@@ -1,0 +1,9 @@
+type world
+  atoms
+  globals
+  next_id
+  out
+
+w = world {} {} 1 ["a" "b"]
+cleared = merge w { "out":[] }
+print "{cleared.out} {cleared.next_id} {length w.out}"

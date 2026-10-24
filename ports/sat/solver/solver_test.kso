@@ -1,4 +1,4 @@
-import "std/text"
+import "std/list"
 
 # End-to-end answers on formulas small enough to check by hand, and the
 # pieces the search is assembled from.
@@ -25,7 +25,7 @@ chain = [[1 2] [-1 2] [-2 3] [-3 -1]]
 contradiction = [[1] [-1]]
 
 # every assignment of three variables falsifies one of these eight clauses
-cube = text/concat cube_low cube_high
+cube = list/concat cube_low cube_high
 
 cube_high = [[-1 2 3] [-1 2 -3] [-1 -2 3] [-1 -2 -3]]
 

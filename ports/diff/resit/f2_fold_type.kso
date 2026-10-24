@@ -1,0 +1,8 @@
+import "std/list"
+
+type fold
+  case
+  space
+
+f = fold false 1
+print "{f.case} {list/sum [1 2]}"

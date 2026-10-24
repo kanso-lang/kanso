@@ -1,0 +1,9 @@
+import "std/list"
+
+fn closer none x
+  x
+
+fn closer best x
+  if (x < best) x best
+
+print "{list/fold [3 1 2] none closer}"

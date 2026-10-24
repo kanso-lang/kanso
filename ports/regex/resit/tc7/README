@@ -1,0 +1,24 @@
+A tail call with seven parameters loses `musttail` in a release build.
+
+The book (ch10, appendix a) promises that "a call in tail position consumes
+no stack, in every engine". In a dev build every tail call below is emitted
+as `musttail call tailcc`. In a `--release` build the same calls are emitted
+as plain `call preserve_nonecc`, with no `musttail`, once a function has
+seven parameters of which most are boxed values. Six parameters keep the
+`musttail`. Whether the program then overflows depends on whether LLVM
+happens to turn the recursion into a loop on its own.
+
+This small program survives because LLVM inlines it into a loop, but the IR
+shows the missing guarantee:
+
+    kanso build main.kso --release && grep 'call.*d_tc/p[io]ng' main.ll
+
+  should: every call to ping_7 / pong_7 is `musttail call`
+  does:   `call preserve_nonecc %KValue @"d_tc/pong_7"(...)` without musttail
+
+In the regex port the same thing happened to the Pike VM's position loop,
+`scan`, which then took one stack frame per character of the subject:
+`regex --steps '(a*)*b' FILE` with 40,000 a's in FILE segfaulted in the
+release build (gdb: 32,452 frames of d_re/scan_7) and ran fine on the dev
+build and the interpreter. The port works around it by keeping every loop
+over the subject at six parameters or fewer (re/pike.kso, `search`).

@@ -1,0 +1,12 @@
+import "std/os"
+
+type run
+  a
+  b
+  c
+  d
+  e
+
+pub fn go n
+  r = run n 2 3 4 5
+  os/run "echo" ["{r.e}"] .> (p -> effect p.stdout)

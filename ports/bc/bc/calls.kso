@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # Calling a bc function. bc scopes dynamically: a parameter or an auto
 # hides the global of the same name for the length of the call, and for
@@ -36,12 +35,18 @@ fn gather params args i m
   r = argument_value p a m
   gather_rest params args i r
 
+fn gather_rest _ _ _ e@(err _)
+  e
+
 fn gather_rest params args i (evaluated m v)
   rest = gather params args (i + 1) m
   in_front v rest
 
+fn in_front _ e@(err _)
+  e
+
 fn in_front v (gathered m vs)
-  gathered m (text/concat [v] vs)
+  gathered m (list/concat [v] vs)
 
 fn argument_value (formal true _ _ _) (whole_array _ slot) m
   ev m (get_array m slot)
@@ -55,9 +60,12 @@ fn argument_value (formal true pname _ _) _ m
 fn argument_value _ a m
   eval a m
 
+fn enter e@(err _) _ _ _ _ _
+  e
+
 fn enter given params args autos body fname
   m = given.machine
-  every = text/concat params autos
+  every = list/concat params autos
   saves = save_all every 1 m []
   bound = bind_params params given.values 1 m
   cleared = list/fold autos bound (acc f -> clear f acc)

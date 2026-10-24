@@ -24,7 +24,7 @@ type sheet
 # The whole program: from the arguments to one description of what to write.
 pub fn run argv
   return failure general_usage if length argv == 0
-  launch argv[1] (text/slice argv 2 (length argv))
+  launch argv[1] (some_slice (text/slice argv 2 (length argv)))
 
 fn launch none _
   failure general_usage
@@ -146,7 +146,7 @@ fn laid_out rows true
   sheet rows [] false
 
 fn laid_out rows false
-  headed (list/first rows) (text/slice rows 2 (length rows))
+  headed (list/first rows) (some_slice (text/slice rows 2 (length rows)))
 
 fn headed none _
   sheet [] [] true
@@ -189,7 +189,7 @@ fn with_head (sheet _ _ false) _ rows
   rows
 
 fn with_head _ head rows
-  if (head == []) rows (text/concat [head] rows)
+  if (head == []) rows (list/concat [head] rows)
 
 fn finish _ (err r)
   failure "{r}\n"
@@ -223,7 +223,7 @@ fn paths_of _ o
 
 fn after_first rest
   return err "missing argument" if rest == []
-  one_input (text/slice rest 2 (length rest))
+  one_input (some_slice (text/slice rest 2 (length rest)))
 
 fn one_input rest
   return ["-"] if rest == []

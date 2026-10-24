@@ -1,0 +1,49 @@
+import "std/list"
+import "std/text"
+
+fn parse_errors source
+  (parse (scan source).tokens).errors
+
+fn parsed_as source
+  result = parse (scan source).tokens
+  text/join (list/to_list (list/map result.statements show)) " "
+
+test_parse_assignment =
+  got = parsed_as "a = b.c = 3; a.b(1)(2).c;"
+  got == "(; (= a (= (. b c) 3.0))) (; (. (call (call (. a b) 1.0) 2.0) c))"
+
+test_parse_class =
+  got = parsed_as "class A < B \{ init(x) \{ this.x = x; } }"
+  got == "(class A < B (fun init (x) (; (= (. this x) x))))"
+
+test_parse_error_recovery =
+  errors = parse_errors "var = 1; print 2 print 3; (a) = 4;"
+  e1 = "[line 1] Error at '=': Expect variable name."
+  e2 = "[line 1] Error at 'print': Expect ';' after value."
+  errors == [e1 e2 "[line 1] Error at '=': Invalid assignment target."]
+
+test_parse_error_at_end =
+  errors = parse_errors "print"
+  errors == ["[line 1] Error at end: Expect expression."]
+
+test_parse_for =
+  got = parsed_as "for (var i = 0; i < 3; i = i + 1) print i;"
+  body = "(block (print i) (; (= i (+ i 1.0))))"
+  want = "(block (var i 0.0) (while (< i 3.0) {body}))"
+  got == want
+
+test_parse_if_else =
+  got = parsed_as "if (a) print 1; else if (b) print 2;"
+  got == "(if a (print 1.0) (if b (print 2.0)))"
+
+test_parse_logic =
+  got = parsed_as "print a or b and !c == nil;"
+  got == "(print (or a (and b (== (! c) nil))))"
+
+test_parse_precedence =
+  got = parsed_as "1 + 2 * 3 - -4;"
+  got == "(; (- (+ 1.0 (* 2.0 3.0)) (- 4.0)))"
+
+test_parse_super =
+  got = parsed_as "return super.m(\"s\");"
+  got == "(return (call (super m) \"s\"))"

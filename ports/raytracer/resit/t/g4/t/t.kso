@@ -1,0 +1,10 @@
+type lit
+
+pub fn mode_named "lit"
+  lit
+
+pub fn mode_named _
+  none
+
+pub fn shade lit
+  "shaded"

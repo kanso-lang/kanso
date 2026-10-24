@@ -42,12 +42,12 @@ fn read_flags argv i acc
 
 fn operands argv i acc
   rest = text/slice argv i (length argv)
-  finish (put acc "files" (text/concat (given acc["files"] []) rest))
+  finish (put acc "files" (list/concat (given acc["files"] []) rest))
 
 fn flag argv i acc word
   noted = put acc "switches" (push acc["switches"] word)
   return long argv i noted word if starts? word "--"
-  short argv i noted (text/slice word 2 (length word))
+  short argv i noted (given (text/slice word 2 (length word)) "")
 
 fn long argv i acc "--brief"
   read_flags argv (i + 1) (put acc "brief" true)
@@ -86,7 +86,7 @@ fn long argv i acc "--unified"
 
 fn long argv i acc word
   pieces = text/split word "="
-  value = text/join (text/slice pieces 2 (length pieces)) "="
+  value = text/join (given (text/slice pieces 2 (length pieces)) []) "="
   long_valued argv i acc (given pieces[1] word) value
 
 fn long_valued argv i acc "--context" n

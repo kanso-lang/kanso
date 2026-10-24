@@ -38,9 +38,9 @@ type packing
   keydir
 
 fn < (held f _ o _) (held g _ p _)
-  f < g or f == g and o < p
+  f < g or (f == g and o < p)
 
-pub fn merge st
+pub fn compact st
   os/list_dir st.dir .> (names -> merge_listed st names)
 
 fn merge_listed st names
@@ -120,11 +120,11 @@ fn write_out _ none _ _
   effect done
 
 fn write_out dir out outs i
-  hints = text/concat out.hints (hint_trailer out.hints)
+  hints = list/concat out.hints (hint_trailer out.hints)
   replace_bytes (data_path dir out.id) out.data
     .> (_ -> replace_bytes (hint_path dir out.id) hints)
     .> (_ -> write_outs dir outs (i + 1))
 
 fn old_paths dir ids
   datas = list/to_list (list/map ids (id -> data_path dir id))
-  text/concat datas (list/to_list (list/map ids (id -> hint_path dir id)))
+  list/concat datas (list/to_list (list/map ids (id -> hint_path dir id)))

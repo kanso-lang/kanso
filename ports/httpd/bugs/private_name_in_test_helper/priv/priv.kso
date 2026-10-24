@@ -1,0 +1,5 @@
+pub fn double x
+  twice x
+
+fn twice x
+  x * 2

@@ -1,0 +1,34 @@
+import "../vec"
+
+# The first output of minimal standard seeded with 1 is 48271, the value
+# Park and Miller publish as the check for a correct implementation.
+test_first_draw_matches_park_miller = (double (seeded 0)).gen.state == 48271
+
+# Their other published check: the 10,000th state from seed 1.
+test_ten_thousandth_state = (nth (seeded 0) 10000).state == 399268537
+
+test_disk_points_lie_in_the_disk =
+  p = (in_unit_disk (seeded 7)).value
+  vec/length_squared p < 1.0 and p.z == 0.0
+
+test_draws_stay_in_range =
+  d = between (seeded 99) 2.0 3.0
+  2.0 <= d.value and d.value < 3.0
+
+test_same_seed_same_stream = double (seeded 5) == double (seeded 5)
+
+test_unit_vectors_are_unit =
+  v = (unit_vector (seeded 3)).value
+  len = vec/magnitude v
+  0.999999 < len and len < 1.000001
+
+fn nth g 0
+  g
+
+fn nth g n
+  nth (double g).gen (n - 1)
+
+test_hemisphere_points_outward =
+  up = vec/new 0.0 1.0 0.0
+  d = on_hemisphere (seeded 11) up
+  0.0 <= d.value.y

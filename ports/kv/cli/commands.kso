@@ -4,26 +4,26 @@
 import "std/list"
 import "std/text"
 
-type delete_cmd
+pub type delete_cmd
   key
 
-type dump_cmd
+pub type dump_cmd
 
-type get_cmd
+pub type get_cmd
   key
 
-type list_cmd
+pub type list_cmd
 
-type merge_cmd
+pub type merge_cmd
 
-type put_cmd
+pub type put_cmd
   key
   value
 
-type status_cmd
+pub type status_cmd
 
 # A command and the script line it came from.
-type numbered
+pub type numbered
   cmd
   line
 
@@ -32,7 +32,7 @@ type reading
   line
 
 # A line that is not a command, and why.
-type bad_cmd
+pub type bad_cmd
   reason
 
 pub fn command_of words
@@ -69,21 +69,29 @@ fn keyed words make why
   if (length words == 2) (make (key_of words)) (bad_cmd why)
 
 fn key_of words
-  text/join (text/slice words 2 2) ""
+  text/join (inside (text/slice words 2 2)) ""
 
 fn bare words cmd name
   if (length words == 1) cmd (bad_cmd "{name} takes no arguments")
 
 # The value is everything after the key, spaces included.
 fn put_of words
-  put_cmd (key_of words) (text/join (text/slice words 3 (length words)) " ")
+  value = inside (text/slice words 3 (length words))
+  put_cmd (key_of words) (text/join value " ")
+
+# The callers have checked the length, so the none arm is never taken.
+fn inside none
+  []
+
+fn inside ws
+  ws
 
 # The commands in a script, each with its line number.
 pub fn script_of source
   lines = text/split source "\n"
-  (list/fold lines (reading [] 0) read_line).cmds
+  (list/fold lines (reading [] 0) take_line).cmds
 
-fn read_line (reading cmds n) raw
+fn take_line (reading cmds n) raw
   line = text/trim raw
   more = push cmds (numbered (command_of (text/split line " ")) (n + 1))
   reading (if (skipped? line) cmds more) (n + 1)

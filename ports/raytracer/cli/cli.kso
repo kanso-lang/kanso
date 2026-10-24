@@ -8,10 +8,10 @@ import "std/io"
 import "std/os"
 import "std/text"
 
-type bad_flag
+pub type bad_flag
   text
 
-type options
+pub type options
   depth
   grid
   samples
@@ -37,7 +37,7 @@ fn continue opts args i
 # The defaults are chapters 4 to 13's image: 400 wide, 100 samples, 50
 # bounces, the full material model. The cover's grid defaults to the
 # original's 11.
-fn defaults name
+pub fn defaults name
   options 50 11 100 name 1 tracer/full_shading 400
 
 fn draw (err reason) path _
@@ -71,7 +71,7 @@ fn launch opts
 
 pub fn main args
   return fail "name a scene" if length args < 1
-  launch (walk args 2 (defaults args[1]))
+  launch (options_for args[1] args)
 
 # A scene file that cannot be used: the command line itself was fine, so
 # there is no usage to repeat.
@@ -137,6 +137,10 @@ usage =
   head = "usage: raytracer <scene | file.scene> {flags} [--shade S]"
   shades = "materials normals hemisphere"
   "{head}\nscenes: {scenes}\nshades: {shades}\n"
+
+# The options a command line asks for, starting from the scene's defaults.
+pub fn options_for scene args
+  walk args 2 (defaults scene)
 
 fn walk args i opts
   return opts if length args < i

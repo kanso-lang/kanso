@@ -1,0 +1,3 @@
+pub fn lexed x
+  tok = x + 1
+  tok * 2

@@ -1,0 +1,7 @@
+import "../rd"
+
+pub fn start argv
+  parsed argv 1 (rd/make 0)
+
+fn parsed argv i o
+  "{argv} {i} {o.a}"

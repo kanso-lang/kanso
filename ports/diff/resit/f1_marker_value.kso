@@ -1,0 +1,11 @@
+import "std/list"
+
+type drop
+
+fn letter drop
+  "dropped"
+
+fn letter _
+  "something else"
+
+print "{drop} {letter drop}"

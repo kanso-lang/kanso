@@ -1,0 +1,12 @@
+fn grow m n
+  return m if n == 0
+  inner = given m["k"]
+  grow (put m "k" (put inner n true)) (n - 1)
+
+fn given none
+  {}
+
+fn given x
+  x
+
+print "{length (grow {} 10000)["k"]}"

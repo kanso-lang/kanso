@@ -1,0 +1,115 @@
+import "std/list"
+import "std/text"
+
+# Writing a value tree back out as TOML. Within each table the plain values
+# come first, as `key = value` lines, then each sub-table under its own
+# [header], then each array of tables as a run of [[header]]s. A table or an
+# array that sits inside an array is written inline.
+pub fn encode m:map[string some]
+  text/utf8 (section_onto (text/bytes "") m [])
+
+pub fn encode _
+  err (tagged_error "a TOML document is a table at the top level")
+
+# One value as TOML writes it: a table as a document, anything else as it
+# would appear on the right of `=`.
+pub fn value_toml m:map[string some]
+  text/utf8 (section_onto (text/bytes "") m [])
+
+pub fn value_toml v
+  text/utf8 (inline_onto (text/bytes "") v)
+
+fn section_onto acc m path
+  pairs = list/fold (entries m) acc (a e -> pair_onto a e)
+  tables = list/fold (entries m) pairs (a e -> table_onto a e path)
+  list/fold (entries m) tables (a e -> array_onto a e path)
+
+fn pair_onto acc (entry k v)
+  return acc if section? v
+  valued = inline_onto (text/append (key_onto acc k) " = ") v
+  text/append valued "\n"
+
+fn table_onto acc (entry k m:map[string some]) path
+  inner = push path k
+  headed = text/append (header_onto (gap_onto acc) inner "[") "]\n"
+  section_onto headed m inner
+
+fn table_onto acc _ _
+  acc
+
+fn array_onto acc (entry k xs:[]some) path
+  return acc if not section? xs
+  inner = push path k
+  list/fold xs acc (a m -> element_onto a m inner)
+
+fn array_onto acc _ _
+  acc
+
+fn element_onto acc m path
+  headed = text/append (header_onto (gap_onto acc) path "[[") "]]\n"
+  section_onto headed m path
+
+# A blank line before every header but the first line of the document.
+fn gap_onto acc
+  if (length acc == 0) acc (text/append acc "\n")
+
+fn header_onto acc path opening
+  names = list/to_list (list/map path key_text)
+  text/append (text/append acc opening) (text/join names ".")
+
+# Whether a value is written as its own section rather than on one line: a
+# table, or a non-empty array holding nothing but tables.
+fn section? _:map[string some]
+  true
+
+fn section? xs:[]some
+  length xs > 0 and list/all? xs (x -> table? x)
+
+fn section? _
+  false
+
+fn table? _:map[string some]
+  true
+
+fn table? _
+  false
+
+fn key_onto acc k
+  text/append acc (key_text k)
+
+fn key_text k
+  if (bare_text? k) k (text/utf8 (quoted_onto (text/bytes "") k))
+
+fn inline_onto acc true
+  text/append acc "true"
+
+fn inline_onto acc false
+  text/append acc "false"
+
+fn inline_onto acc s:string
+  quoted_onto acc s
+
+fn inline_onto acc xs:[]some
+  return text/append acc "[]" if length xs == 0
+  text/append (inline_items (text/append acc "[") xs 1) "]"
+
+fn inline_onto acc m:map[string some]
+  return text/append acc "\{}" if length m == 0
+  fields = inline_fields (text/append acc "\{ ") (entries m) 1
+  text/append fields " }"
+
+fn inline_onto acc v
+  text/append acc (value_text v)
+
+fn inline_items acc xs i
+  return acc if i < 1 or length xs < i
+  opened = if (i == 1) acc (text/append acc ", ")
+  inline_items (inline_onto opened xs[i]) xs (i + 1)
+
+fn inline_fields acc es i
+  return acc if i < 1 or length es < i
+  opened = if (i == 1) acc (text/append acc ", ")
+  inline_fields (inline_field opened es[i]) es (i + 1)
+
+fn inline_field acc (entry k v)
+  inline_onto (text/append (key_onto acc k) " = ") v

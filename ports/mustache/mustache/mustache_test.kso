@@ -1,8 +1,8 @@
 import "std/json"
 import "std/testing"
 
-fn at? line column (parse_error c l _)
-  l == line and c == column
+fn at? line column r
+  r.line == line and r.column == column
 
 # A counter: each call answers one more than the last.
 fn count_up _ calls _
@@ -13,8 +13,14 @@ fn fails_at? template line column
 
 # `render` answers an err for a template it cannot read, and `==` wants a
 # value, so a test dispatches on the result before comparing it.
+fn renders? _ (err _) _
+  false
+
 fn renders? template data want
   same? (render template data {}) want
+
+fn renders_with? _ (err _) _ _
+  false
 
 fn renders_with? template data partials want
   same? (render template data partials) want
@@ -77,9 +83,7 @@ test_outline_nests_sections =
   want = "section a\n  escaped b.c\n  text \"!\"\npartial p"
   shows? "\{\{#a}}\{\{b.c}}!\{\{/a}}\{\{>p}}" want
 
-test_parse_keeps_text_and_tags =
-  nodes = parse "Hi \{\{&who}}"
-  nodes == [(text_node "Hi ") (var_node false 1 ["who"])]
+test_parse_keeps_text_and_tags = shows? "Hi \{\{&who}}" "text \"Hi \"\nraw who"
 
 test_partial_used_twice_from_the_cache =
   partials = { "p":"(\{\{.}})" }
@@ -117,7 +121,7 @@ test_no_escape_setting =
 test_strict_names_the_miss =
   strict = settings_of true true
   got = render_with "a\n\{\{#s}}\{\{y}}\{\{/s}}" { "s":true } {} strict
-  testing/when_failed got (r -> r == context_miss 2 "y")
+  testing/when_failed got (r -> r.line == 2 and r.name == "y")
 
 test_strict_spares_inverted_sections =
   strict = settings_of true true

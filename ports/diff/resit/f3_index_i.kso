@@ -1,0 +1,10 @@
+import "std/text"
+
+fn lower s
+  text/lowercase s
+
+fn nth xs i
+  return "out" if i > length xs or i < 1
+  lower xs[i]
+
+print (nth ["A" "B"] 2)

@@ -36,7 +36,7 @@ pub fn expand_all patterns
 
 fn gather patterns i acc
   return effect acc if i < 1 or length patterns < i
-  next = (found -> gather patterns (i + 1) (text/concat acc found))
+  next = (found -> gather patterns (i + 1) (list/concat acc found))
   expand_one patterns[i] .> next
 
 pub fn matches? pattern name

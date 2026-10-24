@@ -1,0 +1,34 @@
+== unit tests
+vec: 9 passed, 0 failed
+fmath: 9 passed, 0 failed
+rng: 7 passed, 0 failed
+tracer: 14 passed, 0 failed
+scenefile: 10 passed, 0 failed
+cli: 9 passed, 0 failed
+== build
+== fixtures
+cover_full: ok (6s for three engines)
+cover_small: ok (4s for three engines)
+defocus: ok (3s for three engines)
+diffuse: ok (1s for three engines)
+diffuse_seed7: ok (1s for three engines)
+error_missing_value: ok (0s for three engines)
+error_no_scene: ok (0s for three engines)
+error_not_a_number: ok (0s for three engines)
+error_scene_directive: ok (0s for three engines)
+error_scene_line: ok (0s for three engines)
+error_scene_missing: ok (0s for three engines)
+error_unknown_flag: ok (0s for three engines)
+error_unknown_scene: ok (1s for three engines)
+error_unknown_shading: ok (0s for three engines)
+error_zero_samples: ok (0s for three engines)
+file_lens: ok (1s for three engines)
+file_three: ok (3s for three engines)
+glass: ok (2s for three engines)
+metal: ok (2s for three engines)
+shade_hemisphere: ok (1s for three engines)
+shade_normals: ok (0s for three engines)
+sky: ok (0s for three engines)
+wide: ok (3s for three engines)
+file_three matches glass: ok
+check: all engines agree

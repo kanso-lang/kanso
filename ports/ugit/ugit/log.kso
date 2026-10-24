@@ -90,16 +90,16 @@ fn existing none
 fn existing labels
   labels
 
-fn label_for "HEAD" none
+pub fn label_for "HEAD" none
   "HEAD"
 
-fn label_for "HEAD" branch
+pub fn label_for "HEAD" branch
   "HEAD -> {branch}"
 
-fn label_for "MERGE_HEAD" _
+pub fn label_for "MERGE_HEAD" _
   none
 
-fn label_for name branch
+pub fn label_for name branch
   short_name = store/short_name name
   return none if short_name == branch
   return "tag: {short_name}" if store/starts_with? name "refs/tags/"

@@ -8,6 +8,9 @@ type sort_pair
   item
   key
 
+fn apply_filter _ _ e@(err _) _ _
+  e
+
 # The built-in filters. A filter the engine does not know is looked up in
 # the host's table before it is refused. Only `default` may be handed a
 # name the context does not have.
@@ -77,9 +80,8 @@ fn builtin _ "nth" v args line
 
 fn builtin _ "join" v args line
   sep = args["sep"]
-  xs = seq v line
-  parts = list/to_list (list/map xs as_text)
-  text/join parts (if (sep == none) "" sep)
+  glue = if (sep == none) "" sep
+  seq v line .> (xs -> text/join (list/to_list (list/map xs as_text)) glue)
 
 fn builtin _ "truncate" v args _
   s = as_text v
@@ -87,7 +89,7 @@ fn builtin _ "truncate" v args _
   limit = if (n == none) 255 n
   ending = args["end"]
   tail = if (ending == none) "…" ending
-  if (length s > limit) "{text/slice s 1 limit}{tail}" s
+  if (length s > limit) "{textkit/clamped s 1 limit}{tail}" s
 
 fn builtin _ "replace" v args line
   from = args["from"]
@@ -114,21 +116,20 @@ fn builtin _ "sort" v args line
 fn builtin _ "map" v args line
   key = args["attribute"]
   return err "line {line}: `map` needs `attribute`" if key == none
-  xs = seq v line
-  list/to_list (list/map xs (x -> attr_path x key))
+  seq v line .> (xs -> list/to_list (list/map xs (x -> attr_path x key)))
 
 fn builtin _ "filter" v args line
   key = args["attribute"]
   want = args["value"]
   return err "line {line}: `filter` needs `attribute`" if key == none
-  xs = seq v line
-  list/to_list (list/select xs (x -> matches? (attr_path x key) want))
+  keep = (x -> matches? (attr_path x key) want)
+  seq v line .> (xs -> list/to_list (list/select xs keep))
 
 fn builtin _ "group_by" v args line
   key = args["attribute"]
   return err "line {line}: `group_by` needs `attribute`" if key == none
-  xs = seq v line
-  list/fold xs {} (m x -> grouped m (as_text (attr_path x key)) x)
+  file = (m x -> grouped m (as_text (attr_path x key)) x)
+  seq v line .> (xs -> list/fold xs {} file)
 
 fn builtin _ "slice" v args line
   xs = seq v line
@@ -136,17 +137,17 @@ fn builtin _ "slice" v args line
   to = args["end"]
   start = if (from == none) 1 (from + 1)
   stop = if (to == none) (length xs) to
-  textkit/clamped xs start stop
+  xs .> (ys -> textkit/clamped ys start stop)
 
 fn builtin _ "concat" v args line
   more = args["with"]
   xs = seq v line
   return xs if more == none
-  appended xs more
+  xs .> (ys -> appended ys more)
 
 fn builtin _ "unique" v _ line
-  xs = seq v line
-  list/fold xs [] (acc x -> textkit/kept_if acc x (not contains? acc x))
+  keep = (acc x -> textkit/kept_if acc x (not contains? acc x))
+  seq v line .> (xs -> list/fold xs [] keep)
 
 fn builtin _ "int" v _ _
   as_int v
@@ -220,6 +221,9 @@ fn seq xs:[]some _
 fn seq v line
   err "line {line}: expected a list, found `{as_text v}`"
 
+fn edge e@(err _) _
+  e
+
 fn edge xs i
   found = xs[i]
   if (found == none) (missing "[{i - 1}]") found
@@ -228,7 +232,7 @@ fn pieces_of s pat
   text/split s pat
 
 fn appended xs more:[]some
-  text/concat xs more
+  list/concat xs more
 
 fn appended xs more
   push xs more
@@ -253,6 +257,9 @@ fn attr_path v path
   steps = text/split path "."
   list/fold steps v (acc k -> attr_of acc k)
 
+fn sorted_by e@(err _) _
+  e
+
 # Sorting by an attribute, stable, by merging. Values of one kind compare
 # as themselves; anything else compares by its text.
 fn sorted_by xs key
@@ -263,15 +270,15 @@ fn sorted_by xs key
 fn merged_sort xs n
   return xs if n < 2
   half = n / 2
-  left = merged_sort (text/slice xs 1 half) half
-  right = merged_sort (text/slice xs (half + 1) n) (n - half)
+  left = merged_sort (textkit/clamped xs 1 half) half
+  right = merged_sort (textkit/clamped xs (half + 1) n) (n - half)
   merge_runs left right 1 1 []
 
 fn merge_runs left right i j acc
   a = left[i]
   b = right[j]
-  return text/concat acc (drop_keys right j) if a == none
-  return text/concat acc (drop_keys left i) if b == none
+  return list/concat acc (drop_keys right j) if a == none
+  return list/concat acc (drop_keys left i) if b == none
   merge_step left right i j acc (before? b.key a.key)
 
 fn merge_step left right i j acc false
@@ -281,7 +288,7 @@ fn merge_step left right i j acc true
   merge_runs left right i (j + 1) (push acc right[j])
 
 fn drop_keys xs from
-  text/slice xs from (length xs)
+  textkit/clamped xs from (length xs)
 
 fn before? a:int b:int
   a < b
@@ -307,7 +314,8 @@ fn hex2 b
   digits = "0123456789ABCDEF"
   hi = b / 16
   lo = b % 16
-  "{text/slice digits (hi + 1) (hi + 1)}{text/slice digits (lo + 1) (lo + 1)}"
+  high = textkit/clamped digits (hi + 1) (hi + 1)
+  "{high}{textkit/clamped digits (lo + 1) (lo + 1)}"
 
 # Enough JSON for a template: strings, numbers, booleans, lists and maps.
 fn json none

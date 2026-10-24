@@ -1,3 +1,5 @@
+import "../testkit"
+import "std/list"
 import "std/text"
 
 # Whole programs, source to output, through the same pipeline as the command
@@ -15,7 +17,7 @@ fn shown_run lines
 # report.
 fn first_lines n source
   lines = text/split (ran source) "\n"
-  text/join (text/slice lines 1 n) "\n"
+  text/join (list/to_list (list/take lines n)) "\n"
 
 test_answers_a_query =
   source = "e(1, 2).\ne(2, 3).\np(X, Y) :- e(X, Y)."

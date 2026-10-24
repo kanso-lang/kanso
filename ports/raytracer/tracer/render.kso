@@ -30,7 +30,7 @@ fn follow (scattered attenuation g out) depth world
   c = ray_color materials out (depth - 1) world g
   rng/paired c.gen (attenuation * c.value)
 
-fn pixel_line c
+pub fn pixel_line c
   "{byte c.x} {byte c.y} {byte c.z}"
 
 fn ray_color _ _ 0 _ g
@@ -93,7 +93,7 @@ fn surface normals rec _ _ _ g
   rng/paired g ((rec.normal + vec/new 1.0 1.0 1.0) * 0.5)
 
 # The background: white at the horizon blending to sky blue overhead.
-fn sky r
+pub fn sky r
   dir = vec/unit r.direction
   a = 0.5 * (dir.y + 1.0)
   vec/new 1.0 1.0 1.0 * (1.0 - a) + vec/new 0.5 0.7 1.0 * a

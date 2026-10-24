@@ -1,0 +1,75 @@
+import "std/list"
+import "std/text"
+
+fn kinds_of doc_tree
+  text/join (list/to_list (list/map doc_tree.root.kids kind_name)) " "
+
+fn kind_name b
+  name_of b.kind
+
+fn name_of (fenced _ _ _ _)
+  "fenced"
+
+fn name_of (heading level)
+  "h{level}"
+
+fn name_of hr
+  "hr"
+
+fn name_of (html_block v)
+  "html{v}"
+
+fn name_of indented
+  "indented"
+
+fn name_of (listing _ tight)
+  if tight "list" "loose-list"
+
+fn name_of para
+  "para"
+
+fn name_of quote
+  "quote"
+
+fn name_of _
+  "other"
+
+test_atx_closing_hashes = atx_content (text/chars " foo ## ") == " foo "
+
+test_atx_escaped_hash = atx_content (text/chars " foo \\#") == " foo \\#"
+
+test_blocks_in_order =
+  doc_tree = parse_document "# t\n\npara\n\n---\n\n> q\n\n    code\n"
+  kinds_of doc_tree == "h1 para hr quote indented"
+
+test_fence_info_unescaped =
+  doc_tree = parse_document "``` a\\*b c\nx\n```\n"
+  kinds_of doc_tree == "fenced"
+
+test_html_block_kind =
+  doc_tree = parse_document "<div>\nhi\n</div>\n"
+  kinds_of doc_tree == "html6"
+
+test_lazy_line_joins_paragraph =
+  doc_tree = parse_document "> a\nb\n"
+  kinds_of doc_tree == "quote"
+
+test_list_loose_after_blank =
+  doc_tree = parse_document "- a\n\n- b\n"
+  kinds_of doc_tree == "loose-list"
+
+test_list_tight = kinds_of (parse_document "- a\n- b\n") == "list"
+
+test_ordered_list_needs_one_to_interrupt =
+  doc_tree = parse_document "a\n2. b\n"
+  kinds_of doc_tree == "para"
+
+test_setext_heading = kinds_of (parse_document "Title\n===\n") == "h1"
+
+test_split_lines_crlf = split_lines "a\r\nb\rc\n" == ["a" "b" "c"]
+
+test_tab_spends_partially =
+  c = advance_cols (caret_of (text/chars "\tx")) 2
+  c.col == 2 and c.tab and rest c == "  x"
+
+test_thematic_needs_three = not thematic? (text/chars "* *") 1

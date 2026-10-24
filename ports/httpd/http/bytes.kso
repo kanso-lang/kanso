@@ -26,13 +26,21 @@ pub fn blank_line_at bs from
 # The bytes from `from` to `to`, inclusive, as text. A head is ascii by the
 # grammar, and a body that is not utf-8 is refused by whoever asked for text.
 pub fn text_of bs from to
-  text/utf8 (text/slice bs from to)
+  text/utf8 (or_empty (text/slice bs from to))
 
 # Case changes on ascii letters only. Mapping bytes cannot break utf-8 that
 # was whole, but text/utf8 answers an err in its type, so `or_original`
 # says what happens in the case that cannot arise.
 pub fn lower s
   or_original s (text/utf8 (list/to_list (list/map (text/bytes s) lower_byte)))
+
+# A range past the end of a list answers none (2026-10-13 gavel on
+# `text/slice`); every range here was bounded by its caller.
+fn or_empty none
+  []
+
+fn or_empty xs
+  xs
 
 fn or_original s (err _)
   s
@@ -128,7 +136,7 @@ fn listed parts
 pub fn split_once s sep
   parts = split_on s sep
   return none if length parts < 2
-  rest = text/join (text/slice parts 2 (length parts)) sep
+  rest = text/join (or_empty (text/slice parts 2 (length parts))) sep
   cut rest parts[1]
 
 pub fn byte_length s:string

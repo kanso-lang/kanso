@@ -56,11 +56,11 @@ fn taxonomy_url st args
   "{st.base}/{textkit/slugify kind}/{textkit/slugify name}/"
 
 # Where a path's page lands: `/blog/a/` is blog/a/index.html.
-fn out_path "/"
+pub fn out_path "/"
   "index.html"
 
-fn out_path path
-  "{text/slice path 2 (length path)}index.html"
+pub fn out_path path
+  "{textkit/clamped path 2 (length path)}index.html"
 
 fn section_rel ""
   "_index.md"
@@ -132,7 +132,7 @@ fn paginated acc st eng rel name section by
   path = section["path"]
   pagers = list/fold at acc (a i -> pager_file a st eng rel name section by n i)
   redirect = alias_body eng (pager_url st path 1)
-  first = "{text/slice path 2 (length path)}page/1/index.html"
+  first = "{textkit/clamped path 2 (length path)}page/1/index.html"
   added pagers "content/{rel}" first redirect unlisted
 
 fn pager_url st path 1
@@ -186,9 +186,9 @@ fn alias_file acc eng page alias
   body = alias_body eng target
   added acc "alias `{alias}`" (alias_path alias) body unlisted
 
-fn alias_path alias
+pub fn alias_path alias
   cleaned = text/trim (textkit/replace "/{alias}" "//" "/")
-  inner = text/slice cleaned 2 (length cleaned)
+  inner = textkit/clamped cleaned 2 (length cleaned)
   html = textkit/ends_with? inner ".html"
   slashed = if (textkit/ends_with? inner "/") inner "{inner}/"
   if html inner "{slashed}index.html"
@@ -220,7 +220,8 @@ fn taxonomy_kind acc st vw eng kind
   body = tera/render eng list_name ctx
   listing = entry_of st path ""
   listed = added acc "taxonomy `{kind}`" (out_path path) body listing
-  list/fold term_list listed (a t -> term_file a st eng kind taxonomy t)
+  step = (a t -> term_file a st eng kind taxonomy t)
+  listed .> (l -> list/fold term_list l step)
 
 fn newer_map? a b
   da = date_or_blank a["date"]
@@ -277,8 +278,9 @@ fn term_file acc st eng kind taxonomy term
 fn extra_files acc st vw eng templates
   robots = tera/render eng "robots.txt" (context st "/" {})
   with_robots = added acc "robots.txt" "robots.txt" robots unlisted
-  with_404 = not_found with_robots st eng (templates["404.html"] != none)
-  with_feed = feed with_404 st vw eng (feed_on? st.config)
+  has_404 = templates["404.html"] != none
+  with_404 = with_robots .> (w -> not_found w st eng has_404)
+  with_feed = with_404 .> (w -> feed w st vw eng (feed_on? st.config))
   sitemap with_feed st eng
 
 fn not_found acc _ _ false
@@ -328,6 +330,9 @@ fn latest page
   updated = page["updated"]
   if (updated == none) page["date"] updated
 
+fn sitemap e@(err _) _ _
+  e
+
 fn sitemap acc st eng
   listed = list/to_list (list/select acc (f -> f.listing != unlisted))
   found = list/to_list (list/map listed (f -> f.listing))
@@ -341,10 +346,13 @@ fn by_permalink? a b
 
 # Static files and the files beside a page bundle's index.md are copied; a
 # bundle's files land beside the page.
+fn finished _ _ _ e@(err _)
+  e
+
 fn finished input st vw files
   statics = list/map input.statics (rel -> copied "static/{rel}" rel)
   assets = list/map input.assets (rel -> asset_copy vw rel)
-  copies = text/concat (list/to_list statics) (list/to_list assets)
+  copies = list/concat (list/to_list statics) (list/to_list assets)
   summary = summary_lines st files copies
   plan copies files summary
 
@@ -355,7 +363,7 @@ fn asset_target vw rel
   bundle = vw.pages["{dir_of rel}/index.md"]
   return rel if bundle == none
   path = bundle["path"]
-  "{text/slice path 2 (length path)}{basename rel}"
+  "{textkit/clamped path 2 (length path)}{basename rel}"
 
 fn summary_lines st files copies
   pages = length st.pages

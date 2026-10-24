@@ -36,7 +36,7 @@ pub fn with_header r name value
 
 pub fn with_headers r extra
   response body headers status = r
-  response body (text/concat headers extra) status
+  response body (list/concat headers extra) status
 
 pub fn text_page status body
   response body [(header "content-type" "text/plain; charset=utf-8")] status
@@ -135,7 +135,7 @@ pub fn render r method version closing
   { headers status } = r
   line = "HTTP/1.1 {status} {reason_phrase status}\r\n"
   connection = connection_header version closing
-  fields = text/concat headers connection
+  fields = list/concat headers connection
   wire_for r method version fields line
 
 fn connection_header "HTTP/1.0" false
@@ -157,10 +157,10 @@ fn wire_for r method version fields line
 fn framed_wire line fields _ (chunks pieces) "HTTP/1.1"
   coded = push fields (header "transfer-encoding" "chunked")
   opened = [(head_text line coded)]
-  text/concat (list/fold pieces opened chunk_onto) ["0\r\n\r\n"]
+  list/concat (list/fold pieces opened chunk_onto) ["0\r\n\r\n"]
 
 fn framed_wire line _ sized (chunks pieces) _
-  text/concat [(head_text line sized)] pieces
+  list/concat [(head_text line sized)] pieces
 
 fn framed_wire line _ sized body _
   [(head_text line sized) body]
@@ -169,7 +169,7 @@ fn framed_wire line _ sized body _
 fn chunk_onto acc p
   n = piece_length p
   return acc if n == 0
-  text/concat acc ["{to_hex n}\r\n" p "\r\n"]
+  list/concat acc ["{to_hex n}\r\n" p "\r\n"]
 
 fn head_text line fields
   lines = list/to_list (list/map fields header_line)

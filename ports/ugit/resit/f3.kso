@@ -1,0 +1,11 @@
+import "std/list"
+
+type cursor
+  at
+
+fn step a b prev_k k x y
+  a + b + prev_k + k + x + y
+
+c = cursor 3
+
+print "{step 1 2 0 0 0 0} {c.at} {list/sum [1]}"

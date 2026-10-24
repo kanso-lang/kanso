@@ -1,0 +1,8 @@
+type resolved
+  scope
+
+pub fn resolve_if c
+  if_else c (resolved "r")
+
+fn if_else cond (resolved s)
+  "resolver {cond} {s}"

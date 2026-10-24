@@ -1,0 +1,3 @@
+import "std/os"
+
+os/modified "old.c" .> (a -> os/modified "gone.c" .> (b -> print "{a} {b}"))

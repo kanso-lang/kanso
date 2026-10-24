@@ -1,0 +1,9 @@
+import "std/text"
+
+fn replace_all s "" to
+  "{s}{to}"
+
+fn replace_all s from to
+  text/join (text/split s from) to
+
+print (replace_all "a.b.c" "." "/")

@@ -1,0 +1,21 @@
+# A function the file declares should win over a name an import brings
+# (log, 2026-10-12, "a name the author declared wins over a builtin and an
+# import"). Here the local `stdin` loses to `io/stdin`, a pub constant of
+# std/io, and the call applies the description.
+#
+#   kanso play local_fn_loses_to_imported_constant.kso          prints 2
+#   kanso play local_fn_loses_to_imported_constant.kso --interp
+#     error[runtime]: `<io>` is not callable
+#
+# `kanso check` accepts it. In a module directory (a file importing std/io
+# and declaring `fn read_line acc x`, used as `list/fold xs 0 read_line`)
+# the interpreter, the dev build and the release build all stop with the
+# same `<io>` is not callable, and a sibling file's `import "std/io"` is
+# enough to trigger it. That is how kv's `read_line` broke when
+# `io/read_line` was added (log, 2026-10-14).
+import "std/io"
+
+fn stdin n
+  n + 1
+
+io/write "{stdin 1}\n"

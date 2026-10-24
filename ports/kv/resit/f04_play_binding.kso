@@ -1,0 +1,8 @@
+import "std/list"
+
+table = list/to_list (list/map [1 2 3] (n -> n * 10))
+
+fn pick i
+  table[i]
+
+print "{pick 2}"

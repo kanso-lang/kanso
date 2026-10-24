@@ -1,0 +1,3 @@
+import "std/list"
+
+print "{list/to_list (list/reverse [1 2 3])}"

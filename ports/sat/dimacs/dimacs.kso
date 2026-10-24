@@ -39,7 +39,7 @@ fn blank? b
 
 fn close bs start stop acc
   return acc if stop <= start
-  push acc (text/utf8 (text/slice bs start (stop - 1)))
+  push acc (text/utf8 (ranged (text/slice bs start (stop - 1))))
 
 fn digit? b
   47 < b and b < 58
@@ -117,7 +117,8 @@ fn numeric? word
   bs = text/bytes word
   return false if length bs == 0
   start = if (bs[1] == 45) 2 1
-  start <= length bs and list/all? (text/slice bs start (length bs)) digit?
+  rest = ranged (text/slice bs start (length bs))
+  start <= length bs and list/all? rest digit?
 
 pub fn parse text
   lines_from (text/split text "\n") 1 0 [] [] headless
@@ -134,7 +135,7 @@ fn read_words lines i clauses current h ws k
 pub fn render comment vars clauses
   head = ["c {comment}" "p cnf {vars} {length clauses}"]
   body = list/to_list (list/map clauses clause_line)
-  text/join (text/concat head body) "\n"
+  text/join (list/concat head body) "\n"
 
 fn clause_line lits
   text/join (list/to_list (list/map (push lits 0) (l -> "{l}"))) " "
@@ -153,3 +154,11 @@ fn words_from bs i start acc
   b = bs[i]
   return words_from bs (i + 1) (i + 1) (close bs start i acc) if blank? b
   words_from bs (i + 1) start acc
+
+# A range the caller has already bounded. text/slice answers none past the
+# end (#1890), which these ranges never reach.
+fn ranged none
+  []
+
+fn ranged xs
+  xs

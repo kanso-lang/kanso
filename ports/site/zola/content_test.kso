@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 test_date_prefix =
   d = date_prefix "2024-01-15-hello-world"
@@ -28,12 +27,12 @@ fn content_of files
 fn pages_and sections pages
   ps = list/map pages (p -> "{p.rel}={p.path}")
   ss = list/map sections (s -> "{s.rel}={s.path}")
-  text/concat (list/to_list ps) (list/to_list ss)
+  list/concat (list/to_list ps) (list/to_list ss)
 
 test_read_content =
   files = { "a/_index.md":"" "a/b/index.md":"" "a/x.md":"" "y.md":"" }
   want = ["a/b/index.md=/a/b/" "a/x.md=/a/x/" "y.md=/y/"]
-  content_of files == text/concat want ["a/_index.md=/a/" "_index.md=/"]
+  content_of files == list/concat want ["a/_index.md=/a/" "_index.md=/"]
 
 test_drafts_dropped =
   files = { "d.md":"+++\ndraft = true\n+++\n" "e.md":"" }

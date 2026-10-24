@@ -1,0 +1,25 @@
+# Run: kanso test m   (from bugs/test_failure_names_library_line)
+#
+# `parts?` hands text/split a none (a slice that starts past the end), and
+# split fails inside std/text at text.kso:38. This file has 25 lines.
+#
+# Should: name the failure's place in this file (line 25, the call to
+# text/split), the caller's line, as the #1975 gavel asks; or else name
+# std/text/text.kso:38, as `kanso play` does for the same program.
+# Does: "error[runtime]: split takes two strings" and
+#   --> m/m_test.kso:38:3
+# std/text's line number under this file's path. In the chip8 port, line 38
+# of isa_test.kso was a different test, test_every_opcode_round_trips, so the
+# report pointed at a test that had passed.
+import "std/list"
+import "std/text"
+
+xs = [1 2 3]
+
+test_positive = list/all? xs (n -> n > 0)
+
+test_parts = list/all? ["ab" "cd"] parts?
+
+fn parts? s
+  rest = text/slice s 5 (length s)
+  length (text/split rest ", ") > ident 0

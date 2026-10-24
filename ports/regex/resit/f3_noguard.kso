@@ -1,0 +1,8 @@
+type span
+  first
+  last
+
+fn first_of spans i
+  spans[i].first
+
+print "{first_of [(span 1 3)] 5}"

@@ -185,7 +185,8 @@ fn parsed_stamps lines
 fn stamp_line acc line
   space = words/find line " " 1
   return acc if space == 0
-  digits = words/replace_all (text/slice line 1 (space - 1)) "." ""
+  stamp = words/or_blank (text/slice line 1 (space - 1))
+  digits = words/replace_all stamp "." ""
   name = text/slice line (space + 1) (length line)
   stamped acc name (to_number digits)
 

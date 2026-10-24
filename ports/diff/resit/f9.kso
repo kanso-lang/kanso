@@ -1,0 +1,2 @@
+xs = [0 0 0]
+print "{put xs 2 1}"

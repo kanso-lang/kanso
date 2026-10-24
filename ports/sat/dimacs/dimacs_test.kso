@@ -4,6 +4,9 @@ fn clauses_of (formula clauses _ _)
 fn clauses_of _
   []
 
+fn shape_of (formula clauses count vars)
+  [clauses count vars]
+
 fn reason_of (malformed line reason)
   "{line}: {reason}"
 
@@ -16,7 +19,7 @@ test_clause_spans_lines = clauses_of (parse simple) == [[1 -3] [2 3 -1]]
 
 test_comments_anywhere = clauses_of (parse commented) == [[1] [-1 2]]
 
-test_header_counts = parse "p cnf 3 1\n1 2 3 0\n" == formula [[1 2 3]] 1 3
+test_header_counts = shape_of (parse "p cnf 3 1\n1 2 3 0\n") == [[[1 2 3]] 1 3]
 
 test_literal_past_header = reason_of (parse "p cnf 2 1\n1 3 0\n") == past_header
 

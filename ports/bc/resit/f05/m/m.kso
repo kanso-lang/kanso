@@ -1,0 +1,17 @@
+type ps
+  pos
+  scalars
+
+pub fn spin m n
+  return length m if n == 0
+  spin (put m "x" 1) (n - 1)
+
+pub fn spin_rec n
+  s = walk (ps 1 {}) n
+  length s.scalars
+
+fn walk s n
+  return s if n == 0
+  found = s.scalars["x"]
+  slot = if (found == none) (length s.scalars + 1) found
+  walk (ps (s.pos + 1) (put s.scalars "x" slot)) (n - 1)

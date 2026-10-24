@@ -284,7 +284,7 @@ fn set_flag m _ "--vimgrep"
 fn long argv at m parts
   spelled = string_at parts 1
   inline = length parts > 1
-  value = text/join (text/slice parts 2 (length parts)) "="
+  value = text/join (some_list (text/slice parts 2 (length parts))) "="
   flag = canonical spelled
   long_valued argv at m spelled flag value inline (valued? flag)
 
@@ -323,7 +323,7 @@ fn cluster argv at m cs i
 
 fn in_cluster argv at m cs i spelled flag true
   return following argv at m spelled flag if i == length cs
-  value = text/join (text/slice cs (i + 1) (length cs)) ""
+  value = text/join (some_list (text/slice cs (i + 1) (length cs))) ""
   reading argv (at + 1) (set_value m spelled flag value)
 
 fn in_cluster argv at m cs i spelled flag false
@@ -531,7 +531,7 @@ fn patterned m mode true
   return built m mode given pos if named
   why = "ripgrep requires at least one pattern to execute a search"
   return bad_usage why if length pos == 0
-  built m mode [pos[1]] (text/slice pos 2 (length pos))
+  built m mode [pos[1]] (some_list (text/slice pos 2 (length pos)))
 
 fn built m mode patterns paths
   wanted = spec (case_mode m) (on? m "fixed") patterns (shape_of m)
@@ -678,4 +678,4 @@ fn numbers_wanted said _
   said
 
 fn globs_of names
-  list/fold names [] (acc name -> text/concat acc (type_globs name))
+  list/fold names [] (acc name -> list/concat acc (type_globs name))

@@ -1,0 +1,12 @@
+fn blank? 9
+  true
+
+fn blank? 32
+  true
+
+fn blank? _
+  false
+
+cs = [32 9 65]
+
+print (blank? cs[4])

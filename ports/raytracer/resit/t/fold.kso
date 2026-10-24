@@ -1,0 +1,13 @@
+import "std/list"
+
+type reading
+  camera
+  line
+  materials
+  objects
+
+fn next_line (reading camera n materials objects) source
+  reading camera (n + length source) materials objects
+
+r = list/fold ["ab" "c"] (reading 1 0 {} []) next_line
+print "{r}"

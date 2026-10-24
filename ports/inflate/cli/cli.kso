@@ -27,37 +27,37 @@ pub fn main argv
   count = count_of after
   command argv[1] (request argv[1] count flag output path)
 
-fn output_of "-o" none
+pub fn output_of "-o" none
   none
 
-fn output_of "-o" name
+pub fn output_of "-o" name
   name
 
-fn output_of _ none
+pub fn output_of _ none
   none
 
-fn output_of _ _
+pub fn output_of _ _
   none
 
-fn format_flag "--gzip"
+pub fn format_flag "--gzip"
   "gzip"
 
-fn format_flag "--raw"
+pub fn format_flag "--raw"
   "raw"
 
-fn format_flag "--zlib"
+pub fn format_flag "--zlib"
   "zlib"
 
-fn format_flag none
+pub fn format_flag none
   "auto"
 
-fn format_flag _
+pub fn format_flag _
   "auto"
 
-fn count_of none
+pub fn count_of none
   1
 
-fn count_of s
+pub fn count_of s
   whole (text/to_int s)
 
 fn whole (err _)
@@ -129,11 +129,18 @@ fn say line
 fn fail r reason
   io/write_err "inflate: {r.path}: {reason}\n" .> (_ -> os/exit 1)
 
-fn with_file (request _ _ _ _ none) _
+# The path is dispatched on by itself rather than inside the request's
+# pattern: `kanso test cli` checks this module as an importer sees it, and
+# from there a none in the request's field is not seen to be claimed
+# (bugs/test_checks_module_differently).
+fn with_file r k
+  read_path r r.path k
+
+fn read_path _ none _
   usage
 
-fn with_file r k
-  os/read_bytes r.path .> (found -> read_or_fail r found k)
+fn read_path r path k
+  os/read_bytes path .> (found -> read_or_fail r found k)
 
 fn read_or_fail r (file_not_found _) _
   fail r "no such file"

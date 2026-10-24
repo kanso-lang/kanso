@@ -1,0 +1,17 @@
+type entity
+  next
+  value
+
+fn entity_at cs p
+  return none if p > length cs
+  entity (p + 1) cs[p]
+
+fn skip n
+  n + 1
+
+fn here cs p
+  ref = entity_at cs p
+  return 0 if ref == none
+  skip ref.next
+
+print "{here ["a"] 1}"

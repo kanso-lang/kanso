@@ -1,0 +1,4 @@
+fn digit? c
+  c == "1"
+
+print "{not (digit? "1")}"

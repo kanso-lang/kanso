@@ -1,0 +1,7 @@
+fn branch_cmd branch
+  "on {branch}"
+
+fn branch args
+  branch_cmd args
+
+print (branch "main")

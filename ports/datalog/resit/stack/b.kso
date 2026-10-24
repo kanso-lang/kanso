@@ -1,0 +1,13 @@
+fn scan n acc
+  step n acc
+
+fn step 0 acc
+  acc
+
+fn step n acc
+  emit n acc
+
+fn emit n acc
+  scan (n - 1) (acc + 1)
+
+print "{scan 200000 0}"

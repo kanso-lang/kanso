@@ -84,9 +84,15 @@ fn located name lines (err r)
 fn located _ _ t
   t
 
+fn whole _ e@(err _)
+  e
+
 fn whole name chunks
   body = body_of chunks 1 [] []
   top_level name chunks body
+
+fn top_level _ _ e@(err _)
+  e
 
 fn top_level name chunks (parsed p nodes)
   extra = chunks[p]
@@ -126,8 +132,14 @@ fn chunk chunks p stops acc (t_tag body line)
   head = head_of toks line
   tag chunks p stops acc head
 
+fn out_node _ _ _ _ e@(err _) _
+  e
+
 fn out_node chunks p stops acc e line
   body_of chunks (p + 1) stops (push acc (n_out e line))
+
+fn head_of e@(err _) _
+  e
 
 fn head_of toks line
   word = if (length toks > 0) toks[1].word ""
@@ -135,6 +147,9 @@ fn head_of toks line
 
 fn stop? stops word
   list/any? stops (s -> s == word)
+
+fn tag _ _ _ _ e@(err _)
+  e
 
 fn tag chunks p stops acc head
   return parsed p acc if stop? stops head.word
@@ -195,21 +210,30 @@ fn tag_at _ _ _ _ head word
   err "line {head.line}: unknown tag `{word}`"
 
 fn rest xs
-  text/slice xs 2 (length xs)
+  textkit/clamped xs 2 (length xs)
 
 fn word_of ts i
   t = ts[i]
   if (t == none) "" t.word
 
+fn closed_with _ e@(err _) _ _ _
+  e
+
 # After the closing tag of a body: wrap the body and carry on.
 fn closed_with chunks (parsed p body) stops acc wrap
   body_of chunks (p + 1) stops (push acc (wrap body))
+
+fn if_more _ (parsed _ _) _ e@(err _) _ _
+  e
+
+fn if_more _ e@(err _) _ _ _ _
+  e
 
 fn if_more chunks (parsed p body) branches cond stops acc
   toks = tokens "" (tag_body chunks[p]) 0
   head = head_of toks (tag_line chunks[p])
   grown = push branches (branch body cond)
-  if_next chunks p grown stops acc head head.word
+  head .> (h -> if_next chunks p grown stops acc h h.word)
 
 fn if_next chunks p branches stops acc head "elif"
   cond = expression (rest head.toks)
@@ -222,6 +246,9 @@ fn if_next chunks p branches stops acc _ "else"
 
 fn if_next chunks p branches stops acc _ _
   body_of chunks (p + 1) stops (push acc (n_if branches []))
+
+fn if_done _ e@(err _) _ _ _
+  e
 
 fn if_done chunks (parsed p otherwise) branches stops acc
   body_of chunks (p + 1) stops (push acc (n_if branches otherwise))
@@ -252,9 +279,12 @@ fn loop_head chunks p stops acc head ts
   at = if pair 4 2
   bad = word_of ts at != "in"
   return err "line {head.line}: expected `in` in the for tag" if bad
-  source = expression (text/slice ts (at + 1) (length ts))
+  source = expression (textkit/clamped ts (at + 1) (length ts))
   inner = body_of chunks (p + 1) ["else" "endfor"] []
   loop_body chunks inner stops acc (looped key head.line name source)
+
+fn loop_body _ e@(err _) _ _ _
+  e
 
 fn loop_body chunks (parsed p body) stops acc head
   loop_end chunks p body stops acc head (tag_body chunks[p])
@@ -268,6 +298,9 @@ fn loop_end chunks p body stops acc for_head _
   made = n_for body key line name [] source
   body_of chunks (p + 1) stops (push acc made)
 
+fn loop_done _ e@(err _) _ _ _ _
+  e
+
 fn loop_done chunks (parsed p otherwise) body stops acc for_head
   looped key line name source = for_head
   made = n_for body key line name otherwise source
@@ -278,25 +311,40 @@ fn assigned chunks p stops acc head global
   name = word_of ts 1
   bad = word_of ts 2 != "="
   return err "line {head.line}: expected `=` in the set tag" if bad
-  value = expression (text/slice ts 3 (length ts))
+  value = expression (textkit/clamped ts 3 (length ts))
   set_node chunks p stops acc name value global
+
+fn set_node _ _ _ _ _ e@(err _) _
+  e
 
 fn set_node chunks p stops acc name value global
   body_of chunks (p + 1) stops (push acc (n_set value global name))
 
+fn filter_block _ (parsed _ _) _ _ _ e@(err _) _
+  e
+
 fn filter_block chunks (parsed p body) stops acc name (parsed _ args) line
   body_of chunks (p + 1) stops (push acc (n_filter args body line name))
+
+fn filter_block _ e@(err _) _ _ _ _ _
+  e
+
+fn macro_block _ (parsed _ _) _ _ _ e@(err _)
+  e
 
 fn macro_block chunks (parsed p body) stops acc name (parsed _ params)
   made = n_block [(macro_def body params)] "macro:{name}"
   body_of chunks (p + 1) stops (push acc made)
+
+fn macro_block _ e@(err _) _ _ _ _
+  e
 
 fn parent_of nodes
   found = list/find nodes extends?
   parent_name found
 
 fn parent_name (n_include _ name)
-  text/slice name 9 (length name)
+  textkit/clamped name 9 (length name)
 
 fn parent_name _
   ""
@@ -318,17 +366,17 @@ fn declaration? _
 
 fn imported m (n_include _ name)
   return m if not textkit/starts_with? name "import:"
-  spec = text/slice name 8 (length name)
+  spec = textkit/clamped name 8 (length name)
   colon = textkit/index_of spec ":" 1
-  alias = text/slice spec 1 (colon - 1)
-  put m alias (text/slice spec (colon + 1) (length spec))
+  alias = textkit/clamped spec 1 (colon - 1)
+  put m alias (textkit/clamped spec (colon + 1) (length spec))
 
 fn imported m _
   m
 
 fn defined m (n_block body name)
   return m if not textkit/starts_with? name "macro:"
-  put m (text/slice name 7 (length name)) body[1]
+  put m (textkit/clamped name 7 (length name)) body[1]
 
 fn defined m _
   m

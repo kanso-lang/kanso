@@ -36,6 +36,15 @@ test_paper_example_is_shortest =
   got = edits (text/chars "ABCABBA") (text/chars "CBABAC")
   list/count got changed? == 5
 
+fn placed (added line new)
+  "+{line} {new}"
+
+fn placed (dropped line old)
+  "-{line} {old}"
+
+fn placed (kept line new old)
+  " {line} {new} {old}"
+
 test_positions_are_one_based =
-  want = [(added "z" 1) (kept "a" 2 1)]
-  edits ["a"] ["z" "a"] == want
+  got = list/to_list (list/map (edits ["a"] ["z" "a"]) placed)
+  got == ["+z 1" " a 2 1"]

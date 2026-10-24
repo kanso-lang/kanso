@@ -1,0 +1,10 @@
+type logical
+  left
+  op
+  right
+
+pub fn fold_with xs
+  left_assoc xs logical
+
+fn left_assoc xs make
+  make xs[1] "or" xs[2]

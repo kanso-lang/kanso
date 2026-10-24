@@ -1,0 +1,15 @@
+import "std/list"
+
+fn listed title xs
+  "{title} {length xs}"
+
+staged = ["a"]
+unstaged = ["b" "c"]
+loose = []
+sections = [
+  (listed "Changes to be committed:" (list/to_list (list/map staged (p -> p))))
+  (listed "Changes not staged for commit:" unstaged)
+  (listed "Untracked files:" loose)
+]
+
+print "{sections}"

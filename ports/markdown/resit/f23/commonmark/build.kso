@@ -1,0 +1,84 @@
+# The finished parse: the definitions table and the document's tree.
+type parsed
+  refs
+  root
+
+# Rebuild the tree from the closed frames, which arrive children first. A
+# frame's `size` says how far back its subtree reaches, so its children are
+# found by walking back from it, one sibling's size at a time.
+fn build rows i
+  shape_at rows i rows[i]
+
+fn end_or start none
+  start
+
+fn end_or _ b
+  b.end
+
+fn gather rows j stop acc
+  return acc if j < stop
+  gather rows (j - size_at rows[j]) stop (push acc (build rows j))
+
+fn kids_tight? kids
+  pairs_tight? kids 2
+
+# A list item or list ends where its last child does; an empty item ends
+# on the line it started.
+fn last_end start kids
+  end_or start kids[length kids]
+
+fn pairs_tight? kids i
+  return true if i > length kids
+  near = end_or 0 kids[i - 1] == start_or 0 kids[i] - 1
+  near and pairs_tight? kids (i + 1)
+
+# The push sits in the loop's own call: pushed through a helper, the list
+# would be copied every step (bugs/push_through_call).
+fn reversed xs i acc
+  return acc if i < 1
+  reversed xs (i - 1) (push acc xs[i])
+
+fn shape e (item m) kids
+  block (last_end e.start kids) kids (item m) e.lines e.start
+
+fn shape e (listing m _) kids
+  kind = listing m (tight? kids)
+  block (last_end e.start kids) kids kind e.lines e.start
+
+fn shape e kind kids
+  block e.end kids kind e.lines e.start
+
+fn shape_at _ _ none
+  block 0 [] doc [] 0
+
+fn shape_at rows i e
+  backwards = gather rows (i - 1) (i - e.size + 1) []
+  kids = reversed backwards (length backwards) []
+  shape e e.kind kids
+
+fn start_or n none
+  n
+
+fn start_or _ b
+  b.start
+
+fn size_at none
+  1
+
+fn size_at e
+  e.size
+
+# A list is loose when a blank line separates two of its items, or two of
+# the blocks inside any one item.
+fn tight? items
+  kids_tight? items and items_tight? items 1
+
+fn items_tight? items i
+  return true if i > length items
+  kids_tight? (kids_of items[i]) and items_tight? items (i + 1)
+
+fn kids_of none
+  []
+
+fn kids_of b
+  b.kids

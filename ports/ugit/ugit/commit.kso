@@ -67,7 +67,7 @@ fn root_label none
 fn root_label _
   ""
 
-fn subject message
+pub fn subject message
   lines = text/split message "\n"
   lines[1]
 

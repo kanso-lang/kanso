@@ -1,0 +1,4 @@
+fn flip x
+  -x
+
+print "{flip 2.0}"

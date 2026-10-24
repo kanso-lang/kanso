@@ -1,0 +1,8 @@
+fn a x
+  return 1 if not (x > 1)
+  return 2 if not (x > 2)
+  return 3 if not (x > 3)
+  return 4 if not x > 4
+  5
+
+print "{a 9}"

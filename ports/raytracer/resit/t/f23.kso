@@ -1,0 +1,7 @@
+fn contains? lo hi x
+  lo <= x and x <= hi
+
+fn used x
+  x + 1
+
+print "{used 1}"

@@ -1,0 +1,7 @@
+type plan
+  steps
+
+fn run plan
+  length plan.steps
+
+print "{run (plan [1 2])}"

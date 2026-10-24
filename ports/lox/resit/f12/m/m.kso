@@ -1,0 +1,8 @@
+# The syntax tree the parser builds.
+
+type assign
+  name
+  value
+
+pub fn made n
+  assign n 1

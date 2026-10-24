@@ -1,0 +1,5 @@
+import "std/text"
+
+name = "12.bitcask.data"
+
+print "{text/ends_with? name ".bitcask.data"} {text/starts_with? name "12"}"

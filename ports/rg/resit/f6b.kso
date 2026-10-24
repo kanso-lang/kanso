@@ -1,0 +1,9 @@
+fn yes? true
+  true
+
+fn yes? _
+  false
+
+m = { "globs":[] "invert":true }
+
+print (yes? m["nope"])

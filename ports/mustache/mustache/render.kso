@@ -153,6 +153,9 @@ fn interpolate (lambda call) escaped ctx e acc
 fn interpolate v escaped _ e acc
   emit acc (escaped_if (escaped and e.settings.html) "{v}")
 
+fn interpolate_rendered e@(err _) _ _
+  e
+
 fn interpolate_rendered (sink cache state written) escaped acc
   shown = escaped_if escaped (text/utf8 written)
   sink cache state (text/append acc.written shown)

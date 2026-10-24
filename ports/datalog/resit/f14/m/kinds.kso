@@ -1,0 +1,23 @@
+import "std/list"
+
+# A private record type named `repeat`, constructed and matched in this
+# module. std/list exports a function `repeat` (an infinite generator), and
+# this file imports std/list.
+#
+# Expected: either the local type wins, and `kanso run main.kso` prints
+# `again 7`, or the compiler reports that `repeat` is ambiguous.
+# Actual: it compiles cleanly (`kanso check main.kso` says ok), and running it
+# fails with `error[runtime]: no overload of `m/describe` matches these
+# arguments`: the construction `repeat 7` called list/repeat, so the value
+# reaching `describe` is a generator, not the record.
+type repeat
+  times
+
+pub fn shown n
+  describe (repeat n)
+
+fn describe (repeat t)
+  "again {t}"
+
+pub fn total xs
+  list/sum xs

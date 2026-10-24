@@ -1,0 +1,2 @@
+test_errors_are_caught =
+  shown_of "(try* (throw \"no\") (catch* e (str e \"!\")))" == "\"no!\""

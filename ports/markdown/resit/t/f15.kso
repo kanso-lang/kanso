@@ -1,0 +1,10 @@
+type delim
+  count
+
+fn pair_up xs _ i none _
+  "none {xs} {i}"
+
+fn pair_up xs j i (delim a) (delim b)
+  "{xs} {j} {i} {a} {b}"
+
+print (pair_up 1 2 3 none 4)

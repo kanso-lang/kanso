@@ -1,5 +1,6 @@
 # patch's command line: patch [OPTION]... [ORIGFILE [PATCHFILE]]. As in diff,
 # flags are gathered into a map and turned into a record once at the end.
+import "std/list"
 import "std/text"
 
 pub type options
@@ -27,7 +28,7 @@ fn read_flags argv i acc
   read_flags argv (i + 1) (more_files acc [word])
 
 fn more_files acc words
-  put acc "files" (text/concat (given acc["files"] []) words)
+  put acc "files" (list/concat (given acc["files"] []) words)
 
 fn flag argv i acc "--dry-run"
   read_flags argv (i + 1) (put acc "dry_run" true)
@@ -63,7 +64,8 @@ fn flag argv i acc "-s"
   read_flags argv (i + 1) (put acc "quiet" true)
 
 fn flag argv i acc word
-  return prefixed argv i acc (text/slice word 1 2) word if not starts? word "--"
+  two = given (text/slice word 1 2) ""
+  return prefixed argv i acc two word if not starts? word "--"
   named argv i acc (given (text/split word "=")[1] "") (after_eq word)
 
 # -p1: the number glued to the letter
@@ -87,7 +89,7 @@ fn named _ _ _ name _
 
 fn after_eq word
   pieces = text/split word "="
-  text/join (text/slice pieces 2 (length pieces)) "="
+  text/join (given (text/slice pieces 2 (length pieces)) []) "="
 
 fn valued _ _ _ key none
   bad_usage "option '{key}' requires an argument"

@@ -1,0 +1,7 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+nums = list/take list/naturals 200000
+lines = list/to_list (list/map nums (n -> "line {n}"))
+io/write (text/join lines "\n")

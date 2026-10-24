@@ -1,0 +1,74 @@
+import "std/list"
+
+# Every constant in a program gets a small positive id, and evaluation works
+# on ids alone. The ids are handed out in the order the constants sort in:
+# integers first, by value, then strings, by their text. So comparing two ids
+# compares the constants, sorting tuples of ids sorts the tuples, and `<` in a
+# rule needs no lookup.
+pub type constants
+  ids_int
+  ids_text
+  listing
+
+# The distinct constants seen so far, split by kind.
+type pool
+  ints
+  texts
+
+pub fn intern_program (program cs)
+  found = list/fold cs (pool {} {}) pool_clause
+  ints = list/sort (keys found.ints)
+  texts = list/sort (keys found.texts)
+  numbered = list/fold ints (constants {} {} []) add_int
+  list/fold texts numbered add_text
+
+# The base the tuple codes are written in: one more than the largest id.
+pub fn base_of table
+  length table.listing + 1
+
+pub fn id_of table (constant n:int)
+  table.ids_int[n]
+
+pub fn id_of table (constant s)
+  table.ids_text[s]
+
+pub fn value_of table id
+  table.listing[id]
+
+fn add_int (constants ids_int ids_text listing) n
+  ids = put ids_int n (length listing + 1)
+  constants ids ids_text (push listing n)
+
+fn add_text (constants ids_int ids_text listing) s
+  ids = put ids_text s (length listing + 1)
+  constants ids_int ids (push listing s)
+
+fn pool_atom acc a
+  list/fold a.terms acc pool_term
+
+fn pool_clause acc (query a)
+  pool_atom acc a
+
+fn pool_clause acc (rule body head)
+  list/fold body (pool_atom acc head) pool_literal
+
+fn pool_clause acc _
+  acc
+
+fn pool_literal acc (comparison left _ _ right)
+  pool_term (pool_term acc left) right
+
+fn pool_literal acc (holds a)
+  pool_atom acc a
+
+fn pool_literal acc (lacks a)
+  pool_atom acc a
+
+fn pool_term (pool ints texts) (constant n:int)
+  pool (put ints n true) texts
+
+fn pool_term (pool ints texts) (constant s)
+  pool ints (put texts s true)
+
+fn pool_term acc _
+  acc

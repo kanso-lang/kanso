@@ -1,0 +1,8 @@
+type pair
+  left
+  right
+
+pub fn both l r
+  p = pair l r
+  { left right } = p
+  "{left} {right}"

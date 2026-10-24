@@ -1,0 +1,10 @@
+error[exhaustive]: this can be a none and `toml/path_key` has no arm for it — resolve it here, or give `toml/path_key` a `none` arm (in table.kso) (module cli)
+  --> toml/table.kso:229:60
+error[exhaustive]: this can be an err and `toml/from_tagged` has no arm for it — dispatch on it here, or give `toml/from_tagged` an `(err _)` arm (in cli.kso) (module cli)
+  --> cli/cli.kso:54:27
+  54 |   tree = toml/from_tagged tagged
+                                 ^
+error[exhaustive]: this can be an err and `toml/encode` has no arm for it — dispatch on it here, or give `toml/encode` an `(err _)` arm (in cli.kso) (module cli)
+  --> cli/cli.kso:55:26
+  55 |   document = toml/encode tree
+                                ^

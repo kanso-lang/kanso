@@ -21,7 +21,7 @@ fn fixed_code value width
 
 # Every match length from 3 to 258 mapped to its symbol's place in the
 # decoder's tables, so the encoder never searches them per match.
-length_slot = list/to_list (list/map (list/take list/naturals 258) slot_of)
+pub length_slot = list/to_list (list/map (list/take list/naturals 258) slot_of)
 
 fn slot_of len
   slot_from len 1

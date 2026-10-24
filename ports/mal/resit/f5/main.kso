@@ -1,0 +1,5 @@
+import "./m"
+
+print (m/score [true false true])
+print m/found
+print (m/sizes [1 2])

@@ -1,0 +1,7 @@
+type vec3
+  x
+
+fn * (vec3 x) s:float
+  vec3 (x * s)
+
+print "{vec3 1.0 * 2.0}"

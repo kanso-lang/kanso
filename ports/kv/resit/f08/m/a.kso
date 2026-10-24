@@ -1,0 +1,2 @@
+pub fn hints_from bs at
+  bs + at

@@ -1,0 +1,14 @@
+type columns
+  before
+  bit
+  bound
+  keyed_ops
+  keys
+  mask
+  ops
+
+fn skip acc
+  merge acc { "bit":(acc.bit * 2) "ops":(push acc.ops "skip") }
+
+c = skip (columns 0 1 [] [] [] 0 [])
+print "{c.bit} {c.ops}"

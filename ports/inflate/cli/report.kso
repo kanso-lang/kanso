@@ -18,7 +18,7 @@ fn hex u
 fn write_hex data
   io/write (text/utf8 (hex_from data 1 (text/bytes "")))
 
-fn hex_from data i acc
+pub fn hex_from data i acc
   return finish_line acc (i - 1) if i > length data
   b = byte_of data[i]
   hi = text/append acc (digit_byte (b / 16))
@@ -63,24 +63,24 @@ fn info src u
   adler = container/hex8 (checksum/adler32 data)
   fields = list/to_list (list/map u.fields (f -> row f.label f.value))
   head = [(row "format" u.format) (row "members" "{u.members}")]
-  r1 = push (text/concat head fields) (row "compressed" "{length src} bytes")
+  r1 = push (list/concat head fields) (row "compressed" "{length src} bytes")
   r2 = push (push r1 (row "uncompressed" "{size} bytes")) (row "ratio" r)
   r3 = push (push (push r2 (row "crc32" crc)) (row "adler32" adler)) block_row
   io/write (text/join (list/to_list (list/map r3 shown)) "")
 
 # Compressed size over uncompressed, to a tenth of a percent, in integers so
 # every engine prints the same digits.
-fn ratio _ 0
+pub fn ratio _ 0
   "n/a"
 
-fn ratio src size
+pub fn ratio src size
   per_mille = length src * 1000 / size
   "{per_mille / 10}.{per_mille % 10}%"
 
 fn shown (row label value)
   "{padded "{label}:" 14}{value}\n"
 
-fn padded s n
+pub fn padded s n
   return s if length s >= n
   padded "{s} " n
 

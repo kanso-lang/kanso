@@ -1,0 +1,4 @@
+fn names_of keys
+  length keys
+
+print (names_of [1 2])

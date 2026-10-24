@@ -30,8 +30,8 @@ serve_usage = "httpd serve [--port N] [--root DIR] [--quiet]"
 e2e_usage = "httpd e2e SCENARIO [--port N] [--root DIR]"
 
 pub fn run args
-  opts = read_options args 1 (options none false "public" [])
-  dispatched opts.words opts
+  start = options none false "public" []
+  read_options args 1 start .> (opts -> dispatched opts.words opts)
 
 fn read_options args i opts
   return opts if i < 1 or length args < i

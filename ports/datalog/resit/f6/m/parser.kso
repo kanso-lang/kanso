@@ -1,0 +1,5 @@
+pub fn parsed x
+  tok x
+
+fn tok x
+  x - 1

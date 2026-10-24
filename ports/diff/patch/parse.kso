@@ -68,7 +68,7 @@ fn file_at lines i intro acc
   read = hunks_from lines (i + 2) []
   patch_ = file_patch
     read.hunks
-    (text/concat intro [old_head new_head])
+    (list/concat intro [old_head new_head])
     (epoch? new_head)
     new_head
     (name_of new_head)
@@ -105,7 +105,7 @@ fn hunk_at lines i line
 
 # "-12,3" or "+7": a start and a length, the length 1 when it is left out
 fn range_of word
-  parts = text/split (text/slice word 2 (length word)) ","
+  parts = text/split (given (text/slice word 2 (length word)) "") ","
   start = number_of (given parts[1] "0")
   len = if (length parts > 1) (number_of (given parts[2] "1")) 1
   range len start

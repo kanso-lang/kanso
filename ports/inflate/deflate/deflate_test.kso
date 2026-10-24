@@ -35,7 +35,7 @@ test_inflate_fixed =
 test_inflate_overlapping_copy =
   src = text/to_bytes [75 76 74 28 133 131 8 2 0]
   out = (inflate src 0).data
-  length out == 400 and text/utf8 (text/slice out 395 400) == "ababab"
+  length out == 400 and text/ends_with? (text/utf8 out) "ababab"
 
 test_inflate_stored =
   src = text/to_bytes [1 3 0 252 255 107 115 111]

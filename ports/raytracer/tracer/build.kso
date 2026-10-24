@@ -24,3 +24,15 @@ pub fn new_view aspect angle focus lookat lookfrom vfov vup
 # function rather than a pub constant: see bugs/b07.
 pub fn standard_view _
   default_view
+
+pub fn new_group objects
+  group objects
+
+pub fn new_hit_record front_face mat normal p t
+  hit_record front_face mat normal p t
+
+pub fn new_quality max_depth mode samples width
+  quality max_depth mode samples width
+
+pub fn new_ray direction origin
+  ray direction origin

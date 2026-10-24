@@ -1,3 +1,4 @@
+import "std/list"
 import "std/text"
 
 # Throwing away learnt clauses. The learnts are ranked least useful first --
@@ -61,8 +62,8 @@ fn sort_range xs lo hi before?
   merge_by left (sort_range xs (mid + 1) hi before?) 1 1 [] before?
 
 fn merge_by a b i j out before?
-  return text/concat out (text/slice b j (length b)) if length a < i
-  return text/concat out (text/slice a i (length a)) if length b < j
+  return list/concat out (ranged (text/slice b j (length b))) if length a < i
+  return list/concat out (ranged (text/slice a i (length a))) if length b < j
   x = a[i]
   y = b[j]
   return merge_by a b i (j + 1) (push out y) before? if before? y x

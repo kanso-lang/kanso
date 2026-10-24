@@ -1,0 +1,18 @@
+# Chapter 11's three spheres, written as a scene file: matte, glass with an
+# air bubble, and fuzzy gold, on a yellow ground.
+camera aspect 16 9
+camera vfov 90
+camera lookfrom 0 0 0
+camera lookat 0 0 -1
+
+material ground lambertian 0.8 0.8 0.0
+material navy   lambertian 0.1 0.2 0.5
+material glass  dielectric 1.5
+material bubble dielectric 0.6666666666666666
+material gold   metal 0.8 0.6 0.2 1.0
+
+sphere  0.0 -100.5 -1.0 100.0 ground
+sphere  0.0    0.0 -1.2   0.5 navy
+sphere -1.0    0.0 -1.0   0.5 glass
+sphere -1.0    0.0 -1.0   0.4 bubble
+sphere  1.0    0.0 -1.0   0.5 gold

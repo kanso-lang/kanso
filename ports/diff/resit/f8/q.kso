@@ -1,0 +1,6 @@
+fn filled m k n
+  return m if k > n
+  v = m[k - 1]
+  filled (put m k (if (v == none) 1 (v + 1))) (k + 1) n
+
+print "{length (filled {} 1 20000)}"

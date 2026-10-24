@@ -21,7 +21,7 @@ printing = "printf '%s' \"$p\""
 
 pub fn exchange port pieces
   args = list/to_list (list/map pieces as_arg)
-  argv = text/concat ["-c" script "{port}"] args
+  argv = list/concat ["-c" script "{port}"] args
   os/run "bash" argv .> (p -> unhexed p.stdout)
 
 fn as_arg p:string

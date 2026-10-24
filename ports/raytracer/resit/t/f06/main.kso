@@ -1,0 +1,4 @@
+import "./u"
+import "./v"
+
+print "{u/first (v/new 3)}"

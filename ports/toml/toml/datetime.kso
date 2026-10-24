@@ -28,6 +28,19 @@ pub type offset_datetime
 
 pub type utc
 
+# Only this module builds these records; a caller outside it, the tests among
+# them, asks here.
+pub fn date_of day month year
+  local_date day month year
+
+pub fn time_of fraction hour minute second
+  local_time fraction hour minute second
+
+pub fn stamped date offset time
+  offset_datetime date offset time
+
+pub utc_offset = utc
+
 # Reading. The token arrives whole from `scalar`; `base` is the byte position
 # of its first character.
 fn date_time tok base
@@ -36,11 +49,12 @@ fn date_time tok base
   after_date tok date base
 
 fn digits? tok i n
-  piece = text/slice tok i (i + n - 1)
+  piece = some_slice (text/slice tok i (i + n - 1))
   length piece == n and list/all? piece (b -> in? b 48 57)
 
 fn number_at tok i n
-  list/fold (text/slice tok i (i + n - 1)) 0 (acc b -> acc * 10 + b - 48)
+  digits = some_slice (text/slice tok i (i + n - 1))
+  list/fold digits 0 (acc b -> acc * 10 + b - 48)
 
 fn date_part tok base
   dashes = tok[5] == 45 and tok[8] == 45
@@ -91,6 +105,9 @@ fn separator? none
 fn separator? _
   false
 
+fn after_date _ e@(err _) _
+  e
+
 fn after_date tok date base
   return date if length tok == 10
   between = separator? tok[11]
@@ -107,6 +124,9 @@ fn date_with_time tok date (parsed i time) base
 fn time_only tok base
   timed = time_part tok 1 base
   time_alone tok timed base
+
+fn time_alone _ e@(err _) _
+  e
 
 fn time_alone tok (parsed i time) base
   extra = i <= length tok
@@ -132,7 +152,7 @@ fn fraction_at tok 46 i (local_time _ hour minute second) base
   e = plain_digits tok (i + 1)
   none_read = e == i + 1
   return fail (base + i - 1) "expected digits after the point" if none_read
-  fraction = text/utf8 (text/slice tok (i + 1) (e - 1))
+  fraction = text/utf8 (some_slice (text/slice tok (i + 1) (e - 1)))
   parsed e (local_time fraction hour minute second)
 
 fn fraction_at _ none i time _

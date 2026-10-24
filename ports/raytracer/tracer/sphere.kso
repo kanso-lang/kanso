@@ -18,7 +18,7 @@ type hit_record
   t
 
 # What `hit` answers when the ray strikes nothing.
-type miss
+pub type miss
 
 type sphere
   center
@@ -26,10 +26,10 @@ type sphere
   radius
 
 # The nearest hit along `r` within `span`, or miss.
-fn hit (group objects) r span
+pub fn hit (group objects) r span
   list/fold objects miss (&closer r span)
 
-fn hit (sphere center mat radius) r span
+pub fn hit (sphere center mat radius) r span
   oc = center - r.origin
   a = vec/length_squared r.direction
   h = vec/dot r.direction oc

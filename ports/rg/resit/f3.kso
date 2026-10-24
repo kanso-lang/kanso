@@ -1,0 +1,4 @@
+fn single c
+  c == "a"
+
+print (single "a")

@@ -1,0 +1,15 @@
+# This file declares its own private type `cursor` and builds one. It never
+# imports std/list. Another file of the same module does (b.kso), and from
+# that moment `cursor` here resolves to std/list's pub `cursor`.
+#
+# Expected: `kanso run main.kso` prints `m/cursor 1 3`. The local declaration
+# is the nearer one, and a.kso has no import at all.
+# Actual: error[opacity]: `list/cursor` is foreign — only `list` builds a
+# `cursor`; ask it for one through a pub function (module m), pointing at
+# line 15 below. The same happens for a private fn named `step` (std/list
+# exports a type `step`).
+type cursor
+  p
+
+pub fn start n
+  cursor n

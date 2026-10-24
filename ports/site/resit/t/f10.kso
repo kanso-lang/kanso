@@ -1,0 +1,6 @@
+fn f xs
+  done = length xs
+  entry = done + 1
+  entry
+
+print "{f [1]}"

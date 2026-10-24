@@ -9,9 +9,13 @@ import "std/text"
 # std/list's sort orders numbers and strings but not records, and takes no
 # key, so a span is packed into one int for sorting: `first` in the high bits,
 # `last` in the low twenty-one.
-max_cp = 1114111
+pub max_cp = 1114111
 
 shift = 2097152
+
+# The one way outside this module to make a span, for the tests.
+pub fn span_from first last
+  span first last
 
 pub fn contains? spans cp
   inside? spans cp 1
@@ -74,7 +78,7 @@ fn tail_gap out from
   if (from <= max_cp) (push out (span from max_cp)) out
 
 pub fn union a b
-  normalize (text/concat a b)
+  normalize (list/concat a b)
 
 # The Perl escapes, ASCII-only as in RE2: \d \s \w. Their capital forms are
 # the negations and are built by the parser.

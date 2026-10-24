@@ -1,0 +1,4 @@
+import "./m"
+import "std/os"
+
+os/args .> m/load .> (bs -> print "{length bs}")

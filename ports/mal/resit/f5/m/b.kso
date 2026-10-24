@@ -1,0 +1,17 @@
+type holder
+  entries
+
+pub fn sizes xs
+  list_sizes xs (more_of xs)
+
+fn list_sizes xs n
+  "{n} {length xs}"
+
+fn more_of xs
+  list_total xs (k -> k + 1)
+
+fn list_total xs f
+  f (length xs)
+
+pub fn count_entries (holder items)
+  length items

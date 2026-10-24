@@ -109,8 +109,8 @@ pub fn report (finished s status)
   held = "keys {key_text m.held}"
   head = [said counts (registers m) regs stack held]
   rows = list/to_list (list/map (rendered m.display) (r -> "|{r}|"))
-  framed_screen = push (text/concat [border] rows) border
-  text/concat (text/concat s.trace head) framed_screen
+  framed_screen = push (list/concat [border] rows) border
+  list/concat (list/concat s.trace head) framed_screen
 
 border = "+{text/join (list/to_list (list/take (list/repeat "-") 64)) ""}+"
 

@@ -1,0 +1,4 @@
+fn header_of [p cnf v c]
+  "{v} {c}"
+
+print "{header_of ["p" "cnf" "3" "2"]}"

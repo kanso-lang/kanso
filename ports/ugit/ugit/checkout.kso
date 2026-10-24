@@ -2,7 +2,6 @@ import "../steps"
 import "../store"
 import "std/list"
 import "std/os"
-import "std/path"
 import "std/text"
 
 # ugit checkout <branch>            switch to a branch
@@ -115,7 +114,7 @@ fn placed p oid current
   store/get_object oid "blob" .> (content -> written_file p content)
 
 fn written_file p content
-  os/make_dir (path/dirname p) .> (_ -> os/write_file p content)
+  os/make_dir (store/dir_of p) .> (_ -> os/write_file p content)
 
 fn next_index v target
   every = keys (store/merged v.index target)

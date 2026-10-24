@@ -1,0 +1,2 @@
+test_word_shape =
+  regex_for ["fn"] "sensitive word mode for the shape" == "\\b(?:(?:fn))\\b"

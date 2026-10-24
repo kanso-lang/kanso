@@ -1,0 +1,27 @@
+type fault
+  message
+
+type step
+  node
+  pos
+
+type parsed
+  node
+  pos
+
+fn consume pos "x"
+  step "x" (pos + 1)
+
+fn consume _ _
+  err (fault "expected x")
+
+pub fn pair pos a b
+  first = consume pos a
+  second = consume first.pos b
+  parsed "{first.node} and {second.node}" second.pos
+
+pub fn shown (parsed n _)
+  n
+
+pub fn shown (err f)
+  "failed: {f}"

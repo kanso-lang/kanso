@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/mark 3} {m/total [1 2]}"

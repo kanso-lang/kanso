@@ -1,0 +1,10 @@
+import "std/bits"
+import "std/list"
+
+table = list/to_list (list/map [1 2 3 4] (n -> n * 10))
+
+pub fn mixed xs
+  list/fold xs 0 step
+
+fn step c b
+  bits/xor table[(bits/xor c b & 3) + 1] (bits/shr c 8)

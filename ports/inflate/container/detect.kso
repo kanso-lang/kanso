@@ -25,6 +25,9 @@ pub fn unraw src
   r = deflate/inflate src 0
   raw_end src r
 
+fn raw_end _ e@(err _)
+  e
+
 fn raw_end src r
   at = deflate/next_byte r.stop
   extra = length src - at + 1

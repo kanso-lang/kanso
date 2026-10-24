@@ -1,0 +1,61 @@
+kanso test
+test_atoms_keep_their_ids ... ok
+test_atoms_overwrite ... ok
+test_closures_capture ... ok
+test_def_is_global ... ok
+test_do_def_binds_for_the_rest_of_the_do ... ok
+test_errors_are_caught ... ok
+test_hash_map_keys_decode ... ok
+test_hash_map_keys_encode ... ok
+test_hash_map_strings_encode ... ok
+test_let_mutual_recursion ... ok
+test_macro_expands ... ok
+test_missing_name ... ok
+test_printer_escapes ... ok
+test_quasiquote_splices ... ok
+test_reader_comments ... ok
+test_reader_keeps_vectors_and_maps ... ok
+test_reader_negative_numbers ... ok
+test_reader_reports_eof ... ok
+test_reader_reports_unbalanced ... ok
+test_reader_unterminated_string ... ok
+test_str_is_not_readable ... ok
+test_tail_calls_run_flat ... ok
+22 passed, 0 failed
+building the dev and release binaries
+ok: repl basics
+ok: repl closures
+ok: repl errors
+ok: repl hashmaps
+ok: repl macros
+ok: repl numbers
+ok: repl readline
+ok: repl tco
+ok: run args
+ok: run files
+ok: run fizzbuzz
+ok: run interp
+ok: run queens
+ok: run sort
+ok: run uncaught
+ok: selfhost session
+ok: runtest step1_read_print
+ok: runtest step2_eval
+ok: runtest step3_env
+ok: runtest step4_if_fn_do
+ok: runtest step5_tco
+ok: runtest step6_file
+ok: runtest step7_quote
+ok: runtest step8_macros
+ok: runtest step9_try
+ok: runtest stepA_mal
+ok: runtest step2_eval via mal-in-mal
+ok: runtest step3_env via mal-in-mal
+ok: runtest step4_if_fn_do via mal-in-mal
+ok: runtest step6_file via mal-in-mal
+ok: runtest step7_quote via mal-in-mal
+ok: runtest step8_macros via mal-in-mal
+ok: runtest step9_try via mal-in-mal
+ok: runtest stepA_mal via mal-in-mal
+
+all 34 fixtures agree on interp, dev and release

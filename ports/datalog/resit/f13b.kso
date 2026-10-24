@@ -1,0 +1,7 @@
+type listing
+  values
+
+fn total (listing values)
+  length values
+
+print "{total (listing [1 2])}"

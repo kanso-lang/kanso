@@ -1,0 +1,11 @@
+import "std/text"
+
+fn word cs p q
+  text/slice! cs p q .> text/utf8
+
+fn grown acc cs p q
+  text/slice! cs p q .> (s -> text/append acc s)
+
+cs = text/bytes "hello world"
+w = word cs 1 5
+print "{w} {length w} {text/utf8 (grown (text/bytes "<") cs 7 11)}"

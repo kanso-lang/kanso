@@ -1,0 +1,9 @@
+args = ["inflate"]
+
+fn command "cat" _
+  "cat"
+
+fn command _ _
+  "usage"
+
+print (command args[2] 0)

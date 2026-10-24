@@ -18,8 +18,8 @@ fn surely v
   v
 
 fn cut_up src
-  parts = pieces "t" src
-  surely (text/join (list/to_list (list/map parts piece_shape)) "")
+  shapes = pieces "t" src .> (ps -> list/to_list (list/map ps piece_shape))
+  surely (shapes .> (xs -> text/join xs ""))
 
 test_pieces =
   want = "T[a ]E1[x]T[ b\n]G2[if y]T[c]"
@@ -34,9 +34,9 @@ test_raw =
   cut_up "\{% raw %}\{\{ x }}\{% endraw %}" == want
 
 fn kinds src
-  toks = tokens "t" src 1
-  shown = list/to_list (list/map toks (t -> "{t.kind}:{t.word}"))
-  surely (text/join shown " ")
+  label = (t -> "{t.kind}:{t.word}")
+  shown = tokens "t" src 1 .> (ts -> list/to_list (list/map ts label))
+  surely (shown .> (xs -> text/join xs " "))
 
 test_tokens =
   front = "name:a op:. name:b op:| name:f op:( "

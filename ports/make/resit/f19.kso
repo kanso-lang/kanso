@@ -1,0 +1,5 @@
+fn conditional? word
+  word == "ifeq" or word == "ifneq" or word == "ifdef" or word == "ifndef" or
+    word == "else" or word == "endif"
+
+print "{conditional? "else"} {conditional? "all"}"

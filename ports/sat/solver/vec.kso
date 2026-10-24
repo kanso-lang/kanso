@@ -1,4 +1,5 @@
 import "std/bits"
+import "std/list"
 import "std/text"
 
 # Arrays you can overwrite by position, which the language does not provide
@@ -14,7 +15,7 @@ type vec
   root
   size
 
-fn extended (vec depth root size) x
+pub fn extended (vec depth root size) x
   return extended (vec (depth + 1) [root] size) x if size == span (depth + 1)
   vec depth (put_in root depth size x) (size + 1)
 
@@ -45,15 +46,15 @@ fn put_in node d idx x
 fn with_slot xs i x
   return push xs x if length xs < i
   front = push (text/slice xs 1 (i - 1)) x
-  text/concat front (text/slice xs (i + 1) (length xs))
+  list/concat front (ranged (text/slice xs (i + 1) (length xs)))
 
-fn set_at (vec depth root size) i x
+pub fn set_at (vec depth root size) i x
   vec depth (put_in root depth (i - 1) x) size
 
-fn slot (vec depth root _) i
+pub fn slot (vec depth root _) i
   get_in root depth (i - 1)
 
-fn slots (vec _ _ size)
+pub fn slots (vec _ _ size)
   size
 
 # how many slots one child at depth d covers: 32^(d - 1)
@@ -75,7 +76,15 @@ fn span 5
 fn span d
   32 * span (d - 1)
 
-fn vec_of n x
+pub fn vec_of n x
   extended_to empty_vec n x
 
-empty_vec = vec 1 [] 0
+pub empty_vec = vec 1 [] 0
+
+# A range the caller has already bounded. text/slice answers none past the
+# end (#1890), which these ranges never reach.
+fn ranged none
+  []
+
+fn ranged xs
+  xs

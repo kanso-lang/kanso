@@ -1,0 +1,17 @@
+# What it should do: `felt` dispatches on module a's two markers, so the
+# import of "../a" is used, and `kanso run main.kso` prints "hot".
+#
+# What it does: "error[unused]: unused import "../a"". A marker named in a
+# pattern, qualified (`a/hot`) or bare (`hot`), does not count as a use of
+# the import. Add `pub fn fresh _` answering `a/hot_cup 0`, any call into
+# module a, and the same arms dispatch correctly on every engine.
+import "../a"
+
+pub fn describe c
+  felt c.temp
+
+fn felt a/hot
+  "hot"
+
+fn felt a/cold
+  "cold"

@@ -1,0 +1,6 @@
+import "std/text"
+
+pieces = text/split "a b\nc" " "
+header = text/split pieces[3] "\n"
+
+print "{header}"

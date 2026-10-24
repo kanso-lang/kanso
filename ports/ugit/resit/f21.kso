@@ -1,0 +1,9 @@
+fn compared p a b
+  return "new file {p}" if a == none
+  return "deleted {p}" if b == none
+  if (a == b) "same" "modified {p}"
+
+m = { "x":"1" }
+n = { "y":"2" }
+
+print (compared "x" n["x"] m["x"])

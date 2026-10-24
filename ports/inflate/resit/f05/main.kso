@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/total 7}" .> (_ -> print "{m/total 0}")

@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `os/make_dir` has no arm for it — resolve it here, or give `os/make_dir` a `none` arm (in checkout.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/ugit)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/ugit/checkout.kso:118:16
+ 118 |   os/make_dir (path/dirname p) .> (_ -> os/write_file p content)
+                      ^

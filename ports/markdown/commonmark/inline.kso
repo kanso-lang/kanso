@@ -173,7 +173,7 @@ fn domain_end cs p
 
 fn domain_label cs start p
   c = cs[p]
-  ok = alnum? c or c == "-" and p > start
+  ok = alnum? c or (c == "-" and p > start)
   if ok (domain_label cs start (p + 1)) p
 
 fn entity_here cs p out refs
@@ -268,7 +268,7 @@ fn uri_body cs p
 
 fn scheme_end cs start p
   c = cs[p]
-  ok = letter? c or p > start and (alnum? c or has? "+.-" c)
+  ok = letter? c or (p > start and (alnum? c or has? "+.-" c))
   if ok (scheme_end cs start (p + 1)) p
 
 fn trailing_spaces (plain v)
@@ -312,7 +312,7 @@ fn linked cs p out refs b pic none
   not_a_link cs p out refs b pic
 
 fn linked cs _ out refs b pic (target dest next title)
-  kids = flatten (emphasize (text/slice out (b + 1) (length out)) 1)
+  kids = flatten (emphasize (ranged (text/slice out (b + 1) (length out))) 1)
   node = image_or_link pic dest kids title
   before = text/slice out 1 (b - 1)
   kept = if pic before (list/to_list (list/map before deactivate))
@@ -320,11 +320,12 @@ fn linked cs _ out refs b pic (target dest next title)
 
 fn not_a_link cs p out refs b pic
   opener = plain (if pic "![" "[")
-  fixed = text/concat (push (text/slice out 1 (b - 1)) opener) (after_b out b)
+  front = ranged (text/slice out 1 (b - 1))
+  fixed = list/concat (push front opener) (after_b out b)
   scan cs (p + 1) (push fixed (plain "]")) refs
 
 fn after_b out b
-  text/slice out (b + 1) (length out)
+  ranged (text/slice out (b + 1) (length out))
 
 fn opener_for xs j ch opens orig
   return 0 if j == 0
@@ -346,12 +347,13 @@ fn pair_up xs _ i none _
 fn pair_up xs j i (delim oc oo ch on oorig) closer
   { can_close:cc can_open:co count:cn orig:corig } = closer
   use = if (on >= 2 and cn >= 2) 2 1
-  inner = flatten (text/slice xs (j + 1) (i - 1))
+  inner = flatten (ranged (text/slice xs (j + 1) (i - 1)))
   wrapped = if (use == 2) (strong inner) (emph inner)
-  left = shrink (text/slice xs 1 (j - 1)) (delim oc oo ch (on - use) oorig)
+  front = ranged (text/slice xs 1 (j - 1))
+  left = shrink front (delim oc oo ch (on - use) oorig)
   right = shrink [] (delim cc co ch (cn - use) corig)
   after = text/slice xs (i + 1) (length xs)
-  joined = text/concat (push left wrapped) (text/concat right after)
+  joined = list/concat (push left wrapped) (list/concat right after)
   emphasize joined (length left + 2)
 
 fn pair_up xs _ i _ _

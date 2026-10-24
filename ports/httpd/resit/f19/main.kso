@@ -1,0 +1,18 @@
+# A read on one connection stops every other fiber in the program.
+#
+# Should: the early client, which connects at 0.5s and sends at once, is
+# answered at about 0.5s, while the late client's connection waits for
+# its request. Chapter 06 says a fiber that blocks parks and "the scheduler
+# runs whatever else is ready".
+#
+# Does: on every engine, the early client is answered only after the late
+# one has sent its request two seconds in. net/read is a blocking read
+# that holds the whole process, so the fiber serving the early client
+# never runs while the late client's fiber sits in its read. Each line is
+# the client's name and the second-within-the-minute it was answered:
+# "early" prints within a few hundredths of "late". It also means one idle
+# keep-alive client stops a whole server.
+import "./srv"
+import "std/net"
+
+net/listen 0 .> (l -> net/port l .> (p -> srv/race l p))

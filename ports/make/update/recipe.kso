@@ -35,7 +35,7 @@ fn expanded_from scope ats texts i acc
   return effect acc if i < 1 or length texts < i
   at = ats[i]
   here = expand/scope_at scope at
-  grown = (s -> push acc (read_line at s))
+  grown = (s -> push acc (recipe_line_of at s))
   more = (s -> expanded_lines scope ats texts (i + 1) (grown s))
   expand/expand here texts[i] .> more
 
@@ -53,12 +53,12 @@ fn given none
 fn given s
   s
 
-fn read_line at s
+fn recipe_line_of at s
   prefixed (words/trim_left s) at false false false
 
 fn prefixed s at silent ignore always
   c = text/slice s 1 1
-  rest = words/trim_left (text/slice s 2 (length s))
+  rest = words/trim_left (words/or_blank (text/slice s 2 (length s)))
   return prefixed rest at true ignore always if c == "@"
   return prefixed rest at silent true always if c == "-"
   return prefixed rest at silent ignore true if c == "+"

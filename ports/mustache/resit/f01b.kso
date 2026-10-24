@@ -1,0 +1,8 @@
+import "std/os"
+
+type run
+  a
+  b
+  c
+
+os/args .> (xs -> print "{run 1 2 (length xs)}")

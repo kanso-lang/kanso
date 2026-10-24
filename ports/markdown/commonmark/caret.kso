@@ -16,10 +16,10 @@ type gap
 
 # Advance by `count` columns, spending a tab partway when it is wider
 # than what is left to take.
-fn advance_cols c 0
+pub fn advance_cols c 0
   c
 
-fn advance_cols c count
+pub fn advance_cols c count
   advance_col c count c.chars[c.off]
 
 fn advance_col c _ none
@@ -49,7 +49,7 @@ fn advance_to c at
 fn blank? c
   (nonspace c).at > length c.chars
 
-fn caret_of chars
+pub fn caret_of chars
   caret chars 0 1 false
 
 fn char_at c at
@@ -66,14 +66,14 @@ fn peek c
 
 # What is left of the line, for a block that keeps lines. A tab spent
 # partway leaves its remaining columns behind as spaces.
-fn rest c
-  tail = text/join (text/slice c.chars c.off (length c.chars)) ""
+pub fn rest c
+  tail = text/join (ranged (text/slice c.chars c.off (length c.chars))) ""
   return tail if not c.tab
   pad = text/join (spaces (4 - c.col % 4)) ""
-  "{pad}{text/join (text/slice c.chars (c.off + 1) (length c.chars)) ""}"
+  "{pad}{rest_from c (c.off + 1)}"
 
 fn rest_from c at
-  text/join (text/slice c.chars at (length c.chars)) ""
+  text/join (ranged (text/slice c.chars at (length c.chars))) ""
 
 fn skip_spaces chars at col
   skip_one chars at col chars[at]

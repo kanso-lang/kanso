@@ -1,0 +1,4 @@
+import "std/list"
+
+print "{list/sort_by [[3 1] [1 2] [2 1]] (p -> p[1])}"
+  .> (_ -> print "{list/sort [[3 1] [1 2] [1 1]]}")

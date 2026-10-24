@@ -1,0 +1,8 @@
+type vec
+  items
+
+fn put (vec items) i x
+  vec (push items x)
+
+v = put (vec [1]) 2 5
+print "{v}"

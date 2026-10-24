@@ -1,0 +1,7 @@
+pub fn first n
+  n + 1
+
+# Integers.
+
+pub fn second n
+  n + 2

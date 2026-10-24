@@ -1,0 +1,7 @@
+import "../v"
+
+pub fn first (vec3 x)
+  x
+
+pub fn make n
+  v/vec3 n 0

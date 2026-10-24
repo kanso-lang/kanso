@@ -1,0 +1,7 @@
+import "std/text"
+
+fn head cs n
+  return "" if n < 1 or n > length cs
+  text/join (text/slice cs 1 n) ""
+
+print (head (text/chars "hello") 3)

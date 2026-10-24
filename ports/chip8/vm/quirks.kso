@@ -12,11 +12,15 @@ pub type quirks
   shift_vx
   vf_reset
 
+pub modern = quirks true true true false
+
+pub vip = quirks false false false true
+
 pub fn profile "modern"
-  quirks true true true false
+  modern
 
 pub fn profile "vip"
-  quirks false false false true
+  vip
 
 pub fn profile _
   none

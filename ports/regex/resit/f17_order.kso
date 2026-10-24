@@ -1,0 +1,11 @@
+fn first_word s
+  s
+
+type sweep
+  at
+  hits
+
+fn swept n
+  sweep n []
+
+print "{(swept 1).at} {first_word "a"}"

@@ -12,7 +12,7 @@ type seen
 # The first position of `sub` in `s` at or after `from`, or 0 when it does
 # not occur there. The split does the scanning.
 pub fn find s sub from
-  rest = text/slice s from (length s)
+  rest = whole (text/slice s from (length s))
   pieces = split_on rest sub
   if (length pieces < 2) 0 (from + length pieces[1])
 
@@ -66,7 +66,7 @@ pub fn trim_left s
 
 fn from_left s at
   return "" if at > length s
-  rest = text/slice s at (length s)
+  rest = whole (text/slice s at (length s))
   if (blank? (text/slice s at at)) (from_left s (at + 1)) rest
 
 pub fn trim_right s
@@ -74,7 +74,26 @@ pub fn trim_right s
 
 fn from_right s at
   return "" if at < 1
-  if (blank? (text/slice s at at)) (from_right s (at - 1)) (text/slice s 1 at)
+  kept = whole (text/slice s 1 at)
+  if (blank? (text/slice s at at)) (from_right s (at - 1)) kept
+
+# A one-character slice answers none past the end of the text.
+# A slice past the end answers none (gavel 2026-10-13); the ranges here
+# end at or before the end of the text, so none stands for no text.
+fn whole none
+  ""
+
+fn whole s
+  s
+
+pub fn or_blank none
+  ""
+
+pub fn or_blank s
+  s
+
+pub fn blank? none
+  false
 
 pub fn blank? c
   c == " " or c == "\t"
@@ -132,11 +151,11 @@ fn answer stem replacement _
 # need it; "./" when there is none.
 pub fn dir_part w
   at = find_last w "/"
-  if (at == 0) "./" (text/slice w 1 at)
+  if (at == 0) "./" (whole (text/slice w 1 at))
 
 pub fn file_part w
   at = find_last w "/"
-  text/slice w (at + 1) (length w)
+  whole (text/slice w (at + 1) (length w))
 
 # The last position of the one-character string `c` in `s`, or 0.
 pub fn find_last s c

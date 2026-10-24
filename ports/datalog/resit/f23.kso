@@ -1,0 +1,5 @@
+pub fn report x
+  refused x
+
+type refused
+  problem

@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # Bottom-up, semi-naive evaluation, one stratum at a time.
 #
@@ -72,7 +71,7 @@ fn arity_of (shape_at arity _)
 fn compile_stratum table s
   naive = list/to_list (list/map s.rules (r -> plan_rule table r 0))
   each = list/map s.rules (r -> delta_plans table r s.names)
-  deltas = list/fold each [] text/concat
+  deltas = list/fold each [] list/concat
   compiled_stratum deltas s.names naive
 
 fn compare? "=" a b
@@ -109,7 +108,7 @@ fn delta_plans table r names
 
 # A derived tuple joins the round's rows unless the relation already holds
 # it. Duplicates within the round are removed when the round ends.
-fn emit ctx pl env acc
+fn emit_row ctx pl env acc
   base = ctx.base
   code = list/fold pl.head 0 (c tm -> c * base + term_value env tm)
   if (present? ctx.seen[code]) acc (push acc code)
@@ -175,7 +174,7 @@ fn masks_of_plan acc p
   list/fold p.steps acc note_mask
 
 fn masks_of_stratum acc cs
-  all = text/concat cs.naive_plans cs.delta_plans
+  all = list/concat cs.naive_plans cs.delta_plans
   list/fold all acc masks_of_plan
 
 fn matched _ _ _ no_match acc
@@ -269,7 +268,7 @@ fn finished db report
 
 fn run_from ctx pl i env acc
   steps = pl.steps
-  return emit ctx pl env acc if i < 1 or length steps < i
+  return emit_row ctx pl env acc if i < 1 or length steps < i
   exec ctx pl i env acc steps[i]
 
 fn run_plan base db delta found p
@@ -285,7 +284,7 @@ fn run_stratum base (evaluation db reports) cs
   report = stratum_report (count_new first) cs.names 1
   return evaluation grown (push reports report) if length cs.delta_plans == 0
   done_with = rounds_from base grown first cs report
-  evaluation done_with.db (text/concat reports done_with.reports)
+  evaluation done_with.db (list/concat reports done_with.reports)
 
 fn seen_of none
   {}

@@ -1,0 +1,15 @@
+import "std/list"
+
+type cursor
+  at
+  text
+
+pub fn start s
+  c = cursor 1 s
+  c.at
+
+pub fn grow n
+  grown n 2 3
+
+fn grown a b c
+  list/sum [a b c]

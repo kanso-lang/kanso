@@ -1,0 +1,3 @@
+import "./acc"
+
+acc/total 70 .> (n -> print "total {n}")

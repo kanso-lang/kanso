@@ -117,7 +117,7 @@ fn run_at tok c i radix base
 # The value of the digits from `i` to `last`, skipping underscores. The run
 # has already been checked.
 fn digits_value tok i last radix
-  digits = list/reject (text/slice tok i last) (b -> b == 95)
+  digits = list/reject (some_slice (text/slice tok i last)) (b -> b == 95)
   list/fold digits 0 (acc c -> acc * radix + digit_of c)
 
 fn digit_of c
@@ -136,6 +136,9 @@ fn sign_width none
 
 fn sign_width _
   0
+
+fn run_last _ e@(err _) _ _
+  e
 
 # Leftover bytes after a run mean the token was not this kind of number. The
 # answer is the index of the run's last byte.
@@ -157,9 +160,15 @@ fn dec_int tok base
   e = digit_run tok i 10 base
   dec_int_end tok i e base
 
+fn dec_int_end _ _ e@(err _) _
+  e
+
 fn dec_int_end tok i e base
   last = run_last tok e base "integer"
   dec_int_value tok i last base
+
+fn dec_int_value _ _ e@(err _) _
+  e
 
 fn dec_int_value tok i last base
   zero_led = tok[i] == 48 and last > i
@@ -204,9 +213,15 @@ fn based_int tok base
   e = digit_run tok 3 radix base
   based_end tok e radix base
 
+fn based_end _ e@(err _) _ _
+  e
+
 fn based_end tok e radix base
   last = run_last tok e base "integer"
   based_value tok last radix base
+
+fn based_value _ e@(err _) _ _
+  e
 
 fn based_value tok last radix base
   in_range (digits_value tok 3 last radix) base
@@ -216,6 +231,9 @@ fn dec_float tok base
   i = sign_width tok[1] + 1
   e = digit_run tok i 10 base
   float_whole tok i e base
+
+fn float_whole _ _ e@(err _) _
+  e
 
 fn float_whole tok i e base
   zero_led = tok[i] == 48 and e > i + 1
@@ -231,6 +249,9 @@ fn float_part tok none e base
 
 fn float_part tok _ e base
   float_exp tok e base
+
+fn float_exp _ e@(err _) _
+  e
 
 fn float_exp tok e base
   exponent_at tok tok[e] e base
@@ -253,7 +274,11 @@ fn exponent tok i base
   last = run_last tok k base "float"
   float_text tok last
 
+fn float_text _ e@(err _)
+  e
+
 fn float_text tok last
-  digits = list/to_list (list/reject (text/slice tok 1 last) (b -> b == 95))
+  kept = some_slice (text/slice tok 1 last)
+  digits = list/to_list (list/reject kept (b -> b == 95))
   spelling = text/utf8 digits
   text/to_float spelling

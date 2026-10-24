@@ -1,0 +1,12 @@
+import "std/text"
+
+fn laid rows 0
+  "plain {rows}"
+
+fn laid e@(err _) _
+  e
+
+fn laid rows limit
+  "{rows} cut at {limit}"
+
+print (laid (text/to_int "3") 0)

@@ -1,0 +1,7 @@
+fn joined [] s
+  [s]
+
+fn joined acc s
+  push acc s
+
+print "{joined [] "a"}"

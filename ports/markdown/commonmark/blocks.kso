@@ -59,7 +59,7 @@ fn after_marker c
 
 # An ATX heading's text: the closing run of `#` goes when a space or the
 # start of the line comes before it.
-fn atx_content cs
+pub fn atx_content cs
   e = last_solid cs (length cs)
   h = before_hashes cs e
   return "" if h == 0
@@ -71,7 +71,7 @@ fn atx_start x
   k = run_length cs g.at "#"
   ok = not indented? x g and 1 <= k and k <= 6 and space_end? cs[g.at + k]
   return passed_over x if not ok
-  body = atx_content (text/slice cs (g.at + k) (length cs))
+  body = atx_content (ranged (text/slice cs (g.at + k) (length cs)))
   line_done (add_text_line (add_child (close_unmatched x) (heading k)) body)
 
 fn before_hashes cs p
@@ -165,10 +165,10 @@ fn fence_start x
   g = nonspace x.cur
   cs = x.cur.chars
   ch = cs[g.at]
-  return passed_over x if indented? x g or ch != "`" and ch != "~"
+  return passed_over x if indented? x g or (ch != "`" and ch != "~")
   k = run_length cs g.at ch
   info = span cs (g.at + k) (length cs)
-  return passed_over x if k < 3 or ch == "`" and has? info "`"
+  return passed_over x if k < 3 or (ch == "`" and has? info "`")
   kind = fenced ch (unescape (text/trim info)) k (g.col - x.cur.col)
   line_done (add_child (close_unmatched x) kind)
 
@@ -381,7 +381,7 @@ fn special? none
 fn special? c
   has? "#`~*+_=<>-0123456789" c
 
-fn split_lines text
+pub fn split_lines text
   t = text . swap "\r\n" "\n" . swap "\r" "\n"
   clean = swap t (text/from_code 0) (text/from_code 65533)
   ls = text/split clean "\n"
@@ -403,7 +403,7 @@ fn text_into st f c
   next = add_line st c
   if (html_ended? f.kind (rest c)) (close_top next st.line) next
 
-fn thematic? cs p
+pub fn thematic? cs p
   c = cs[p]
   return false if c != "*" and c != "-" and c != "_"
   thematic_count cs p c 0 >= 3

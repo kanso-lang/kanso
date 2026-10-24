@@ -1,0 +1,4 @@
+import "./cli"
+
+print (cli/shown "a")
+print (cli/shown "(")

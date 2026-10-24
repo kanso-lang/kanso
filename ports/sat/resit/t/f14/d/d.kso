@@ -1,0 +1,6 @@
+pub type formula
+  clauses
+  vars
+
+pub fn parse n
+  formula [[n]] n

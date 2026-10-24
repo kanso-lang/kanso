@@ -1,0 +1,8 @@
+fn expand_one p
+  effect "<{p}>"
+
+fn gather patterns i acc
+  return effect acc if i > length patterns
+  expand_one patterns[i] .> (x -> gather patterns (i + 1) (push acc x))
+
+gather ["a" "b"] 1 [] .> (r -> print "{r}")

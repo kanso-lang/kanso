@@ -1,0 +1,18 @@
+fn check n
+  return err "bad {n}" if n < 0
+  n
+
+fn resume a b
+  a + b
+
+fn both x y
+  check x .> (a -> check y .> (b -> resume a b))
+
+fn shown (err e)
+  "failed: {e}"
+
+fn shown n
+  "got {n + 1}"
+
+print (shown (both 1 2))
+print (shown (both 1 (0 - 2)))

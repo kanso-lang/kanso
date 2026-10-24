@@ -1,0 +1,11 @@
+import "std/io"
+import "std/os"
+
+fn fatal (err r)
+  io/write_err "fatal: {r}\n" .> (_ -> os/exit 128)
+
+fn command n
+  return os/exit 3 if n > 2
+  err "bad {n}"
+
+command 5 .? fatal

@@ -1,0 +1,15 @@
+import "std/text"
+
+fn big acc 0
+  acc
+
+fn big acc n
+  big "{acc}abcdefg" (n - 1)
+
+fn cut s i n acc
+  return acc if n == 0
+  piece = text/slice s i (i + 2)
+  cut s i (n - 1) (acc + length "{piece}")
+
+src = big "" 21000
+print "{cut src 1 20000 0}"

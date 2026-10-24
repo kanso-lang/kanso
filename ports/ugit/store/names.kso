@@ -44,8 +44,12 @@ fn parent_or_fail parent n whole
 fn first_ref candidates name
   return by_prefix name if length candidates == 0
   first = candidates[1]
-  rest = text/slice candidates 2 (length candidates)
+  rest = sliced (text/slice candidates 2 (length candidates))
   get_ref first .> (at -> ref_or_next at.value rest name)
+
+# `kanso test store` reads `at.value` as possibly none; `kanso check` does not.
+fn ref_or_next none rest name
+  first_ref rest name
 
 fn ref_or_next (ref_value _ none) rest name
   first_ref rest name

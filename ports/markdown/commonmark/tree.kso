@@ -4,32 +4,32 @@ import "std/text"
 # differs by kind is an overload group dispatching on it.
 type doc
 
-type fenced
+pub type fenced
   char
   info
   len
   offset
 
-type heading
+pub type heading
   level
 
-type hr
+pub type hr
 
-type html_block
+pub type html_block
   variant
 
-type indented
+pub type indented
 
 type item
   mark
 
-type listing
+pub type listing
   mark
   tight
 
-type para
+pub type para
 
-type quote
+pub type quote
 
 # What a list marker said: the bullet character or the ordered delimiter,
 # the column it sat at, and how far its content is indented past that.
@@ -149,7 +149,7 @@ fn para? _
   false
 
 fn pop xs
-  text/slice xs 1 (length xs - 1)
+  ranged (text/slice xs 1 (length xs - 1))
 
 fn replace_top st f
   state st.closed st.line st.refs (push (pop st.stack) f)
@@ -159,3 +159,11 @@ fn top st
 
 fn with_lines f lines
   frame f.end f.kind lines f.size f.start
+
+# A range the caller has already bounded. text/slice answers none past the
+# end (#1890), which these ranges never reach.
+fn ranged none
+  []
+
+fn ranged xs
+  xs

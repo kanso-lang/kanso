@@ -37,7 +37,7 @@ fn names_of sh
   list/to_list (list/map (list/take list/naturals (width_of sh)) (i -> "{i}"))
 
 fn header_names sheets false
-  list/fold sheets [] (acc sh -> text/concat acc (names_of sh))
+  list/fold sheets [] (acc sh -> list/concat acc (names_of sh))
 
 # The names of the first input that every other input also has, once each.
 fn header_names sheets true

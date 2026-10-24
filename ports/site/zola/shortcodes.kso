@@ -34,7 +34,7 @@ fn flush _ acc chunk true
 fn flush eng acc chunk false
   words = text/join chunk "\n"
   done_text = expand eng words
-  added acc done_text
+  done_text .> (t -> added acc t)
 
 fn added acc x
   push acc x
@@ -44,13 +44,17 @@ fn expand eng words
   out = calls eng cs 1 []
   joined out ""
 
+fn joined e@(err _) _
+  e
+
 fn joined parts sep
   text/join parts sep
 
 fn calls eng cs p acc
   at = next_call cs p
-  return push acc (text/join (text/slice cs p (length cs)) "") if at == none
-  before = push acc (text/join (text/slice cs p (at - 1)) "")
+  rest = text/join (textkit/clamped cs p (length cs)) ""
+  return push acc rest if at == none
+  before = push acc (text/join (textkit/clamped cs p (at - 1)) "")
   call_at eng cs at before (cs[at + 1] == "%")
 
 fn next_call cs p
@@ -76,7 +80,7 @@ fn call_shape cs p close
   shut = if opens (paren_close cs (name_end + 1) 0) none
   after = if (shut == none) none (skip_spaces cs (shut + 1))
   closed = after != none and cs[after] == close and cs[after + 1] == "}"
-  source = text/join (text/slice cs start (if (shut == none) 0 shut)) ""
+  source = text/join (textkit/clamped cs start (if (shut == none) 0 shut)) ""
   if closed (call_site (after + 2) source) none
 
 fn skip_spaces cs p
@@ -101,20 +105,22 @@ fn string_end cs p q
   if (c == q) (p + 1) (string_end cs (p + 1) q)
 
 fn inline_call eng cs at acc none
-  calls eng cs (at + 2) (push acc (text/join (text/slice cs at (at + 1)) ""))
+  pair = text/join (textkit/clamped cs at (at + 1)) ""
+  calls eng cs (at + 2) (push acc pair)
 
 fn inline_call eng cs _ acc (call_site next source)
   out = tera/shortcode eng source {} 1
   calls eng cs next (push acc (called_out source out))
 
 fn body_call eng cs at acc none
-  calls eng cs (at + 2) (push acc (text/join (text/slice cs at (at + 1)) ""))
+  pair = text/join (textkit/clamped cs at (at + 1)) ""
+  calls eng cs (at + 2) (push acc pair)
 
 fn body_call eng cs _ acc (call_site next source)
-  rest = text/join (text/slice cs next (length cs)) ""
+  rest = text/join (textkit/clamped cs next (length cs)) ""
   end = textkit/index_of rest "\{% end %}" 1
   return err "shortcode `{source}` has no `\{% end %}`" if end == none
-  body = text/slice rest 1 (end - 1)
+  body = textkit/clamped rest 1 (end - 1)
   out = tera/shortcode eng source { "body":(trimmed body) } 1
   calls eng cs (next + end + 8) (push acc (called_out source out))
 

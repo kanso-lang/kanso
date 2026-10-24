@@ -1,0 +1,9 @@
+import "std/os"
+
+fn got (os/file_not_found p)
+  "missing {p}"
+
+fn got s
+  s
+
+os/read_file "/nonexistent" .> (r -> print (got r))

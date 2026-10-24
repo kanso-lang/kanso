@@ -1,0 +1,10 @@
+import "std/list"
+
+type slot
+  path
+  value
+
+slots = [(slot "b" 1) (slot "a" 2) (slot "c" 3)]
+ordered = list/sort_by slots (s -> s.path)
+
+print "{list/to_list (list/map ordered (s -> s.value))}"

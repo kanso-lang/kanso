@@ -1,0 +1,3 @@
+import "std/text"
+
+print "{text/index_of "a.b" "."}"

@@ -1,0 +1,88 @@
+import "std/list"
+import "std/path"
+import "std/text"
+
+# The file types `-t` and `-T` know: a subset of ripgrep's own table, with
+# the same globs. A type matches a file by its name alone.
+type_names = text/split "{type_words} {more_type_words}" " "
+
+type_words = "c css go html js json log markdown md"
+
+more_type_words = "py python rust sh toml txt yaml"
+
+# The globs for one type name, or an empty list for a name nobody defined.
+pub fn type_globs "c"
+  ["*.[chH]" "*.[chH].in" "*.cats"]
+
+pub fn type_globs "css"
+  ["*.css" "*.scss"]
+
+pub fn type_globs "go"
+  ["*.go"]
+
+pub fn type_globs "html"
+  ["*.ejs" "*.htm" "*.html"]
+
+pub fn type_globs "js"
+  ["*.cjs" "*.js" "*.jsx" "*.mjs" "*.vue"]
+
+pub fn type_globs "json"
+  ["*.json" "*.sarif" "composer.lock"]
+
+pub fn type_globs "log"
+  ["*.log"]
+
+pub fn type_globs "markdown"
+  md_globs
+
+pub fn type_globs "md"
+  md_globs
+
+pub fn type_globs "py"
+  ["*.py" "*.pyi"]
+
+pub fn type_globs "python"
+  ["*.py" "*.pyi"]
+
+pub fn type_globs "rust"
+  ["*.rs"]
+
+pub fn type_globs "sh"
+  text/split "{sh_shells} {sh_dots} {sh_more_dots} {sh_plain} {sh_more}" " "
+
+pub fn type_globs "toml"
+  ["*.toml" "Cargo.lock"]
+
+pub fn type_globs "txt"
+  ["*.txt"]
+
+pub fn type_globs "yaml"
+  ["*.yaml" "*.yml"]
+
+pub fn type_globs _
+  []
+
+md_globs = ["*.markdown" "*.md" "*.mdown" "*.mdwn" "*.mdx" "*.mkd" "*.mkdn"]
+
+# A list literal holds one line and so does a string, and this list is
+# longer than a line, so the shell globs are five strings split on spaces.
+sh_shells = "*.bash *.bashrc *.csh *.cshrc *.ksh *.kshrc *.sh *.tcsh *.zsh"
+
+sh_dots = ".bash_login .bash_logout .bash_profile .bashrc .cshrc .kshrc"
+
+sh_more_dots = ".login .logout .profile .tcshrc .zlogin .zlogout .zprofile"
+
+sh_plain = ".zshenv .zshrc bash_login bash_logout bash_profile bashrc"
+
+sh_more = "profile zlogin zlogout zprofile zshenv zshrc"
+
+# `--type-list`, one type a line, the way ripgrep prints it.
+pub type_lines = list/to_list (list/map type_names listed)
+
+fn listed name
+  "{name}: {text/join (type_globs name) ", "}"
+
+# Does a file's name match any of these type globs?
+pub fn typed? globs file
+  name = path/basename file
+  list/any? globs (g -> glob_match? g name)

@@ -1,0 +1,20 @@
+# Run with `kanso play if_in_list_literal.kso` and with `--interp`.
+#
+# A list element is one atom, so `[if (n > 0) "yes" "no"]` is a list of four
+# elements: the function `if`, a boolean, and two strings. A record
+# constructor in the same position is refused with a clear message ("`to_scan`
+# takes 2 argument(s), and a list element is one atom ... Write
+# `(to_scan ...)`"). `if` is not.
+#
+# Expected: the same refusal for `if`, pointing at line 18; or, failing that,
+# the same behaviour on both engines.
+# Actual: `kanso check` on the port (datalog/answer.kso) said ok. The
+# interpreter builds the four-element list and fails later, far away, with
+# "error[runtime]: join takes a list of strings". The native engine refuses the whole program with "error: native
+# backend: `if` as a bare value is not yet supported", with no location.
+import "std/text"
+
+fn verdict n
+  [if (n > 0) "yes" "no"]
+
+print (text/join (verdict 3) ", ")

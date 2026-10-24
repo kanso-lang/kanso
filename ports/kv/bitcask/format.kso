@@ -60,7 +60,7 @@ pub fn encode_record stamp key value
   kb = utf8_bytes key
   vfield = be32 (value_size value)
   body = cat [(be32 stamp) (be16 (length kb)) vfield kb (value_bytes value)]
-  text/concat (be32 (crc32 body)) body
+  list/concat (be32 (crc32 body)) body
 
 fn value_bytes _:tombstone
   []
@@ -97,7 +97,7 @@ pub fn decode_at bs offset
   whole = text/slice bs (offset + 5) (offset + size)
   return corrupt offset if crc32 whole != read_be bs offset 4
   key_at = offset + header_size
-  key = text/utf8 (text/slice bs (key_at + 1) (key_at + ksz))
+  key = text/utf8 (inside (text/slice bs (key_at + 1) (key_at + ksz)))
   vb = text/slice bs (key_at + ksz + 1) (offset + size)
   record key offset size (read_be bs (offset + 4) 4) (value_of vfield vb)
 
@@ -127,9 +127,9 @@ fn hints_from bs at acc
   next = at + hint_header_size + ksz
   return trailer bs at size acc if offset == max_offset
   return bad_hint at if length bs < next
-  key = text/utf8 (text/slice bs (at + hint_header_size + 1) next)
+  key = text/utf8 (inside (text/slice bs (at + hint_header_size + 1) next))
   hints_from bs next (push acc (hint key offset size (read_be bs at 4)))
 
 fn trailer bs at crc acc
   whole = at + hint_header_size == length bs
-  if (whole and crc32 (text/slice bs 1 at) == crc) acc (bad_hint at)
+  if (whole and crc32 (inside (text/slice bs 1 at)) == crc) acc (bad_hint at)

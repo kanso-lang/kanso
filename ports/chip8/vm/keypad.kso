@@ -38,7 +38,7 @@ fn unique_frames events
   keys (list/index_by events (e -> e.frame))
 
 fn in_frame acc events f
-  text/concat acc (list/to_list (list/select events (e -> e.frame == f)))
+  list/concat acc (list/to_list (list/select events (e -> e.frame == f)))
 
 fn script_line (bad_script reason) _
   bad_script reason
@@ -53,7 +53,7 @@ fn added _ n (bad_script reason)
   bad_script "line {n}: {reason}"
 
 fn added acc _ events
-  text/concat acc events
+  list/concat acc events
 
 fn blank? w
   w == ""

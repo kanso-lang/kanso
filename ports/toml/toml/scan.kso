@@ -56,6 +56,9 @@ fn end_at cs 35 p
 fn end_at cs _ p
   fail p "expected newline or end of input, found {shown cs p}"
 
+fn newline_at _ e@(err _)
+  e
+
 # Where `p` is a cursor that may already be a failure, reading the byte under it
 # would be an index on an err; a call carries the failure past instead.
 fn newline_at cs p
@@ -64,8 +67,19 @@ fn newline_at cs p
 fn fail p reason
   err (parse_failure p reason)
 
+# A slice whose range the scan has just bounded is never none; the none arm is
+# there because the checker cannot see that.
+fn some_slice none
+  []
+
+fn some_slice xs
+  xs
+
 # After a key/value pair or a header: blanks, an optional comment, and then the
 # line has to end.
+fn line_end _ e@(err _)
+  e
+
 fn line_end cs p
   q = skip_blank cs p
   end_at cs cs[q] q
@@ -80,7 +94,7 @@ fn continuation? b
   127 < b and b < 192
 
 fn line_of cs p
-  list/count (text/slice cs 1 (p - 1)) (b -> b == 10) + 1
+  list/count (some_slice (text/slice cs 1 (p - 1))) (b -> b == 10) + 1
 
 fn line_start cs p
   return 1 if p < 2
@@ -121,7 +135,8 @@ fn shown_byte _ 13 _
 
 fn shown_byte cs c p
   return "control character {c}" if control? c
-  "`{text/utf8 (text/slice cs p (p + utf8_width c - 1))}`"
+  piece = some_slice (text/slice cs p (p + utf8_width c - 1))
+  "`{text/utf8 piece}`"
 
 fn skip_blank cs p
   if (blank? cs[p]) (skip_blank cs (p + 1)) p
@@ -142,6 +157,9 @@ fn comment_at _ 13 p
 fn comment_at cs c p
   return fail p "control character {c} in comment" if control? c
   comment_at cs cs[p + 1] (p + 1)
+
+fn skip_space _ e@(err _)
+  e
 
 # Blanks, newlines and comments, as they may sit between array elements.
 fn skip_space cs p

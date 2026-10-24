@@ -1,0 +1,5 @@
+import "std/text"
+
+piece = text/slice "ab" 1 5
+
+print "{length piece}"

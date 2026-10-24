@@ -1,0 +1,19 @@
+# Bug: a helper function in a test file may call a private name of the
+# module, the checker lets it through, and the test fails at run time with
+# a mangled name.
+#
+# Run from bugs/test_helper_reaches_private_name: kanso test m
+#
+# should: refuse `hidden` at check, as it refuses the same name in a test
+#   constant ("error[name]: unknown name `hidden`", which `test_direct`
+#   below gets when uncommented). Ruling 2026-10-12: a test file sees only
+#   pub names.
+# does: `test_through_helper ... FAILED` with "error[runtime]: unknown name
+#   `~hidden`". The `~` is an internal spelling the author never wrote.
+
+fn via n
+  hidden n
+
+test_through_helper = via 1 == 2
+
+test_public = shown 1 == 2

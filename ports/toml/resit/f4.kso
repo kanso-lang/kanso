@@ -1,0 +1,8 @@
+fn need_int n
+  n + 1
+
+fn first_guard xs i
+  return 0 if length xs < i
+  need_int xs[i]
+
+print (first_guard [1 2] 1)

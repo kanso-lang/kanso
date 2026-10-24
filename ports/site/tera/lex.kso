@@ -3,15 +3,15 @@ import "std/list"
 import "std/text"
 
 # The pieces of a template between its delimiters.
-type t_expr
+pub type t_expr
   body
   line
 
-type t_tag
+pub type t_tag
   body
   line
 
-type t_text
+pub type t_text
   words
 
 # One token inside `{{ }}` or `{% %}`: `kind` is name, str, int, float or
@@ -31,14 +31,14 @@ type scan
 
 # Cut a template into text, `{{ expression }}` and `{% tag %}` pieces.
 # Comments go, and `-` beside a delimiter trims the space on that side.
-fn pieces name src
+pub fn pieces name src
   cs = text/chars src
   cut name cs (scan [] 1 1 false)
 
 fn cut name cs st
   { p } = st
   at = next_open cs p
-  words = text/join (text/slice cs p (at - 1)) ""
+  words = text/join (textkit/clamped cs p (at - 1)) ""
   text_done = add_text st words
   return text_done.acc if cs[at] == none
   opened name cs at text_done
@@ -68,7 +68,7 @@ fn opened name cs at st
   return fail name st.line "unclosed `\{{kind}`" if end == none
   right = cs[end - 1] == "-"
   stop = if right (end - 2) (end - 1)
-  body = text/trim (text/join (text/slice cs start stop) "")
+  body = text/trim (text/join (textkit/clamped cs start stop) "")
   trimmed = if left (trim_last st) st
   piece_of name cs (end + 2) trimmed kind body right
 
@@ -92,7 +92,7 @@ fn trim_last (scan acc line p trim)
 
 fn trim_text acc n (t_text words)
   stripped = textkit/trim_end words
-  front = text/slice acc 1 (n - 1)
+  front = textkit/clamped acc 1 (n - 1)
   if (stripped == "") front (push front (t_text stripped))
 
 fn trim_text acc _ _
@@ -120,10 +120,10 @@ fn count_body (scan acc line p trim) body
 # After `{% raw %}` everything up to `{% endraw %}` is text.
 fn verbatim name cs st
   { p } = st
-  src = text/join (text/slice cs p (length cs)) ""
+  src = text/join (textkit/clamped cs p (length cs)) ""
   end = textkit/index_of src "\{% endraw %}" 1
   return fail name st.line "`raw` without `endraw`" if end == none
-  words = text/slice src 1 (end - 1)
+  words = textkit/clamped src 1 (end - 1)
   added = add_text st words
   ended = push added.acc (t_tag "endraw" added.line)
   cut name cs (scan ended added.line (p + end + 11) false)
@@ -132,7 +132,7 @@ fn fail _ line message
   err "line {line}: {message}"
 
 # The tokens of one expression or tag body.
-fn tokens name body line
+pub fn tokens name body line
   lexed name (text/chars body) 1 line []
 
 fn lexed name cs p line acc
@@ -153,7 +153,7 @@ fn token_at name cs "`" p line acc
 fn token_at name cs c p line acc
   return word_token name cs p line acc if textkit/letter? c or c == "_"
   return number_token name cs p line acc if textkit/digit? c
-  two = text/join (text/slice cs p (p + 1)) ""
+  two = text/join (textkit/clamped cs p (p + 1)) ""
   paired = push acc (tok "op" line two)
   return lexed name cs (p + 2) line paired if pair_op? two
   return lexed name cs (p + 1) line (push acc (tok "op" line c)) if single_op? c
@@ -168,7 +168,7 @@ fn single_op? c
 fn quoted name cs q p line acc
   end = text_end cs q (p + 1)
   return fail name line "unterminated string" if end == none
-  words = text/join (text/slice cs (p + 1) (end - 1)) ""
+  words = text/join (textkit/clamped cs (p + 1) (end - 1)) ""
   lexed name cs (end + 1) line (push acc (tok "str" line words))
 
 fn text_end cs q p
@@ -177,7 +177,7 @@ fn text_end cs q p
 
 fn word_token name cs p line acc
   end = run_end cs p (c -> textkit/alnum? c or c == "_")
-  words = text/join (text/slice cs p (end - 1)) ""
+  words = text/join (textkit/clamped cs p (end - 1)) ""
   lexed name cs end line (push acc (tok "name" line words))
 
 fn number_token name cs p line acc
@@ -185,7 +185,7 @@ fn number_token name cs p line acc
   fraction = cs[end] == "." and textkit/digit? cs[end + 1]
   stop = if fraction (run_end cs (end + 1) (c -> textkit/digit? c)) end
   kind = if fraction "float" "int"
-  words = text/join (text/slice cs p (stop - 1)) ""
+  words = text/join (textkit/clamped cs p (stop - 1)) ""
   lexed name cs stop line (push acc (tok kind line words))
 
 fn run_end cs p keep

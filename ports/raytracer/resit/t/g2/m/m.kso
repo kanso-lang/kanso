@@ -1,0 +1,12 @@
+import "std/list"
+
+type bag
+  items
+
+fn half n
+  return err "odd" if n % 2 == 1
+  bag [n]
+
+pub fn f n
+  r = half n
+  list/first r.items

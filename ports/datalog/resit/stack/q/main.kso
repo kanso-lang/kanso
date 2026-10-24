@@ -1,0 +1,4 @@
+import "./m"
+import "std/os"
+
+os/read_file! "in.txt" .> (s -> print "{length (m/lex s)} {m/other 1}")

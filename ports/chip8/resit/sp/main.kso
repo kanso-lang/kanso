@@ -1,0 +1,8 @@
+import "../../isa"
+
+print (isa/spell (isa/decode 20481))
+print (isa/spell (isa/decode 56533))
+print (isa/spell (isa/decode 60574))
+print (isa/spell (isa/parse "DRW" ["V1" "v2" "15"] isa/literal))
+print (isa/spell (isa/parse "JP" ["V0" "#300"] isa/literal))
+print (isa/spell (isa/parse "LD" ["[i]" "VA"] isa/literal))

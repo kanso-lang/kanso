@@ -22,6 +22,10 @@ type gz_member
   fields
   next
 
+# Fewer than two bytes left is not a gzip header.
+pub fn gzip? none
+  false
+
 pub fn gzip? src
   byte_at src 1 == 31 and byte_at src 2 == 139
 
@@ -33,10 +37,13 @@ fn each_member src p out blocks fields count
   m = member src p
   more_members src out blocks fields count m
 
+fn more_members _ _ _ _ _ e@(err _)
+  e
+
 fn more_members src out blocks fields count (gz_member more data own next)
   joined = text/append out data
-  all_blocks = text/concat blocks more
-  all_fields = text/concat fields own
+  all_blocks = list/concat blocks more
+  all_fields = list/concat fields own
   finished = unpacked all_blocks joined all_fields "gzip" (count + 1)
   return finished if next > length src
   junk = not gzip? (text/slice src next (next + 1))
@@ -78,7 +85,7 @@ fn header_crc_bad? _ _ _ 0
   false
 
 fn header_crc_bad? src p q _
-  sum = checksum/crc32 (text/slice src p (q - 1)) & 65535
+  sum = checksum/crc32 (inside (text/slice src p (q - 1))) & 65535
   sum != le16 src q
 
 fn header_fields src p q1 q2 q3 flg
@@ -92,7 +99,7 @@ fn header_fields src p q1 q2 q3 flg
 
 fn with_string fields label src from to
   return fields if from == to
-  push fields (field label (latin1 (text/slice src from (to - 2))))
+  push fields (field label (latin1 (inside (text/slice src from (to - 2)))))
 
 fn with_extra fields from to
   return fields if from == to

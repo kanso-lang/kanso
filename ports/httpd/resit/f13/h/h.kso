@@ -1,0 +1,11 @@
+pub type response
+  body
+  headers
+  status
+
+pub fn make s
+  response "b" [] s
+
+pub fn with_header r name
+  { body headers status } = r
+  response body (push headers name) status

@@ -1,0 +1,32 @@
+pub fn lex cs
+  scan cs 1 []
+
+fn emit cs p acc x
+  scan cs (p + 1) (push acc x)
+
+fn scan cs p acc
+  scan_char cs p cs[p] acc
+
+fn skip _ _ none acc
+  acc
+
+fn skip cs p "*" acc
+  if (cs[p + 1] == "/")
+    scan cs (p + 2) acc
+  else
+    next = p + 1
+    skip cs next cs[next] acc
+
+fn skip cs p _ acc
+  next = p + 1
+  skip cs next cs[next] acc
+
+fn scan_char _ _ none acc
+  acc
+
+fn scan_char cs p "(" acc
+  emit cs p acc 1
+
+fn scan_char cs p "/" acc
+  return skip cs (p + 2) cs[p + 2] acc if cs[p + 1] == "*"
+  acc

@@ -56,7 +56,18 @@ fn written name (ref_value false oid)
 
 fn ref_written name content
   full = ref_path name
-  os/make_dir (path/dirname full) .> (_ -> os/write_file full content)
+  os/make_dir (dir_of full) .> (_ -> os/write_file full content)
+
+# std/path's dirname slices without a none arm, so the checker reads its answer
+# as possibly none, though a path with a separator in it never gives one.
+pub fn dir_of full
+  known_dir (path/dirname full)
+
+fn known_dir none
+  "."
+
+fn known_dir dir
+  dir
 
 pub fn delete_ref name
   removed (ref_path name)
@@ -71,10 +82,10 @@ fn with_heads names
     .> (h -> os/exists (ref_path "MERGE_HEAD") .> (m -> heads h m under))
 
 fn heads true true under
-  effect (text/concat ["HEAD" "MERGE_HEAD"] under)
+  effect (list/concat ["HEAD" "MERGE_HEAD"] under)
 
 fn heads true false under
-  effect (push [] "HEAD" . (hs -> text/concat hs under))
+  effect (push [] "HEAD" . (hs -> list/concat hs under))
 
 fn heads _ _ under
   effect under

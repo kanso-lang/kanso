@@ -1,0 +1,8 @@
+import "std/text"
+
+fn count_of word
+  n = text/to_int word
+  return n if 0 < n
+  0
+
+print "{count_of "zero"}"

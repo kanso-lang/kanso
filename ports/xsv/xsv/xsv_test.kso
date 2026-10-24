@@ -1,8 +1,8 @@
 import "std/list"
 import "std/testing"
 
-sample_specs = [(flag "--select" "-s" true)]
-  . push (flag "--reverse" "-R" false)
+sample_specs = [(flag_of "--select" "-s" true)]
+  . push (flag_of "--reverse" "-R" false)
   . flags_with
 
 fn parsed_with argv
@@ -13,24 +13,25 @@ test_args_positional =
   o.rest == ["a.csv"]
 
 test_args_long_value =
-  o = parsed_with ["--select" "1,2" "x.csv"]
-  value_or o "--select" "" == "1,2" and o.rest == ["x.csv"]
+  check = (o -> value_or o "--select" "" == "1,2" and o.rest == ["x.csv"])
+  parsed_with ["--select" "1,2" "x.csv"] .> check
 
 test_args_long_equals =
-  o = parsed_with ["--select=a=b"]
-  value_or o "--select" "" == "a=b"
+  check = (o -> value_or o "--select" "" == "a=b")
+  parsed_with ["--select=a=b"] .> check
 
-test_args_short_cluster =
-  o = parsed_with ["-nRs" "3"]
+fn cluster_read? o
   on? o "--no-headers" and on? o "--reverse" and value_or o "--select" "" == "3"
 
+test_args_short_cluster = parsed_with ["-nRs" "3"] .> cluster_read?
+
 test_args_short_attached =
-  o = parsed_with ["-s1-2"]
-  value_or o "--select" "" == "1-2"
+  check = (o -> value_or o "--select" "" == "1-2")
+  parsed_with ["-s1-2"] .> check
 
 test_args_double_dash =
-  o = parsed_with ["--" "-n" "--x"]
-  o.rest == ["-n" "--x"] and not on? o "--no-headers"
+  check = (o -> o.rest == ["-n" "--x"] and not on? o "--no-headers")
+  parsed_with ["--" "-n" "--x"] .> check
 
 test_args_stdin_dash =
   o = parsed_with ["-"]
@@ -56,17 +57,17 @@ fn number_is? n want
   n == want
 
 test_number_flag =
-  o = parsed_with ["--select" "12"]
-  number_is? (number_or o "--select" 0) 12
+  check = (o -> number_is? (number_or o "--select" 0) 12)
+  parsed_with ["--select" "12"] .> check
 
 test_number_flag_default =
-  o = parsed_with []
-  number_is? (number_or o "--select" 7) 7
+  check = (o -> number_is? (number_or o "--select" 7) 7)
+  parsed_with [] .> check
 
 test_number_flag_bad =
-  o = parsed_with ["--select" "x"]
   why = "flag --select wants a whole number, got 'x'"
-  testing/when_failed (number_or o "--select" 0) (r -> r == why)
+  number = parsed_with ["--select" "x"] .> (o -> number_or o "--select" 0)
+  testing/when_failed number (r -> r == why)
 
 test_float_whole = rust_float 6.0 == "6"
 

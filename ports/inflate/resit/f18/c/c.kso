@@ -1,0 +1,10 @@
+import "../d"
+
+pub fn shown n
+  told (d/decode n)
+
+fn told (err e:d/corrupt)
+  "corrupt: {e.reason}"
+
+fn told v
+  "{v}"

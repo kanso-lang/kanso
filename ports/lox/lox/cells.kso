@@ -18,7 +18,7 @@ type quad
   d
 
 # A subtree nothing has been written to yet.
-type vacant
+pub type vacant
 
 pub empty_cells = cells (quad vacant vacant vacant vacant) 1
 

@@ -1,3 +1,4 @@
+import "std/list"
 import "std/text"
 
 # Unit propagation over two watched literals.
@@ -69,7 +70,7 @@ fn stuck tr cls wat ws i kept fl props cid first
   open = value_of assigns first == 0
   return forcing tr cls wat ws i kept fl props cid first if open
   rest = text/slice ws (i + 1) (length ws)
-  propagated cls cid props (drained tr) (set_at wat fl (text/concat kept rest))
+  propagated cls cid props (drained tr) (set_at wat fl (list/concat kept rest))
 
 fn forcing tr cls wat ws i kept fl props cid first
   visit (enqueue tr first cid) cls wat ws (i + 1) kept fl props
@@ -82,7 +83,8 @@ fn drained (assignment assigns level lim _ reason size trail)
 fn rewatched c other k fl
   l = c[k]
   middle = push (text/slice c 3 (k - 1)) fl
-  text/concat (text/concat [other l] middle) (text/slice c (k + 1) (length c))
+  rest = ranged (text/slice c (k + 1) (length c))
+  list/concat (list/concat [other l] middle) rest
 
 # The first position from k on whose literal is not false, or 0.
 fn unfalsified assigns c k

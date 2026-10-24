@@ -90,7 +90,8 @@ fn quoted src p acc fields
   closing src p q acc fields src.bytes[q + 1]
 
 fn closing src p q acc fields 34
-  quoted src (q + 2) (text/append acc (text/slice src.bytes p q)) fields
+  run = sliced (text/slice src.bytes p q)
+  quoted src (q + 2) (text/append acc run) fields
 
 fn closing src p q acc fields none
   close src p q acc fields
@@ -106,7 +107,7 @@ fn close src p q acc fields
 # The input ended inside quotes. The csv crate keeps what it read, and so does
 # this reader.
 fn unclosed src p acc fields
-  whole = text/append acc (text/slice src.bytes p (length src.bytes))
+  whole = text/append acc (sliced (text/slice src.bytes p (length src.bytes)))
   cut (push fields (text/utf8 whole)) (length src.bytes + 1)
 
 # After a closing quote comes a delimiter, a line break or the end. Anything
@@ -128,7 +129,7 @@ fn stop_after src p acc fields c
   after_quote src (p + 1) (text/append acc c) fields
 
 fn piece bs from upto
-  text/utf8 (text/slice bs from (upto - 1))
+  text/utf8 (sliced (text/slice bs from (upto - 1)))
 
 # Every record is as wide as the first one.
 fn even src (gathered rows starts)
@@ -142,7 +143,16 @@ fn verdict _ rows _ _ none
   rows
 
 fn verdict src rows starts width i
-  line = 1 + list/count (text/slice src.bytes 1 (starts[i] - 1)) (b -> b == 10)
+  before = sliced (text/slice src.bytes 1 (starts[i] - 1))
+  line = 1 + list/count before (b -> b == 10)
   at = "record {i - 1} (line: {line}, byte: {starts[i] - 1})"
   found = "found record with {length rows[i]} fields"
   err "CSV error: {at}: {found}, but the previous record has {width} fields"
+
+# A slice whose range the reader has just bounded is never none; the none arm
+# is there because the checker cannot see that.
+fn sliced none
+  []
+
+fn sliced bs
+  bs

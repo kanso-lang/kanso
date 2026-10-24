@@ -1,0 +1,9 @@
+import "std/text"
+
+fn fresh args
+  put {} "globs" args
+
+fn globs m
+  text/join m["globs"] ","
+
+print (globs (fresh ["a" "b"]))

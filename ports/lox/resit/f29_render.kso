@@ -1,0 +1,18 @@
+type literal
+  value
+
+type token
+  kind
+  lexeme
+  line
+
+type define
+  init
+  name
+  slot
+
+tree = [
+  (define (literal 1.0) (token "identifier" "a" 1) 1)
+  (define (literal 2.0) (token "identifier" "b" 1) 2)
+]
+print "{tree}"

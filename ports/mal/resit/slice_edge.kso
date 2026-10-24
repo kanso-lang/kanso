@@ -1,0 +1,10 @@
+import "std/list"
+import "std/text"
+
+xs = [1 2 3]
+print "{text/slice xs 2 3}"
+print "{text/slice xs 4 3}"
+print "{text/slice xs 5 3}"
+print "{text/slice "abc" 4 3}"
+print "{text/slice "abc" 2 5}"
+print "{list/to_list (list/drop xs 1)}"

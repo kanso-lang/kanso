@@ -9,5 +9,13 @@ pub fn starts_with? s prefix
 pub fn after s prefix
   text/slice s (length prefix + 1) (length s)
 
+# A slice whose range the code just bounded is never none; the none arm is
+# there because the checker cannot see that.
+pub fn sliced none
+  []
+
+pub fn sliced xs
+  xs
+
 pub fn contains? s piece
   length (text/split s piece) > 1

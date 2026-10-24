@@ -127,7 +127,7 @@ fn blank_after_tag? cs e
 
 fn ends_tag_name? cs e
   c = cs[e]
-  c == none or c == ">" or link_space? c or c == "/" and cs[e + 1] == ">"
+  c == none or c == ">" or link_space? c or (c == "/" and cs[e + 1] == ">")
 
 # Each kind of HTML block names the line that ends it; kinds 6 and 7 end
 # at a blank line instead, which the block parser sees for itself.

@@ -1,0 +1,8 @@
+== unit tests
+24 passed, 0 failed
+51 passed, 0 failed
+== build
+built ./xsv (llvm ir at xsv.ll)
+built ./xsv (llvm ir at xsv.ll)
+== fixtures
+ok: 122 fixtures agree on interp, dev and release

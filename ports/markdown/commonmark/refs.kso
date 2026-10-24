@@ -18,6 +18,10 @@ type taken
   refs
   rest
 
+# A reference definition built directly, for the tests.
+pub fn new_ref_def dest title
+  ref_def dest title
+
 fn at_line_end? cs p
   q = skip_spaces_only cs p
   cs[q] == "\n" or cs[q] == none
@@ -56,7 +60,7 @@ fn line_end_next cs p
 
 # Labels match case-insensitively, with runs of whitespace treated as one
 # space and the ends trimmed.
-fn normalize_label raw
+pub fn normalize_label raw
   cs = text/chars raw
   inner = text/slice cs 2 (length cs - 1)
   spaced = list/to_list (list/map inner (c -> if (label_space? c) " " c))

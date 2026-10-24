@@ -1,0 +1,20 @@
+import "std/text"
+
+fn clipped xs from to
+  stop = if (to < length xs) to (length xs)
+  clip_or_empty (text/slice xs from stop) xs
+
+fn clip_or_empty none xs
+  empty_like xs
+
+fn clip_or_empty part _
+  part
+
+fn empty_like _:string
+  ""
+
+fn empty_like _
+  []
+
+print "[{clipped "abc" 2 9}] [{clipped "abc" 5 9}]"
+  .> (_ -> print "{clipped [1 2 3] 2 9} {clipped [1] 4 9}")

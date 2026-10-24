@@ -1,0 +1,22 @@
+fn named m i n
+  return m if n < i
+  key = "k{i}"
+  seen = m[key]
+  named (put m key (counted seen)) (i + 1) n
+
+fn repeated m i n
+  return m if n < i
+  key = "k{i % 1000}"
+  repeated (put m key (counted m[key])) (i + 1) n
+
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+pub fn named_n n
+  length (named {} 1 n)
+
+pub fn repeated_n n
+  length (repeated {} 1 n)

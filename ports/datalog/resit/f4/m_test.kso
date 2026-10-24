@@ -1,0 +1,8 @@
+import "../f4"
+
+test_lexes_directives = f4/spelled ".decl e(a)\n.output e" ==
+  "decl e ( a ) output e "
+
+fn helper a b
+  a ==
+    b

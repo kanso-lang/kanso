@@ -1,0 +1,21 @@
+import "std/list"
+import "std/os"
+
+type cursor
+  pos
+
+type run
+  cursor
+  last
+  nodes
+
+type env
+  name
+
+fn finish (run _ _ nodes)
+  nodes
+
+print "{finish (run (cursor 1) 2 [3])} {list/count [1 2] (x -> x > 1)}"
+  .> (_ -> print "{env "x"}")
+  .> (_ -> os/args)
+  .> (a -> print "{length a}")

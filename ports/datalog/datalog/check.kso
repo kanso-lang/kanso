@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # The checks a program must pass before it is evaluated: every relation is
 # used at one arity, every relation that is read is defined somewhere, facts
@@ -128,8 +127,7 @@ fn note_arity shape a was
 
 fn note_clause shape (declaration n line name)
   columns = list/to_list (list/take (list/repeat wildcard) n)
-  noted = note_atom shape (atom line name columns)
-  define noted name
+  note_atom shape (atom line name columns) .> (noted -> define noted name)
 
 fn note_clause shape (input _ _ name)
   define shape name
@@ -144,10 +142,10 @@ fn note_clause shape (query a)
   note_atom shape a
 
 fn note_clause shape (rule body head)
-  checked = rule_checked body head shape
-  start = note_atom checked head
-  noted = list/fold body start note_literal
-  define noted head.name
+  rule_checked body head shape
+    .> (checked -> note_atom checked head)
+    .> (start -> list/fold body start note_literal)
+    .> (noted -> define noted head.name)
 
 fn note_literal shape (comparison _ _ _ _)
   shape
@@ -204,7 +202,7 @@ fn safe_or_not v body head _
 # once, under negation, where `_` was meant.
 fn unsafe_reason body head v
   plain = "`{v}` is not range-restricted: no positive atom binds it"
-  others = text/concat (variables_in head.terms) (all_of body variables_of)
+  others = list/concat (variables_in head.terms) (all_of body variables_of)
   under_not = all_of body negated_variables
   count = length (list/to_list (list/select others (w -> w == v)))
   once = count == 1 and list/any? under_not (w -> w == v)
@@ -220,11 +218,11 @@ fn variables_in terms
   list/to_list (list/map (list/select terms variable?) (t -> t.name))
 
 fn variables_needing body head
-  text/concat (variables_in head.terms) (all_of body variables_of)
+  list/concat (variables_in head.terms) (all_of body variables_of)
 
 # Every variable a literal's `pick` names, across a whole body.
 fn all_of body pick
-  list/fold body [] (acc l -> text/concat acc (pick l))
+  list/fold body [] (acc l -> list/concat acc (pick l))
 
 fn negated_variables (lacks a)
   variables_in a.terms

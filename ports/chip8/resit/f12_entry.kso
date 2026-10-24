@@ -1,0 +1,7 @@
+type machine
+  held
+
+fn shown (machine entry)
+  "{entry}"
+
+print (shown (machine 1))

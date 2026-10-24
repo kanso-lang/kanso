@@ -1,0 +1,7 @@
+type ran
+  machine
+
+pub fn go n
+  other = ran n
+  { machine:m } = other
+  m + 1

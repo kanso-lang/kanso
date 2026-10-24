@@ -51,7 +51,7 @@ type evaluated
   value
 
 # What a statement answers: carry on, or unwind to the call with a value.
-type normal
+pub type normal
   machine
 
 type returning

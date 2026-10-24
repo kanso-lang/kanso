@@ -1,0 +1,31 @@
+== unit tests
+ok   textkit: 20 passed, 0 failed
+ok   toml: 7 passed, 0 failed
+ok   markdown: 24 passed, 0 failed
+ok   tera: 43 passed, 0 failed
+ok   zola: 20 passed, 0 failed
+== builds
+ok   dev and release binaries
+ok   blog
+ok   blog-check
+ok   plain
+ok   plain-drafts
+ok   error-bad_front_matter
+ok   error-bad_shortcode
+ok   error-broken_link
+ok   error-missing_template
+ok   error-no_base_url
+ok   error-parent_missing
+ok   error-unclosed_tag
+ok   error-undefined_variable
+ok   error-unknown_filter
+ok   markdown-blocks
+ok   markdown-code
+ok   markdown-emphasis
+ok   markdown-headings
+ok   markdown-links
+ok   markdown-lists
+ok   markdown-references
+== scale
+ok   scale (244 files)
+== all fixtures agree on interp, dev and release

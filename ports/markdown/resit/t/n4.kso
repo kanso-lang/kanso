@@ -1,0 +1,8 @@
+import "std/list"
+import "std/text"
+
+fn tail_of xs i
+  after = text/slice xs (i + 1) (length xs)
+  list/concat [0] after
+
+print "{tail_of [1 2 3] 5}"

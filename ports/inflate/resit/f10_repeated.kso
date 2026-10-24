@@ -1,0 +1,7 @@
+import "std/list"
+
+fn repeated src n total
+  return total if n == 0
+  repeated src (n - 1) (total + length src)
+
+print "{repeated [1 2] 3 0} {list/sum [1]}"

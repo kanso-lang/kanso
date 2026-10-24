@@ -1,0 +1,8 @@
+fn slash "/"
+  "comment"
+
+fn slash _
+  "single"
+
+cs = ["/"]
+print (slash cs[2])

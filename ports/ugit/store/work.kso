@@ -13,7 +13,7 @@ fn walk_dir dir prefix
 
 fn visited dir prefix names
   steps/gathered (visible prefix names) (n -> visit dir prefix n)
-    .> (groups -> effect (list/fold groups [] text/concat))
+    .> (groups -> effect (list/fold groups [] list/concat))
 
 fn visible "" names
   list/to_list (list/reject names (n -> n == root))
@@ -50,4 +50,4 @@ fn pruned dir
 
 fn parent_of file
   parts = text/split file "/"
-  text/join (text/slice parts 1 (length parts - 1)) "/"
+  text/join (sliced (text/slice parts 1 (length parts - 1))) "/"

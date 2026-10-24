@@ -1,0 +1,18 @@
+type parsed
+  node
+  ps
+
+type if_stmt
+  check
+  no
+  yes
+
+fn got node s
+  parsed node s
+
+fn make_if check no yes
+  if_stmt check no yes
+
+pub fn go s
+  p = got (make_if 1 none 2) s
+  "{p.ps}"

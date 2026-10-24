@@ -16,7 +16,7 @@ fn flags_of "join"
   own = [(flag "--cross" "" false) (flag "--full" "" false)]
   more = [(flag "--left" "" false) (flag "--no-case" "" false)]
   last = [(flag "--nulls" "" false) (flag "--right" "" false)]
-  flags_with (text/concat (text/concat own more) last)
+  flags_with (list/concat (list/concat own more) last)
 
 fn usage_of "join"
   ["Joins two sets of CSV data on the specified columns."]
@@ -100,7 +100,7 @@ fn joined o one two
   n1 = length one.picked
   n2 = length two.picked
   return mismatched n1 n2 if n1 != n2
-  head = text/concat one.sh.head two.sh.head
+  head = list/concat one.sh.head two.sh.head
   rows = join_rows (join_kind o) o one two
   csv/render (with_head one.sh head rows) 44
 
@@ -128,7 +128,7 @@ fn join_rows kind o one two
   per = list/map one.sh.body (r -> left_rows kind o one two index pad r)
   lefts = flat per
   return lefts if kind != "--full"
-  text/concat lefts (unmatched o one two)
+  list/concat lefts (unmatched o one two)
 
 # One list of every row. Pushing reuses the buffer; concatenating onto the
 # accumulator copied it for every record, quadratically.
@@ -136,7 +136,7 @@ fn flat lists
   list/fold lists [] (acc xs -> list/fold xs acc (a x -> push a x))
 
 fn paired r others
-  list/to_list (list/map others (q -> text/concat r q))
+  list/to_list (list/map others (q -> list/concat r q))
 
 fn blanks n
   list/to_list (list/take (list/repeat "") n)
@@ -145,21 +145,21 @@ fn blanks n
 # --right a record with no match is kept beside empty fields.
 fn right_rows o one two index pad r
   hits = hits_for index (key_of o r two.picked)
-  return [(text/concat pad r)] if hits == []
-  list/to_list (list/map hits (i -> text/concat (row_at one.sh.body i) r))
+  return [(list/concat pad r)] if hits == []
+  list/to_list (list/map hits (i -> list/concat (row_at one.sh.body i) r))
 
 # The rows of the second input matching one record of the first. An inner
 # join drops a record with no match; the outer joins keep it, padded.
 fn left_rows kind o one two index pad r
   hits = hits_for index (key_of o r one.picked)
   return kept_alone kind r pad if hits == []
-  list/to_list (list/map hits (i -> text/concat r (row_at two.sh.body i)))
+  list/to_list (list/map hits (i -> list/concat r (row_at two.sh.body i)))
 
 fn kept_alone "" _ _
   []
 
 fn kept_alone _ r pad
-  [(text/concat r pad)]
+  [(list/concat r pad)]
 
 # Under --full, the records of the second input that no record of the first
 # matched, after every left row, in their input order.
@@ -168,7 +168,7 @@ fn unmatched o one two
   pad = blanks (width_of one.sh)
   matched? = (r -> hits_for index (key_of o r two.picked) != [])
   lonely = list/reject two.sh.body matched?
-  list/to_list (list/map lonely (r -> text/concat pad r))
+  list/to_list (list/map lonely (r -> list/concat pad r))
 
 # Every key of one side, with the positions of the records that carry it,
 # in input order. Built by sorting rather than by growing a map one record
@@ -182,7 +182,8 @@ fn key_index o sd
   list/fold groups {} (m r -> put m ordered[r.first].key (spots_in ordered r))
 
 fn spots_in ordered r
-  list/to_list (list/map (text/slice ordered r.first r.last) (t -> t.spot))
+  run = some_slice (text/slice ordered r.first r.last)
+  list/to_list (list/map run (t -> t.spot))
 
 fn hits_for _ none
   []

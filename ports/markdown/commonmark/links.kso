@@ -134,7 +134,7 @@ fn title_step cs start p close c
 
 # The characters from one position to another, as a string.
 fn span cs from to
-  text/join (text/slice cs from to) ""
+  text/join (ranged (text/slice cs from to)) ""
 
 # Spaces, at most one newline, and spaces again.
 fn skip_spnl cs p

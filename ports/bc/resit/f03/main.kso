@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/total 1} {m/dec 1 2}"

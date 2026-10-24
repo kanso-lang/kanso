@@ -1,0 +1,11 @@
+type lambda
+  call
+
+fn call_it (lambda f) text
+  f text 1 2
+
+fn two_args t s
+  "{t}{s}"
+
+pub fn go x
+  call_it (lambda two_args) x

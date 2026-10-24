@@ -1,0 +1,7 @@
+# Myers' O(ND) difference algorithm, the whole-file comment.
+
+# One line of the new file that the old one did not have.
+type added
+  line
+
+print "{(added "x").line}"

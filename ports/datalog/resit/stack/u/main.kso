@@ -1,0 +1,5 @@
+import "./m"
+import "std/list"
+
+cs = list/to_list (list/take (list/repeat "(") 30000)
+print "{length (m/lex cs)} {m/other 1}"

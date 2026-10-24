@@ -1,0 +1,16 @@
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in read.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv/read.kso:93:40
+  93 |   quoted src (q + 2) (text/append acc (text/slice src.bytes p q)) fields
+                                              ^
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in read.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv/read.kso:109:28
+ 109 |   whole = text/append acc (text/slice src.bytes p (length src.bytes))
+                                  ^
+error[exhaustive]: this can be a none and `text/utf8` has no arm for it — resolve it here, or give `text/utf8` a `none` arm (in read.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv/read.kso:131:14
+ 131 |   text/utf8 (text/slice bs from (upto - 1))
+                    ^
+error[exhaustive]: this can be a none and `list/count` has no arm for it — resolve it here, or give `list/count` a `none` arm (in read.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv/read.kso:145:26
+ 145 |   line = 1 + list/count (text/slice src.bytes 1 (starts[i] - 1)) (b -> b == 10)
+                                ^

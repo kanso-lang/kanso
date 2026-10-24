@@ -31,8 +31,7 @@ fn compute "search" o sheets
   pattern = case_folded (or_empty o.rest[1]) (on? o "--ignore-case")
   picked = chosen_columns o sh
   valid = compiles pattern (regexp/match? pattern "")
-  bad = list/find [valid picked] failed?
-  unless_failed bad (_ -> searched o sh pattern picked)
+  valid .> (_ -> picked .> (p -> searched o sh pattern p))
 
 fn case_folded pattern true
   "(?i){pattern}"

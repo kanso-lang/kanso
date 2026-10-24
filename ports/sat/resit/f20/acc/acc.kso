@@ -1,0 +1,33 @@
+# PERFORMANCE BUG: a list that grows by `push` inside a record, threaded
+# through a tail-recursive loop, costs time quadratic in its length on the
+# native engines. The same list threaded as a bare parameter is linear.
+#
+# Release build, rows pushed (each row a two-element list):
+#   n      flat     boxed
+#   2,000  0.02 s   0.28 s
+#   4,000  0.004 s  1.14 s
+#   8,000  0.007 s  4.37 s
+# The interpreter runs boxed at n = 8,000 in 0.014 s.
+#
+# A profile of the DIMACS reader this came from puts 84% of the time in
+# k_ten_holds_outside, k_deep_copy and k_copy_size: the loop's per-iteration
+# evacuation copies the whole accumulator every iteration.
+#
+# Expected: boxed costs what flat costs, as on the interpreter.
+pub type state
+  rows
+  tag
+
+pub fn boxed s n
+  return s if n == 0
+  state rows tag = s
+  boxed (state (push rows [n (n + 1)]) tag) (n - 1)
+
+pub fn count_of (state rows _)
+  length rows
+
+pub empty = state [] 0
+
+pub fn flat rows n
+  return rows if n == 0
+  flat (push rows [n (n + 1)]) (n - 1)

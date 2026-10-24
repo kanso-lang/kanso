@@ -1,0 +1,8 @@
+fn stored m k
+  return none if k == "x"
+  m
+
+fn need_int n
+  n + 1
+
+print (need_int (stored 3 "y"))

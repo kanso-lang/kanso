@@ -1,0 +1,7 @@
+import "../db"
+
+pub fn global v
+  value_of v
+
+fn value_of (db/var _ value)
+  value

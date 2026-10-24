@@ -1,0 +1,2 @@
+pub fn sky r
+  r * 2.0

@@ -1,0 +1,39 @@
+== unit tests
+56 passed, 0 failed
+== build
+== valid documents
+== invalid documents
+FAIL: invalid/time-no-seconds.toml on interp
+1,5c1,2
+< TOML parse error at line 1, column 5
+<   |
+< 1 | a = 07:32
+<   |     ^
+< invalid time: expected HH:MM:SS
+---
+> error[runtime]: length takes a list, string, or map, not <none>
+>   failed in toml/digits? at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/toml/toml/datetime.kso:53
+FAIL: invalid/time-no-seconds.toml on dev
+1,5c1,2
+< TOML parse error at line 1, column 5
+<   |
+< 1 | a = 07:32
+<   |     ^
+< invalid time: expected HH:MM:SS
+---
+> error[runtime]: length takes a list, string, or map, not <none>
+>   failed in toml/digits? at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/toml/toml/datetime.kso:53
+FAIL: invalid/time-no-seconds.toml on release
+1,5c1,2
+< TOML parse error at line 1, column 5
+<   |
+< 1 | a = 07:32
+<   |     ^
+< invalid time: expected HH:MM:SS
+---
+> error[runtime]: length takes a list, string, or map, not <none>
+>   failed in toml/digits? at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/toml/toml/datetime.kso:53
+== encoding
+== lookups
+== round trips
+== 154 cases, 3 failures, engines: interp dev release

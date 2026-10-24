@@ -1,0 +1,4 @@
+import "./lx"
+import "std/os"
+
+os/read_file! "in.dl" .> (s -> print "{length (lx/lex s)}")

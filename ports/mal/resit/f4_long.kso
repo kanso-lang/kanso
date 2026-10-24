@@ -1,0 +1,15 @@
+prelude = [
+  "(def! not (fn* (a) (if a false true)))"
+  "(def! inc (fn* (a) (+ a 1)))"
+  "(def! dec (fn* (a) (- a 1)))"
+  "(def! twice (fn* (f x) (f (f x))))"
+]
+
+cond_src = """
+  (defmacro! cond (fn* (& xs)
+    (if (> (count xs) 0)
+      (list 'if (first xs) (nth xs 1) (cons 'cond (rest (rest xs)))))))
+"""
+
+print "{length prelude}"
+print cond_src

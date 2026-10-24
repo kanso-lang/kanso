@@ -18,7 +18,11 @@ pub fixed_dist = code_of (list/map (upto 30) (_ -> 5))
 
 pub fixed_lit = code_of (list/map (upto 288) fixed_length)
 
-pub length_base = push (bases_from 3 (text/slice length_extra 1 28)) 258
+pub length_base = push (bases_from 3 first_extras) 258
+
+# The extra bits of the 28 length codes that have a base of their own; 285,
+# the last, is 258 exactly.
+first_extras = list/to_list (list/take length_extra 28)
 
 pub length_extra = push (list/to_list (list/map (upto 28) length_extra_of)) 0
 

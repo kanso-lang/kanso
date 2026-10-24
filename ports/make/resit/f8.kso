@@ -1,0 +1,25 @@
+type assignment
+  op
+
+fn assigned "x := 1"
+  assignment ":="
+
+fn assigned _
+  none
+
+fn classified head none
+  head
+
+fn classified _ found
+  found
+
+fn classify s
+  classified s (assigned s)
+
+fn op_of (assignment op)
+  op
+
+fn op_of s
+  "line {s}"
+
+print (op_of (classify "x := 1"))

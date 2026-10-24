@@ -1,0 +1,11 @@
+type box
+  v
+
+fn twice x
+  x * 2
+
+pub fn new_box x
+  box x
+
+pub fn use (box v)
+  twice v

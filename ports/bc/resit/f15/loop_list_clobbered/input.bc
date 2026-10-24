@@ -1,0 +1,5 @@
+define fib(n) {
+  auto a, b, t, i
+  return (a)
+}
+fib(100)

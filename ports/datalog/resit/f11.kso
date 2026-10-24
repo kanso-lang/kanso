@@ -1,0 +1,9 @@
+import "std/list"
+
+fn first_gap none c
+  if (c > 2) c none
+
+fn first_gap gap _
+  gap
+
+print "{list/fold [1 2 3 4] none first_gap}"

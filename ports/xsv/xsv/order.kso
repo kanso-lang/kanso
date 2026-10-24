@@ -14,17 +14,19 @@ type tally_row
 # A stable merge sort by a three-way comparison: `cmp a b` answers a
 # negative number when a comes first, zero when they tie, and a positive one
 # when b does. Ties keep their input order.
-fn sorted_by xs cmp
+pub fn sorted_by xs cmp
   n = length xs
   return xs if n < 2
   half = n / 2
-  left = sorted_by (text/slice xs 1 half) cmp
-  right = sorted_by (text/slice xs (half + 1) n) cmp
+  left = sorted_by (some_slice (text/slice xs 1 half)) cmp
+  right = sorted_by (some_slice (text/slice xs (half + 1) n)) cmp
   merged left right 1 1 [] cmp
 
 fn merged left right i j out cmp
-  return text/concat out (text/slice right j (length right)) if i > length left
-  return text/concat out (text/slice left i (length left)) if j > length right
+  rest = some_slice (text/slice right j (length right))
+  return list/concat out rest if i > length left
+  tail = some_slice (text/slice left i (length left))
+  return list/concat out tail if j > length right
   merge_step left right i j out cmp (cmp right[j] left[i] < 0)
 
 fn merge_step left right i j out cmp true
@@ -35,16 +37,16 @@ fn merge_step left right i j out cmp false
 
 # Three-way comparison of two strings, byte by byte. The guards in
 # `fields_from` keep `none` from arriving; the arms say what it would mean.
-fn compare_text none none
+pub fn compare_text none none
   0
 
-fn compare_text none _
+pub fn compare_text none _
   0 - 1
 
-fn compare_text _ none
+pub fn compare_text _ none
   1
 
-fn compare_text a b
+pub fn compare_text a b
   return 0 - 1 if a < b
   if (b < a) 1 0
 
@@ -54,7 +56,7 @@ fn compare_numbers a b
 
 # Two lists of strings compared field by field; a list that runs out first
 # comes first.
-fn compare_fields a b
+pub fn compare_fields a b
   fields_from a b 1
 
 fn fields_from a b i
@@ -89,7 +91,7 @@ fn run_end next _
 # list/tally done by sorting: a fold that reads a map and then puts into it
 # is quadratic in native code (bugs/map_read_then_put_quadratic.kso), and
 # this is the part of xsv that counts things.
-fn counted_values xs
+pub fn counted_values xs
   ordered = sorted_by xs compare_text
   found = runs ordered (a b -> a == b)
   sized = (r -> tally_row (r.last - r.first + 1) ordered[r.first])

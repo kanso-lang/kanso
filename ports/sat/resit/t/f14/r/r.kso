@@ -1,0 +1,7 @@
+import "../d"
+
+pub fn report (formula clauses vars)
+  "{clauses} {vars}"
+
+pub fn run n
+  report (d/parse n)

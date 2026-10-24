@@ -1,0 +1,23 @@
+pub type tombstone
+
+type record
+  key
+  offset
+  size
+
+type loc
+  id
+  offset
+  size
+
+pub fn locate id r v
+  located id r v
+
+fn located id (record _ offset size) _
+  loc id offset size
+
+fn located _ _ _:tombstone
+  "gone"
+
+pub fn rec k o s
+  record k o s

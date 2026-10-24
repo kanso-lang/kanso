@@ -1,0 +1,13 @@
+fn or_else none d
+  d
+
+fn or_else x _
+  x
+
+fn fresh args
+  put {} "mode" args
+
+m = fresh "lines"
+mode = m["nope"] . or_else "default"
+
+print "mode {mode}"

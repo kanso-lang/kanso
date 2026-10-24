@@ -10,7 +10,7 @@ type command_line
   words
 
 # `valued` lists the options that take the next word as their value.
-fn parsed args valued
+pub fn parsed args valued
   list/fold args (command_line {} none []) (got w -> took got w valued)
 
 fn took (command_line flags none words) word valued
@@ -28,11 +28,11 @@ fn listed? xs x
   list/any? xs (y -> y == x)
 
 # An option's value: a string, true for a switch given bare, none if absent.
-fn flag line name
+pub fn flag line name
   line.flags[name]
 
-fn on? line name
+pub fn on? line name
   line.flags[name] != none
 
-fn words_of line
+pub fn words_of line
   line.words

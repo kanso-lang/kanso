@@ -1,0 +1,9 @@
+m = { "a":1 }
+
+fn pick none true
+  "none, strict"
+
+fn pick v _
+  "caught {v}"
+
+print (pick m["zz"] false)

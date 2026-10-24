@@ -1,0 +1,7 @@
+class Point {
+  init(x, y) { this.x = x; this.y = y; }
+  add(o) { return Point(this.x + o.x, this.y + o.y); }
+}
+var p = Point(0, 0);
+for (var i = 0; i < 20000; i = i + 1) { p = p.add(Point(1, 2)); }
+print p.x;

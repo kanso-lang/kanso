@@ -1,0 +1,15 @@
+type pending
+  caps
+  pc
+  rest
+
+fn follow (pending _ _ rest) 1
+  rest
+
+fn follow _ none
+  "none"
+
+fn follow (pending _ _ rest) _
+  rest
+
+print (follow (pending 0 0 "r") 2)

@@ -1,0 +1,3 @@
+import "std/regexp"
+
+print (regexp/find "x{3}" "xxx x3")

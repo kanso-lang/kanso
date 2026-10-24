@@ -1,0 +1,17 @@
+type cfg
+  q
+
+fn pick "a"
+  7
+
+fn pick _
+  none
+
+fn use (cfg q)
+  q + 1
+
+fn go s
+  q = pick s
+  use (cfg q)
+
+print "{go "a"}"

@@ -1,6 +1,6 @@
 import "std/testing"
 
-header = columns true ["a" "b" "c" "b" "e-f"] 5
+header = columns_of true ["a" "b" "c" "b" "e-f"] 5
 
 fn picks? sel want
   same_pick? (pick_from sel header) want
@@ -53,7 +53,7 @@ test_select_out_of_bounds = refused? "9" (bounds_message 9)
 test_select_zero = refused? "0" (bounds_message 0)
 
 test_select_names_without_headers =
-  got = pick_from "a" (columns false [] 3)
+  got = pick_from "a" (columns_of false [] 3)
   why = "Cannot use names ('a') in selection with --no-headers set."
   testing/when_failed got (r -> r == why)
 

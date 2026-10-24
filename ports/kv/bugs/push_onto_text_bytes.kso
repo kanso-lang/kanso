@@ -1,0 +1,14 @@
+# The original text_bytes_is_not_a_list.kso, moved onto today's names.
+# text/bytes answers int[] (appendix B), so this should print [1 97] and
+# then [97 2]. list/concat now works on every engine (log, 2026-10-12,
+# "concat reads the bytes text/bytes answers"). push still stops, now on
+# the interpreter and natively alike:
+#   [1 97]
+#   error[runtime]: push takes a list and a value
+#     failed in the entry at push_onto_text_bytes.kso:14
+# `kanso check` passes it. list/to_list around text/bytes is the workaround.
+import "std/list"
+import "std/text"
+
+print "{list/concat [1] (text/bytes "a")}"
+  .> (_ -> print "{push (text/bytes "a") 2}")

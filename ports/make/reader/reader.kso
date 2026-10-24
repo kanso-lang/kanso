@@ -230,7 +230,7 @@ fn each_glob ws i acc
   return effect acc if i < 1 or length ws < i
   w = ws[i]
   kept = (found -> if (found == []) [w] found)
-  more = (found -> each_glob ws (i + 1) (text/concat acc (kept found)))
+  more = (found -> each_glob ws (i + 1) (list/concat acc (kept found)))
   if (glob/wild? w) (glob/expand_one w .> more) (more [w])
 
 # The pending rule goes into the database for each of its targets. The

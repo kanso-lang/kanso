@@ -7,7 +7,7 @@ import "../vec"
 import "std/math"
 
 # The ray was absorbed; only the generator moves on.
-type absorbed
+pub type absorbed
   gen
 
 # Clear glass, water, diamond: refracts where it can and reflects where it
@@ -30,7 +30,7 @@ type scattered
 
 type material dielectric lambertian metal
 
-fn scatter (dielectric index) r_in rec g
+pub fn scatter (dielectric index) r_in rec g
   ri = if rec.front_face (1.0 / index) index
   dir = vec/unit r_in.direction
   cos_theta = fmath/min_of (vec/dot (vec/neg dir) rec.normal) 1.0
@@ -41,13 +41,13 @@ fn scatter (dielectric index) r_in rec g
   out = if mirror (vec/reflect dir rec.normal) (vec/refract dir rec.normal ri)
   bounce rec d.gen out
 
-fn scatter (lambertian albedo) _ rec g
+pub fn scatter (lambertian albedo) _ rec g
   d = rng/unit_vector g
   aim = rec.normal + d.value
   dir = if (vec/near_zero? aim) rec.normal aim
   scattered albedo d.gen (ray dir rec.p)
 
-fn scatter (metal albedo fuzz) r_in rec g
+pub fn scatter (metal albedo fuzz) r_in rec g
   d = rng/unit_vector g
   reflected = vec/unit (vec/reflect r_in.direction rec.normal)
   dir = reflected + d.value * fuzz

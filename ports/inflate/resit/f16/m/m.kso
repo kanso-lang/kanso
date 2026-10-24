@@ -1,0 +1,9 @@
+fn file prior
+  prior + 1
+
+pub fn named heads key
+  first = heads[key]
+  file first
+
+pub fn inline heads key
+  file heads[key]

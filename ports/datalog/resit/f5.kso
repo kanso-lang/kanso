@@ -1,0 +1,17 @@
+import "std/list"
+import "std/text"
+
+fn lex ""
+  err "empty"
+
+fn lex s
+  text/chars s
+
+fn spelled source
+  text/join (list/to_list (list/map (lex source) (t -> "<{t}>"))) " "
+
+fn sized source
+  bound = lex source
+  length bound
+
+print "{spelled "ab"} {sized "cd"}"

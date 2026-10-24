@@ -1,0 +1,8 @@
+type parsed
+  node
+
+pub fn parse_if c
+  if_else c (parsed "p")
+
+fn if_else cond (parsed n)
+  "parser {cond} {n}"

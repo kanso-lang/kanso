@@ -1,0 +1,9 @@
+import "std/text"
+
+fn shown none
+  "none"
+
+fn shown xs
+  "{xs}"
+
+print (shown (text/slice [1 2 3] 1 4096))

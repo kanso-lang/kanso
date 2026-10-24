@@ -11,12 +11,12 @@ import "std/text"
 #
 # Exit status follows the competition convention: 10 for satisfiable, 20 for
 # unsatisfiable, and 1 for anything that is not an answer.
-type options
+pub type options
   path
   strategy
 
 # a command line that asks for something this program does not do
-type unusable
+pub type unusable
   reason
 
 fn answer (file_not_found p) _
@@ -28,15 +28,15 @@ fn answer text opts
 fn broken intro counts bad
   first = bad[1]
   failed = "c model check FAILED: clause {first} is false"
-  summary = text/concat intro (stat_lines counts)
-  lines = text/concat summary [failed "s UNKNOWN"]
+  summary = list/concat intro (stat_lines counts)
+  lines = list/concat summary [failed "s UNKNOWN"]
   print (text/join lines "\n") .> (_ -> os/exit 1)
 
 fn command "gen" rest
   generate rest
 
 fn command "solve" rest
-  solve_with (read_options rest 1 (options "" solver/luby))
+  solve_with (parsed_options rest)
 
 fn command verb _
   refuse "sat: no verb `{verb}`\n{usage}"
@@ -52,7 +52,7 @@ fn count_of word
 pub fn dispatch args
   return refuse usage if length args == 0
   verb = args[1]
-  command verb (text/slice args 2 (length args))
+  command verb (list/to_list (list/drop args 1))
 
 fn emit comment (family clauses vars)
   print (dimacs/render comment vars clauses)
@@ -60,7 +60,7 @@ fn emit comment (family clauses vars)
 fn generate rest
   return refuse usage if length rest == 0
   family = rest[1]
-  sizes = list/to_list (list/map (text/slice rest 2 (length rest)) count_of)
+  sizes = list/to_list (list/map (list/drop rest 1) count_of)
   bad = list/find sizes unusable?
   said = text/join rest " "
   return generated family sizes said if bad == none
@@ -109,18 +109,22 @@ fn bad_flag? word
   text/slice word 1 1 == "-" and word != "-"
 
 fn outcome (unsatisfied counts) intro _ _
-  summary = text/concat intro (stat_lines counts)
-  lines = text/concat summary ["s UNSATISFIABLE"]
+  summary = list/concat intro (stat_lines counts)
+  lines = list/concat summary ["s UNSATISFIABLE"]
   print (text/join lines "\n") .> (_ -> os/exit 20)
 
 fn outcome (satisfied counts model) intro clauses vars
   bad = solver/falsified model clauses
   return broken intro counts bad if 0 < length bad
   checked = "c model checked: all {length clauses} clauses satisfied"
-  summary = text/concat intro (stat_lines counts)
-  head = text/concat summary [checked "s SATISFIABLE"]
+  summary = list/concat intro (stat_lines counts)
+  head = list/concat summary [checked "s SATISFIABLE"]
   body = value_lines (solver/literals model vars) 1 "v" []
-  print (text/join (text/concat head body) "\n") .> (_ -> os/exit 10)
+  print (text/join (list/concat head body) "\n") .> (_ -> os/exit 10)
+
+# The options a command line's words ask for, or why they are unusable.
+pub fn parsed_options words
+  read_options words 1 (options "" solver/luby)
 
 fn read_options _ _ (unusable reason)
   unusable reason
@@ -177,7 +181,7 @@ usage_random = "       sat gen random <variables> <clauses> <seed>"
 usage_solve = "usage: sat solve [--luby | --geometric] [file.cnf | -]"
 
 # The model as `v` lines no wider than 80 columns, ended by a 0.
-fn value_lines lits i line acc
+pub fn value_lines lits i line acc
   return push acc "{line} 0" if i < 1 or length lits < i
   l = lits[i]
   word = " {l}"

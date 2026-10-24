@@ -1,0 +1,5 @@
+pub fn uniq ws
+  (seen ws).kept
+
+type seen
+  kept

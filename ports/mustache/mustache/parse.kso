@@ -122,12 +122,15 @@ fn behind cs i 32
 fn behind _ _ _
   none
 
+fn blocked _ _ _ _ e@(err _)
+  e
+
 fn blocked cs until acc t (stretch after _ nodes)
   read_run cs after until (push acc (block_node nodes t.content))
 
 # `{{{name}}}` ends with one more brace than its delimiter, and `{{=a b=}}`
 # with an equals sign. The bytes go through a string because the interpreter's
-# text/concat refuses a list that text/bytes built (bugs/concat_rejects_*).
+# list/concat refuses a list that text/bytes built (bugs/concat_rejects_*).
 fn closer 61 close
   text/bytes "={text/utf8 close}"
 
@@ -172,6 +175,9 @@ fn found cs q delim
 fn inline t
   spot "" (t.start - 1) t.stop
 
+fn inverted _ _ _ _ e@(err _)
+  e
+
 fn inverted cs until acc t (stretch after _ nodes)
   node = inverted_node nodes t.line (path t.content)
   read_run cs after until (push acc node)
@@ -200,14 +206,29 @@ fn ahead cs p 32
 fn ahead _ _ _
   none
 
+# Every range sliced here lies inside its bytes or string, but text/slice
+# answers none for one past the end, and the checker cannot see the bounds,
+# so these none arms are never taken.
+fn inside none
+  []
+
+fn inside xs
+  xs
+
+fn inside_text none
+  ""
+
+fn inside_text s
+  s
+
 fn line_of cs at
-  list/count (text/slice cs 1 (at - 1)) (b -> b == 10) + 1
+  list/count (inside (text/slice cs 1 (at - 1))) (b -> b == 10) + 1
 
 fn moved cs cur p
   scanner cur.close (cur.line + newlines cs cur.pos (p - 1)) cur.open p
 
 fn newlines cs a b
-  list/count (text/slice cs a b) (c -> c == 10)
+  list/count (inside (text/slice cs a b)) (c -> c == 10)
 
 fn onward cs cur s until acc
   read_run cs (moved cs cur s.resume) until acc
@@ -229,13 +250,17 @@ pub fn parse_with template d
   start = scanner (text/bytes d.close) 1 (text/bytes d.open) 1
   finish (read_run cs start top [])
 
+fn parented _ _ _ _ _ e@(err _)
+  e
+
 fn parented cs until acc t s (stretch after _ nodes)
   blocks = list/fold nodes {} (m n -> with_block m n)
   read_run cs after until (push acc (parent_node blocks s.indent t.content))
 
 fn partial_of name indent
   return partial_node false indent name if text/slice name 1 1 != "*"
-  partial_node true indent (text/trim (text/slice name 2 (length name)))
+  rest = inside_text (text/slice name 2 (length name))
+  partial_node true indent (text/trim rest)
 
 # A path written back the way the template spelled it.
 fn dotted parts
@@ -269,7 +294,7 @@ fn place cs at
   "line {line_of cs at}, column {column_of cs at}"
 
 fn piece cs a b
-  text/utf8 (text/slice cs a b)
+  text/utf8 (inside (text/slice cs a b))
 
 fn read_run cs cur until acc
   at_tag cs cur until acc (find_tag cs cur.pos cur.open)
@@ -292,6 +317,9 @@ fn read_tag cs cur q
   from = if (sigil == 0) after (after + 1)
   marker = closer sigil cur.close
   tag_at cs cur q from sigil marker (find_tag cs from marker)
+
+fn sectioned _ _ _ _ _ _ e@(err _)
+  e
 
 fn sectioned cs cur until acc t s (stretch after last nodes)
   raw = piece cs s.resume last

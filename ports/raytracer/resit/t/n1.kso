@@ -1,0 +1,9 @@
+fn twice x
+  x * 2
+
+fn look m k
+  v = m[k]
+  return 0 if v == none
+  twice v
+
+print "{look { "a":1 } "a"}"

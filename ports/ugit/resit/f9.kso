@@ -1,0 +1,10 @@
+type clean
+  lines
+
+fn joined_to none acc chunk
+  push acc chunk
+
+fn joined_to (clean before) acc (clean lines)
+  push acc (clean "{before}{lines}")
+
+print "{length (joined_to none [] (clean "x"))}"

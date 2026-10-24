@@ -1,6 +1,5 @@
 import "../store"
 import "std/list"
-import "std/text"
 
 # Everything most commands look at before they act, read once: the branch
 # HEAD is on (none when detached), the commit HEAD names (none before the
@@ -34,7 +33,7 @@ fn viewed b head hf idx m work
   effect (view b head hf idx m.value.value work)
 
 # How `to` differs from `from`, path by path in sorted order.
-fn changes from to
+pub fn changes from to
   every = keys (store/merged from to)
   found = list/map every (p -> compared p from[p] to[p])
   list/to_list (list/reject found same?)
@@ -66,7 +65,7 @@ fn untracked v
 fn dirty v
   staged = changes v.head_files v.index
   unstaged = changes v.index (tracked_work v)
-  list/sort (list/to_list (list/map (text/concat staged unstaged) _.path))
+  list/sort (list/to_list (list/map (list/concat staged unstaged) _.path))
 
 fn tracked_work v
   list/fold (keys v.index) {} (m p -> put m p v.work[p])

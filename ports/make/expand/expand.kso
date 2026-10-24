@@ -65,7 +65,7 @@ fn scan sc s i acc
   dollar sc s j (push acc lit) (text/slice s (j + 1) (j + 1))
 
 # A lone `$` at the very end expands to nothing.
-fn dollar _ _ _ acc ""
+fn dollar _ _ _ acc none
   effect (text/join acc "")
 
 fn dollar sc s j acc "$"
@@ -124,13 +124,13 @@ fn too_few sc name given
 
 # A function's name is the word before the first blank; $(info) with no
 # blank is a variable called "info".
-fn function_name inner
+pub fn function_name inner
   spaced = words/replace_all inner "\t" " "
   at = words/find spaced " " 1
   if (at == 0) "" (text/slice inner 1 (at - 1))
 
 fn args_text inner name
-  words/trim_left (text/slice inner (length name + 1) (length inner))
+  words/trim_left (or_empty (text/slice inner (length name + 1) (length inner)))
 
 # Split at commas outside references; the last argument keeps the rest, so
 # $(shell echo a,b) is one argument. A limit of 0 means no limit.
@@ -161,7 +161,7 @@ fn substitution sc inner colon eq
 fn replaced value parts
   effect (substituted value (arg parts 2) (arg parts 3))
 
-fn substituted value from to
+pub fn substituted value from to
   pat = if (words/pattern? from) from "%{from}"
   rep = if (words/pattern? from) to "%{to}"
   words/unwords (patsubst_all pat rep (words/split_words value))
@@ -179,7 +179,8 @@ pub fn lookup sc name
   local sc name sc.locals[name]
 
 fn local sc name none
-  automatic_part sc name (text/slice name 1 1) (text/slice name 2 2)
+  first = or_empty (text/slice name 1 1)
+  automatic_part sc name first (or_empty (text/slice name 2 2))
 
 fn local _ _ value
   effect value

@@ -1,0 +1,7 @@
+import "std/list"
+
+fn step x
+  x + 1
+
+pub fn run n
+  "{step n} {list/sum [1 2]}"

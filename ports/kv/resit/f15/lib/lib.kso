@@ -1,0 +1,10 @@
+import "std/os"
+
+pub fn open dir
+  read_all dir 1
+
+fn read_all dir 0
+  os/list_dir dir
+
+fn read_all dir _
+  os/list_dir dir .> (_ -> read_all dir 0)

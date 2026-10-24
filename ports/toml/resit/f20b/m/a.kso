@@ -1,0 +1,5 @@
+pub fn lookup doc path
+  lookup doc path 0
+
+fn lookup doc path n
+  "{doc}.{path}.{n}"

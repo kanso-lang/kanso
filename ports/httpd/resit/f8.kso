@@ -1,0 +1,11 @@
+type response
+  body
+
+type turn
+  response
+  state
+
+fn show (turn response state)
+  "{response.body} {state}"
+
+print (show (turn (response "b") 1))

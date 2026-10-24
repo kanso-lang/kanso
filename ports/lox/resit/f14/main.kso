@@ -1,0 +1,4 @@
+import "./m"
+
+print (m/parse_if 1)
+print (m/resolve_if 2)

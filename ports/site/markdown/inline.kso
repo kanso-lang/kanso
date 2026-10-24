@@ -46,7 +46,7 @@ fn span_at cs "`" p links st
   run = count_run cs "`" p
   close = find_run cs "`" run (p + run)
   return spans cs (p + run) links (emit st (repeat_tick run)) if close == none
-  body = text/join (text/slice cs (p + run) (close - 1)) ""
+  body = text/join (textkit/clamped cs (p + run) (close - 1)) ""
   code = "<code>{textkit/escape_html (code_trim body)}</code>"
   spans cs (close + run) links (emit st code)
 
@@ -74,13 +74,13 @@ fn span_at cs "[" p links st
 fn span_at cs "<" p links st
   close = text_find cs ">" (p + 1)
   return spans cs (p + 1) links (emit st "&lt;") if close == none
-  inner = text/join (text/slice cs (p + 1) (close - 1)) ""
+  inner = text/join (textkit/clamped cs (p + 1) (close - 1)) ""
   angle cs p close inner links st
 
 fn span_at cs "&" p links st
   return spans cs (p + 1) links (emit st "&amp;") if not entity? cs p
   close = text_find cs ";" p
-  word = text/join (text/slice cs p close) ""
+  word = text/join (textkit/clamped cs p close) ""
   spans cs (close + 1) links (emit st word)
 
 fn span_at cs "\n" p links st
@@ -96,7 +96,7 @@ fn trim_tail (ink broken pieces)
 
 fn drop_spaces pieces n
   keep = n > 0 and pieces[n] == " "
-  if keep (drop_spaces pieces (n - 1)) (text/slice pieces 1 n)
+  if keep (drop_spaces pieces (n - 1)) (textkit/clamped pieces 1 n)
 
 fn punctuation? c
   textkit/contains? "!\"#$%&'()*+,-./:;<=>?@[\\]^_`\{|}~" c
@@ -117,7 +117,7 @@ fn find_run cs c n p
 fn code_trim body
   padded = length body > 2 and textkit/starts_with? body " "
   both = padded and textkit/ends_with? body " "
-  if both (text/slice body 2 (length body - 1)) body
+  if both (textkit/clamped body 2 (length body - 1)) body
 
 fn text_find cs c p
   return none if cs[p] == none
@@ -164,7 +164,7 @@ fn skip_code cs p
   if (close == none) (p + run) (close + run)
 
 fn wrapped cs p close width tag links st
-  inner = text/slice cs (p + width) (close - 1)
+  inner = textkit/clamped cs (p + width) (close - 1)
   opened = emit st "<{tag}>"
   body = spans inner 1 links opened
   spans cs (close + width) links (emit body "</{tag}>")
@@ -191,7 +191,7 @@ fn linked cs p _ none links st
   spans cs (p + 1) links (emit st "[")
 
 fn linked cs p close (dest next title url) links st
-  label = text/slice cs (p + 1) (close - 1)
+  label = textkit/clamped cs (p + 1) (close - 1)
   resolved = resolve url links
   tag = "<a href=\"{href resolved}\"{titled title}>"
   opened = emit (record_broken st resolved) tag
@@ -209,7 +209,8 @@ fn pictured cs p _ none links st
   spans cs (p + 1) links (emit st "!")
 
 fn pictured cs p close (dest next title url) links st
-  alt = textkit/strip_tags (inline_html (text/slice cs (p + 2) (close - 1)))
+  inside = textkit/clamped cs (p + 2) (close - 1)
+  alt = textkit/strip_tags (inline_html inside)
   resolved = resolve url links
   tag = "<img src=\"{href resolved}\" alt=\"{attr alt}\"{titled title} />"
   spans cs next links (emit (record_broken st resolved) tag)
@@ -224,14 +225,14 @@ fn target_of cs open close links
   after = cs[close + 1]
   return destination cs (close + 1) if after == "("
   return labelled cs open close links if after == "["
-  shortcut = text/join (text/slice cs (open + 1) (close - 1)) ""
+  shortcut = text/join (textkit/clamped cs (open + 1) (close - 1)) ""
   referenced links shortcut (close + 1)
 
 fn labelled cs open close links
   end = text_find cs "]" (close + 2)
   return none if end == none
-  given = text/join (text/slice cs (close + 2) (end - 1)) ""
-  own = text/join (text/slice cs (open + 1) (close - 1)) ""
+  given = text/join (textkit/clamped cs (close + 2) (end - 1)) ""
+  own = text/join (textkit/clamped cs (open + 1) (close - 1)) ""
   label = if (given == "") own given
   referenced links label (end + 1)
 
@@ -244,7 +245,7 @@ fn destination cs p
   return none if cs[p] != "("
   close = text_find cs ")" p
   return none if close == none
-  inner = text/trim (text/join (text/slice cs (p + 1) (close - 1)) "")
+  inner = text/trim (text/join (textkit/clamped cs (p + 1) (close - 1)) "")
   space = textkit/index_of inner " " 1
   split_target inner space (close + 1)
 
@@ -252,10 +253,10 @@ fn split_target inner none next
   dest next "" inner
 
 fn split_target inner space next
-  url = text/slice inner 1 (space - 1)
-  rest = text/trim (text/slice inner (space + 1) (length inner))
+  url = textkit/clamped inner 1 (space - 1)
+  rest = text/trim (textkit/clamped inner (space + 1) (length inner))
   quoted = length rest > 1 and textkit/starts_with? rest "\""
-  title = if quoted (text/slice rest 2 (length rest - 1)) ""
+  title = if quoted (textkit/clamped rest 2 (length rest - 1)) ""
   dest next title url
 
 fn titled ""
@@ -273,10 +274,10 @@ fn resolve url links
   if internal (lookup url links) url
 
 fn lookup url links
-  bare = text/slice url 3 (length url)
+  bare = textkit/clamped url 3 (length url)
   hash = textkit/index_of bare "#" 1
-  file = if (hash == none) bare (text/slice bare 1 (hash - 1))
-  anchor = if (hash == none) "" (text/slice bare hash (length bare))
+  file = if (hash == none) bare (textkit/clamped bare 1 (hash - 1))
+  anchor = if (hash == none) "" (textkit/clamped bare hash (length bare))
   found = links[file]
   if (found == none) (unresolved url) "{found}{anchor}"
 
@@ -305,11 +306,11 @@ fn autolink cs close inner scheme links st
   spans cs (close + 1) links (emit st a)
 
 fn tag_like? inner
-  first = text/slice inner 1 1
+  first = textkit/clamped inner 1 1
   textkit/letter? first or first == "/" or first == "!"
 
 fn entity? cs p
   close = text_find cs ";" (p + 1)
   return false if close == none or close - p > 10 or close - p < 3
-  word = text/slice cs (p + 1) (close - 1)
+  word = textkit/clamped cs (p + 1) (close - 1)
   list/all? word (c -> textkit/alnum? c or c == "#")

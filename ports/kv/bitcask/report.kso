@@ -8,7 +8,7 @@ import "std/text"
 # The store's own files, in the order they were written: by number, and the
 # data file before its hint.
 pub fn store_files names
-  ids = list/sort (text/concat (file_ids names "data") (file_ids names "hint"))
+  ids = list/sort (list/concat (file_ids names "data") (file_ids names "hint"))
   unique = list/fold ids [] (acc id -> if (seen? acc id) acc (push acc id))
   list/to_list (list/select (both_kinds unique) (n -> listed? names n))
 
@@ -19,7 +19,7 @@ fn listed? names n
   list/any? names (x -> x == n)
 
 fn both_kinds ids
-  list/fold ids [] (acc id -> text/concat acc (names_for id))
+  list/fold ids [] (acc id -> list/concat acc (names_for id))
 
 fn names_for id
   ["{id}.bitcask.data" "{id}.bitcask.hint"]
@@ -87,7 +87,7 @@ fn same_place? _ _ _
   false
 
 pub fn dump_lines names files
-  list/fold names [] (acc n -> text/concat acc (dump_of files n))
+  list/fold names [] (acc n -> list/concat acc (dump_of files n))
 
 fn dump_of files name
   dump_file name (held_bytes files[name])
@@ -95,7 +95,7 @@ fn dump_of files name
 fn dump_file name bs
   kind = (text/split name ".")[3]
   head = "{name} ({length bs} bytes)"
-  text/concat [head] (dump_body kind bs)
+  list/concat [head] (dump_body kind bs)
 
 fn dump_body "hint" bs
   hint_dump (decode_hints bs)
@@ -115,7 +115,7 @@ fn hint_line (hint key offset size stamp)
   "  {key} -> @{offset} size {size} stamp {stamp}"
 
 fn record_line bs r
-  header = hex (text/slice bs (r.offset + 1) (r.offset + header_size))
+  header = hex (inside (text/slice bs (r.offset + 1) (r.offset + header_size)))
   "  @{r.offset} {header} {r.stamp} {describe r.key r.value}"
 
 fn describe key _:tombstone

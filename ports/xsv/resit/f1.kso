@@ -1,0 +1,10 @@
+import "std/text"
+
+fn field_onto acc field
+  text/append acc field
+
+fn fields_onto acc fields i
+  return acc if i > length fields
+  fields_onto (field_onto acc fields[i]) fields (i + 1)
+
+print (text/utf8 (fields_onto (text/bytes "") ["a" "b"] 1))

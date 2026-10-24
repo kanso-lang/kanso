@@ -86,7 +86,7 @@ fn write_plan root out p
   { copies files } = p
   file_paths = list/map files (f -> f.path)
   copy_paths = list/map copies (c -> c.to)
-  targets = text/concat (list/to_list file_paths) (list/to_list copy_paths)
+  targets = list/concat (list/to_list file_paths) (list/to_list copy_paths)
   dirs = list/fold targets {} (m path -> put m (parent_of "{out}/{path}") true)
   made_dirs (keys dirs) 1
     .> (_ -> written out files 1)
@@ -113,7 +113,7 @@ fn copied_all root out copies i
 
 fn parent_of path
   parts = text/split path "/"
-  text/join (text/slice parts 1 (length parts - 1)) "/"
+  text/join (textkit/clamped parts 1 (length parts - 1)) "/"
 
 fn write_one out (out_file body _ path)
   os/write_file "{out}/{path}" body

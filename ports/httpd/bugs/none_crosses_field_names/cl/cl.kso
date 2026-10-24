@@ -1,0 +1,8 @@
+import "../lib"
+
+type reading
+  body
+
+pub fn read xs
+  r = reading xs[2]
+  "{r.body} {lib/body_text (lib/make "hi")}"

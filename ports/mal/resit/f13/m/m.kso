@@ -1,0 +1,29 @@
+type k_args
+  acc
+  i
+
+type k_if
+  then_form
+
+type halt
+
+pub fn start n
+  ret (pick n) 1
+
+fn pick 0
+  halt
+
+fn pick 1
+  k_if "x"
+
+fn pick _
+  k_args [] 1
+
+fn ret halt v
+  v
+
+fn ret (k_if f) _
+  f
+
+fn ret (k_args 7 i) v
+  v + i

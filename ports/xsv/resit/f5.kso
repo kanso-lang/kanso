@@ -1,0 +1,3 @@
+import "std/text"
+
+print (text/utf8 (text/append [] 34))

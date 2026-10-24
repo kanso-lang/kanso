@@ -1,0 +1,15 @@
+import "std/list"
+import "std/text"
+
+type slot
+  path
+
+fn path_key path
+  text/join path "."
+
+fn made target
+  slot (text/slice target 1 (length target - 1))
+
+pub fn spelled targets
+  slots = list/map targets made
+  list/to_list (list/map slots (s -> path_key s.path))

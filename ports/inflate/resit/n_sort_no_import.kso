@@ -1,0 +1,3 @@
+import "std/text"
+
+print "{list/sort [2 1]} {text/trim " a "}"

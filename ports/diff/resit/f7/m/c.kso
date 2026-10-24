@@ -1,0 +1,3 @@
+pub fn third xs
+  run = length xs
+  run * 2

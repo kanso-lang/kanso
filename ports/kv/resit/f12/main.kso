@@ -1,0 +1,4 @@
+import "./m"
+import "./r"
+
+print (r/report (m/merge_of 3 1))

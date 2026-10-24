@@ -1,0 +1,7 @@
+m = { "a":1 }
+
+fn placed first resume
+  return "inline" if first == none or resume == none
+  "spot {first + 1} {resume + 1}"
+
+print "{placed m["a"] m["b"]} {placed m["a"] m["a"]}"

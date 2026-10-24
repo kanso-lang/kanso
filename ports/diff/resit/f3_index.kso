@@ -1,0 +1,10 @@
+import "std/text"
+
+fn lower s
+  text/lowercase s
+
+fn first_two files
+  return "need two" if length files != 2
+  lower files[1]
+
+print (first_two ["A" "B"])

@@ -1,0 +1,10 @@
+import "std/text"
+
+fn first_of parts
+  parts[1]
+
+fn split_on s sep
+  parts = text/split s sep
+  first_of parts
+
+print "{split_on "a:b" ":"}"

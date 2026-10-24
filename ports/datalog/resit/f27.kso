@@ -1,0 +1,6 @@
+import "../datalog"
+
+fn shown n
+  "tokens: {n}"
+
+print (shown (length (datalog/lex "p(1).")))

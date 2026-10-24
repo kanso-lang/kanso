@@ -1,6 +1,6 @@
 import "std/text"
 
-sample = commit
+sample = new_commit
   "A U Thor <a@example.com>"
   "first\n\nbody"
   ["p1" "p2"]
@@ -14,7 +14,7 @@ test_commit_text_layout =
 test_commit_round_trips = parsed_commit (commit_text sample) == sample
 
 test_root_commit_has_no_parents =
-  c = commit "x <y>" "m" [] 5 "t"
+  c = new_commit "x <y>" "m" [] 5 "t"
   (parsed_commit (commit_text c)).parents == []
 
 # printf 'blob\0hi' | sha256sum

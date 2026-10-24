@@ -79,7 +79,8 @@ fn named_entity cs start p
   named_entity cs start (p + 1)
 
 fn named_close cs start p
-  named_value p entity_table[text/join (text/slice cs start (p - 1)) ""]
+  name = text/join (ranged (text/slice cs start (p - 1))) ""
+  named_value p entity_table[name]
 
 fn named_value _ none
   none
@@ -88,7 +89,7 @@ fn named_value p value
   entity (p + 1) value
 
 # Percent-encode what a URL may not carry bare, keeping escapes already made.
-fn normalize_url s
+pub fn normalize_url s
   cs = text/chars s
   parts = list/map (list/naturals . list/take (length cs)) (p -> url_char cs p)
   text/join (list/to_list parts) ""

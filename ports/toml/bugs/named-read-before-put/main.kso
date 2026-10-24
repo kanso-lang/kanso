@@ -1,0 +1,3 @@
+import "./probe"
+
+print "{probe/named_n 8000} {probe/inline_n 8000}"

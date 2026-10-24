@@ -1,0 +1,4 @@
+import "./lox"
+import "std/os"
+
+os/args .> lox/start

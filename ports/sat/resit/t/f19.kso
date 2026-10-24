@@ -1,0 +1,12 @@
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + 1)
+
+fn f n
+  slow = spin 3000000000 0
+  return 1 if n < 10
+  slow
+
+print "{f 1}"

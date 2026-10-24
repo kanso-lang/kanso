@@ -1,0 +1,7 @@
+type machine
+  pending
+
+fn with_pending (machine _) p
+  machine p
+
+print "{(with_pending (machine 1) none).pending}"

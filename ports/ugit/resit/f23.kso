@@ -1,0 +1,5 @@
+import "std/text"
+
+line = "ref: refs/heads/x"
+
+print "{text/starts_with? line "ref: "} {text/ends_with? line "x"}"

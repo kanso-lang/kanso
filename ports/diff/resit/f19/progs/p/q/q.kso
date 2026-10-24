@@ -1,0 +1,3 @@
+import "../../../lib"
+
+pub three = lib/two + 1

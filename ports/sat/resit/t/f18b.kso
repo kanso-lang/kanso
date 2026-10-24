@@ -1,0 +1,4 @@
+fn begin acc header
+  "{length acc} {header}"
+
+print (begin [] none)

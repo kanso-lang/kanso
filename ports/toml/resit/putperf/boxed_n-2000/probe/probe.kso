@@ -1,0 +1,38 @@
+# Rebuilding a record around an updated field copies the field.
+#
+# Run from this directory: sh run.sh (release timings); kanso run main.kso
+#  --interp is slow too
+#
+# `bare` puts into a map it alone owns, and the runtime extends it in place,
+# as appendix B promises for `put`. `boxed` does the same through a record:
+# take the record apart, put into its map, build the record again. Nothing
+# else holds the record or the map, but every put copies the whole map, so
+# the loop is quadratic.
+#
+# Expected: both linear; 20,000 inserts in a few hundredths of a second.
+# Actual (release build, this container): bare 20,000 in 0.03s and 40,000 in
+# 0.03s; boxed 20,000 in 14s and 40,000 in 74s. The interpreter is slow on
+# `boxed` too (both loops together: 6.4s), so this is not one backend.
+#
+# Where it bit: the TOML decoder keeps each table as `tbl members kind`, and a
+# 300 KB document took ten seconds.
+type box
+  members
+  tag
+
+fn bare m i n
+  return m if n < i
+  bare (put m "k{i}" i) (i + 1) n
+
+fn boxed b i n
+  return b if n < i
+  boxed (grow b "k{i}" i) (i + 1) n
+
+fn grow (box members tag) k v
+  box (put members k v) tag
+
+pub fn bare_n n
+  length (bare {} 1 n)
+
+pub fn boxed_n n
+  length (boxed (box {} 0) 1 n).members

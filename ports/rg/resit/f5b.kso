@@ -1,0 +1,6 @@
+help = """
+  USAGE:
+    rg [OPTIONS] PATTERN [PATH ...]
+"""
+
+print help

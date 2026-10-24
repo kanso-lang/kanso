@@ -1,0 +1,6 @@
+import "std/text"
+
+b = 1e21
+c = 1.5e-3
+d = 0xff
+print "{b} {c} {d} {b == text/to_float "1e21"}"

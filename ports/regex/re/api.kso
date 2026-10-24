@@ -78,7 +78,8 @@ pub fn codes s
   list/to_list (list/map (text/chars s) text/char_code)
 
 pub fn between cps from to
-  text/join (list/to_list (list/map (text/slice cps (from + 1) to) glyph)) ""
+  between_cps = sliced (text/slice cps (from + 1) to) []
+  text/join (list/to_list (list/map between_cps glyph)) ""
 
 fn glyph cp
   text/from_code cp

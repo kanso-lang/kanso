@@ -1,0 +1,8 @@
+pub type simple
+
+pub type var
+  flavor
+  value
+
+pub fn simple_var v
+  var simple v

@@ -1,0 +1,13 @@
+import "std/list"
+
+type tally
+  a
+  b
+  c
+  d
+
+fn step x
+  x + 1
+
+t = tally 1 2 3 4
+print "{t} {step 3} {list/sum [1 2]}"

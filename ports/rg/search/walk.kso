@@ -56,14 +56,14 @@ fn pattern_lines file _ (file_not_found _)
   bad_usage "{file}: No such file or directory (os error 2)"
 
 fn pattern_lines _ acc body
-  text/concat acc (lines_of body)
+  list/concat acc (lines_of body)
 
 fn rebuilt _ b@(bad_usage _)
   b
 
 fn rebuilt cfg found
   s = cfg.spec
-  all = text/concat s.patterns found
+  all = list/concat s.patterns found
   regex = regex_of (spec s.case s.fixed all s.shape)
   vetted (with_regex cfg regex) (regex_trouble regex)
 
@@ -153,17 +153,17 @@ fn start_dir cfg named root t
   begin = (rules -> into cfg named (place 0 norm rules root) t)
   in_turn above [] (rules dir -> rules_in cfg dir rules) .> begin
 
-fn ancestors ""
+pub fn ancestors ""
   []
 
-fn ancestors norm
+pub fn ancestors norm
   return [] if text/slice norm 1 1 == "/"
   parts = text/split norm "/"
   rising parts 1 [""]
 
 fn rising parts i acc
   return acc if i >= length parts
-  prefix = text/join (text/slice parts 1 i) "/"
+  prefix = text/join (some_list (text/slice parts 1 i)) "/"
   rising parts (i + 1) (push acc prefix)
 
 # A path as rules see it: no `./` in front and no `/` behind, and the working
@@ -172,9 +172,9 @@ pub fn normal "."
   ""
 
 pub fn normal p
-  return normal (text/slice p 3 (length p)) if starts_with? p "./"
+  return normal (some_text (text/slice p 3 (length p))) if starts_with? p "./"
   trimmed = length p > 1 and ends_with? p "/"
-  if trimmed (normal (text/slice p 1 (length p - 1))) p
+  if trimmed (normal (some_text (text/slice p 1 (length p - 1)))) p
 
 # Read the three ignore files a directory may hold, lowest precedence first,
 # so that a later rule wins over an earlier one the way a deeper file's do.
@@ -192,7 +192,7 @@ fn with_rules _ rules (file_not_found _)
   rules
 
 fn with_rules dir rules body
-  text/concat rules (ignore_rules dir body)
+  list/concat rules (ignore_rules dir body)
 
 fn opened ""
   "."

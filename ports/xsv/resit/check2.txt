@@ -1,0 +1,4 @@
+error[name]: unknown name `text/concat` — two lists join with `list/concat`, and two strings by interpolation, `"{a}{b}"`
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/args.kso:28:15
+  28 |   opts given (text/concat rest (text/slice argv (i + 1) (length argv)))
+                     ^

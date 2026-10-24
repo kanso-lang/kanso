@@ -66,7 +66,8 @@ pub fn execute (or_reg x y) m q
 pub fn execute ret m _
   depth = length m.stack
   return fault "stack underflow: RET with nothing to return to" if depth == 0
-  with_pc (with_stack m (text/slice m.stack 1 (depth - 1))) (top m.stack)
+  popped = sliced (text/slice m.stack 1 (depth - 1)) []
+  with_pc (with_stack m popped) (top m.stack)
 
 pub fn execute (rnd byte x) m _
   state = next_state m.rng
@@ -185,3 +186,10 @@ fn waited m _ none k
 fn waited m x k _
   return m if held? m.held k
   set (released (advanced m)) x k
+
+# A slice that starts past the end answers none; nothing is left.
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of

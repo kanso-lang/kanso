@@ -1,0 +1,10 @@
+fn inner 0
+  err "EOF"
+
+fn inner n
+  n
+
+fn wrap v
+  "got {v}"
+
+print (wrap (inner 0))

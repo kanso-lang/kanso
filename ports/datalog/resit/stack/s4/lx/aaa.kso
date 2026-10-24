@@ -1,0 +1,5 @@
+pub fn other a b c
+  length (emit a b c [])
+
+fn emit _ _ _ acc
+  push acc 1

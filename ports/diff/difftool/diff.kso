@@ -119,7 +119,7 @@ fn differ pa pb
 # One string, written once: see bugs/native_crash_after_reads.kso for what
 # happened when the header was its own print in front of the write.
 fn announce opts pa pb true
-  words = text/concat (text/concat ["diff"] opts.switches) [pa pb]
+  words = list/concat (list/concat ["diff"] opts.switches) [pa pb]
   "{text/join words " "}\n"
 
 fn announce _ _ _ false
@@ -165,7 +165,7 @@ fn compare_dirs opts pa pb
   os/list_dir pa .> (na -> os/list_dir pb .> (nb -> walk opts pa pb na nb))
 
 fn walk opts pa pb na nb
-  names = list/fold (list/sort (text/concat na nb)) [] unique
+  names = list/fold (list/sort (list/concat na nb)) [] unique
   each opts pa pb na nb names 1 0
 
 fn unique seen name

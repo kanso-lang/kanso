@@ -1,0 +1,20 @@
+type break_stmt
+  line
+
+type return_stmt
+  line
+  value
+
+fn misplaced_in (break_stmt line) false _
+  "break at {line}"
+
+fn misplaced_in (return_stmt line _) _ false
+  "return at {line}"
+
+fn misplaced_in _ _ _
+  "fine"
+
+a = misplaced_in (break_stmt 1) false true
+b = misplaced_in (return_stmt 2 0) true false
+
+print "{a} {b}"

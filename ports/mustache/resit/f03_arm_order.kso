@@ -1,0 +1,19 @@
+type opened
+  name
+
+fn act 33 _
+  "comment"
+
+fn act 35 _
+  "section"
+
+fn act 47 (opened name)
+  "close {name}"
+
+fn act 47 _
+  "stray close"
+
+fn act _ _
+  "variable"
+
+print "{act 33 0} {act 47 (opened "a")} {act 47 0} {act 9 0}"

@@ -1,0 +1,10 @@
+import "std/text"
+
+pub type request
+  body
+
+pub fn make s
+  request s
+
+pub fn body_text r
+  text/uppercase r.body

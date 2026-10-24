@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `list/map` has no arm for it — resolve it here, or give `list/map` a `none` arm (in lines.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/delta)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/delta/lines.kso:12:11
+  12 |   ended = text/slice pieces 1 (length pieces - 1)
+                 ^

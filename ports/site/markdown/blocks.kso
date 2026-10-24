@@ -92,7 +92,7 @@ fn read_block _ i _ "more"
 
 fn read_block ls i line "fence"
   mark = fence_mark line
-  lang = text/trim (text/slice line (length mark + 1) (length line))
+  lang = text/trim (textkit/clamped line (length mark + 1) (length line))
   fence_body ls (i + 1) mark lang []
 
 fn read_block _ i line "heading"
@@ -138,7 +138,7 @@ fn closed lines
 
 fn heading_level t
   hashes = count_lead (text/chars t) "#" 1
-  after = text/slice t (hashes + 1) (hashes + 1)
+  after = textkit/clamped t (hashes + 1) (hashes + 1)
   if (hashes < 7 and (after == " " or after == "")) hashes 0
 
 fn count_lead cs c p
@@ -146,7 +146,7 @@ fn count_lead cs c p
 
 fn atx t
   level = heading_level t
-  body = text/trim (strip_closing (text/slice t (level + 1) (length t)))
+  body = text/trim (strip_closing (textkit/clamped t (level + 1) (length t)))
   custom_id level body (textkit/index_of body "\{#" 1)
 
 fn custom_id level body none
@@ -154,8 +154,8 @@ fn custom_id level body none
 
 fn custom_id level body at
   close = textkit/ends_with? body "}"
-  id = text/slice body (at + 2) (length body - 1)
-  words = text/trim (text/slice body 1 (at - 1))
+  id = textkit/clamped body (at + 2) (length body - 1)
+  words = text/trim (textkit/clamped body 1 (at - 1))
   if close (heading id level words) (heading "" level body)
 
 fn strip_closing body
@@ -164,7 +164,7 @@ fn strip_closing body
   n = count_tail cs "#" (length cs)
   keep = length cs - n
   cut = n > 0 and (keep == 0 or cs[keep] == " ")
-  if cut (text/slice trimmed 1 keep) trimmed
+  if cut (textkit/clamped trimmed 1 keep) trimmed
 
 fn count_tail cs c p
   if (p > 0 and cs[p] == c) (count_tail cs c (p - 1)) (length cs - p)
@@ -184,8 +184,8 @@ fn quote_lines ls i acc
   quote_lines ls (i + 1) (push acc (unquote t))
 
 fn unquote t
-  rest = text/slice t 2 (length t)
-  if (textkit/starts_with? rest " ") (text/slice rest 2 (length rest)) rest
+  rest = textkit/clamped t 2 (length t)
+  if (textkit/starts_with? rest " ") (textkit/clamped rest 2 (length rest)) rest
 
 # A line that opens with a tag: `<` and a name of letters and digits, then
 # a space, `>` or `/`. `<https://...>` is an autolink and does not count.
@@ -254,19 +254,19 @@ fn spaced cs p width
 
 fn ordered? line
   t = textkit/trim_start line
-  textkit/digit? (text/slice t 1 1)
+  textkit/digit? (textkit/clamped t 1 1)
 
 fn list_start line
   t = textkit/trim_start line
   digits = count_digits (text/chars t) 1
-  text/to_int (text/slice t 1 digits)
+  text/to_int (textkit/clamped t 1 digits)
 
 # Items of one list. Each item's lines are dedented by its marker width and
 # parsed again as blocks, which is how nested lists come out.
 fn list_items ls i shape acc
   line = ls[i]
   width = item_width line
-  first = text/slice line (width + 1) (length line)
+  first = textkit/clamped line (width + 1) (length line)
   item = item_lines ls (i + 1) width [first]
   more_items ls item shape acc
 
@@ -291,10 +291,10 @@ fn same_item? line shape
 # A bullet's character, or an ordered item's closing `.` or `)`.
 fn marker_of line
   t = textkit/trim_start line
-  first = text/slice t 1 1
+  first = textkit/clamped t 1 1
   return first if not textkit/digit? first
   digits = count_digits (text/chars t) 1
-  text/slice t (digits + 1) (digits + 1)
+  textkit/clamped t (digits + 1) (digits + 1)
 
 fn finish_list (listing _ ordered start) items next
   loose = list/any? items (lines -> gapped? lines)
@@ -325,7 +325,7 @@ fn item_gap ls i width acc
 fn dedent line width
   indent = length line - length (textkit/trim_start line)
   cut = if (indent < width) indent width
-  text/slice line (cut + 1) (length line)
+  textkit/clamped line (cut + 1) (length line)
 
 # GitHub tables: a header row, a delimiter row of dashes, then body rows.
 fn table_lines ls i acc
@@ -341,7 +341,7 @@ fn as_table rows i
   aligns = list/to_list (list/map (cells delim) align_of)
   head = cells rows[1]
   width = length head
-  body = text/slice rows 3 (length rows)
+  body = textkit/clamped rows 3 (length rows)
     . list/map (r -> pad_row (cells r) width)
     . list/to_list
   took (table aligns head body) i
@@ -364,7 +364,7 @@ fn cells none
   []
 
 fn cells row
-  inner = text/slice row 2 (length row - trailing_bar row)
+  inner = textkit/clamped row 2 (length row - trailing_bar row)
   list/to_list (list/map (text/split inner "|") text/trim)
 
 fn trailing_bar row

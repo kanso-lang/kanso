@@ -1,0 +1,6 @@
+import "std/list"
+
+fields = list/map [1 2] (f -> "{f}")
+rows = list/concat ["head"] fields
+
+print "{rows}"

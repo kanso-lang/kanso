@@ -1,0 +1,10 @@
+fn accumulate none _ _
+  none
+
+fn accumulate _ none _
+  none
+
+fn accumulate acc d base
+  if (d < base) (acc * base + d) none
+
+print "{accumulate 1 2 10}"

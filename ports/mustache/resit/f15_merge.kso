@@ -1,0 +1,11 @@
+type sink
+  cache
+  state
+  written
+
+fn cached acc key nodes
+  merge acc { "cache":(put acc.cache key nodes) }
+
+s = sink {} 0 ""
+
+print "{cached s "p" [1]}"

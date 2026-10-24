@@ -1,3 +1,5 @@
+import "std/text"
+
 # Whether a connection stays open after a response, decided from the
 # request's version and Connection header, the response's own headers, and
 # how many requests the connection has carried.
@@ -5,12 +7,14 @@ fn keeps? version connection reply served
   quiet = server_with (_ s -> effect (carry (empty 200) s)) (_ -> effect done)
   keep_alive? quiet (request_with version connection) reply served
 
-fn request_with version ""
-  request [] { "host":"x" } "GET" "/" {} "/" version
-
+# A test cannot build a `request`, so it parses one.
 fn request_with version connection
-  headers = { "connection":connection "host":"x" }
-  request [] headers "GET" "/" {} "/" version
+  line = if (connection == "") "" "Connection: {connection}\r\n"
+  raw = "GET / {version}\r\nHost: x\r\n{line}\r\n"
+  parsed_request (parse (text/bytes raw) default_limits)
+
+fn parsed_request (framed r _)
+  r
 
 plain = empty 200
 

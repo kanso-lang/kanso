@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/cut 1} {m/other 2}"

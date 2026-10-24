@@ -1,0 +1,6 @@
+import "std/list"
+
+fn back_of [p a]
+  "{p}={a}"
+
+print "{list/map (list/zip ["a"] [1]) back_of}"

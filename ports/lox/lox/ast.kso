@@ -54,7 +54,7 @@ type logical
 
 # Lox's nil. Kanso's own none is an answer to a question ("was it there?"),
 # and a value that rides through every Lox variable cannot be one.
-type nil
+pub type nil
 
 # An optional part of a node that is not there: an `if` with no `else`, a
 # `return;`, a class with no superclass.

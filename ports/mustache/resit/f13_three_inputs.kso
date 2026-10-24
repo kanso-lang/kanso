@@ -1,0 +1,15 @@
+import "std/os"
+
+fn rendered (file_not_found f) _ _
+  "no such file: {f}"
+
+fn rendered _ (file_not_found f) _
+  "no such file: {f}"
+
+fn rendered _ _ (file_not_found f)
+  "no such file: {f}"
+
+fn rendered t d p
+  "{t}{d}{p}"
+
+os/read_file "a" .> (t -> print (rendered t "d" "p"))

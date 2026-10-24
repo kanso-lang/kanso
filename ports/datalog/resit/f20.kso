@@ -1,0 +1,14 @@
+type by_key
+  t
+
+fn add_op acc _ none _
+  acc
+
+fn add_op acc _ (by_key _) true
+  acc
+
+fn add_op acc place (by_key t) false
+  push acc "{place}{t}"
+
+m = { 1:(by_key "x") }
+print "{add_op [] 1 m[1] false} {add_op [] 1 m[2] true}"

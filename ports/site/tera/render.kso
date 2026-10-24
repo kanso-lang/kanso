@@ -61,6 +61,9 @@ pub fn shortcode eng call_src extra line
   e = expression toks
   run_shortcode eng e extra
 
+fn run_shortcode _ e@(err _) _
+  e
+
 fn run_shortcode eng (e_call args line name) extra
   e = scope {} 0 eng {} "shortcode" ""
   vals = eval_args e {} args
@@ -100,6 +103,9 @@ fn ancestry eng t acc
   return err "parent template `{t.parent}` was not found" if up == none
   ancestry eng up (push acc up)
 
+fn run_chain _ e@(err _) _
+  e
+
 fn run_chain eng chain ctx
   root = chain[length chain]
   blocks = list/fold chain {} stack_blocks
@@ -127,6 +133,9 @@ fn listed xs
 fn merged m extra
   list/fold (keys extra) m (acc k -> put acc k extra[k])
 
+fn run _ e@(err _) _
+  e
+
 fn run e body st
   list/fold body st (s n -> node e s n)
 
@@ -139,7 +148,7 @@ fn node _ st (n_text words)
 fn node e st (n_out expr line)
   v = eval e st.ctx expr
   shown = display v line
-  emit st shown
+  shown .> (s -> emit st s)
 
 fn node e st (n_if branches otherwise)
   chosen = choose e st.ctx branches 1
@@ -152,7 +161,7 @@ fn node e st (n_for body key line name otherwise source)
 
 fn node e st (n_set expr global name)
   v = eval e st.ctx expr
-  set_in st name v global
+  v .> (x -> set_in st name x global)
 
 fn node e st (n_block body name)
   return run e body st if name == ""
@@ -171,7 +180,7 @@ fn node e st (n_filter args body line name)
   vals = eval_args e st.ctx args
   result = apply_filter e name (markup shown) vals line
   shown_result = display result line
-  emit st shown_result
+  shown_result .> (s -> emit st s)
 
 fn set_in (pen ctx globals parts) name v false
   pen (put ctx name v) globals parts
@@ -196,11 +205,20 @@ fn picked _ _ branches i true
 fn picked e ctx branches i false
   choose e ctx branches (i + 1)
 
+fn picked _ _ _ _ e@(err _)
+  e
+
 fn chosen_body none otherwise
   otherwise
 
+fn chosen_body e@(err _) _
+  e
+
 fn chosen_body body _
   body
+
+fn looped_over _ _ e@(err _) _
+  e
 
 fn looped_over e st items form
   return run e form.otherwise st if length items == 0
@@ -229,6 +247,9 @@ fn bind_item ctx "" name item
 fn bind_item ctx key name item
   put (put ctx key item[1]) name item[2]
 
+fn iterable e@(err _) _
+  e
+
 # What a for loop walks: a list's items, a map's [key value] pairs in key
 # order, or a string's characters.
 fn iterable (missing path) line
@@ -249,6 +270,9 @@ fn iterable v line
 # What `{{ }}` prints: text escaped, markup as it is.
 fn display none _
   ""
+
+fn display e@(err _) _
+  e
 
 fn display (missing path) line
   err "line {line}: `{path}` is not defined"
@@ -296,6 +320,9 @@ fn truthy? true
 
 fn truthy? false
   false
+
+fn truthy? e@(err _)
+  e
 
 fn truthy? (missing _)
   false
@@ -362,7 +389,7 @@ fn eval e ctx (e_bin left _ "or" right)
 fn eval e ctx (e_bin left line op right)
   l = eval e ctx left
   r = eval e ctx right
-  binary op l r line
+  l .> (a -> r .> (b -> binary op a b line))
 
 fn eval e ctx (e_not operand)
   v = eval e ctx operand
@@ -370,12 +397,12 @@ fn eval e ctx (e_not operand)
 
 fn eval e ctx (e_neg operand)
   v = eval e ctx operand
-  binary "-" 0 v 0
+  v .> (x -> binary "-" 0 x 0)
 
 fn eval e ctx (e_test args line name negate target)
   v = eval e ctx target
   vals = eval_args e ctx args
-  answer = check_test name v vals line
+  answer = v .> (x -> check_test name x vals line)
   flip? answer negate
 
 fn eval e ctx (e_list items)
@@ -388,12 +415,21 @@ fn and_then e ctx true right
   r = eval e ctx right
   truthy? r
 
+fn and_then _ _ e@(err _) _
+  e
+
 fn or_else _ _ true _
   true
 
 fn or_else e ctx false right
   r = eval e ctx right
   truthy? r
+
+fn or_else _ _ e@(err _) _
+  e
+
+fn flip? e@(err _) _
+  e
 
 fn flip? answer negate
   if negate (not answer) answer
@@ -415,6 +451,9 @@ fn arg_key (arg key _) _
   key
 
 # A missing attribute is reported by the whole path that reached it.
+fn named_missing e@(err _) _
+  e
+
 fn named_missing (missing _) expr
   missing (path_text expr)
 
@@ -432,6 +471,9 @@ fn path_text (e_index _ _ target)
 
 fn path_text _
   "(value)"
+
+fn attr_of e@(err _) _
+  e
 
 fn attr_of (missing path) key
   missing "{path}.{key}"
@@ -456,8 +498,17 @@ fn index_into m:map[string some] k:string _
   found = m[k]
   if (found == none) (missing k) found
 
+fn index_into e@(err _) (err _) _
+  e
+
+fn index_into e@(err _) _ _
+  e
+
 fn index_into (missing path) _ _
   missing path
+
+fn index_into _ e@(err _) _
+  e
 
 fn index_into _ k line
   err "line {line}: cannot index with `{k}`"

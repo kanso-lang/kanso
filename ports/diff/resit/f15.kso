@@ -1,0 +1,9 @@
+import "std/os"
+
+fn loaded _ (os/file_not_found p)
+  "missing {p}"
+
+fn loaded _ text
+  "read {length text}"
+
+os/read_file "nope.txt" .> (t -> print (loaded 1 t))

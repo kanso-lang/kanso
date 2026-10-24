@@ -1,0 +1,14 @@
+import "std/text"
+
+usage = """
+  usage: sat solve [--luby|--geometric] FILE
+         sat gen FAMILY N...
+"""
+
+lines = [
+  "c one"
+  "c two"
+  "c three"
+  "c four and a long line that pushes this literal past eighty columns"
+]
+print usage .> (_ -> print (text/join lines "\n"))

@@ -27,8 +27,8 @@ pub fn parse_at src first
 
 fn shifted (err r) by
   colon = textkit/index_of r ":" 1
-  line = text/to_int (text/slice r 6 (colon - 1))
-  err "line {numbered line by}{text/slice r colon (length r)}"
+  line = text/to_int (textkit/clamped r 6 (colon - 1))
+  err "line {numbered line by}{textkit/clamped r colon (length r)}"
 
 fn shifted m _
   m
@@ -54,6 +54,12 @@ fn doc_at cs _ p root path
   placed = place root path pair
   doc_after cs pair placed path
 
+fn doc_after _ (got _ _) e@(err _) _
+  e
+
+fn doc_after _ e@(err _) _ _
+  e
+
 fn doc_after cs (got p _) root path
   q = skip_space cs p
   line_end cs cs[q] q root path
@@ -74,6 +80,9 @@ fn header cs p root
   names = key_path cs (skip_space cs p) []
   header_close cs names root
 
+fn header_close _ e@(err _) _
+  e
+
 fn header_close cs (got p names) root
   q = skip_space cs p
   return fail cs q "expected `]` to close the table header" if cs[q] != "]"
@@ -91,10 +100,13 @@ fn table_or_new m
   m
 
 fn rest xs
-  text/slice xs 2 (length xs)
+  textkit/clamped xs 2 (length xs)
+
+fn place _ _ e@(err _)
+  e
 
 fn place root path (got _ (assignment names v))
-  set_in root (text/concat path names) v
+  set_in root (list/concat path names) v
 
 fn set_in m names v
   return put m names[1] v if length names == 1
@@ -105,11 +117,17 @@ fn key_value cs p
   names = key_path cs p []
   after_key cs names
 
+fn after_key _ e@(err _)
+  e
+
 fn after_key cs (got p names)
   q = skip_space cs p
   return fail cs q "expected `=` after the key" if cs[q] != "="
   v = value cs (skip_space cs (q + 1))
   paired_with names v
+
+fn paired_with _ e@(err _)
+  e
 
 fn paired_with names (got p v)
   got p (assignment names v)
@@ -117,6 +135,9 @@ fn paired_with names (got p v)
 fn key_path cs p acc
   k = key cs p
   key_more cs k acc
+
+fn key_more _ e@(err _) _
+  e
 
 fn key_more cs (got p k) acc
   q = skip_space cs p
@@ -138,7 +159,7 @@ fn key_at cs none p
 fn key_at cs _ p
   q = bare_end cs p
   return fail cs p "expected a key" if q == p
-  got q (text/join (text/slice cs p (q - 1)) "")
+  got q (text/join (textkit/clamped cs p (q - 1)) "")
 
 fn bare_end cs p
   if (bare? cs[p]) (bare_end cs (p + 1)) p
@@ -148,14 +169,14 @@ fn bare? none
 
 fn bare? c
   code = text/char_code c
-  alpha = 64 < code and code < 91 or 96 < code and code < 123
-  alpha or 47 < code and code < 58 or c == "_" or c == "-"
+  alpha = (64 < code and code < 91) or (96 < code and code < 123)
+  alpha or (47 < code and code < 58) or c == "_" or c == "-"
 
 fn value cs p
   value_at cs cs[p] p
 
 fn value_at cs "\"" p
-  quoted cs p (text/slice cs p (p + 2) == ["\"" "\"" "\""])
+  quoted cs p (textkit/clamped cs p (p + 2) == ["\"" "\"" "\""])
 
 fn value_at cs "'" p
   literal_string cs (p + 1) p
@@ -172,7 +193,7 @@ fn value_at cs none p
 fn value_at cs _ p
   q = scalar_end cs p
   return fail cs p "expected a value" if q == p
-  word = text/join (text/slice cs p (q - 1)) ""
+  word = text/join (textkit/clamped cs p (q - 1)) ""
   scalar cs p q word
 
 fn scalar _ _ q "true"
@@ -225,7 +246,7 @@ fn skip_first_newline cs p
 
 fn long_string cs p acc
   return fail cs p "unterminated string" if cs[p] == none
-  closing = text/slice cs p (p + 2) == ["\"" "\"" "\""]
+  closing = textkit/clamped cs p (p + 2) == ["\"" "\"" "\""]
   if closing (got (p + 3) (text/join acc "")) (long_char cs p acc)
 
 fn long_char cs p acc
@@ -279,7 +300,7 @@ fn escape_of _
 fn literal_string cs p start
   q = literal_end cs p
   return fail cs start "unterminated string" if cs[q] != "'"
-  got (q + 1) (text/join (text/slice cs p (q - 1)) "")
+  got (q + 1) (text/join (textkit/clamped cs p (q - 1)) "")
 
 fn literal_end cs p
   if (cs[p] == none or cs[p] == "'" or cs[p] == "\n") p (literal_end cs (p + 1))
@@ -288,6 +309,9 @@ fn array cs p acc
   return got (p + 1) acc if cs[p] == "]"
   v = value cs p
   array_more cs v acc
+
+fn array_more _ e@(err _) _
+  e
 
 fn array_more cs (got p v) acc
   q = skip_blank cs p
@@ -310,6 +334,9 @@ fn inline_table cs p m
   return got (p + 1) m if cs[p] == "}"
   pair = key_value cs p
   table_more cs pair m
+
+fn table_more _ e@(err _) _
+  e
 
 fn table_more cs (got p (assignment names v)) m
   q = skip_space cs p
@@ -360,5 +387,5 @@ fn skip_comment cs p
   if (cs[p] == none or cs[p] == "\n") p (skip_comment cs (p + 1))
 
 fn fail cs p message
-  line = list/count (text/slice cs 1 (p - 1)) (c -> c == "\n") + 1
+  line = list/count (textkit/clamped cs 1 (p - 1)) (c -> c == "\n") + 1
   err "line {line}: {message}"

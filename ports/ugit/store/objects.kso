@@ -31,11 +31,15 @@ pub fn get_object oid kind
 fn unframed oid _ (file_not_found _)
   err "not a valid object name {oid}"
 
+# `nul` is computed, so the checker cannot see that it is not the empty
+# separator `text/split` refuses, and the split is taken through `.>`.
 fn unframed oid kind stored
-  pieces = text/split stored nul
+  text/split stored nul .> (pieces -> unframed_pieces oid kind pieces)
+
+fn unframed_pieces oid kind pieces
   found = pieces[1]
   return err "object {oid} is a {found}, not a {kind}" if found != kind
-  text/join (text/slice pieces 2 (length pieces)) nul
+  text/join (sliced (text/slice pieces 2 (length pieces))) nul
 
 # The kind of an object, for cat-file -t.
 pub fn kind_of oid
@@ -45,5 +49,4 @@ fn kind_in oid (file_not_found _)
   err "not a valid object name {oid}"
 
 fn kind_in _ stored
-  pieces = text/split stored nul
-  pieces[1]
+  text/split stored nul .> (pieces -> pieces[1])

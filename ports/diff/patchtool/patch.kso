@@ -91,7 +91,7 @@ fn one opts fp
   task = job births born deaths dies fp hunks opts
   olds = if (fp.old_name == "/dev/null") [] [old]
   news = if (fp.new_name == "/dev/null") [] [new]
-  target_of opts.target (text/concat olds news) .> (name -> located task name)
+  target_of opts.target (list/concat olds news) .> (name -> located task name)
 
 # A lone hunk whose range on one side is "0,0" says that side is empty,
 # which GNU patch reads as a weaker form of /dev/null.
@@ -157,7 +157,7 @@ fn strip_name name none
 
 fn strip_name name n
   parts = text/split name "/"
-  text/join (text/slice parts (n + 1) (length parts)) "/"
+  text/join (given (text/slice parts (n + 1) (length parts)) []) "/"
 
 fn plural 1 word
   "1 out of 1 {word}"
@@ -218,7 +218,7 @@ fn patch_file task name existed content
   saving = "{failed} out of {total} {hunks_word total} FAILED"
   saved = if task.opts.dry_run "" " -- saving rejects to file {name}.rej"
   summary = if (failed > 0) ["{saving}{saved}"] []
-  said = text/concat (text/concat head (if quiet [] story.said)) summary
+  said = list/concat (list/concat head (if quiet [] story.said)) summary
   new = lines/from_keys result.rows
   wrote = outcome new story.failed task.hunks story.mismatch said
   written task name existed content wrote

@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # A recursive-descent parser for bc, with precedence climbing for
 # expressions. It reads one top-level unit at a time -- a line of statements
@@ -62,6 +61,9 @@ pub fn start_source tables toks
 
 # Built by a call rather than the constructor, so that a syntax error
 # arriving in both arguments stays one error (FRICTION F7).
+fn got _ e@(err _)
+  e
+
 fn got node s
   parsed node s
 
@@ -82,6 +84,9 @@ fn fail s message
   t = peek s
   err (syntax_fault t.line message s.pos)
 
+fn expect e@(err _) _
+  e
+
 fn expect s kind
   k = kind_at s
   if (k == kind) (advance s) (fail s "syntax error")
@@ -90,6 +95,9 @@ fn expect s kind
 # the end. Written as loops over the parser state itself, they became beat
 # loops carrying a record that holds maps across the arena rewind, and the
 # native build later read corrupted values (FRICTION F15).
+fn skip_newlines e@(err _)
+  e
+
 fn skip_newlines s
   moved_to s (past_kinds s.toks s.pos "newline" "newline")
 
@@ -111,6 +119,9 @@ fn with_scalar (ps arrays funcs pos scalars toks voids) name
   return got found (ps arrays funcs pos scalars toks voids) if found != none
   slot = length scalars + 1
   got slot (ps arrays funcs pos (put scalars name slot) toks voids)
+
+fn with_array e@(err _) _
+  e
 
 fn with_array (ps arrays funcs pos scalars toks voids) name
   found = arrays[name]
@@ -140,7 +151,7 @@ fn unit_of s "define"
 fn unit_of s _
   first = statement s
   more = statement_list first.ps
-  body = text/concat [first.node] more.node
+  body = list/concat [first.node] more.node
   ended = end_of_unit more.ps
   placed = check_placement body ended
   make_unit body placed
@@ -169,7 +180,7 @@ fn statement_list s
   return got [] after if k2 == "newline" or k2 == "eof" or k2 == ";"
   next = statement after
   rest = statement_list next.ps
-  got (text/concat [next.node] rest.node) rest.ps
+  got (list/concat [next.node] rest.node) rest.ps
 
 fn settle (err (syntax_fault line message pos)) s
   bad_unit line message (recover (moved_to s pos))
@@ -191,6 +202,9 @@ fn line_end toks pos
   return pos if k == "eof"
   return pos + 1 if k == "newline"
   line_end toks (pos + 1)
+
+fn statement e@(err _)
+  e
 
 fn statement s
   k = kind_at s
@@ -276,10 +290,16 @@ fn condition s
   closed = expect check.ps ")"
   got check.node closed
 
+fn optional_expr e@(err _) _
+  e
+
 fn optional_expr s closer
   k = kind_at s
   return got absent s if k == closer
   expression s 1
+
+fn block_body e@(err _)
+  e
 
 fn block_body s
   k = kind_at s
@@ -287,7 +307,7 @@ fn block_body s
   return fail s "syntax error" if k == "eof"
   next = statement s
   rest = block_after next.ps
-  got (text/concat [next.node] rest.node) rest.ps
+  got (list/concat [next.node] rest.node) rest.ps
 
 fn block_after s
   k = kind_at s
@@ -300,7 +320,7 @@ fn print_items s
   k = kind_at item.ps
   return got [item.node] item.ps if k != ","
   rest = print_items (advance item.ps)
-  got (text/concat [item.node] rest.node) rest.ps
+  got (list/concat [item.node] rest.node) rest.ps
 
 fn print_item s
   k = kind_at s
@@ -333,6 +353,9 @@ fn skip_newlines_then_brace s
   return fail s "syntax error" if k != "\{"
   skip_separators (advance s)
 
+fn auto_list e@(err _)
+  e
+
 fn auto_list s
   k = kind_at s
   return got [] s if k != "auto"
@@ -341,6 +364,9 @@ fn auto_list s
 
 # A parameter or auto list. `closer` is ) for parameters; an auto list ends
 # at a semicolon or a newline. The list may be empty, but not after a comma.
+fn formals e@(err _) _
+  e
+
 fn formals s closer
   k = kind_at s
   return got [] (advance s) if k == closer
@@ -358,9 +384,12 @@ fn formal_list s closer
 # Not a loop: the list is built on the way back out. Built by pushing in a
 # tail-recursive loop, it came back corrupted from native builds (FRICTION
 # F15, bugs/loop_list_clobbered).
+fn more_formals e@(err _) _
+  e
+
 fn more_formals item closer
   rest = formal_list (advance item.ps) closer
-  got (text/concat [item.node] rest.node) rest.ps
+  got (list/concat [item.node] rest.node) rest.ps
 
 fn formal_of s
   k = kind_at s
@@ -386,7 +415,7 @@ fn scalar_formal name reference s
   got (formal false name false slot.node) slot.ps
 
 fn check_formals params autos s
-  all = text_names (text/concat params autos)
+  all = text_names (list/concat params autos)
   return fail s "duplicate parameter names" if repeats? (text_names params)
   return fail s "variable in both parameter and auto lists" if repeats? all
   s
@@ -465,6 +494,9 @@ fn power_of "^"
 
 fn power_of _
   0
+
+pub fn expression e@(err _) _
+  e
 
 pub fn expression s floor
   left = prefix s
@@ -672,9 +704,12 @@ fn argument_list s
   closed = expect item.ps ")"
   got [item.node] closed
 
+fn more_arguments e@(err _)
+  e
+
 fn more_arguments item
   rest = argument_list (advance item.ps)
-  got (text/concat [item.node] rest.node) rest.ps
+  got (list/concat [item.node] rest.node) rest.ps
 
 # `name[]` passes a whole array; anything else is an expression.
 fn argument s
@@ -690,6 +725,9 @@ fn argument_named name s
   return expression s 1 if open != "[" or close != "]"
   slot = with_array (advance (advance after)) name
   got (whole_array name slot.node) slot.ps
+
+fn make_unit _ e@(err _)
+  e
 
 fn make_unit body s
   unit body s
@@ -715,6 +753,9 @@ fn make_element index name slot
 # break and continue belong in a loop and return in a function; GNU bc
 # refuses the unit when one is elsewhere. `s` is handed back when all is
 # well.
+fn check_placement _ e@(err _)
+  e
+
 fn check_placement body s
   found = list/fold body absent (acc x -> first_misplaced acc x false false)
   refuse_misplaced found s

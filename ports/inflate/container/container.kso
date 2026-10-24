@@ -47,6 +47,14 @@ fn zero_past_end none
 fn zero_past_end v
   v
 
+# A range the caller has already checked against the length. text/slice
+# answers none for one past the end, and these never are.
+fn inside none
+  []
+
+fn inside xs
+  xs
+
 # A 32-bit value as eight hex digits, the way gzip -l and zlib's tools print
 # checksums.
 pub fn hex8 n

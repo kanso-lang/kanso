@@ -1,0 +1,16 @@
+import "std/list"
+
+fn upto n
+  list/to_list (list/take (list/iterate 1 (k -> k + 1)) n)
+
+fn or_empty none
+  []
+
+fn or_empty xs
+  xs
+
+fn file_in buckets code
+  k = code * 7919 % 8009
+  put buckets k (push (or_empty buckets[k]) code)
+
+print "{length (list/fold (upto 8000) {} file_in)}"

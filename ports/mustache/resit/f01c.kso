@@ -1,0 +1,6 @@
+import "std/list"
+
+type cursor
+  pos
+
+print "{cursor 1} {list/count [1 2] (x -> x > 1)}"

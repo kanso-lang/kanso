@@ -1,0 +1,9 @@
+pub fn total xs
+  plus = length xs + 1
+  given plus 0
+
+fn given none fallback
+  fallback
+
+fn given v _
+  v

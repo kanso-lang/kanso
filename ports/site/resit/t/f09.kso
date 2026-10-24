@@ -1,0 +1,7 @@
+fn read 1 line
+  "one at {line}"
+
+fn read n line
+  "{n}"
+
+print (read 2 5)

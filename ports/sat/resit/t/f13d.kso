@@ -1,0 +1,6 @@
+import "std/list"
+
+fn step x
+  x + 1
+
+print "{step 3}"

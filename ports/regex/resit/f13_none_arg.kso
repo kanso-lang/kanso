@@ -1,0 +1,13 @@
+fn outcome none steps
+  "no match after {steps}"
+
+fn outcome caps steps
+  "{caps} after {steps}"
+
+fn scan 0 matched
+  outcome matched 3
+
+fn scan n matched
+  scan (n - 1) matched
+
+print (scan 2 none)

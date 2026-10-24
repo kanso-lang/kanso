@@ -1,0 +1,15 @@
+import "std/text"
+
+fn smaller a b
+  if (a < b) a b
+
+fn chunk cs from to
+  text/join (sliced (text/slice cs from (smaller to (length cs))) []) ""
+
+fn sliced none empty
+  empty
+
+fn sliced piece_of _
+  piece_of
+
+print (chunk ["a" "b" "c"] 2 9)

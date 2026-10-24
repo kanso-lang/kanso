@@ -1,0 +1,22 @@
+# `kanso check m` and `kanso check .` say ok. `kanso test m` refuses this
+# file, though the test file beside it does not call anything:
+#   error[exhaustive]: this can be a none and `os/read_bytes` has no arm for
+#   it — resolve it here, or give `os/read_bytes` a `none` arm (in m.kso)
+#     --> m/m.kso:22:18
+# The first `go` arm claims the none in the `path` field. The same module
+# passed `kanso test` on 2026-10-10, when a test file was a member of its
+# module; since the 2026-10-12 gavel the test file is an importer.
+import "std/io"
+import "std/os"
+
+type req
+  path
+
+pub fn main argv
+  go (req argv[1])
+
+fn go (req none)
+  io/write "usage: m FILE\n"
+
+fn go r
+  os/read_bytes r.path .> (bs -> io/write "{length bs} bytes\n")

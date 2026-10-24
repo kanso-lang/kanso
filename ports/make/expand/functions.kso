@@ -235,12 +235,12 @@ pub fn run_shell cmd
     .> (p -> io/write_err p.stderr .> (_ -> effect (shell_text p.stdout)))
 
 # What $(shell) hands back: trailing newlines gone, the rest made spaces.
-fn shell_text out
+pub fn shell_text out
   words/replace_all (words/replace_all (chomp out) "\r\n" " ") "\n" " "
 
 fn chomp s
   last = text/slice s (length s) (length s)
-  if (last == "\n") (chomp (text/slice s 1 (length s - 1))) s
+  if (last == "\n") (chomp (or_empty (text/slice s 1 (length s - 1)))) s
 
 fn nth sc n text
   number sc "word" n .> (i -> effect (or_empty (words/split_words text)[i]))
@@ -253,7 +253,13 @@ fn ranged sc vals
     .> (from -> number sc "wordlist" to_text .> (to -> slice_words ws from to))
 
 fn slice_words ws from to
-  effect (words/unwords (text/slice ws from to))
+  effect (words/unwords (no_words (text/slice ws from to)))
+
+fn no_words none
+  []
+
+fn no_words ws
+  ws
 
 # A function's numeric argument, which make refuses unless it is a whole
 # number above zero.
@@ -267,62 +273,62 @@ fn counted sc name _ i
   message = "first argument to '{name}' function must be greater than 0"
   if (i < 1) (report/fatal sc.at message) (effect i)
 
-fn computed "addprefix" vals
+pub fn computed "addprefix" vals
   every (arg vals 2) (w -> "{arg vals 1}{w}")
 
-fn computed "addsuffix" vals
+pub fn computed "addsuffix" vals
   every (arg vals 2) (w -> "{w}{arg vals 1}")
 
-fn computed "basename" vals
+pub fn computed "basename" vals
   every (arg vals 1) without_suffix
 
-fn computed "dir" vals
+pub fn computed "dir" vals
   every (arg vals 1) words/dir_part
 
-fn computed "filter" vals
+pub fn computed "filter" vals
   kept (arg vals 1) (arg vals 2) true
 
-fn computed "filter-out" vals
+pub fn computed "filter-out" vals
   kept (arg vals 1) (arg vals 2) false
 
-fn computed "findstring" vals
+pub fn computed "findstring" vals
   if (words/contains? (arg vals 2) (arg vals 1)) (arg vals 1) ""
 
-fn computed "firstword" vals
+pub fn computed "firstword" vals
   words/first_word (arg vals 1)
 
-fn computed "join" vals
+pub fn computed "join" vals
   joined (words/split_words (arg vals 1)) (words/split_words (arg vals 2))
 
-fn computed "lastword" vals
+pub fn computed "lastword" vals
   ws = words/split_words (arg vals 1)
   or_empty ws[length ws]
 
-fn computed "notdir" vals
+pub fn computed "notdir" vals
   every (arg vals 1) words/file_part
 
-fn computed "patsubst" vals
+pub fn computed "patsubst" vals
   pat = words/squeeze (arg vals 1)
   rep = words/squeeze (arg vals 2)
   words/unwords (patsubst_all pat rep (words/split_words (arg vals 3)))
 
-fn computed "sort" vals
+pub fn computed "sort" vals
   words/unwords (words/uniq (list/sort (words/split_words (arg vals 1))))
 
-fn computed "strip" vals
+pub fn computed "strip" vals
   words/squeeze (arg vals 1)
 
-fn computed "subst" vals
+pub fn computed "subst" vals
   words/replace_all (arg vals 3) (arg vals 1) (arg vals 2)
 
-fn computed "suffix" vals
+pub fn computed "suffix" vals
   ws = list/map (words/split_words (arg vals 1)) suffix_of
   words/unwords (list/to_list (list/reject ws (s -> s == "")))
 
-fn computed "words" vals
+pub fn computed "words" vals
   "{length (words/split_words (arg vals 1))}"
 
-fn computed _ _
+pub fn computed _ _
   ""
 
 fn every text f

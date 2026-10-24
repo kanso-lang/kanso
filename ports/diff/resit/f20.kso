@@ -1,0 +1,4 @@
+fn f nested
+  print "hello"
+
+f 1

@@ -1,0 +1,5 @@
+import "std/list"
+import "std/text"
+
+parts = text/split "a=b=c" "="
+print (text/join (list/drop parts 1) "=")

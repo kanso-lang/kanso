@@ -1,0 +1,4 @@
+import "std/list"
+import "std/text"
+
+print "{list/concat [1] (text/bytes "a")}"

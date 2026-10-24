@@ -1,0 +1,4 @@
+fn total values
+  length values
+
+print "{total [1 2]}"

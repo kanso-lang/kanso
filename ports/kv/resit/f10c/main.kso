@@ -1,0 +1,3 @@
+import "./m"
+
+print (m/octal_of [1 2 3])

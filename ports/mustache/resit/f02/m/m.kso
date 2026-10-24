@@ -1,0 +1,8 @@
+# The node types a parsed template is made of.
+
+# One run of literal text.
+pub type text_node
+  text
+
+pub fn shown n
+  "{n.text}"

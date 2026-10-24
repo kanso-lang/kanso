@@ -1,0 +1,4 @@
+import "./db"
+import "./ex"
+
+print (ex/global (db/simple_var "x"))

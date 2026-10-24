@@ -1,0 +1,3 @@
+test_local =
+  q = profile "vip"
+  ran q == 2

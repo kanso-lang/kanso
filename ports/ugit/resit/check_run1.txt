@@ -1,0 +1,469 @@
+== unit tests
+delta: 21 passed, 0 failed
+store: 6 passed, 0 failed
+ugit: 20 passed, 0 failed
+== build
+== fixtures
+FAIL add_commit (interp differs from add_commit.out)
+33,40c33,35
+< commit 9945f7801e8f56fd17ae3b19e68c69d009b6cbb77e337e4008eeb9cc79d04103 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     first commit
+< 
+<     with a body that spans
+<     two lines
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+49,50c44,46
+< d2b69d9 (HEAD -> master) remove a note, add two
+< 9945f78 first commit
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+FAIL add_commit (dev differs from add_commit.out)
+33,40c33,35
+< commit 9945f7801e8f56fd17ae3b19e68c69d009b6cbb77e337e4008eeb9cc79d04103 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     first commit
+< 
+<     with a body that spans
+<     two lines
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+49,50c44,46
+< d2b69d9 (HEAD -> master) remove a note, add two
+< 9945f78 first commit
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+FAIL add_commit (release differs from add_commit.out)
+33,40c33,35
+< commit 9945f7801e8f56fd17ae3b19e68c69d009b6cbb77e337e4008eeb9cc79d04103 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     first commit
+< 
+<     with a body that spans
+<     two lines
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+49,50c44,46
+< d2b69d9 (HEAD -> master) remove a note, add two
+< 9945f78 first commit
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+FAIL diff (interp differs from diff.out)
+106,169c106,111
+< diff --ugit a/gone.txt b/gone.txt
+< deleted file
+< --- a/gone.txt
+< +++ /dev/null
+< @@ -1 +0,0 @@
+< -bye
+< diff --ugit a/numbers.txt b/numbers.txt
+< --- a/numbers.txt
+< +++ b/numbers.txt
+< @@ -1,6 +1,6 @@
+<  1
+<  2
+< -3
+< +three
+<  4
+<  5
+<  6
+< @@ -11,5 +11,6 @@
+<  11
+FAIL diff (dev differs from diff.out)
+106,169c106,111
+< diff --ugit a/gone.txt b/gone.txt
+< deleted file
+< --- a/gone.txt
+< +++ /dev/null
+< @@ -1 +0,0 @@
+< -bye
+< diff --ugit a/numbers.txt b/numbers.txt
+< --- a/numbers.txt
+< +++ b/numbers.txt
+< @@ -1,6 +1,6 @@
+<  1
+<  2
+< -3
+< +three
+<  4
+<  5
+<  6
+< @@ -11,5 +11,6 @@
+<  11
+FAIL diff (release differs from diff.out)
+106,169c106,111
+< diff --ugit a/gone.txt b/gone.txt
+< deleted file
+< --- a/gone.txt
+< +++ /dev/null
+< @@ -1 +0,0 @@
+< -bye
+< diff --ugit a/numbers.txt b/numbers.txt
+< --- a/numbers.txt
+< +++ b/numbers.txt
+< @@ -1,6 +1,6 @@
+<  1
+<  2
+< -3
+< +three
+<  4
+<  5
+<  6
+< @@ -11,5 +11,6 @@
+<  11
+FAIL log (interp differs from log.out)
+7,35c7,29
+< commit 34439a634be50b589a2ded115053f0afdda6f7b7b2c87b0d5b4df1e4a9254ba1 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:16:20 2023 +0000
+< 
+<     commit number 3
+< 
+< commit 916b1bce664ec867b753e461a6b4a91d0f9ad1bc86a082b7fe13d8fb17a22668
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:15:20 2023 +0000
+< 
+<     commit number 2
+< 
+< commit 59b792f3027fa21c1c473cbed6ad87f5fb96c3b2324b515cb965220637e53214
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     commit number 1
+< 34439a6 (HEAD -> master, older, tag: v1.0) commit number 3
+< 916b1bc commit number 2
+FAIL log (dev differs from log.out)
+7,35c7,29
+< commit 34439a634be50b589a2ded115053f0afdda6f7b7b2c87b0d5b4df1e4a9254ba1 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:16:20 2023 +0000
+< 
+<     commit number 3
+< 
+< commit 916b1bce664ec867b753e461a6b4a91d0f9ad1bc86a082b7fe13d8fb17a22668
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:15:20 2023 +0000
+< 
+<     commit number 2
+< 
+< commit 59b792f3027fa21c1c473cbed6ad87f5fb96c3b2324b515cb965220637e53214
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     commit number 1
+< 34439a6 (HEAD -> master, older, tag: v1.0) commit number 3
+< 916b1bc commit number 2
+FAIL log (release differs from log.out)
+7,35c7,29
+< commit 34439a634be50b589a2ded115053f0afdda6f7b7b2c87b0d5b4df1e4a9254ba1 (HEAD -> master)
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:16:20 2023 +0000
+< 
+<     commit number 3
+< 
+< commit 916b1bce664ec867b753e461a6b4a91d0f9ad1bc86a082b7fe13d8fb17a22668
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:15:20 2023 +0000
+< 
+<     commit number 2
+< 
+< commit 59b792f3027fa21c1c473cbed6ad87f5fb96c3b2324b515cb965220637e53214
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:14:20 2023 +0000
+< 
+<     commit number 1
+< 34439a6 (HEAD -> master, older, tag: v1.0) commit number 3
+< 916b1bc commit number 2
+FAIL merge_clean (interp differs from merge_clean.out)
+7,8c7,9
+< Auto-merging story.txt
+< Merge made by the 'ugit' strategy.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+17,18c18,19
+< THE END
+< notes, and more
+---
+> end
+> notes
+21a23
+> old.txt
+25,49c27,32
+< commit a13a462e319b38a571d8e438e0c08d2949492c32139350ae7f972c68fe104d3d (HEAD -> master)
+< Merge: f26ce36 0ead0e1
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:17:20 2023 +0000
+FAIL merge_clean (dev differs from merge_clean.out)
+7,8c7,9
+< Auto-merging story.txt
+< Merge made by the 'ugit' strategy.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+17,18c18,19
+< THE END
+< notes, and more
+---
+> end
+> notes
+21a23
+> old.txt
+25,49c27,32
+< commit a13a462e319b38a571d8e438e0c08d2949492c32139350ae7f972c68fe104d3d (HEAD -> master)
+< Merge: f26ce36 0ead0e1
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:17:20 2023 +0000
+FAIL merge_clean (release differs from merge_clean.out)
+7,8c7,9
+< Auto-merging story.txt
+< Merge made by the 'ugit' strategy.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+17,18c18,19
+< THE END
+< notes, and more
+---
+> end
+> notes
+21a23
+> old.txt
+25,49c27,32
+< commit a13a462e319b38a571d8e438e0c08d2949492c32139350ae7f972c68fe104d3d (HEAD -> master)
+< Merge: f26ce36 0ead0e1
+< Author: A U Thor <author@example.com>
+< Date:   Tue Nov 14 22:17:20 2023 +0000
+FAIL merge_conflict (interp differs from merge_conflict.out)
+7,9c7,8
+< Auto-merging letters.txt
+< CONFLICT (content): Merge conflict in letters.txt
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+12d10
+< <<<<<<< HEAD
+14,16d11
+< =======
+< B
+< >>>>>>> upper
+19,20c14,15
+< E
+< Merge branch 'upper'
+---
+> e
+> cat: .ugit/MERGE_MSG: No such file or directory
+22,44c17,20
+FAIL merge_conflict (dev differs from merge_conflict.out)
+7,9c7,8
+< Auto-merging letters.txt
+< CONFLICT (content): Merge conflict in letters.txt
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+12d10
+< <<<<<<< HEAD
+14,16d11
+< =======
+< B
+< >>>>>>> upper
+19,20c14,15
+< E
+< Merge branch 'upper'
+---
+> e
+> cat: .ugit/MERGE_MSG: No such file or directory
+22,44c17,20
+FAIL merge_conflict (release differs from merge_conflict.out)
+7,9c7,8
+< Auto-merging letters.txt
+< CONFLICT (content): Merge conflict in letters.txt
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+12d10
+< <<<<<<< HEAD
+14,16d11
+< =======
+< B
+< >>>>>>> upper
+19,20c14,15
+< E
+< Merge branch 'upper'
+---
+> e
+> cat: .ugit/MERGE_MSG: No such file or directory
+22,44c17,20
+FAIL merge_delete (interp differs from merge_delete.out)
+7,10c7,8
+< Auto-merging both.txt
+< CONFLICT (add/add): Merge conflict in both.txt
+< CONFLICT (modify/delete): contested.txt deleted in other and modified in HEAD. Version HEAD of contested.txt left in tree.
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+13a12
+> doomed.txt
+15d13
+< <<<<<<< HEAD
+17,19d14
+< =======
+< from other
+< >>>>>>> other
+22,29c17
+< You are merging ebd375b.
+<   (fix conflicts, add them, and run "ugit commit")
+< 
+FAIL merge_delete (dev differs from merge_delete.out)
+7,10c7,8
+< Auto-merging both.txt
+< CONFLICT (add/add): Merge conflict in both.txt
+< CONFLICT (modify/delete): contested.txt deleted in other and modified in HEAD. Version HEAD of contested.txt left in tree.
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+13a12
+> doomed.txt
+15d13
+< <<<<<<< HEAD
+17,19d14
+< =======
+< from other
+< >>>>>>> other
+22,29c17
+< You are merging ebd375b.
+<   (fix conflicts, add them, and run "ugit commit")
+< 
+FAIL merge_delete (release differs from merge_delete.out)
+7,10c7,8
+< Auto-merging both.txt
+< CONFLICT (add/add): Merge conflict in both.txt
+< CONFLICT (modify/delete): contested.txt deleted in other and modified in HEAD. Version HEAD of contested.txt left in tree.
+< Automatic merge failed; fix conflicts and then commit the result.
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+13a12
+> doomed.txt
+15d13
+< <<<<<<< HEAD
+17,19d14
+< =======
+< from other
+< >>>>>>> other
+22,29c17
+< You are merging ebd375b.
+<   (fix conflicts, add them, and run "ugit commit")
+< 
+FAIL merge_ff (interp differs from merge_ff.out)
+6,13c6,19
+< Updating d407a55..0b250c8
+< Fast-forward
+< 0b250c8 (HEAD -> master, feature) v2
+< d407a55 v1
+< v2
+< added
+< Already up to date.
+< 0b250c8ab5084e2adf08b233be3fd834d649a9e73621a711517884b287e7a6b1
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> v1
+> cat: extra.txt: No such file or directory
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+FAIL merge_ff (dev differs from merge_ff.out)
+6,13c6,19
+< Updating d407a55..0b250c8
+< Fast-forward
+< 0b250c8 (HEAD -> master, feature) v2
+< d407a55 v1
+< v2
+< added
+< Already up to date.
+< 0b250c8ab5084e2adf08b233be3fd834d649a9e73621a711517884b287e7a6b1
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> v1
+> cat: extra.txt: No such file or directory
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+FAIL merge_ff (release differs from merge_ff.out)
+6,13c6,19
+< Updating d407a55..0b250c8
+< Fast-forward
+< 0b250c8 (HEAD -> master, feature) v2
+< d407a55 v1
+< v2
+< added
+< Already up to date.
+< 0b250c8ab5084e2adf08b233be3fd834d649a9e73621a711517884b287e7a6b1
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+> v1
+> cat: extra.txt: No such file or directory
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+FAIL reset (interp differs from reset.out)
+4c4,6
+< 201947d (HEAD -> master) one
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+FAIL reset (dev differs from reset.out)
+4c4,6
+< 201947d (HEAD -> master) one
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+FAIL reset (release differs from reset.out)
+4c4,6
+< 201947d (HEAD -> master) one
+---
+> error[runtime]: concat takes two lists
+>   failed in store/visited at /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:83
+> [exit 1]
+check.sh: FAILED

@@ -1,0 +1,20 @@
+# BUG: module t declares `pub type materials` (a marker). This module imports
+# t and names a pattern binder `materials` in `fn size (box materials)`.
+# The binder is read as the type `t/materials`, so the arm matches only a
+# box holding that marker. `kanso check` says ok (and does not call the
+# import unused, though nothing else here uses t), and every engine stops
+# at run time with "no overload of `m/size` matches these arguments".
+#
+# Expected: `materials` binds the field, as it does when t's type is
+# private, and `kanso run` prints `1 shaded`; or check refuses the
+# ambiguous name.
+import "../t"
+
+type box
+  materials
+
+fn size (box materials)
+  length materials
+
+pub fn f n
+  size (box [n])

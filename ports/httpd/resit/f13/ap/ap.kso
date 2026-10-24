@@ -1,0 +1,2 @@
+pub fn status_of (response _ _ status)
+  status

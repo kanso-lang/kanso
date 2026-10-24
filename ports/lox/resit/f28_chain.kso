@@ -1,0 +1,4 @@
+fn neg? a b
+  a < 0.0 != b
+
+print "{neg? 1.0 true}"

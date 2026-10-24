@@ -1,0 +1,21 @@
+type nil
+
+fn pr_str v:int _ _
+  "{v}"
+
+fn pr_str s:string true _
+  "\"{s}\""
+
+fn pr_str s:string false _
+  s
+
+fn pr_str nil _ _
+  "nil"
+
+fn pr_str true _ _
+  "true"
+
+fn pr_str _ _ _
+  "?"
+
+print (pr_str "a" true 0)

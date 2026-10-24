@@ -1,0 +1,7 @@
+fn fresh args
+  put {} "globs" args
+
+fn globs m
+  length m["globs"]
+
+print (globs (fresh []))

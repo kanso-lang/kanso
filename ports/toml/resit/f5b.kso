@@ -1,0 +1,5 @@
+fn finish acc
+  done = "{acc}!"
+  done
+
+print (finish "a")

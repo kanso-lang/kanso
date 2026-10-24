@@ -1,0 +1,6 @@
+import "std/list"
+
+ns = list/take list/naturals 40000
+pieces = list/to_list (list/map ns (n -> "<li>{n}</li>"))
+out = list/fold pieces "" (acc p -> "{acc}{p}")
+print "{length out}"

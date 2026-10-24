@@ -23,7 +23,7 @@ fn scale_with words r
   rows = list/to_list (list/map sizes (size -> scale_row r unit tail size))
   left = "{right "n" 8}{right "match" 7}"
   columns = "{left}{right "pike" 10}{right "backtrack" 12}"
-  print (text/join (push (text/concat [head columns] rows) note) "\n")
+  print (text/join (push (list/concat [head columns] rows) note) "\n")
 
 note = "backtracking stops at {budget} steps, and is skipped past n = 64"
 
@@ -43,7 +43,7 @@ fn shown_steps -1
 fn shown_steps n
   "{n}"
 
-fn right s width
+pub fn right s width
   fill = width - length s
   spaces = text/join (list/to_list (list/take (list/repeat " ") fill)) ""
   "{spaces}{s}"

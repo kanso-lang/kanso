@@ -1,0 +1,8 @@
+import "std/list"
+
+pub fn run m n
+  return m if n == 0
+  run (step m) (n - 1)
+
+fn step m
+  list/sum [m 1]

@@ -1,0 +1,6 @@
+import "std/os"
+
+fn show p
+  p.stdout
+
+pub play = os/run "echo" ["hi"] .> show

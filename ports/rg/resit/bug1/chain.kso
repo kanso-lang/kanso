@@ -1,0 +1,11 @@
+import "std/io"
+import "std/list"
+
+fn in_turn xs start step
+  list/fold xs (effect start) (chain x -> chain .> (acc -> step acc x))
+
+fn shown acc x
+  io/write "{x}\n" .> (_ -> effect (acc + 1))
+
+in_turn (list/to_list (list/take (list/iterate 1 (n -> n + 1)) 200)) 0 shown
+  .> (n -> print "total {n}")

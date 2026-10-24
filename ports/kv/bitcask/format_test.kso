@@ -1,6 +1,41 @@
 import "std/list"
 import "std/text"
 
+# A test file sees only what the module makes pub, and only bitcask builds
+# its records, so the expected values are read field by field.
+fn stopped_at? t:bitcask/torn "torn" n
+  t.offset == n
+
+fn stopped_at? c:bitcask/corrupt "corrupt" n
+  c.offset == n
+
+fn stopped_at? f:bitcask/finished "finished" n
+  f.offset == n
+
+fn stopped_at? _ _ _
+  false
+
+fn record? r key offset size stamp value
+  same = r.key == key and r.offset == offset and r.size == size
+  same and r.stamp == stamp and r.value == value
+
+fn hint? h key offset size stamp
+  same = h.key == key and h.offset == offset and h.size == size
+  same and h.stamp == stamp
+
+fn bad_hint_at? b:bitcask/bad_hint n
+  b.offset == n
+
+fn bad_hint_at? _ _
+  false
+
+# A range these tests know lies inside the bytes.
+fn inside none
+  []
+
+fn inside xs
+  xs
+
 # put "a" "1" at stamp 100, laid out byte by byte; the checksum is zlib's.
 test_record_layout =
   bs = encode_record 100 "a" "1"
@@ -8,56 +43,68 @@ test_record_layout =
 
 test_record_round_trip =
   bs = encode_record 7 "key" "value"
-  decode_at bs 0 == record "key" 0 22 7 "value"
+  record? (decode_at bs 0) "key" 0 22 7 "value"
 
 test_tombstone_round_trip =
   bs = encode_record 9 "gone" tombstone
-  decode_at bs 0 == record "gone" 0 18 9 tombstone
+  record? (decode_at bs 0) "gone" 0 18 9 tombstone
 
 test_tombstone_size_field =
   bs = encode_record 9 "k" tombstone
-  hex (text/slice bs 11 14) == "ffffffff"
+  hex (inside (text/slice bs 11 14)) == "ffffffff"
 
-test_end_of_bytes = decode_at (encode_record 1 "k" "v") 16 == finished 16
+test_end_of_bytes =
+  got = decode_at (encode_record 1 "k" "v") 16
+  stopped_at? got "finished" 16
 
-test_short_header = decode_at [1 2 3] 0 == torn 0
+test_short_header = stopped_at? (decode_at [1 2 3] 0) "torn" 0
 
 test_short_body =
   bs = encode_record 1 "key" "value"
-  decode_at (text/slice bs 1 20) 0 == torn 0
+  stopped_at? (decode_at (inside (text/slice bs 1 20)) 0) "torn" 0
 
 test_flipped_bit =
   bs = encode_record 1 "key" "value"
-  bad = text/concat (text/slice bs 1 20) [0 0]
-  decode_at bad 0 == corrupt 0
+  bad = list/concat (inside (text/slice bs 1 20)) [0 0]
+  stopped_at? (decode_at bad 0) "corrupt" 0
 
 test_scan_two =
-  bs = text/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
+  bs = list/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
   found = scan_bytes bs
   length found.records == 2 and clean? found
 
 test_scan_torn_tail =
-  bs = text/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
-  found = scan_bytes (text/slice bs 1 25)
+  bs = list/concat (encode_record 1 "a" "x") (encode_record 2 "b" "y")
+  found = scan_bytes (inside (text/slice bs 1 25))
   length found.records == 1 and good_bytes found == 16
 
+fn hints_body records
+  cat (list/to_list (list/map records encode_hint))
+
 fn hint_file records
-  body = cat (list/to_list (list/map records encode_hint))
-  text/concat body (hint_trailer body)
+  body = hints_body records
+  list/concat body (hint_trailer body)
+
+# Two records as a scan reads them back: "key" at offset 0, 22 bytes, and
+# "" at offset 22, 14 bytes. Only bitcask builds a record, so the tests take
+# theirs from a scan.
+two = list/concat (encode_record 7 "key" "value") (encode_record 8 "" "")
+
+two_records = (scan_bytes two).records
 
 test_hint_round_trip =
-  bs = hint_file [(record "key" 40 22 7 "value") (record "" 62 14 8 "")]
-  decode_hints bs == [(hint "key" 40 22 7) (hint "" 62 14 8)]
+  hs = decode_hints (hint_file two_records)
+  length hs == 2 and hint? hs[1] "key" 0 22 7 and hint? hs[2] "" 22 14 8
 
 test_hint_empty_file_has_a_trailer = decode_hints (hint_file []) == []
 
-test_hint_short = decode_hints [0 0 0 1 0] == bad_hint 0
+test_hint_short = bad_hint_at? (decode_hints [0 0 0 1 0]) 0
 
 test_hint_without_trailer =
-  bs = encode_hint (record "key" 40 22 7 "value")
-  decode_hints bs == bad_hint 21
+  bs = hints_body (list/to_list (list/take two_records 1))
+  bad_hint_at? (decode_hints bs) 21
 
 test_hint_flipped_bit =
-  bs = hint_file [(record "key" 40 22 7 "value")]
-  bad = text/concat [0 0 0 8] (text/slice bs 5 (length bs))
-  decode_hints bad == bad_hint 21
+  bs = hint_file (list/to_list (list/take two_records 1))
+  bad = list/concat [0 0 0 8] (inside (text/slice bs 5 (length bs)))
+  bad_hint_at? (decode_hints bad) 21

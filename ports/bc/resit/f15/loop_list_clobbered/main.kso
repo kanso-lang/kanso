@@ -1,0 +1,4 @@
+import "./bc"
+import "std/os"
+
+os/args .> bc/start

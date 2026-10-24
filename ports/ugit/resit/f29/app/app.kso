@@ -1,0 +1,8 @@
+import "../store"
+
+fn logged a b c
+  "{a} {b} {c}"
+
+pub fn shown x
+  e = store/entry x "o"
+  "{logged 1 2 x} {e.oid}"

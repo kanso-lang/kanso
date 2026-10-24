@@ -1,0 +1,13 @@
+# Bug: a module's two files each declare an arm of `lookup`, at different
+# arities, and a call in one file cannot see the other file's arm.
+#
+# Run from this directory: kanso run main.kso --interp
+#
+# should: print `d.p.0`. A module's files share their declarations, and the
+#   same two arms written in one file run (move b.kso's arm into a.kso).
+# does: error[arity]: no 3-argument arm of `lookup` (arms take 2), at
+#   m/a.kso:2. It makes no difference whether the 3-argument arm is pub.
+
+import "./m"
+
+print (m/lookup "d" "p")

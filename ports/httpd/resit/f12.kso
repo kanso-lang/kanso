@@ -1,0 +1,14 @@
+type on
+  action
+  method
+  path
+
+table = [
+  (on "list" "GET" "/todos")
+  (on "create" "POST" "/todos")
+  (on "show" "GET" "/todos/:id")
+  (on "edit" "PATCH" "/todos/:id")
+  (on "files" "GET" "/static/*path")
+]
+
+print "{length table}"

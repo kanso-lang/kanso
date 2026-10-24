@@ -1,3 +1,4 @@
+import "std/list"
 import "std/testing"
 import "std/text"
 
@@ -24,7 +25,7 @@ test_zlib_bad_adler =
 
 test_gunzip_empty_member =
   head = [31 139 8 0 0 0 0 0 0 3]
-  src = text/to_bytes (text/concat head [3 0 0 0 0 0 0 0 0 0])
+  src = text/to_bytes (list/concat head [3 0 0 0 0 0 0 0 0 0])
   u = gunzip src
   length u.data == 0 and u.members == 1
 

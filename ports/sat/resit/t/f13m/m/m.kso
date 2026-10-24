@@ -1,0 +1,16 @@
+import "std/list"
+
+pub type tally
+  a
+  b
+  c
+  d
+
+fn step x
+  x + 1
+
+pub fn make n
+  tally n 2 3 (step 3)
+
+pub fn total xs
+  list/sum xs

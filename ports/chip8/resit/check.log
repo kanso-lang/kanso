@@ -1,0 +1,9 @@
+== unit tests
+isa: 22 passed, 0 failed
+vm: 36 passed, 0 failed
+asm: 26 passed, 0 failed
+cli: 11 passed, 0 failed
+== build
+== fixtures
+ok: 45 fixtures agree on interp, dev and release
+check.sh exit 0

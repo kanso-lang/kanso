@@ -26,7 +26,7 @@ fn comment? line
 
 fn row options line
   parts = text/split line "\t"
-  subject = text/join (text/slice parts 2 (length parts)) "\t"
+  subject = text/join (sliced (text/slice parts 2 (length parts)) []) "\t"
   "{line}\t{judged options parts[1] (unescaped subject)}"
 
 fn judged _ none _

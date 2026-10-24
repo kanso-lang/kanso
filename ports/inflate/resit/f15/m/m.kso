@@ -1,0 +1,4 @@
+import "std/os"
+
+pub fn load a
+  os/read_bytes! a[1]!

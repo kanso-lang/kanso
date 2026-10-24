@@ -1,0 +1,5 @@
+fn ready x
+  done = x + 1
+  done
+
+print "{ready 1}"

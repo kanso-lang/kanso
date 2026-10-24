@@ -94,7 +94,7 @@ fn bind_one _ _ _ _ none _
   none
 
 fn bind_one _ segs i params (splat name) _
-  rest = text/join (text/slice segs i (length segs)) "/"
+  rest = text/join (or_empty (text/slice segs i (length segs))) "/"
   put params name rest
 
 fn bind_one pattern segs i params p s
@@ -106,3 +106,11 @@ fn bind_segment pattern segs i params (param name) s
 
 fn bind_segment pattern segs i params (literal t) s
   if (t == s) (bind_all pattern segs (i + 1) params) none
+
+# A range past the end of a list answers none (2026-10-13 gavel on
+# `text/slice`); the splat's range starts inside the path.
+fn or_empty none
+  []
+
+fn or_empty xs
+  xs

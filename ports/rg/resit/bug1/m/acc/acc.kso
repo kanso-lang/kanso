@@ -1,0 +1,8 @@
+import "std/list"
+
+fn added chain x
+  chain .> (acc -> effect (acc + x))
+
+pub fn total n
+  steps = list/to_list (list/take (list/iterate 1 (k -> k + 1)) n)
+  list/fold steps (effect 0) added

@@ -1,0 +1,2 @@
+pub fn enter params autos
+  length params + length autos

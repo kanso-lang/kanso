@@ -8,8 +8,7 @@ type parsed
   value
 
 pub fn parse source
-  tokens = lex source
-  clauses tokens 1 []
+  lex source .> (tokens -> clauses tokens 1 [])
 
 fn after_body ts (parsed p body) head
   end_of_rule p body head (tok ts p)
@@ -21,15 +20,13 @@ fn after_head_mark _ p head (token _ mark_tok _ ".")
   parsed (p + 1) (rule [] head)
 
 fn after_head_mark ts p head (token _ mark_tok _ ":-")
-  body = literals ts (p + 1) []
-  after_body ts body head
+  literals ts (p + 1) [] .> (body -> after_body ts body head)
 
 fn after_head_mark _ _ _ t
   unexpected t "expected `.` or `:-` after the head of a clause"
 
 fn arguments ts p acc
-  arg = term_at ts p (tok ts p)
-  more_arguments ts arg acc
+  term_at ts p (tok ts p) .> (arg -> more_arguments ts arg acc)
 
 fn atom_at ts p (token _ lower_tok line name)
   atom_args ts (p + 1) line name (tok ts (p + 1))
@@ -38,8 +35,7 @@ fn atom_at _ _ t
   unexpected t "expected a predicate name"
 
 fn atom_args ts p line name (token _ mark_tok _ "(")
-  args = arguments ts (p + 1) []
-  closed_atom args line name
+  arguments ts (p + 1) [] .> (args -> closed_atom args line name)
 
 fn atom_args _ p line name _
   parsed p (atom line name [])
@@ -60,12 +56,10 @@ fn clause_at _ _ (token col directive_tok line other)
   err (syntax_error col line "unknown directive `.{other}`")
 
 fn clause_at ts p (token _ mark_tok _ "?-")
-  asked = atom_at ts (p + 1) (tok ts (p + 1))
-  finish_query ts asked
+  atom_at ts (p + 1) (tok ts (p + 1)) .> (asked -> finish_query ts asked)
 
 fn clause_at ts p _
-  head = atom_at ts p (tok ts p)
-  after_head ts head
+  atom_at ts p (tok ts p) .> (head -> after_head ts head)
 
 fn clauses ts p acc
   next_clause ts p acc (tok ts p)
@@ -74,8 +68,7 @@ fn closed_atom (parsed p args) line name
   parsed p (atom line name args)
 
 fn comparison_at ts p left line (token _ mark_tok _ op)
-  right = term_at ts (p + 1) (tok ts (p + 1))
-  compared right left line op
+  term_at ts (p + 1) (tok ts (p + 1)) .> (right -> compared right left line op)
 
 fn compared (parsed p right) left line op
   parsed p (comparison left line op right)
@@ -119,8 +112,7 @@ fn declared _ _ t
   unexpected t "expected a relation name after `.decl`"
 
 fn declared_open ts p line name (token _ mark_tok _ "(")
-  params = decl_first ts (p + 1) (tok ts (p + 1))
-  declared_done params line name
+  decl_first ts (p + 1) (tok ts (p + 1)) .> (n -> declared_done n line name)
 
 fn declared_open _ p line name _
   parsed p (declaration 0 line name)
@@ -164,16 +156,13 @@ fn literal_at ts p (token _ lower_tok _ "not")
 fn literal_at ts p (token _ lower_tok line w)
   next = tok ts (p + 1)
   return comparison_at ts (p + 1) (constant w) line next if operator? next
-  a = atom_at ts p (token 0 lower_tok line w)
-  positive a
+  atom_at ts p (token 0 lower_tok line w) .> positive
 
 fn literal_at ts p t
-  left = term_at ts p t
-  operand left ts t.line
+  term_at ts p t .> (left -> operand left ts t.line)
 
 fn literals ts p acc
-  lit = literal_at ts p (tok ts p)
-  more_literals ts lit acc
+  literal_at ts p (tok ts p) .> (lit -> more_literals ts lit acc)
 
 fn more_arguments ts (parsed p arg) acc
   more_arguments_at ts p (push acc arg) (tok ts p)
@@ -197,8 +186,7 @@ fn more_literals_at _ p acc _
   parsed p acc
 
 fn negated ts p
-  inner = atom_at ts p (tok ts p)
-  negated_done inner
+  atom_at ts p (tok ts p) .> negated_done
 
 fn negated_done (parsed p inner)
   parsed p (lacks inner)
@@ -207,8 +195,7 @@ fn next_clause _ _ acc (token _ end_tok _ _)
   program acc
 
 fn next_clause ts p acc _
-  one = clause_at ts p (tok ts p)
-  stored ts one acc
+  clause_at ts p (tok ts p) .> (one -> stored ts one acc)
 
 fn operand (parsed p left) ts line
   comparison_at ts p left line (tok ts p)

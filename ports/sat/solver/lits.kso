@@ -7,7 +7,7 @@ pub fn dimacs_of l
 pub fn lit_of d
   if (0 < d) (2 * d) (1 - 2 * d)
 
-fn neg l
+pub fn neg l
   if (l % 2 == 0) (l + 1) (l - 1)
 
 # the value a literal would give its variable

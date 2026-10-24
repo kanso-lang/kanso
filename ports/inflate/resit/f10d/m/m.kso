@@ -1,0 +1,7 @@
+import "std/list"
+
+pub fn go n
+  "{repeated n 2} {list/sum [1]}"
+
+fn repeated a b
+  a + b

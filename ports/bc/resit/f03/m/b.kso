@@ -1,0 +1,2 @@
+fn units n
+  n * 2

@@ -1,0 +1,6 @@
+import "std/text"
+
+fn verdict n
+  [if (n > 0) "yes" "no"]
+
+print (text/join (verdict 3) ", ")

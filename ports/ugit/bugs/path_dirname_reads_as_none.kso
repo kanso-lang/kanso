@@ -1,0 +1,16 @@
+# Bug: the checker reads `path/dirname` as possibly answering none, so its
+# answer cannot be handed to `os/make_dir` without a none arm.
+#
+# Run: kanso play path_dirname_reads_as_none.kso
+#
+# should: run and create .ugit/refs/heads. `dirname` answers ".", "/" or a
+#   slice that ends before the last separator, which is never past the end.
+#   std/path's own `basename` wraps its slice in a `whole none` arm for this
+#   reason. `dirname` (through `cut_at`) and `extension` (through `from_dot`)
+#   do not.
+# does: error[exhaustive]: this can be a none and `os/make_dir` has no arm for
+#   it. ugit wraps every `path/dirname` in a helper with a none arm.
+import "std/os"
+import "std/path"
+
+os/make_dir (path/dirname ".ugit/refs/heads/main") .> (_ -> print "made")

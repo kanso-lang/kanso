@@ -1,0 +1,5 @@
+fn go n acc
+  return effect acc if n == 0
+  effect (acc + n) .> (a -> go (n - 1) a)
+
+go 100000 0 .> (n -> print "total {n}")

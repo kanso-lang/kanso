@@ -1,0 +1,11 @@
+# A header comment about the file.
+
+pub fn first xs
+  helper (pair 1 2)
+
+fn helper p
+  p.a + length []
+
+type pair
+  a
+  b

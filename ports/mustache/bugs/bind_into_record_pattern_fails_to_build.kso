@@ -1,0 +1,27 @@
+# `half 4` answers a record, or an err for 0, and `.>` hands the record to
+# `shown`, whose arm takes it apart with a pattern. Should print 4/2.
+#
+#   kanso play bind_into_record_pattern_fails_to_build.kso --interp   4/2
+#   kanso play bind_into_record_pattern_fails_to_build.kso
+#     ...ll:468:23: error: '%t1' defined with type
+#     '%parsed = type { i64, i64, i64 }' but expected
+#     '%KValue = type { i64, i64 }'
+#     error: cannot build: clang failed
+#
+# kanso build fails the same way. Any one of these makes it build: drop the
+# err arm of `half`; read the fields (`fn shown p` with `p.a`) instead of the
+# pattern; or call `shown (half 4)` with an `(err _)` arm on `shown`.
+type pair
+  a
+  b
+
+fn half 0
+  err "zero"
+
+fn half n
+  pair n (n / 2)
+
+fn shown (pair a b)
+  "{a}/{b}"
+
+print (half 4 .> shown)

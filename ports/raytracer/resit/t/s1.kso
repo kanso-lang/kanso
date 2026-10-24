@@ -1,0 +1,4 @@
+import "std/text"
+
+xs = [1 2 3]
+print "{text/slice xs 4 3} {text/slice xs 5 4} {text/slice xs 3 2}"

@@ -1,0 +1,4 @@
+import "std/list"
+import "std/text"
+
+print (text/join (list/map ["a" "b"] (p -> "<{p}>")) "")

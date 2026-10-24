@@ -1,0 +1,4 @@
+import "std/bits"
+
+op = 4660
+print "{(bits/shr op 8) & 15} {(2 + 3) & 4}"

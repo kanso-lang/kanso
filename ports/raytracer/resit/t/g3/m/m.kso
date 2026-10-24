@@ -1,0 +1,10 @@
+import "../t"
+
+type box
+  materials
+
+fn size (box materials)
+  length materials
+
+pub fn f n
+  size (box [n])

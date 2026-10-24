@@ -1,0 +1,18 @@
+# Bug: `kanso check lib` accepts a library that `kanso check main.kso`
+# refuses, and the refusal prints no source line.
+#
+# Run from this directory: kanso check lib; kanso check main.kso
+#
+# should: the same verdict from both. `made` stores a `text/slice` that can be
+#   none (ruling 2026-10-13, #1890) in a record field, and `path_key s.path`
+#   hands it to a function with no none arm.
+# does: `kanso check lib` prints `lib: ok`. `kanso check main.kso` (and so
+#   run and build) prints "error[exhaustive]: this can be a none and
+#   `lib/path_key` has no arm for it ... --> lib/lib.kso:15:48" and stops
+#   there: the line excerpt and caret every other diagnostic shows are
+#   missing. In the toml port the same refusal also named the wrong module,
+#   "(module cli)", for a line in toml/table.kso.
+
+import "./lib"
+
+print "{lib/spelled [["a" "b" "c"]]}"

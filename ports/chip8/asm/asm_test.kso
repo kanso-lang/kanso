@@ -44,9 +44,11 @@ first_listed = "0200  6001      start: LD V0, 1"
 
 test_colon_in_comment = bytes_of "CLS ; note: not a label" == [0 224]
 
-test_split_line = source_lines "a: LD V1, 2 ; c" == [lined]
+test_split_line =
+  l = (source_lines "a: LD V1, 2 ; c")[1]
+  [l.label l.mnemonic l.n l.operands l.text] == lined
 
-lined = source_line "a" "LD" 1 ["V1" "2"] "a: LD V1, 2 ; c"
+lined = ["a" "LD" 1 ["V1" "2"] "a: LD V1, 2 ; c"]
 
 test_position_of = position_of "ab;c" ";" == 3
 

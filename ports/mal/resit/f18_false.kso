@@ -1,0 +1,6 @@
+type nil
+
+fn false? v
+  v == false
+
+print "{false? nil} {false? false}"

@@ -1,0 +1,50 @@
+== unit tests
+re: 82 passed, 0 failed
+grep: 8 passed, 0 failed
+== build
+== fixtures
+ok   error_class_range
+ok   error_lookahead
+ok   error_missing_file
+ok   error_nested_repeat
+ok   error_paren
+ok   error_unicode_column
+ok   error_usage
+ok   explain_alternation
+ok   explain_classes
+ok   explain_counted
+ok   explain_named
+ok   explain_nested
+ok   grep_anchors
+ok   grep_count
+ok   grep_emails
+ok   grep_empty_line
+ok   grep_fold
+ok   grep_fold_cyrillic
+ok   grep_fold_greek
+ok   grep_invert_numbered
+ok   grep_leftmost_first
+ok   grep_log_greedy
+ok   grep_log_ip
+ok   grep_log_lazy
+ok   grep_log_status
+ok   grep_longest
+ok   grep_no_match
+ok   grep_numbers
+ok   grep_only_unicode
+ok   grep_only_words
+ok   grep_plain
+ok   grep_stdin
+ok   grep_steps
+ok   grep_tabs
+ok   scale_alternation
+ok   scale_classic
+ok   scale_linear
+ok   scale_match_at_end
+ok   scale_nested_star
+ok   table_basic
+ok   table_errors
+ok   table_longest
+ok   table_re2_only
+all 43 fixtures agree on all three engines
+check.sh exit 0

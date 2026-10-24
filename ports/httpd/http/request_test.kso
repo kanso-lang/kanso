@@ -6,7 +6,7 @@ fn outcome s
   summary (parse (text/bytes s) default_limits)
 
 fn small s
-  summary (parse (text/bytes s) (limits 10 50))
+  summary (parse (text/bytes s) (limits_of 10 50))
 
 fn summary (framed r rest)
   { body method path target version } = r

@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # A relation's tuples, each stored as one integer: its code. A tuple is a
 # list of constant ids, and its code writes those ids as the digits of a
@@ -62,7 +61,7 @@ pub fn insert_all base (relation arity indexes seen tuples) codes
   span = power base arity
   masks = keys indexes
   indexed = list/fold masks indexes (acc m -> grow_index base span acc m codes)
-  relation arity indexed seen_now (text/concat tuples codes)
+  relation arity indexed seen_now (list/concat tuples codes)
 
 # The key of a tuple under an index: the digits at `places`, as one number.
 pub fn key_of base places code
@@ -132,7 +131,7 @@ fn merged olds news i j acc
 fn merge_pair olds news i j acc (entry k old) (group g members)
   return merged olds news (i + 1) j (put acc k old) if k < g
   return merged olds news i (j + 1) (put acc g members) if g < k
-  merged olds news (i + 1) (j + 1) (put acc k (text/concat old members))
+  merged olds news (i + 1) (j + 1) (put acc k (list/concat old members))
 
 fn rest_of_news news j acc
   return acc if j < 1 or length news < j

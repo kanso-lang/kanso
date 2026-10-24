@@ -1,0 +1,4 @@
+import "./commonmark"
+import "std/os"
+
+os/args .> commonmark/main

@@ -1,0 +1,18 @@
+# The module declares a two-field type `tally` and imports std/list, which
+# exports a one-argument function `list/tally`. The import should be reached
+# only as `list/tally` (gavel 2026-10-12, a file names only what it can see),
+# and an author's own name wins over an import's (log 2026-10-12, "a name the
+# author declared wins over a builtin and an import").
+#
+# Should: print "2 1" on every engine.
+# Does: error[arity]: no 2-argument arm of `tally` (arms take 1), at both
+# constructions. Rename the type, or drop the import, and it runs.
+import "std/list"
+
+type tally
+  failed
+  passed
+
+pub fn shown xs
+  t = tally (list/sum xs) 1
+  "{t.failed} {t.passed}"

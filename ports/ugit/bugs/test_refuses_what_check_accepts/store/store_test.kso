@@ -1,0 +1,17 @@
+# Bug: `kanso test store` refuses the module that `kanso check store`
+# accepts, and this test reads nothing from it.
+#
+# Run from bugs/test_refuses_what_check_accepts:
+#   kanso check store    prints `store: ok`
+#   kanso test store     error[exhaustive]: this can be a none and
+#                        `store/ref_or_next` has no arm for it
+#                        --> store/store.kso:27:40, with no source line
+#
+# should: the same verdict from both verbs. `at.value` is always a
+#   `ref_value` record (both `followed` arms build one), so check's ok is
+#   right and test's refusal is wrong. ugit's store/names.kso hit this at
+#   `get_ref first .> (at -> ref_or_next at.value rest name)`; the port
+#   carries a `ref_or_next none` arm that can never run, to get its tests
+#   to compile.
+
+test_nothing = 1 == 1

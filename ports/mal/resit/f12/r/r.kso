@@ -1,0 +1,13 @@
+import "std/io"
+import "std/time"
+
+pub fn repl n
+  io/write "user> " .> (_ -> io/read_line) .> (line -> answer line n)
+
+fn answer done _
+  print ""
+
+fn answer line n
+  time/now
+    .> (t -> print "{n}: {line} at {t % 100000 / 1000}")
+    .> (_ -> repl (n + 1))

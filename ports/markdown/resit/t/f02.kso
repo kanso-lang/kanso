@@ -1,0 +1,6 @@
+table = {
+  "AElig":"Æ"
+  "AMP":"&"
+  "ApplyFunction":"the function application character, written long enough"
+}
+print "{table["AMP"]} {length table}"

@@ -1,0 +1,11 @@
+import "../f8m"
+
+fn op_of (assignment _ op _)
+  op
+
+fn op_of _
+  "none"
+
+test_op = op_of (f8m/classify "x := 1") == ":="
+
+test_bare = op_of (f8m/classify "y") == "none"

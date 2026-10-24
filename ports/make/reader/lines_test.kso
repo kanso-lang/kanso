@@ -51,11 +51,12 @@ test_inline = inline_of (classify "all: ; echo a # b") == " echo a # b"
 
 test_rule_eq_in_prereq = head_of (classify "a: b=c") == "a: b=c"
 
-test_bare = classify "$(info hi)" == bare_line "$(info hi)"
+test_bare = bare_text (classify "$(info hi)") == "$(info hi)"
 
-test_split_rule = split_rule "a b: c d | e" == split_expected
-
-split_expected = rule_parts ["e"] ["c" "d"] "" ["a" "b"]
+test_split_rule =
+  r = split_rule "a b: c d | e"
+  heads = r.targets == ["a" "b"] and r.static == ""
+  heads and r.prereqs == ["c" "d"] and r.order_only == ["e"]
 
 test_split_static = (split_rule "a.o b.o: %.o: %.c").static == "%.o"
 
@@ -66,3 +67,10 @@ test_directive = directive "include foo.mk" == "include"
 test_directive_as_name = directive "include = 3" == ""
 
 test_no_directive = directive "all: x" == ""
+
+# A test cannot build the reader's records, so it takes them apart.
+fn bare_text (bare_line t)
+  t
+
+fn bare_text _
+  none

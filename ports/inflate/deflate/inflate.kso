@@ -50,6 +50,9 @@ fn each_block src bp out log
 # Every answer that can be a failure is handed to a function before anything
 # reads it: a call passes a failure through untouched, where a binding pattern
 # or a field read would stop the program.
+fn next_block _ _ _ _ _ _ e@(err _)
+  e
+
 fn next_block src bp final kind before log (block_end after data note)
   logged = push log (block_info bp kind note (length data - before))
   return inflated logged data after if final == 1
@@ -68,6 +71,9 @@ fn block src bp out 2
 fn block _ bp _ _
   broken bp "invalid block type 3"
 
+fn noted e@(err _) _
+  e
+
 fn noted (block_end after data _) note
   block_end after data note
 
@@ -85,7 +91,7 @@ fn stored src bp out
   return broken bp why if nlen != bits/xor len 65535
   last = at + 3 + len
   return broken bp "ran out of input" if last > length src
-  block_end (last * 8) (text/append out (text/slice src (at + 4) last)) "stored"
+  block_end (last * 8) (appended out (text/to_span src (at + 4) last)) "stored"
 
 # A dynamic block sends its two codes as lists of code lengths, and sends
 # those lists compressed with a third, smaller code whose own lengths come
@@ -120,7 +126,7 @@ fn code_length_fault left
 
 # An incomplete code is allowed in one case only: a single code of one bit,
 # which is how a compressor sends a block that uses just one distance.
-fn bad_code? b n
+pub fn bad_code? b n
   built code left zeros = b
   left != 0 and (left < 0 or n != zeros + nth code.counts 1)
 
@@ -175,8 +181,7 @@ fn pushed lens value n
 # start a match, a length and a distance back into what is already written.
 fn codes src bp out lens dists
   return broken bp "ran out of input" if exhausted? src bp
-  g = decode src bp lens
-  literal_or_match src g out lens dists
+  decode src bp lens .> (g -> literal_or_match src g out lens dists)
 
 fn literal_or_match _ (got bp 256) out _ _
   block_end bp out ""
@@ -189,8 +194,7 @@ fn matched src bp out lens dists i
   return broken bp "invalid length symbol {i + 256}" if i > 29
   extra = nth length_extra i
   len = nth length_base i + peek src bp extra
-  g = decode src (bp + extra) dists
-  distance src g out lens dists len
+  decode src (bp + extra) dists .> (g -> distance src g out lens dists len)
 
 fn distance src (got after dsym) out lens dists len
   return broken after "invalid distance symbol {dsym}" if dsym > 29
@@ -202,13 +206,22 @@ fn distance src (got after dsym) out lens dists len
 # A match may overlap the bytes it is producing: distance 1, length 10 is ten
 # copies of the last byte. The bytes being copied repeat with a period of the
 # distance, so the copy is whole slices of that period.
+# Every range appended here was checked against its bytes first, so
+# text/to_span never answers none; the arm is there because the checker
+# cannot see the bound.
+fn appended out none
+  out
+
+fn appended out run
+  text/append out (text/slice run)
+
 fn copy out dist len
   start = length out - dist + 1
-  return text/append out (text/slice out start (start + len - 1)) if len <= dist
+  return appended out (text/to_span out start (start + len - 1)) if len <= dist
   repeat_copy out start dist len
 
 fn repeat_copy out start dist left
   return out if left <= 0
   piece = if (left < dist) left dist
-  grown = text/append out (text/slice out start (start + piece - 1))
+  grown = appended out (text/to_span out start (start + piece - 1))
   repeat_copy grown start dist (left - piece)

@@ -1,0 +1,7 @@
+import "std/text"
+
+fn shout names i acc
+  name = names[i]
+  "{acc}{text/uppercase name}"
+
+print (shout ["a" "b"] 5 "")

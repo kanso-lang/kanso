@@ -1,0 +1,152 @@
+# GNU diff's discard_confusing_lines. Before the search runs, a line that
+# matches nothing in the other file is marked changed outright and taken out
+# of the search, which makes the search smaller and steers it away from
+# lining up unrelated text. A line that matches very many lines of the other
+# file is "provisionally" discardable, and is only taken out when it sits in
+# the middle of a run of lines that are certainly changed.
+#
+# Codes per line: 0 keep, 1 discard, 2 provisional. They live in a list, and
+# the settling pass builds a new list; only inside a run of discardable lines,
+# where the C walks backward and forward rewriting codes, does a run get a map
+# of its own from 0-based offset to code.
+import "std/list"
+
+# what is left for the search, and what was settled without it
+pub type kept_lines
+  at
+  changed
+  ids
+  real
+
+type trimmed_run
+  codes
+  stop
+
+pub fn discard mine theirs
+  counts = count_runs theirs
+  many = threshold (length mine) 5
+  first = list/to_list (list/map mine (&classify counts many))
+  settled = settle first (length mine) 0 []
+  list/fold mine (kept_lines 0 {} [] []) (&sift settled)
+
+# std/list's tally reads the map inside each put, and a map read in the same
+# expression that grows it is copied: counting 20,000 lines that way took
+# 0.7 s. Sorting first means each key is put exactly once, with no read.
+fn count_runs xs
+  sorted = list/sort xs
+  runs sorted 1 (length sorted) {}
+
+fn runs xs i n acc
+  return acc if i > n
+  j = run_stop xs i n
+  runs xs j n (put acc xs[i] (j - i))
+
+fn run_stop xs i n
+  stop_at xs i (i + 1) n
+
+fn stop_at xs i j n
+  return j if j > n or xs[j] != xs[i]
+  stop_at xs i (j + 1) n
+
+fn threshold n many
+  shrink (n / 64) many
+
+fn shrink tem many
+  next = tem / 4
+  if (next > 0) (shrink next (many * 2)) many
+
+fn classify counts many id
+  matches = given counts[id] 0
+  if (matches == 0) 1 (if (matches > many) 2 0)
+
+# The accumulator carries its own counter: reading a list or a map and then
+# growing it in the same function copies it, which made this pass quadratic.
+fn sift codes (kept_lines at changed ids places) id
+  out = given codes[at + 1] 0 > 0
+  return kept_lines (at + 1) (put changed at true) ids places if out
+  kept_lines (at + 1) changed (push ids id) (push places at)
+
+fn code codes at
+  given codes[at] 0
+
+# a provisional line outside a run is kept; a run starting with a certain
+# discard is settled on its own
+fn settle codes n i out
+  return out if i >= n
+  c = given codes[i + 1] 0
+  return settle codes n (i + 1) (push out 0) if c != 1
+  j = run_end codes n i
+  offsets = list/to_list (list/take list/naturals (j - i))
+  run = list/fold offsets {} (m k -> put m (k - 1) (given codes[i + k] 0))
+  fixed = settle_discards run (j - i)
+  settle codes n j (list/fold offsets out (&copy_code fixed))
+
+fn copy_code fixed out k
+  push out (code fixed (k - 1))
+
+fn run_end codes n j
+  return j if j >= n or given codes[j + 1] 0 == 0
+  run_end codes n (j + 1)
+
+# the run, as offsets 0 to j - 1 in a map of its own
+fn settle_discards codes j
+  trimmed = trim_tail codes 0 j
+  stop = trimmed.stop
+  provisional = count_twos trimmed.codes 0 stop 0
+  length_ = stop
+  heavy = provisional * 4 > length_
+  return cancel trimmed.codes 0 stop if heavy
+  minimum = root length_
+  thinned = thin trimmed.codes 0 length_ minimum 0 0
+  front = from_front thinned 0 length_ 0 0
+  from_back front (length_ - 1) length_ 0 0
+
+fn trim_tail codes i j
+  return trimmed_run codes j if j <= i or code codes (j - 1) != 2
+  trim_tail (put codes (j - 1) 0) i (j - 1)
+
+fn count_twos codes i j acc
+  return acc if i >= j
+  count_twos codes (i + 1) j (if (code codes i == 2) (acc + 1) acc)
+
+fn cancel codes i j
+  return codes if i >= j
+  cancel (if (code codes i == 2) (put codes i 0) codes) (i + 1) j
+
+# an approximate square root of length/4, plus one
+fn root length_
+  grow (length_ / 4) 1
+
+fn grow tem minimum
+  next = tem / 4
+  if (next > 0) (grow next (minimum * 2)) (minimum + 1)
+
+# cancel any subrun of `minimum` or more provisional lines
+fn thin codes i length_ minimum j consec
+  return codes if j >= length_
+  c = code codes (i + j)
+  return thin codes i length_ minimum (j + 1) 0 if c != 2
+  more = consec + 1
+  return thin codes i length_ minimum (j - more + 1) more if more == minimum
+  wiped = if (more > minimum) (put codes (i + j) 0) codes
+  thin wiped i length_ minimum (j + 1) more
+
+# from the start of the run, cancel provisional lines until three certain
+# ones in a row, or a certain one at least eight lines in
+fn from_front codes i length_ j consec
+  return codes if j >= length_
+  c = code codes (i + j)
+  return codes if j >= 8 and c == 1
+  return from_front (put codes (i + j) 0) i length_ (j + 1) 0 if c == 2
+  return from_front codes i length_ (j + 1) 0 if c == 0
+  return codes if consec + 1 == 3
+  from_front codes i length_ (j + 1) (consec + 1)
+
+fn from_back codes last length_ j consec
+  return codes if j >= length_
+  c = code codes (last - j)
+  return codes if j >= 8 and c == 1
+  return from_back (put codes (last - j) 0) last length_ (j + 1) 0 if c == 2
+  return from_back codes last length_ (j + 1) 0 if c == 0
+  return codes if consec + 1 == 3
+  from_back codes last length_ (j + 1) (consec + 1)

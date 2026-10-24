@@ -37,8 +37,18 @@ pub fn hint_path dir id
 # absent; an expiry of 0 keeps everything. `now` is also the stamp every
 # write carries.
 pub fn open dir limit expiry now
-  empty = store 0 dir expiry {} limit now 0
+  empty = empty_store dir limit expiry now
   os/make_dir dir .> (_ -> os/list_dir dir) .> (names -> loaded empty names)
+
+# A store with no files and no keys. A test builds its stores from this,
+# because only bitcask may build a `store`.
+pub fn empty_store dir limit expiry now
+  store 0 dir expiry {} limit now 0
+
+# Where a key lives. The tests build locations with it, because only bitcask
+# may build a `loc`.
+pub fn located_at file offset size stamp
+  loc file offset size stamp
 
 fn loaded empty names
   ids = file_ids names "data"
@@ -59,7 +69,7 @@ fn kind_of? name kind
   length parts == 3 and parts[2] == "bitcask" and parts[3] == kind
 
 fn id_of name
-  text/to_int (text/slice name 1 (dot_at name 1 - 1))
+  text/to_int (inside (text/slice name 1 (dot_at name 1 - 1)))
 
 fn dot_at name i
   if (text/slice name i i == ".") i (dot_at name (i + 1))
@@ -117,7 +127,7 @@ fn located _ id r
 fn repaired st id bs found true
   path = data_path st.dir id
   good = good_bytes found
-  replace_bytes path (text/slice bs 1 good)
+  replace_bytes path (inside (text/slice bs 1 good))
     .> (_ -> say "{damage_note id found}, file cut to {good} bytes")
     .> (_ -> st)
 

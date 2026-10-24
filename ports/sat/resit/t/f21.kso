@@ -1,0 +1,11 @@
+fn set_at v i x
+  return err "set_at {i} past {length v}" if length v < i
+  put v i x
+
+fn scan v
+  length (keys v)
+
+fn grow v
+  scan (set_at v 3 1)
+
+print "{grow { 1:1 }}"

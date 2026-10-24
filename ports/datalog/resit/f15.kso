@@ -1,0 +1,9 @@
+import "std/text"
+
+fn rows n
+  [n "x"]
+
+fn shown n
+  text/join (rows n) ", "
+
+print (shown 3)

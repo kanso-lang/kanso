@@ -20,6 +20,9 @@ type branch
 
 type no_branch
 
+# The empty index, for a caller outside the module.
+pub empty_index = no_branch
+
 # The polynomial alone keeps keys of one length in their spelled order, which
 # for "k1", "k2", … is the order they arrive in, and the tree degenerates into
 # a list. Knuth's multiplicative step scatters them.
@@ -28,9 +31,9 @@ fn key_hash key
   poly * 2654435761 % 4294967296
 
 fn before? hash key (branch h k _ _ _)
-  hash < h or hash == h and key < k
+  hash < h or (hash == h and key < k)
 
-fn stored t key
+pub fn stored t key
   search t (key_hash key) key
 
 fn search no_branch _ _
@@ -40,7 +43,7 @@ fn search t:branch hash key
   return t.value if hash == t.hash and key == t.key
   if (before? hash key t) (search t.left hash key) (search t.right hash key)
 
-fn store t key value
+pub fn store t key value
   insert t (key_hash key) key value
 
 fn insert no_branch hash key value

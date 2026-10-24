@@ -26,6 +26,9 @@ pub fn run_list body i m
   r = exec next m
   after_statement r body i
 
+fn after_statement e@(err _) _ _
+  e
+
 fn after_statement (ran m) body i
   run_list body (i + 1) m
 
@@ -111,6 +114,9 @@ fn loop_while body check m
   r = exec body c.machine
   while_next r body check
 
+fn while_next e@(err _) _ _
+  e
+
 fn while_next (ran m) body check
   loop_while body check m
 
@@ -123,11 +129,17 @@ fn while_next (broke m) _ _
 fn while_next other _ _
   other
 
+fn loop_for _ _ _ e@(err _)
+  e
+
 fn loop_for body check step m
   c = test check m
   return ran c.machine if zero? c.value
   r = exec body c.machine
   for_next r body check step
+
+fn for_next e@(err _) _ _ _
+  e
 
 fn for_next (ran m) body check step
   stepped = discard step m
@@ -156,6 +168,9 @@ fn discard absent m
 fn discard e m
   r = eval e m
   r.machine
+
+fn print_items _ _ e@(err _)
+  e
 
 fn print_items items i m
   item = items[i]

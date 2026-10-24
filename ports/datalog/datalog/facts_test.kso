@@ -1,8 +1,17 @@
+import "../testkit"
 import "std/list"
 import "std/text"
 
+# A test cannot build the module's `input` record, so it parses one: an
+# `.input f` directive on line 3.
 fn read_facts contents
-  shown_facts (facts_from (input "f.facts" 3 "f") contents)
+  parse "\n\n.input f" .> (tree -> read_from tree.clauses[1] contents)
+
+fn read_from none _
+  "no .input clause"
+
+fn read_from given contents
+  shown_facts (facts_from given contents)
 
 fn shown_facts (err e)
   "{e.line}: {e.reason}"

@@ -1,0 +1,4 @@
+import "../f8"
+import "std/expect"
+
+test_double = expect.expect (f8/double 2) . expect/to (expect/equal 5)

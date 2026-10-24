@@ -1,0 +1,6 @@
+import "std/list"
+
+fn repeated n
+  n + 1
+
+print "{repeated 1} {list/sum [1]}"

@@ -4,7 +4,7 @@ sample = "one\ntwo\nmatch a\nthree\nfour\nmatch b\nfive\n"
 
 fn trial args body
   c = parse args
-  searched c (target "f.txt" false) (decoded (text/bytes body)) true
+  searched c (target_at "f.txt" false) (decoded (text/bytes body)) true
 
 fn printed_by args body
   (trial args body).out
@@ -62,29 +62,29 @@ test_column_counts_bytes =
 test_binary_explicit_is_reported =
   c = parse ["x"]
   body = decoded (text/to_bytes [120 0 10])
-  got = searched c (target "b" true) body true
+  got = searched c (target_at "b" true) body true
   got.out == ["b: binary file matches (found \"\\0\" byte around offset 1)\n"]
 
 test_binary_found_by_walking_is_skipped =
   c = parse ["x"]
   body = decoded (text/to_bytes [120 0 10])
-  got = searched c (target "b" true) body false
+  got = searched c (target_at "b" true) body false
   got.matched == 0 and got.out == []
 
 test_text_flag_searches_binary =
   c = parse ["-a" "x"]
   body = decoded (text/to_bytes [120 0 10])
-  got = searched c (target "b" false) body false
+  got = searched c (target_at "b" false) body false
   got.matched == 1
 
 test_with_name_prefix =
   c = parse ["-n" "two"]
-  got = searched c (target "f.txt" true) (decoded (text/bytes sample)) true
+  got = searched c (target_at "f.txt" true) (decoded (text/bytes sample)) true
   got.out == ["f.txt:2:two\n"]
 
 test_files_with_matches =
   c = parse ["-l" "two"]
-  got = searched c (target "f.txt" false) (decoded (text/bytes sample)) true
+  got = searched c (target_at "f.txt" false) (decoded (text/bytes sample)) true
   got.out == ["f.txt\n"]
 
 test_empty_pattern_matches_all = printed_by ["-c" ""] sample == ["7\n"]

@@ -1,0 +1,6 @@
+type trail
+  qhead
+  size
+
+t = trail 1 5
+print "{merge t { "qhead":2 }}"

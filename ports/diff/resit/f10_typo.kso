@@ -1,0 +1,18 @@
+type options
+  brief
+  context
+  recursive
+
+defaults = options false 3 false
+
+fn flag opts "-r"
+  merge opts { "recursive":true }
+
+fn flag opts "-q"
+  merge opts { "breif":true }
+
+fn flag opts _
+  opts
+
+o = flag (flag defaults "-r") "-q"
+print "{o.brief} {o.context} {o.recursive}"

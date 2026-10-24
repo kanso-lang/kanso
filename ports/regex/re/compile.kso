@@ -49,7 +49,7 @@ pub fn longest_program p
 # marked anchored, so the matcher does not try it anywhere else.
 pub fn assemble t
   body = emit t.node 2
-  code = push (text/concat [(i_save 0)] (push body (i_save 1))) i_match
+  code = push (list/concat [(i_save 0)] (push body (i_save 1))) i_match
   program (anchored? t.node) code false (2 * (length t.names + 1))
 
 # An upper bound on the instructions a parsed tree compiles to, counted
@@ -124,12 +124,12 @@ fn emit no_match _
   [i_fail]
 
 fn emit (cat parts) at
-  list/fold parts [] (acc p -> text/concat acc (emit p (at + length acc)))
+  list/fold parts [] (acc p -> list/concat acc (emit p (at + length acc)))
 
 fn emit (capture index _ body) at
   inner = emit body (at + 1)
   closing = push inner (i_save (2 * index + 1))
-  text/concat [(i_save (2 * index))] closing
+  list/concat [(i_save (2 * index))] closing
 
 # a|b|c: split to a, else split to b, else c; each branch but the last jumps
 # past the rest.
@@ -145,7 +145,7 @@ fn emit (star greedy body) at
   return emit (quest greedy (plus greedy body)) at if nullable? body
   inner = emit body (at + 1)
   out = at + length inner + 2
-  text/concat [(choice greedy (at + 1) out)] (push inner (i_jmp at))
+  list/concat [(choice greedy (at + 1) out)] (push inner (i_jmp at))
 
 # x+: L: x; split L, out.
 fn emit (plus greedy body) at
@@ -157,7 +157,7 @@ fn emit (plus greedy body) at
 fn emit (quest greedy body) at
   inner = emit body (at + 1)
   out = at + length inner + 1
-  text/concat [(choice greedy (at + 1) out)] inner
+  list/concat [(choice greedy (at + 1) out)] inner
 
 fn emit edge:anchor _
   [(i_assert edge)]
@@ -201,7 +201,7 @@ fn branch_chain bs i at
   rest = branch_chain bs (i + 1) (at + length inner + 2)
   out = at + length inner + 2 + length rest
   head = [(i_split (at + 1) (at + length inner + 2))]
-  text/concat head (text/concat (push inner (i_jmp out)) rest)
+  list/concat head (list/concat (push inner (i_jmp out)) rest)
 
 # The program as text, one instruction a line, for --dump.
 pub fn listing p

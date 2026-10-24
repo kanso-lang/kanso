@@ -1,0 +1,9 @@
+import "std/io"
+
+fn encode m:map[string some]
+  "table of {length m}\n"
+
+fn encode _
+  err "only a table encodes"
+
+io/write (encode { "a":1 })

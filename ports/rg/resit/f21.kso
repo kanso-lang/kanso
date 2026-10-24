@@ -1,0 +1,4 @@
+import "std/regexp"
+
+print (regexp/find "todo\\W" "TODO: x todoW")
+print (regexp/find "\\q" "q")

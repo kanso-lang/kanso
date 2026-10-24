@@ -1,0 +1,29 @@
+import "std/list"
+import "std/regexp"
+
+type score_card
+  failed
+  passed
+
+type hit
+  at
+  from
+  name
+  text
+
+pub fn score xs
+  t = list/fold xs (score_card 0 0) (acc x -> bump acc x)
+  "{t.passed}/{t.failed} {regexp/match? "a+" "aa"}"
+
+fn bump (score_card f p) true
+  score_card f (p + 1)
+
+fn bump (score_card f p) _
+  score_card (f + 1) p
+
+pub found =
+  h = hit 1 2 "n" "t"
+  h.name
+
+fn more xs
+  length xs

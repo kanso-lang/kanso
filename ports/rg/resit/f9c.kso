@@ -1,0 +1,6 @@
+import "std/list"
+
+fn tally a b c
+  a + b + c
+
+print "{tally 1 2 3} {list/sum [1 2]}"

@@ -30,13 +30,13 @@ cyrillic_low = [(rule -80 1104 1119)]
 odd = [[75 107 8490] [83 115 383] [197 229 8491] [181 924 956] [931 962 963]]
 
 rules = [latin latin_low greek greek_low cyrillic cyrillic_low]
-  . list/fold [] text/concat
+  . list/fold [] list/concat
 
 # A class together with every case partner of every code point in it. The
 # result is normalized, so folding twice gives what folding once gave.
 pub fn fold_spans spans
-  extra = list/fold spans [] (acc s -> text/concat acc (partners s))
-  normalize (text/concat spans extra)
+  extra = list/fold spans [] (acc s -> list/concat acc (partners s))
+  normalize (list/concat spans extra)
 
 # Every code point a single one folds to, itself included.
 pub fn fold_orbit cp
@@ -53,7 +53,7 @@ fn moved acc s r
 
 fn orbit_of acc s orbit
   touched = list/any? orbit (cp -> s.first <= cp and cp <= s.last)
-  if touched (text/concat acc (list/to_list (list/map orbit point))) acc
+  if touched (list/concat acc (list/to_list (list/map orbit point))) acc
 
 fn point cp
   span cp cp

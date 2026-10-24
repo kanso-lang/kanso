@@ -90,7 +90,7 @@ fn joined_to none acc lines
   push acc (clean lines)
 
 fn joined_to (clean before) acc lines
-  push (text/slice acc 1 (length acc - 1)) (clean (text/concat before lines))
+  push (text/slice acc 1 (length acc - 1)) (clean (list/concat before lines))
 
 # After a conflict.
 fn joined_to _ acc lines

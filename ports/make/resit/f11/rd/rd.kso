@@ -1,0 +1,95 @@
+# What it should do: print 1, as `kanso run . --interp` does.
+#
+# What it does: a binary from `kanso build` crashes with SIGSEGV, and gdb
+# puts the fault in memcpy under k_repair_interior <- k_deep_copy <-
+# k_beat_pop_slow. `kanso run .` and `kanso play play.kso` (the same program
+# in one file) fail instead with "the program ran out of stack".
+#
+# It is cut down from the make port's reader: a loop over lines that carries
+# a record holding the database and a rule waiting for its recipe lines. In
+# the port the same fault appeared as SIGSEGV or as "out of memory" on six of
+# 77 fixtures, natively only, and moved or vanished when unrelated code
+# changed: adding a trace line anywhere in the reader fixed it.
+#
+# Either of two edits makes it print 1: give `walk` an effect boundary per
+# line (`effect 0 .> (_ -> ...)`), or skip `committed`'s `effect r` when
+# nothing is pending. The port does the second (reader/reader.kso,
+# `statement`).
+type assignment
+  name
+
+type rule_line
+
+type rule
+  at
+  has_recipe
+
+type base
+  rules
+  vars
+
+type open_rule
+  at
+  has_recipe
+
+type reader
+  data
+  lines
+  pending
+
+fn with_data (reader _ lines pending) d
+  reader d lines pending
+
+fn with_pending (reader d lines _) pending
+  reader d lines pending
+
+fn define d name value
+  base d.rules (put d.vars name value)
+
+fn add_rule d target at has_recipe
+  fresh = rule at has_recipe
+  effect (base (put d.rules target fresh) d.vars)
+
+fn read_all d
+  walk (reader d ["c" "all"] 0) 1
+
+fn walk r i
+  ls = r.lines
+  return finished r if i < 1 or length ls < i
+  statement r i (i + 1) ls[i]
+
+fn finished r
+  committed r .> (s -> effect s.data)
+
+fn statement r i next text
+  committed r .> (s -> line_kind s i next (kind text))
+
+fn kind "c"
+  assignment "c"
+
+fn kind "all"
+  rule_line
+
+fn line_kind r _ next (assignment name)
+  effect name .> (n -> effect (define r.data n "x"))
+    .> (d -> walk (with_data r d) next)
+
+fn line_kind r i next rule_line
+  at = i
+  waiting = open_rule at false
+  walk (with_pending r waiting) next
+
+fn committed r
+  return effect r if r.pending == 0
+  p = r.pending
+  each_target r.data p 1 .> (d -> effect (with_pending (with_data r d) 0))
+
+fn each_target d p i
+  return effect d if i > 1
+  target_rule d p "all" .> (next -> each_target next p 2)
+
+fn target_rule d p t
+  add_rule d t p.at p.has_recipe
+
+pub fn run _
+  read_all (base {} {}) .> (p -> print "{length p.vars}")

@@ -1,4 +1,4 @@
-import "std/text"
+import "std/list"
 
 gitignore = "# logs\ntarget/\n*.log\n!keep.log\n/secret.txt\ndocs/*.tmp\n"
 
@@ -26,7 +26,7 @@ test_ignore_outside_base = not ignored? root_rules "other/debug.log" false
 
 test_ignore_deeper_file_overrides =
   deeper = ignore_rules "tree/sub" "!debug.log\n"
-  rules = text/concat root_rules deeper
+  rules = list/concat root_rules deeper
   not ignored? rules "tree/sub/debug.log" false
 
 test_ignore_crlf_and_trailing_space =

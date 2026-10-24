@@ -1,0 +1,3 @@
+import "./cl"
+
+print (cl/read ["a"])

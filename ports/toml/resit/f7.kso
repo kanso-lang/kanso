@@ -1,0 +1,9 @@
+fn first n
+  n + 1
+
+# Integers.
+
+fn second n
+  n + 2
+
+print (second (first 1))

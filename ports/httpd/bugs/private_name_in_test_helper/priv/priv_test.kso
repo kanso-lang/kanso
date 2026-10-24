@@ -1,0 +1,17 @@
+# A test file is an outside consumer of its module (gavel 2026-10-12), so a
+# private name is refused. Read straight from a test constant it is:
+#   test_x = twice 2 == 4   ->   error[name]: unknown name `twice`
+# Read from inside a helper function in the test file, it is not.
+#
+# Run: kanso test priv
+#
+# Should: refuse at check with error[name]: unknown name `twice`.
+#
+# Does: compiles and runs, and the test fails at run time with
+#   error[runtime]: unknown name `~twice`
+#     --> priv/priv_test.kso:15:3
+# naming an internal, mangled spelling of the private function.
+fn helper x
+  twice x
+
+test_private = helper 2 == 4

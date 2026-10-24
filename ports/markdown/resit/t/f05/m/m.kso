@@ -1,0 +1,10 @@
+import "std/list"
+
+type skipped
+  line
+
+pub fn mark x
+  skipped x
+
+pub fn total xs
+  list/sum xs

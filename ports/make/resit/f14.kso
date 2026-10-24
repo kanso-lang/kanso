@@ -1,0 +1,11 @@
+type pending
+  targets
+
+type reader
+  file
+  pending
+
+fn with_db (reader file pending) d
+  "{file} {pending.targets} {d}"
+
+print (with_db (reader "Makefile" (pending ["a"])) 1)

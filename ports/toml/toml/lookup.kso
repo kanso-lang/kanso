@@ -10,6 +10,9 @@ pub fn lookup doc path
   steps = path_steps cs 1 []
   finish cs (along doc steps)
 
+fn along _ e@(err _)
+  e
+
 # `steps` may be a failure to parse the path; a call carries it to `finish`,
 # which turns it into a toml_error, without reading it.
 fn along doc steps
@@ -23,7 +26,8 @@ fn step_at cs 91 p steps
   q = plain_digits cs (p + 1)
   return fail (p + 1) "expected an index inside `[ ]`" if q == p + 1
   return fail q "expected `]`" if cs[q] != 93
-  index = text/to_int (text/utf8 (text/slice cs (p + 1) (q - 1)))
+  piece = some_slice (text/slice cs (p + 1) (q - 1))
+  index = text/to_int (text/utf8 piece)
   path_steps cs (q + 1) (push steps index)
 
 fn step_at cs 46 p steps
@@ -35,6 +39,9 @@ fn step_at cs _ p steps
   return fail p "expected `.` or `[` between steps" if length steps > 0
   keyed = simple_key cs p
   after_key cs keyed steps
+
+fn after_key _ e@(err _) _
+  e
 
 fn after_key cs (parsed p k) steps
   path_steps cs p (push steps k)

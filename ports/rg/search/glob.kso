@@ -29,6 +29,20 @@ fn matching? p i s j
 pub fn string_at cs i
   if (i < 1 or i > length cs) "" cs[i]
 
+# A slice whose range the caller built inside the value is never none; the
+# none arms are there because the checker cannot see that.
+fn some_list none
+  []
+
+fn some_list xs
+  xs
+
+fn some_text none
+  ""
+
+fn some_text s
+  s
+
 fn step? p i s j "*"
   starred? p i s j (string_at p (i + 1) == "*")
 

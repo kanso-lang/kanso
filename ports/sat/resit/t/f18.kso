@@ -1,0 +1,7 @@
+fn begin none
+  "headless"
+
+fn begin header
+  "header {header}"
+
+print (begin none)

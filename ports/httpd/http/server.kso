@@ -133,7 +133,7 @@ fn onward _ c state _ _ false
 # unless the client asked for keep-alive. A handler that sets
 # `connection: close` itself, and a connection that has carried
 # `max_requests`, close it too.
-fn keep_alive? srv req reply served
+pub fn keep_alive? srv req reply served
   { max_requests } = srv
   asked = req.headers["connection"]
   wanted = persistent? req.version (tokens asked)

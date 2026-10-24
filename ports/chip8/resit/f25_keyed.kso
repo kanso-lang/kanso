@@ -1,0 +1,10 @@
+type options
+  cycles
+  files
+  seed
+
+fn shown opts
+  { cycles files seed } = opts
+  "{cycles} {files} {seed}"
+
+print (shown (options 1 [] 2))

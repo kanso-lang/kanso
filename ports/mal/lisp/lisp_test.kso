@@ -23,9 +23,11 @@ test_errors_are_caught =
   src = "(try* (throw \"no\") (catch* e (str e \"!\")))"
   shown_of src == "\"no!\""
 
-test_hash_map_keys_decode = decode_key "ka" == kw "a" and decode_key "sa" == "a"
+test_hash_map_keys_decode =
+  shown = pr_str (decode_key "ka") true (boot [])
+  shown == ":a" and decode_key "sa" == "a"
 
-test_hash_map_keys_encode = encode_key (kw "a") == "ka"
+test_hash_map_keys_encode = encode_key (decode_key "ka") == "ka"
 
 test_hash_map_strings_encode = encode_key "a" == "sa"
 
@@ -37,7 +39,7 @@ test_macro_expands = shown_of "(macroexpand (cond a b))" == "(if a b (cond))"
 
 test_missing_name = shown_of "(nope)" == "Error: 'nope' not found"
 
-test_printer_escapes = round_trip "\"a\\\\b\\\"c\\nd\""
+test_printer_escapes = round_trip? "\"a\\\\b\\\"c\\nd\""
 
 test_quasiquote_splices = shown_of "`(1 ~@(list 2 3) 4)" == "(1 2 3 4)"
 
@@ -45,7 +47,7 @@ test_reader_comments = shown_of "7 ; trailing comment" == "7"
 
 test_reader_keeps_vectors_and_maps =
   src = "[1 (2 \"three\" :four) \{\"k\" [nil true false]}]"
-  round_trip src
+  round_trip? src
 
 test_reader_negative_numbers = shown_of "(+ -3 -4)" == "-7"
 
@@ -70,7 +72,7 @@ fn reason_of (err r)
 fn reason_of _
   "read without failing"
 
-fn round_trip src
+fn round_trip? src
   printed = shown_read (read_str src)
   printed == src
 

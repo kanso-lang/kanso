@@ -1,0 +1,3 @@
+import "./probe"
+
+print "{probe/boxed_n 20000}"

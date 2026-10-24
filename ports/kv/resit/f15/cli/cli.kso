@@ -1,0 +1,14 @@
+import "../lib"
+
+type options
+  dir
+  words
+
+pub fn main argv
+  started (options argv[1] argv)
+
+fn started (options none _)
+  print "no directory"
+
+fn started opts
+  lib/open opts.dir .> (names -> print "{names}")

@@ -1,0 +1,51 @@
+# The whole comparison, in GNU diff's order. First the identical lines at
+# both ends are set aside (all but `horizon` of them, so that changes near the
+# ends can still slide into them); then the lines that cannot match are
+# discarded; the search runs on what is left; and the changed runs are slid
+# into their conventional places. The answer says, for each file, which of
+# its lines (0-based) are changed.
+#
+# `exact_a` and `exact_b` number the lines by their bytes, `ids_a` and
+# `ids_b` by whatever -i, -b or -w say makes two lines the same. GNU trims
+# the identical ends on the bytes, so the two numberings are both needed.
+import "std/list"
+import "std/text"
+
+pub fn changed_lines ids_a ids_b exact_a exact_b horizon
+  na = length ids_a
+  nb = length ids_b
+  head = same_head exact_a exact_b 0
+  tail = same_tail exact_a exact_b head 0
+  lo = at_least 0 (head - horizon)
+  hi = at_least 0 (tail - horizon)
+  mid_a = text/slice ids_a (lo + 1) (na - hi)
+  mid_b = text/slice ids_b (lo + 1) (nb - hi)
+  found = middle mid_a mid_b
+  marks (moved found.left lo) (moved found.right lo)
+
+fn middle ids_a ids_b
+  a = discard ids_a ids_b
+  b = discard ids_b ids_a
+  found = compare_lines a.ids a.real b.ids b.real (marks [] [])
+  left = list/fold found.left a.changed (m k -> put m k true)
+  right = list/fold found.right b.changed (m k -> put m k true)
+  shift_boundaries ids_a ids_b (marks left right)
+
+fn same_head a b k
+  return k if k >= length a or k >= length b
+  if (a[k + 1] == b[k + 1]) (same_head a b (k + 1)) k
+
+# the suffix may not reach back into the prefix
+fn same_tail a b head k
+  return k if length a - k <= head or length b - k <= head
+  same = a[length a - k] == b[length b - k]
+  if same (same_tail a b head (k + 1)) k
+
+fn moved flags by
+  list/fold (keys flags) {} (acc k -> put acc (k + by) flags[k])
+
+fn at_least x y
+  if (x > y) x y
+
+pub fn changed? m k
+  given m[k] false

@@ -13,21 +13,21 @@ coll_names = ["assoc" "contains?" "dissoc" "get" "hash-map" "keys" "vals"]
 
 core_globals = list/fold core_names {} registered
 
-core_names = list/fold name_groups [] text/concat
+core_names = list/fold name_groups [] list/concat
 
 io_names = ["pr-str" "println" "prn" "read-string" "readline" "slurp" "str"]
 
 misc_names = ["apply" "eval" "map" "meta" "throw" "time-ms" "with-meta"]
 
 name_groups = [arith_names atom_names coll_names io_names misc_names seq_names]
-  . text/concat [type_names]
+  . list/concat [type_names]
 
 seq_names = ["concat" "conj" "cons" "count" "first" "list" "nth" "rest" "seq"]
-  . text/concat ["vec" "vector" "empty?"]
+  . list/concat ["vec" "vector" "empty?"]
 
 type_names = ["false?" "fn?" "keyword" "keyword?" "list?" "macro?" "map?"]
-  . text/concat ["nil?" "number?" "sequential?" "string?" "symbol" "symbol?"]
-  . text/concat ["true?" "vector?"]
+  . list/concat ["nil?" "number?" "sequential?" "string?" "symbol" "symbol?"]
+  . list/concat ["true?" "vector?"]
 
 fn registered acc name
   put acc name (prim nil name)
@@ -151,14 +151,14 @@ fn builtin "assoc" args k w
   assoc (arg args 1) (tail args) k w
 
 fn builtin "concat" args k w
-  joined = list/fold args [] (acc s -> text/concat acc (seq_items s))
+  joined = list/fold args [] (acc s -> list/concat acc (seq_items s))
   ret k (mlist joined nil) w
 
 fn builtin "conj" args k w
   conj (arg args 1) (tail args) k w
 
 fn builtin "cons" args k w
-  ret k (mlist (text/concat [(arg args 1)] (seq_items (arg args 2))) nil) w
+  ret k (mlist (list/concat [(arg args 1)] (seq_items (arg args 2))) nil) w
 
 fn builtin "contains?" args k w
   ret k (lookup (arg args 1) (arg args 2) != none) w
@@ -204,7 +204,8 @@ fn builtin "vector" args k w
 
 # --- functions, atoms and metadata ------------------------------------------
 fn builtin "apply" args k w
-  spread = text/concat (text/slice args 2 (length args - 1)) (last_items args)
+  middle = sliced (text/slice args 2 (length args - 1)) []
+  spread = list/concat middle (last_items args)
   apply_fn (arg args 1) spread k w
 
 fn builtin "atom" args k w
@@ -228,7 +229,8 @@ fn builtin "reset!" args k w
   reset (arg args 1) (arg args 2) k w
 
 fn builtin "swap!" args k w
-  swap (arg args 1) (arg args 2) (text/slice args 3 (length args)) k w
+  extra = sliced (text/slice args 3 (length args)) []
+  swap (arg args 1) (arg args 2) extra k w
 
 fn builtin "with-meta" args k w
   ret k (with_meta_of (arg args 1) (arg args 2)) w
@@ -355,16 +357,16 @@ fn nth _ _ k w
   throw k "nth takes a sequence and a number" w
 
 fn conj (mlist items meta) xs k w
-  ret k (mlist (text/concat (reversed xs) items) meta) w
+  ret k (mlist (list/concat (reversed xs) items) meta) w
 
 fn conj (mvec items meta) xs k w
-  ret k (mvec (text/concat items xs) meta) w
+  ret k (mvec (list/concat items xs) meta) w
 
 fn conj _ _ k w
   throw k "conj takes a list or a vector" w
 
 fn reversed xs
-  list/fold xs [] (acc x -> text/concat [x] acc)
+  list/fold xs [] (acc x -> list/concat [x] acc)
 
 fn to_seq s:seq
   return nil if length s.items == 0
@@ -475,7 +477,7 @@ fn reset _ _ k w
 
 fn swap (atom_ref id) f extra k w
   current = deref_atom id w
-  apply_fn f (text/concat [current] extra) (k_swap id k) w
+  apply_fn f (list/concat [current] extra) (k_swap id k) w
 
 fn swap _ _ _ k w
   throw k "swap! takes an atom" w

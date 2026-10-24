@@ -1,0 +1,7 @@
+fn show_atom name []
+  name
+
+fn show_atom name terms
+  "{name}({length terms})"
+
+print "{show_atom "p" []} {show_atom "q" [1 2]}"

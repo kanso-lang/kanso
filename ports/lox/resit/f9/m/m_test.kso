@@ -1,0 +1,3 @@
+import "std/list"
+
+test_start = list/sum [(start "abc") (grow 1)] == 7

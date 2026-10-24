@@ -1,0 +1,4 @@
+fn show xs
+  "{length xs} items"
+
+pub play = print (show [1 2 3])

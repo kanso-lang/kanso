@@ -1,0 +1,4 @@
+import "std/text"
+
+xs = push (text/slice [1 2] 5 9) 3
+print "{xs}"

@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # Compiling a rule into a join plan. A plan is a list of steps run left to
 # right over an environment: a list of constant ids, one per variable, in the
@@ -251,7 +250,7 @@ fn ordered positives delta_at
   places = upto (length positives)
   rest = list/to_list (list/select places (i -> i != delta_at))
   others = list/to_list (list/map rest (i -> to_scan positives[i] false))
-  text/concat [(to_scan positives[delta_at] true)] others
+  list/concat [(to_scan positives[delta_at] true)] others
 
 # `=` binds a variable when the other side is known, and tests when both are.
 fn equality table st (comparison left _ _ right) true true

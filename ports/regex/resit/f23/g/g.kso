@@ -1,0 +1,14 @@
+import "std/os"
+import "std/text"
+
+type compiled
+  pattern
+
+pub fn run path
+  os/read_file path .> (body -> print (grep "-n" (compiled "a") body))
+
+fn grep _ (file_not_found p) _
+  "missing {p}"
+
+fn grep _ r body
+  "{length (text/split body "\n")} lines for {r.pattern}"

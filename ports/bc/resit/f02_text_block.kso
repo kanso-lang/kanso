@@ -1,0 +1,7 @@
+library_source = """
+  define e(x) {
+    return (x)
+  }
+"""
+
+print library_source

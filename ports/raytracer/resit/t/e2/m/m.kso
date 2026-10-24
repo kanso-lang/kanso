@@ -1,0 +1,15 @@
+import "../t"
+import "std/text"
+
+fn number_of (err _) word
+  err "{word} is not a number"
+
+fn number_of x _
+  x
+
+fn scalar word
+  number_of (text/to_float word) word
+
+pub fn use word
+  index = scalar word
+  t/wrap index

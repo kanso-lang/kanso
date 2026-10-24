@@ -1,0 +1,13 @@
+type usage_error
+  reason
+
+fn command _ (usage_error reason)
+  "failed: {reason}"
+
+fn command "asm" opts
+  "asm {opts}"
+
+fn command word _
+  "unknown {word}"
+
+print (command "asm" 1)

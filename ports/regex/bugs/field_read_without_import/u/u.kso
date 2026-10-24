@@ -1,0 +1,13 @@
+# u never imports m; the value arrives as a parameter. Chapter 03: "nothing
+# has to be imported to read a field — the reader is not a name in your file".
+# Gavel 2026-10-12 on #1894: a value carries the arms its type's owner wrote,
+# a field of a parameter included, and "a library is checked alone with
+# `area x` on a parameter accepted".
+#
+# Should: print "2..5" on every engine.
+# Does: error[name]: no record type has a field `start` (module .../u), on
+# check, run and run --interp. Adding `import "../m"` to this file is
+# refused as an unused import; reading the fields through a call that names
+# m (`h = m/found`) is accepted.
+pub fn shown h
+  "{h.start}..{h.end}"

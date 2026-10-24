@@ -1,0 +1,4 @@
+fn twice entry
+  entry * 2
+
+print "{twice 4}"

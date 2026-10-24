@@ -1,0 +1,3 @@
+poly = 0xedb88320
+
+print "{poly} {0x30 + 1} {0b1010}"

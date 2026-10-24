@@ -55,7 +55,7 @@ fn column (scanner _ _ p start)
 
 # The text from `from` to `to` characters past the scanner, inclusive.
 fn cut c from to
-  text/join (text/slice c.cs (c.p + from) (c.p + to)) ""
+  text/join (or_empty (text/slice c.cs (c.p + from) (c.p + to))) ""
 
 fn digit? none
   false

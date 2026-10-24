@@ -1,0 +1,28 @@
+== unit tests
+dimacs: 11 passed, 0 failed
+solver: 27 passed, 0 failed
+gen: 9 passed, 0 failed
+cli: 7 passed, 0 failed
+== build
+== solve
+== malformed input
+== command line
+== benchmarks
+php4: s UNSATISFIABLE, three engines in 0 s
+php5: s UNSATISFIABLE, three engines in 1 s
+php5_geometric: s UNSATISFIABLE, three engines in 0 s
+php6: s UNSATISFIABLE, three engines in 7 s
+queens3: s UNSATISFIABLE, three engines in 0 s
+queens6: s SATISFIABLE, three engines in 1 s
+queens8: s SATISFIABLE, three engines in 0 s
+queens10: s SATISFIABLE, three engines in 1 s
+rand50_sat: s SATISFIABLE, three engines in 0 s
+rand75_unsat: s UNSATISFIABLE, three engines in 1 s
+rand100_unsat: s UNSATISFIABLE, three engines in 2 s
+rand100_geometric: s UNSATISFIABLE, three engines in 6 s
+rand100_sat: s SATISFIABLE, three engines in 2 s
+rand120_sat: s SATISFIABLE, three engines in 5 s
+== oracle
+oracle agreed on 15 fixtures and 60 random formulas
+
+59 cases on three engines, 0 failures

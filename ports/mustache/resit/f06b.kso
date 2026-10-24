@@ -1,0 +1,6 @@
+template = """
+  Hello, {{name}}!
+  Bye.
+"""
+
+print template

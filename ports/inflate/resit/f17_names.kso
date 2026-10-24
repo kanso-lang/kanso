@@ -1,0 +1,11 @@
+fn put_bits acc n
+  acc + n
+
+fn put acc n
+  acc + n
+
+fn finish x
+  done = x + 1
+  done
+
+print "{put 1 2} {finish 1}"

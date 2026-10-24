@@ -1,0 +1,8 @@
+pub type corrupt
+  reason
+
+pub fn decode 0
+  err (corrupt "bad")
+
+pub fn decode n
+  n

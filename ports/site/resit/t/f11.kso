@@ -1,0 +1,9 @@
+type dest
+  next
+  title
+  url
+
+fn linked (dest url title next)
+  "{url} {title} {next}"
+
+print (linked (dest 7 "t" "/u"))

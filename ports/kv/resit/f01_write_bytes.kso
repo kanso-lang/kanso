@@ -1,0 +1,6 @@
+import "std/os"
+import "std/text"
+
+os/write_file "out.bin" (text/to_bytes [0 1 127 128 200 255])
+  .> (_ -> os/read_bytes! "out.bin")
+  .> (b -> print "{b}")

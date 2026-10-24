@@ -1,0 +1,8 @@
+fn skip_one " " at
+  at + 1
+
+fn skip_one _ at
+  at
+
+cs = ["a"]
+print "{skip_one cs[2] 5}"

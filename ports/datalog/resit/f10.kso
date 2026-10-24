@@ -1,0 +1,2 @@
+firm = { "X":true }
+print "{firm["X"] == true} {firm["Y"] == true}"

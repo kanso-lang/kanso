@@ -27,13 +27,13 @@ type date_stem
   stem
 
 # The two kinds of content file, sorted out.
-type sorted_content
+pub type sorted_content
   pages
   sections
 
 # Split content files into sections (`_index.md`) and pages, reading their
 # front matter. Any file that fails to parse fails the whole build, named.
-fn read_content files drafts
+pub fn read_content files drafts
   rels = keys files
   section_rels = list/to_list (list/select rels section_file?)
   page_rels = list/to_list (list/reject rels section_file?)
@@ -53,7 +53,7 @@ fn basename rel
 
 fn dir_of rel
   parts = text/split rel "/"
-  text/join (text/slice parts 1 (length parts - 1)) "/"
+  text/join (textkit/clamped parts 1 (length parts - 1)) "/"
 
 fn draft? p
   flag? p.meta["draft"]
@@ -81,10 +81,10 @@ fn section_from acc rel (fronted body meta)
   dir = dir_of rel
   push acc (raw_section body dir meta (section_path dir) rel)
 
-fn section_path ""
+pub fn section_path ""
   "/"
 
-fn section_path dir
+pub fn section_path dir
   parts = list/map (text/split dir "/") textkit/slugify
   "/{text/join (list/to_list parts) "/"}/"
 
@@ -112,14 +112,14 @@ fn page_from acc rel (fronted body meta) dirs
   path = page_path meta home slug
   push acc (raw_page body date meta (owner_of home dirs) path rel slug)
 
-fn date_prefix stem
+pub fn date_prefix stem
   cs = text/chars stem
   ok = length cs > 11 and cs[5] == "-" and cs[8] == "-"
   sep = cs[11] == "-" or cs[11] == "_"
-  digits = list/all? (text/slice cs 1 4) textkit/digit?
+  digits = list/all? (textkit/clamped cs 1 4) textkit/digit?
   dated = ok and sep and digits
-  rest = text/join (text/slice cs 12 (length cs)) ""
-  if dated (date_stem (text/slice stem 1 10) rest) (date_stem "" stem)
+  rest = text/join (textkit/clamped cs 12 (length cs)) ""
+  if dated (date_stem (textkit/clamped stem 1 10) rest) (date_stem "" stem)
 
 fn page_date meta dated
   given = meta["date"]
@@ -135,12 +135,12 @@ fn page_path meta home slug
   base = section_path home
   "{base}{slug}/"
 
-fn normal_path p
+pub fn normal_path p
   inner = text/trim (textkit/replace p "//" "/")
   front = if (textkit/starts_with? inner "/") inner "/{inner}"
   if (textkit/ends_with? front "/") front "{front}/"
 
 # A page belongs to the nearest directory above it that has an _index.md.
-fn owner_of dir dirs
+pub fn owner_of dir dirs
   return dir if flag? dirs[dir] or dir == ""
   owner_of (dir_of dir) dirs

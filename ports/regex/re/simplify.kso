@@ -36,7 +36,7 @@ pub fn simplify other
   other
 
 fn flat_cat parts
-  list/fold parts [] (acc p -> text/concat acc (cat_parts (simplify p)))
+  list/fold parts [] (acc p -> list/concat acc (cat_parts (simplify p)))
 
 fn cat_parts (cat parts)
   parts
@@ -45,7 +45,7 @@ fn cat_parts other
   [other]
 
 fn flat_alt branches
-  list/fold branches [] (acc b -> text/concat acc (alt_parts (simplify b)))
+  list/fold branches [] (acc b -> list/concat acc (alt_parts (simplify b)))
 
 fn alt_parts (alt branches)
   branches
@@ -67,7 +67,7 @@ fn merge_one bs i out b
   both_chars = char_spans prev != [] and char_spans b != []
   return merge_chars bs (i + 1) (push out b) if not both_chars
   front = text/slice out 1 (length out - 1)
-  both = cls (normalize (text/concat (char_spans prev) (char_spans b)))
+  both = cls (normalize (list/concat (char_spans prev) (char_spans b)))
   merge_chars bs (i + 1) (push front both)
 
 fn char_spans (lit cp)

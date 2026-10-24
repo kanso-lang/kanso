@@ -1,0 +1,3 @@
+import "./up"
+
+up/go 1 .> (s -> print s)

@@ -1,0 +1,4 @@
+fn helper x
+  twice? x
+
+test_private = helper 2

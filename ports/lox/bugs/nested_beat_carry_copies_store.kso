@@ -1,0 +1,50 @@
+# Native only. A self-recursive loop (`run_from`) whose lap calls a function
+# that enters the same loop again, carrying a persistent binary trie that each
+# lap writes one leaf into by path copy. This is the shape of the lox
+# interpreter's statement loop when a Lox constructor builds a tree
+# (tests/binary_trees.lox).
+#
+# Should: run in time proportional to the number of writes, as the
+# interpreter does (depth 12, 16,382 writes: 0.4 s with --interp).
+# Does, with `kanso play` on this file at the depth below:
+#   depth 8   1,022 writes   0.07 s
+#   depth 9   2,046 writes   1.5 s
+#   depth 10  4,094 writes   7.0 s
+#   depth 11  8,190 writes   more than 30 s
+# gdb samples of the stuck lox binary all sit in the runtime's beat carry:
+#   k_interior_survives <- k_copy_size / k_deep_copy <- k_beat_iter_carry
+#   <- k_beat_lap_carry <- d_lox/run_from_3
+# A flat loop carrying the same trie (no re-entry) stays linear, and a
+# re-entrant loop carrying a plain linked chain stays linear too.
+# The lox port's binary_trees fixture passed on 2026-10-10 and now runs for
+# more than twelve minutes on the dev and release builds.
+type node
+  left
+  right
+
+type empty
+
+type world
+  next
+  tree
+
+fn run_from i d w
+  return w if 2 < i
+  run_from (i + 1) d (exec d w)
+
+fn exec 0 w
+  world (w.next + 1) (store w.tree 16 w.next w.next)
+
+fn exec d w
+  run_from 1 (d - 1) (exec 0 w)
+
+fn store empty bits id v
+  return v if bits == 0
+  store (node empty empty) bits id v
+
+fn store (node l r) bits id v
+  return v if bits == 0
+  return node (store l (bits - 1) (id / 2) v) r if id % 2 == 0
+  node l (store r (bits - 1) (id / 2) v)
+
+print "{(run_from 1 10 (world 0 empty)).next}"

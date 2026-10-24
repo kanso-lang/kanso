@@ -1,0 +1,3 @@
+import "../m"
+
+print "{m/repeated_n 4000}"

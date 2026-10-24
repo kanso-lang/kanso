@@ -1,0 +1,4 @@
+import "./probe"
+import "std/os"
+
+os/args .> (a -> print (probe/demo "{length a}x"))

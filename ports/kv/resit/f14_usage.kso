@@ -1,0 +1,11 @@
+usage = """
+  usage: kv [--max-file-size BYTES] [--expiry SECONDS] DIR [COMMAND [ARGS...]]
+  commands: put KEY VALUE, get KEY, delete KEY, list, merge, status, dump
+"""
+
+usage_lines = [
+  "usage: kv [--max-file-size BYTES] [--expiry SECONDS] DIR [COMMAND [ARGS...]]"
+  "commands: put KEY VALUE, get KEY, delete KEY, list, merge, status, dump"
+]
+
+print usage .> (_ -> print "{length usage_lines}")

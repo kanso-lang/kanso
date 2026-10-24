@@ -1,0 +1,5 @@
+src = """
+  taxonomies = [{name = "tags"}]
+  title = "x"
+"""
+print src

@@ -1,0 +1,3 @@
+import "../m"
+
+print "{m/read_put 2000}"

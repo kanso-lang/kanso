@@ -1,0 +1,25 @@
+import "std/list"
+
+fn names_up_to n
+  counted = list/take (list/iterate 1 (k -> k + 1)) n
+  list/to_list (list/map counted (k -> "k{k}"))
+
+pub fn tallied n
+  length (list/tally (names_up_to n))
+
+pub fn flattened n
+  lists = list/to_list (list/map (names_up_to n) (k -> [k k]))
+  length (list/fold lists [] (acc xs -> list/concat acc xs))
+
+fn grouped m k i
+  put m k (push (or_list m[k]) i)
+
+fn or_list none
+  []
+
+fn or_list xs
+  xs
+
+pub fn indexed n
+  ks = names_up_to n
+  length (list/fold ks {} (m k -> grouped m k 1))

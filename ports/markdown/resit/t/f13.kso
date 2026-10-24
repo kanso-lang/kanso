@@ -1,0 +1,7 @@
+import "std/text"
+
+tags = """
+  address article aside base basefont blockquote body caption center col
+  colgroup dd details dialog dir div dl dt fieldset figcaption figure footer
+"""
+print "{length (text/split (text/trim tags) " ")}"

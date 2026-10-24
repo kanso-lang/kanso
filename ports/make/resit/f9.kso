@@ -1,0 +1,25 @@
+import "std/io"
+
+directives = [
+  "-include"
+  "else"
+  "endif"
+  "export"
+  "ifdef"
+  "ifeq"
+  "ifndef"
+  "ifneq"
+  "include"
+  "override"
+  "sinclude"
+  "unexport"
+]
+
+usage = """
+  Usage: make [options] [target] ...
+  Options:
+    -f FILE, --file=FILE        Read FILE as a makefile.
+    -k, --keep-going            Keep going when some targets can't be made.
+"""
+
+print "{length directives}" .> (_ -> io/write usage)

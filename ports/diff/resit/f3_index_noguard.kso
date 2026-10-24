@@ -1,0 +1,9 @@
+import "std/text"
+
+fn lower s
+  text/lowercase s
+
+fn first_two files
+  lower files[1]
+
+print (first_two ["A" "B"])

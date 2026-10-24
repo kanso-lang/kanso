@@ -1,0 +1,7 @@
+== unit tests
+delta: 21 passed, 0 failed
+store: 6 passed, 0 failed
+ugit: 20 passed, 0 failed
+== build
+== fixtures
+ok: 15 fixtures agree on interp, dev and release

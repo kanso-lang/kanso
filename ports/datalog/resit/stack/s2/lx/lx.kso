@@ -1,0 +1,78 @@
+import "std/text"
+
+pub type token
+  col
+  kind
+  line
+  text
+
+pub type mark_tok
+
+type scanner
+  cs
+  line
+  p
+  start
+
+pub fn lex source
+  scan (scanner (text/chars source) 1 1 1) []
+
+fn at (scanner cs _ p _) k
+  cs[p + k]
+
+fn advance (scanner cs line p start) n
+  scanner cs line (p + n) start
+
+fn column (scanner _ _ p start)
+  p - start + 1
+
+fn emit c kind text width acc
+  made = token (column c) kind c.line text
+  scan (advance c width) (push acc made)
+
+fn fail_at _ reason
+  err reason
+
+fn newline c
+  scanner c.cs (c.line + 1) (c.p + 1) (c.p + 1)
+
+fn scan c acc
+  scan_char c (at c 0) acc
+
+fn skip_block c none _
+  fail_at c "a block comment is never closed"
+
+fn skip_block c "\n" acc
+  skip_block (newline c) (at (newline c) 0) acc
+
+fn skip_block c "*" acc
+  if (at c 1 == "/")
+    scan (advance c 2) acc
+  else
+    next = advance c 1
+    skip_block next (at next 0) acc
+
+fn skip_block c _ acc
+  next = advance c 1
+  skip_block next (at next 0) acc
+
+fn skip_line c none acc
+  scan c acc
+
+fn skip_line c "\n" acc
+  scan c acc
+
+fn skip_line c _ acc
+  next = advance c 1
+  skip_line next (at next 0) acc
+
+fn scan_char c none acc
+  push acc (token (column c) "end" c.line "")
+
+fn scan_char c "(" acc
+  emit c mark_tok "(" 1 acc
+
+fn scan_char c "/" acc
+  return skip_line c "/" acc if at c 1 == "/"
+  return skip_block (advance c 2) (at c 2) acc if at c 1 == "*"
+  fail_at c "unexpected character `/`"

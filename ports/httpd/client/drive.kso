@@ -56,7 +56,7 @@ fn without_cr s
 
 fn transcript bs methods
   replies = read_replies bs methods
-  lines = list/fold replies [] (acc r -> text/concat acc (shown_lines r))
+  lines = list/fold replies [] (acc r -> list/concat acc (shown_lines r))
   text/join lines "\n"
 
 # The methods of the requests a connection carried, read with the server's

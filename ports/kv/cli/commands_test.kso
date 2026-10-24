@@ -1,24 +1,45 @@
-test_put_keeps_spaces = command_of ["put" "k" "a" "b"] == put_cmd "k" "a b"
+# A test file sees only what the module makes pub, and only cli builds its
+# commands, so the expected values are read field by field.
+fn put? c:cli/put_cmd key value
+  c.key == key and c.value == value
 
-test_put_empty_value = command_of ["put" "k" ""] == put_cmd "k" ""
+fn put? _ _ _
+  false
+
+fn get? c:cli/get_cmd key
+  c.key == key
+
+fn get? _ _
+  false
+
+fn bad? c:cli/bad_cmd reason
+  c.reason == reason
+
+fn bad? _ _
+  false
+
+test_put_keeps_spaces = put? (command_of ["put" "k" "a" "b"]) "k" "a b"
+
+test_put_empty_value = put? (command_of ["put" "k" ""]) "k" ""
 
 test_put_needs_value =
   got = command_of ["put" "k"]
-  got == bad_cmd "put takes a key and a value"
+  bad? got "put takes a key and a value"
 
-test_get = command_of ["get" "k"] == get_cmd "k"
+test_get = get? (command_of ["get" "k"]) "k"
 
-test_get_one_key = command_of ["get" "a" "b"] == bad_cmd "get takes one key"
+test_get_one_key = bad? (command_of ["get" "a" "b"]) "get takes one key"
 
 test_bare_verbs =
   verbs = [(command_of ["list"]) (command_of ["merge"]) (command_of ["dump"])]
   verbs == [list_cmd merge_cmd dump_cmd]
 
-test_unknown = command_of ["frob"] == bad_cmd "unknown command `frob`"
+test_unknown = bad? (command_of ["frob"]) "unknown command `frob`"
 
 test_script_skips_blanks_and_comments =
   cmds = script_of "# header\n\nput a 1\n  get a  \n"
-  cmds == [(numbered (put_cmd "a" "1") 3) (numbered (get_cmd "a") 4)]
+  first = put? cmds[1].cmd "a" "1" and cmds[1].line == 3
+  length cmds == 2 and first and get? cmds[2].cmd "a" and cmds[2].line == 4
 
 test_script_finds_first_bad =
   cmds = script_of "list\nget\nput\n"

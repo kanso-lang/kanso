@@ -1,0 +1,10 @@
+import "std/bits"
+
+fn family 0xD op
+  "draw {op & 0xF}"
+
+fn family _ op
+  "other {op}"
+
+font = [0xF0 0x90 0x90 0x90 0xF0]
+print "{family (bits/shr 0xD123 12) 0xD123} {font} {0b1010}"

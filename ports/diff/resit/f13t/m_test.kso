@@ -1,0 +1,6 @@
+import "../f13t"
+
+test_spans = f13t/out == [
+  "--- a/the/first/file/with/a/long/name.txt"
+  "+++ b/the/first/file/with/a/long"
+]

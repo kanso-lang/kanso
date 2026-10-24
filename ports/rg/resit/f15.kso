@@ -1,0 +1,4 @@
+import "std/io"
+import "std/text"
+
+io/write (text/to_bytes [99 97 102 233 10])

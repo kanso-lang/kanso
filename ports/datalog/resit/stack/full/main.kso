@@ -1,0 +1,4 @@
+import "./dl"
+import "std/os"
+
+os/read_file! "../e2000.dl" .> (s -> print "{length (dl/lex s)}")

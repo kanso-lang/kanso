@@ -1,0 +1,8 @@
+fn matches _ none
+  []
+
+fn matches index k
+  index[k]
+
+pub fn hits? index k
+  matches index k != []

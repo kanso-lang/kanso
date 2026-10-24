@@ -1,0 +1,11 @@
+type rd
+  lines
+
+fn statement line
+  "<{line}>"
+
+fn walk r i
+  return "done" if i < 1 or length r.lines < i
+  statement r.lines[i]
+
+print (walk (rd ["a"]) 1)

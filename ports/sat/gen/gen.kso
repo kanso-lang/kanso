@@ -1,5 +1,4 @@
 import "std/list"
-import "std/text"
 
 # Benchmark formulas, generated rather than downloaded, so that every fixture
 # can be rebuilt from a command line.
@@ -19,7 +18,7 @@ fn each xs f
   list/to_list (list/map xs f)
 
 fn flatten xss
-  list/fold xss [] (acc xs -> text/concat acc xs)
+  list/fold xss [] (acc xs -> list/concat acc xs)
 
 fn ints a b
   ints_onto [] a b
@@ -46,7 +45,7 @@ pub fn pigeonhole n
   housed = each (ints 1 (n + 1)) (i -> each (ints 1 n) (j -> (i - 1) * n + j))
   holes = each (ints 1 n) (j -> each (ints 1 (n + 1)) (i -> (i - 1) * n + j))
   apart = flatten (each holes at_most_one)
-  family (text/concat housed apart) (n * (n + 1))
+  family (list/concat housed apart) (n * (n + 1))
 
 # n queens on an n by n board, none attacking another. Variable
 # (r - 1) * n + c says a queen stands on row r, column c. Satisfiable for
@@ -54,9 +53,9 @@ pub fn pigeonhole n
 pub fn queens n
   rows = each (ints 1 n) (r -> each (ints 1 n) (c -> (r - 1) * n + c))
   columns = each (ints 1 n) (c -> each (ints 1 n) (r -> (r - 1) * n + c))
-  lines = flatten (each (text/concat rows columns) at_most_one)
+  lines = flatten (each (list/concat rows columns) at_most_one)
   diagonals = flatten (each (ints 1 n) (r -> diagonal_clauses n r))
-  family (text/concat (text/concat rows lines) diagonals) (n * n)
+  family (list/concat (list/concat rows lines) diagonals) (n * n)
 
 fn diagonal_clauses n r
   flatten (each (ints 1 n) (c -> attacks n r c))
@@ -69,7 +68,7 @@ fn attacks n r c
   left = list/select steps (d -> 1 <= c - d)
   falling = each right (d -> [(0 - here) (0 - ((r + d - 1) * n + c + d))])
   rising = each left (d -> [(0 - here) (0 - ((r + d - 1) * n + c - d))])
-  text/concat falling rising
+  list/concat falling rising
 
 # Uniform random k-SAT: each clause draws k distinct variables and a sign for
 # each. The generator is a fixed linear congruential sequence, so a seed names

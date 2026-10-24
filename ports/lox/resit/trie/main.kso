@@ -1,0 +1,3 @@
+import "./store"
+
+print "{store/fill 12}"

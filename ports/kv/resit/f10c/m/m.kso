@@ -1,0 +1,6 @@
+import "std/list"
+import "std/text"
+
+pub fn octal_of bs
+  part = text/slice bs 1 4096
+  text/join (list/to_list (list/map part (b -> "\\{b}"))) ""

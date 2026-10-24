@@ -1,0 +1,7 @@
+fn grow m 0
+  m
+
+fn grow m n
+  grow (put m n true) (n - 1)
+
+print "{length (grow {} 40000)}"

@@ -8,10 +8,10 @@ import "std/text"
 pub fn answer_all tree table ev
   base = base_of table
   shown = list/fold tree.clauses [] (acc c -> answered base table ev acc c)
-  text/concat shown (summary ev)
+  list/concat shown (summary ev)
 
 fn answered base table ev acc c
-  text/concat acc (answer_clause base table ev c)
+  list/concat acc (answer_clause base table ev c)
 
 # A query runs as the body of a rule whose head lists its variables, through
 # the same planner and evaluator as every other rule.
@@ -21,14 +21,14 @@ fn answer_clause base table ev (query a)
   ctx = context base ev.db {} {}
   found = run_from ctx (plan_rule table r 0) 1 [] []
   rows = decoded base (length vars) (distinct found)
-  text/concat ["?- {show_atom a}."] (answer_lines table vars rows)
+  list/concat ["?- {show_atom a}."] (answer_lines table vars rows)
 
 fn answer_clause base table ev (output _ name)
   rel = ev.db[name]
   rows = decoded base (arity_or_zero rel) (list/sort (rows_of rel))
   head = ".output {name} ({counted (length rows) "tuple"})"
   lines = list/to_list (list/map rows (t -> fact_line table name t))
-  text/concat [head] lines
+  list/concat [head] lines
 
 fn answer_clause _ _ ev (printsize _ name)
   [".printsize {name}: {counted (size_or_zero ev.db[name]) "tuple"}"]
@@ -98,7 +98,7 @@ fn summary ev
   all = "total: {counted total "tuple"} after {counted rounds "round"}"
   listed = if (length sizes == 0) "none" (text/join sizes ", ")
   tail = ["relations: {listed}" all]
-  text/concat (text/concat ["-- evaluation"] layers) tail
+  list/concat (list/concat ["-- evaluation"] layers) tail
 
 fn size_text (entry name rel)
   "{name} {size_of rel}"

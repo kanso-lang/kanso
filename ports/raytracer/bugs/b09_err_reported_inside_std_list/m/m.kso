@@ -1,0 +1,29 @@
+# DIAGNOSTIC BUG: `r` can be an err (`line` answers `fails …`), and
+# `r.objects` is handed to `list/first`. `kanso run` reports four
+# error[exhaustive] lines whose locations are inside std/list/list.kso
+# (`list/counted_flat`, `list/bounded_flat`, `list/fold_flat`,
+# `list/fold_go`), and none at line 29 of this file, the call the author
+# wrote.
+#
+# Expected: one refusal at `list/first r.objects` here, the way
+# `list/first (half 4)` is refused at its own call when `half` can raise.
+import "../t"
+import "std/list"
+
+type reading
+  materials
+  n
+  objects
+
+fn fails n reason
+  err "line {n}: {reason}"
+
+fn line (reading materials n objects) words
+  return fails n "short" if length words < 2
+  mat = materials[words[2]]
+  return fails n "no material called {words[2]}" if mat == none
+  reading materials n (push objects (t/new_box mat))
+
+pub fn f m words
+  r = line (reading m 1 []) words
+  t/use (list/first r.objects)

@@ -55,6 +55,10 @@ type chunk_done
 
 pub default_limits = limits 1048576 8192
 
+# Other limits, for a caller outside the module (the tests use tiny ones).
+pub fn limits_of max_body max_head
+  limits max_body max_head
+
 # A request built by hand, for tests and for a client that wants to frame
 # one: the target is split and its query parsed the way the parser does it.
 pub fn make_request method target headers body
@@ -222,7 +226,7 @@ fn framed_body bs lim at req (framing_length n)
   return rejected "the body is too large" 413 if n > max_body
   from = at + 4
   return need_body (expects? req) if length bs - from + 1 < n
-  finished req bs (from + n) (text/slice bs from (from + n - 1))
+  finished req bs (from + n) (or_empty (text/slice bs from (from + n - 1)))
 
 fn framed_body bs lim at req framing_chunked
   { max_body } = lim
@@ -248,7 +252,7 @@ fn finished req bs next body
   { headers method target version } = req
   cut query path = split_target target
   r = request body headers method path (parse_query query) target version
-  framed r (text/slice bs next (length bs))
+  framed r (or_empty (text/slice bs next (length bs)))
 
 # One chunk at a time: a size line in hex, the data, a CR LF. A zero size
 # ends the body, and the trailer section after it is read and dropped.
@@ -277,7 +281,7 @@ fn chunk_sized bs line_end acc max size
   past = from + size
   return need_head if length bs < past + 1
   return bad "a chunk without its CR LF" if bs[past] != 13 or bs[past + 1] != 10
-  data = text/slice bs from (past - 1)
+  data = or_empty (text/slice bs from (past - 1))
   chunk_from bs (past + 2) (text/append acc data) max
 
 fn trailers bs at acc

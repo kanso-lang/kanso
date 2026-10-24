@@ -1,0 +1,5 @@
+import "./churn"
+
+n = 40000
+m = churn/churn (churn/fill {} 1 n) 1 200000 n
+print "{churn/total m 1 n 0}"

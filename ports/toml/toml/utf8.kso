@@ -19,7 +19,7 @@ fn two cs p
 
 # The position of the first byte that does not start a well-formed sequence,
 # or 0 when there is none.
-fn utf8_error cs p
+pub fn utf8_error cs p
   utf8_at cs cs[p] p
 
 fn utf8_at _ none _

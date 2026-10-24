@@ -1,0 +1,14 @@
+type progress
+  commands
+  d
+  failed
+  opts
+  recipes
+  status
+  temporary
+
+fn with_temporary rn t
+  merge rn { "temporary":(push rn.temporary t) }
+
+rn = with_temporary (progress 0 {} false {} 0 "ok" []) "a.o"
+print "{rn.temporary} {rn.status}"

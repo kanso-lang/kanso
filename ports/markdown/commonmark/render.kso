@@ -103,7 +103,7 @@ fn inline_html (strong kids)
 fn inline_html _
   ""
 
-fn inlines_html kids
+pub fn inlines_html kids
   text/join (list/to_list (list/map kids inline_html)) ""
 
 fn block_html f tight refs

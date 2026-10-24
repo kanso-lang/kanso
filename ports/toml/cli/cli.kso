@@ -50,9 +50,7 @@ fn encoded (file_not_found path)
   missing path
 
 fn encoded source
-  tagged = json/decode source
-  tree = toml/from_tagged tagged
-  document = toml/encode tree
+  document = json/decode source .> toml/from_tagged .> toml/encode
   written document
 
 fn written (err e)

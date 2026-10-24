@@ -1,0 +1,8 @@
+import "std/list"
+
+extra = [0 0 1 1 2 2]
+base = push (list/take extra 3) 258
+fields = list/map [1 2] (f -> "{f}")
+rows = list/concat ["head"] fields
+
+print "{base} {rows}"

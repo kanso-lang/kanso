@@ -1,0 +1,3 @@
+import "std/text"
+
+print "{text/uppercase "ld v1"} {text/find2 (text/bytes "ab;c") 1 59 59}"

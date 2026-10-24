@@ -66,10 +66,16 @@ type parsed
   pos
   value
 
+fn expression e@(err _)
+  e
+
 # A whole expression from a token list, refusing tokens left over.
 fn expression ts
   read = or_expr ts 1
   all_read ts read
+
+fn all_read _ e@(err _)
+  e
 
 fn all_read ts (parsed p v)
   t = ts[p]
@@ -107,6 +113,9 @@ fn or_expr ts p
   left = and_expr ts p
   or_more ts left
 
+fn or_more _ e@(err _)
+  e
+
 fn or_more ts (parsed p left)
   return parsed p left if not keyword? ts p "or"
   right = and_expr ts (p + 1)
@@ -116,10 +125,16 @@ fn and_expr ts p
   left = not_expr ts p
   and_more ts left
 
+fn and_more _ e@(err _)
+  e
+
 fn and_more ts (parsed p left)
   return parsed p left if not keyword? ts p "and"
   right = not_expr ts (p + 1)
   and_more ts (joined "and" left right (line_at ts p))
+
+fn joined _ _ e@(err _) _
+  e
 
 fn joined op left (parsed p right) line
   parsed p (e_bin left line op right)
@@ -134,12 +149,18 @@ fn not_or_compare ts p true
 fn not_or_compare ts p false
   compare ts p
 
+fn negated e@(err _)
+  e
+
 fn negated (parsed p v)
   parsed p (e_not v)
 
 fn compare ts p
   left = concat_expr ts p
   compare_more ts left
+
+fn compare_more _ e@(err _)
+  e
 
 fn compare_more ts (parsed p left)
   op = word_at ts p
@@ -169,6 +190,9 @@ fn is_test ts p left line
   args = maybe_args ts (at + 1)
   tested args left line name negate
 
+fn tested e@(err _) _ _ _ _
+  e
+
 fn tested (parsed p args) left line name negate
   parsed p (e_test args line name negate left)
 
@@ -183,6 +207,9 @@ fn add_expr ts p
 fn mul_expr ts p
   left = unary ts p
   binary_more ts left ["*" "/" "%"] unary
+
+fn binary_more _ e@(err _) _ _
+  e
 
 fn binary_more ts (parsed p left) ops next
   op = word_at ts p
@@ -214,12 +241,18 @@ fn signed_or_negated ts p false
 fn minus_or_filtered ts p false
   filtered ts p
 
+fn negative e@(err _)
+  e
+
 fn negative (parsed p v)
   parsed p (e_neg v)
 
 fn filtered ts p
   base = postfix ts p
   filters ts base
+
+fn filters _ e@(err _)
+  e
 
 fn filters ts (parsed p v)
   piped = kind_at ts p == "op" and word_at ts p == "|"
@@ -237,6 +270,9 @@ fn postfix ts p
   base = primary ts p
   postfix_more ts base
 
+fn postfix_more _ e@(err _)
+  e
+
 fn postfix_more ts (parsed p v)
   op = if (kind_at ts p == "op") (word_at ts p) ""
   return attribute ts (p + 1) v if op == "."
@@ -252,6 +288,9 @@ fn attribute ts p v
 fn subscript ts p v
   key = or_expr ts p
   closed_subscript ts key v
+
+fn closed_subscript _ e@(err _) _
+  e
 
 fn closed_subscript ts (parsed p key) v
   after = expect_op ts p "]"
@@ -287,6 +326,9 @@ fn punct ts p _ "["
 fn punct _ _ t word
   fail_at t "unexpected `{word}`"
 
+fn grouped _ e@(err _)
+  e
+
 fn grouped ts (parsed p v)
   parsed (expect_op ts p ")") v
 
@@ -294,6 +336,9 @@ fn listed ts p acc
   return parsed (p + 1) (e_list acc) if word_at ts p == "]"
   item = or_expr ts p
   list_more ts item acc
+
+fn list_more _ e@(err _) _
+  e
 
 fn list_more ts (parsed p v) acc
   more = push acc v
@@ -325,6 +370,9 @@ fn name_then ts p word line "::"
 fn name_then _ p word line _
   parsed (p + 1) (e_var line word)
 
+fn called e@(err _) _ _
+  e
+
 fn called (parsed p args) name line
   parsed p (e_call args line name)
 
@@ -334,6 +382,9 @@ fn macro_call ts p space line
   return fail_at ts[p] "expected `{space}::name(...)`" if not opens
   args = args_of ts (p + 4)
   macro_of args space name line
+
+fn macro_of e@(err _) _ _ _
+  e
 
 fn macro_of (parsed p args) space name line
   parsed p (e_macro args line name space)
@@ -350,6 +401,9 @@ fn args_of ts p
   key = if keyed (word_at ts p) ""
   value = or_expr ts start
   arg_more ts value key []
+
+fn arg_more _ e@(err _) _ _
+  e
 
 fn arg_more ts (parsed p v) key acc
   more = push acc (arg key v)

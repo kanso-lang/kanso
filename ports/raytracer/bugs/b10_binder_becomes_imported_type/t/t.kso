@@ -1,0 +1,4 @@
+pub type materials
+
+pub fn shade materials
+  "shaded"

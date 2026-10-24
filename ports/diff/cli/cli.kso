@@ -3,11 +3,11 @@
 import "../difftool"
 import "../patchtool"
 import "std/io"
+import "std/list"
 import "std/os"
-import "std/text"
 
 pub fn main argv
-  tool argv[1] (text/slice argv 2 (length argv))
+  tool argv[1] (list/to_list (list/drop argv 1))
 
 fn tool "diff" rest
   run_diff rest .> exit_with

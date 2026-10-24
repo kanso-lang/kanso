@@ -1,0 +1,15 @@
+type invalid
+  reason
+  status
+
+fn edited _ st none _
+  "missing {st}"
+
+fn edited _ st _ (invalid reason status)
+  "{reason} {status} {st}"
+
+fn edited _ st _ _
+  "ok {st}"
+
+m = { 1:2 }
+print (edited 0 1 m[1] (invalid "r" 400))

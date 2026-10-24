@@ -1,0 +1,24 @@
+import "std/text"
+
+type scanner
+  cs
+  p
+
+pub fn lex source
+  scan (scanner (text/chars source) 1) []
+
+fn scan c acc
+  scan_char c c.cs[c.p] acc
+
+fn scan_char _ none acc
+  acc
+
+fn scan_char c "x" acc
+  emit c "x" 1 acc 0
+
+fn scan_char c _ acc
+  scan (scanner c.cs (c.p + 1)) acc
+
+fn emit c kind width acc _
+  made = "{kind}{c.p}"
+  scan (scanner c.cs (c.p + width)) (push acc made)

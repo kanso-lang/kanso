@@ -1,0 +1,11 @@
+# BUG: a test file is an outside consumer (#1883) and cannot see `hidden`.
+# Named in a test constant, `kanso test` refuses it at check time with
+# "unknown name `hidden`". Named inside a helper function of the test file,
+# as here, it passes the check and the test fails at run time:
+#   test_hidden ... FAILED
+#   error[runtime]: unknown name `~hidden`
+# Expected: the same check-time refusal in both places.
+fn helper x
+  hidden x
+
+test_hidden = helper 1 == 2

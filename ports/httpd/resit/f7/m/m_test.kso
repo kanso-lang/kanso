@@ -1,0 +1,5 @@
+import "../m"
+
+srv = 3
+
+test_handle = m/handle srv == 13

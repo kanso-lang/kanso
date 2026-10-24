@@ -1,6 +1,9 @@
 # The document is read a line at a time. `current` is the path of the table
 # the latest header opened, and every key/value pair lands there. `slots` is
 # the flat index table.kso keeps; the tree is built from it at the end.
+fn parse_document _ e@(err _) _ _
+  e
+
 fn parse_document cs p current slots
   q = skip_blank cs p
   line_at_doc cs cs[q] q current slots
@@ -27,10 +30,16 @@ fn line_at_doc cs _ p current slots
   keyed = parse_key cs p
   pair_key cs p keyed current slots
 
+fn pair_key _ _ e@(err _) _ _
+  e
+
 fn pair_key cs start (parsed p names) current slots
   at = expect_equals cs p
   item = parse_value cs at
   pair_value cs start names item current slots
+
+fn pair_value _ _ _ e@(err _) _ _
+  e
 
 fn pair_value cs start names (parsed p v) current slots
   next = line_end cs p
@@ -39,6 +48,15 @@ fn pair_value cs start names (parsed p v) current slots
 
 # Bound in this order so that, when both fail, the failure further up the line
 # is the one reported: a call keeps its first failing argument.
+fn resume _ _ e@(err _) (err _)
+  e
+
+fn resume _ _ e@(err _) _
+  e
+
+fn resume _ _ _ e@(err _)
+  e
+
 fn resume cs current slots p
   parse_document cs p current slots
 
@@ -47,13 +65,15 @@ fn header_line cs p slots mode
   keyed = parse_key cs start
   header_names cs start keyed slots mode
 
+fn header_names _ _ e@(err _) _ _
+  e
+
 fn header_names cs start (parsed p names) slots mode
   q = skip_blank cs p
   closed_at = header_close cs q mode
-  target = header_path slots [] names 1 start mode
   next = line_end cs closed_at
-  grown = open_header slots target mode
-  resume cs target grown next
+  header_path slots [] names 1 start mode
+    .> (target -> resume cs target (open_header slots target mode) next)
 
 fn header_close cs p array_header
   return p + 2 if cs[p] == 93 and cs[p + 1] == 93

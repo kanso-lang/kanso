@@ -1,0 +1,8 @@
+fn shout s
+  "{s}!"
+
+fn loud names i acc
+  return acc if i > length names
+  loud names (i + 1) "{acc}{shout names[i]}"
+
+print (loud ["a" "b"] 1 "")

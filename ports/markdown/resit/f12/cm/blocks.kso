@@ -1,0 +1,180 @@
+import "std/list"
+import "std/text"
+
+type marked
+  c
+  m
+
+type opened
+  line
+
+type line_ctx
+  closed
+  cur
+  depth
+  st
+
+type passed_over
+  line
+
+type unmatched
+
+type walked
+  c
+  depth
+  done
+  st
+
+fn add_text st f c
+  return text_into st f c if accepts_lines? f.kind
+  return st if blank? c
+  add_line (add_child st para) (advance_to c (nonspace c).at)
+
+fn after_marker c
+  if (space_or_tab? (peek c)) (advance_cols c 1) c
+
+fn close_down st depth end
+  if (length st.stack > depth) (close_down (close_top st end) depth end) st
+
+fn close_top st end
+  f = top st
+  finish (state st.line st.refs (pop st.stack)) f end f.kind
+
+fn close_unmatched x
+  if x.closed x.st (close_down x.st x.depth (x.st.line - 1))
+
+fn container x
+  if x.closed (top x.st) x.st.stack[x.depth]
+
+fn continues (item m) f c has_child
+  return item_blank f c has_child if blank? c
+  need = m.offset + m.padding
+  if (indent c >= need) (advance_cols c need) unmatched
+
+fn continues (listing _ _) _ c _
+  c
+
+fn continues para _ c _
+  if (blank? c) unmatched c
+
+fn finish st f end kind
+  attach st (frame f.children end kind f.lines f.start)
+
+fn finish_line x
+  st = close_unmatched x
+  add_text st (top st) x.cur
+
+fn indented? x g
+  g.col - x.cur.col >= 4
+
+fn item_blank f c has_child
+  empty = length f.children == 0 and not has_child
+  if empty unmatched (advance_to c (nonspace c).at)
+
+fn item_opened x _ none
+  passed_over x
+
+fn item_opened x _ (marked m c)
+  st = close_unmatched x
+  wrapped = if (same_list? (top st).kind m) st (add_child st (listing m true))
+  opened (line_ctx true c 0 (add_child wrapped (item m)))
+
+fn item_start x
+  g = nonspace x.cur
+  cf = container x
+  item_opened x cf (list_marker x g (para? cf.kind))
+
+fn list_marker x g in_para
+  c = x.cur.chars[g.at]
+  bullet = c == "*" or c == "+" or c == "-"
+  return ordered_marker x g in_para if not bullet
+  marker_tail x g in_para 1 c "" false 0
+
+fn marker_tail x g in_para len bullet ender ordered start
+  cs = x.cur.chars
+  return none if in_para and rest_blank? cs (g.at + len)
+  c1 = advance_cols (advance_to x.cur g.at) len
+  c2 = spaces_after c1 (advance_cols c1 1)
+  n = c2.col - c1.col
+  narrow = n >= 5 or n < 1 or peek c2 == none
+  padding = if narrow (len + 1) (len + n)
+  c = if narrow (after_marker c1) c2
+  marked (mark bullet ender (g.col - x.cur.col) ordered padding start) c
+
+fn open_starts x
+  cf = container x
+  return finish_line x if leaf? cf.kind
+  g = nonspace x.cur
+  ordinary = not indented? x g and not special? x.cur.chars[g.at]
+  return finish_line (to_nonspace x) if ordinary
+  started x 1 (item_start x)
+
+fn ordered_marker x g in_para
+  cs = x.cur.chars
+  d = digit_run cs g.at 0
+  ender = cs[g.at + d]
+  ok = 1 <= d and d <= 9 and (ender == "." or ender == ")")
+  return none if not ok
+  n = 1
+  marker_tail x g in_para (d + 1) "" ender true n
+
+pub fn starts text
+  st = parse_lines text
+  kids = list/map st.stack (f -> "{f.start}")
+  text/join (list/to_list kids) " "
+
+fn parse_lines text
+  lines = split_lines text
+  start = state 0 {} [(frame [] 0 doc [] 1)]
+  list/fold lines start parse_line
+
+fn parse_line st line
+  process_line (state (st.line + 1) st.refs st.stack) (text/chars line)
+
+fn process_line st chars
+  w = walk_open st (caret_of chars) 2
+  open_starts (line_ctx (w.depth == length w.st.stack) w.c w.depth w.st)
+
+fn same_list? (listing lm _) m
+  lm.bullet == m.bullet and lm.delim == m.delim and lm.ordered == m.ordered
+
+fn same_list? _ _
+  false
+
+fn spaces_after start c
+  more = c.col - start.col < 5 and space_or_tab? (peek c)
+  if more (spaces_after start (advance_cols c 1)) c
+
+fn special? none
+  false
+
+fn special? c
+  c == "-" or c == "#" or c == ">"
+
+fn split_lines text
+  ls = text/split text "\n"
+  if (ls[length ls] == "") (pop ls) ls
+
+fn started _ _ (opened x)
+  open_starts x
+
+fn text_into st _ c
+  next = add_line st c
+  next
+
+fn to_nonspace x
+  with_cur x (advance_to x.cur (nonspace x.cur).at)
+
+fn walk_open st c d
+  return walked c (d - 1) false st if d > length st.stack
+  f = st.stack[d]
+  walk_result st c d (continues f.kind f c (d < length st.stack))
+
+fn walk_result st c d unmatched
+  walked c (d - 1) false st
+
+fn walk_result st _ d next
+  walk_open st next (d + 1)
+
+fn with_cur x c
+  line_ctx x.closed c x.depth x.st

@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/moved 1} {m/shift 2}"

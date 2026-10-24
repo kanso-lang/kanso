@@ -1,0 +1,11 @@
+import "std/text"
+
+fn closing ended ""
+  ended
+
+fn closing ended tail
+  push ended tail
+
+pieces = text/split "a\nb" "\n"
+
+print "{closing [] pieces[length pieces]}"

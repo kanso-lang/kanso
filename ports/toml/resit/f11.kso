@@ -1,0 +1,4 @@
+fn floats =
+  1.5
+
+print "{floats}"

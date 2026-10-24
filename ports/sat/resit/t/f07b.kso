@@ -1,0 +1,4 @@
+fn bump m k
+  m[k] + 1
+
+print "{bump { 1:1 } 2}"

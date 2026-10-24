@@ -38,19 +38,21 @@ test_double_dash_ends_flags =
   c = parse ["--" "-v" "a"]
   c.regex == "(?:-v)" and not c.invert
 
-test_unknown_flag = parse ["--nope" "x"] == bad_usage "unrecognized flag --nope"
+test_unknown_flag =
+  why = complaint (parse ["--nope" "x"])
+  why == "unrecognized flag --nope"
 
 test_missing_value =
   why = "missing value for flag -m: missing argument for option '-m'"
-  parse ["x" "-m"] == bad_usage why
+  complaint (parse ["x" "-m"]) == why
 
 test_bad_number =
   why = "value is not a valid number: invalid digit found in string"
-  parse ["-A" "two" "x"] == bad_usage "error parsing flag -A: {why}"
+  complaint (parse ["-A" "two" "x"]) == "error parsing flag -A: {why}"
 
 test_no_pattern_is_refused =
   why = "ripgrep requires at least one pattern to execute a search"
-  parse ["-n"] == bad_usage why
+  complaint (parse ["-n"]) == why
 
 test_files_needs_no_pattern =
   c = parse ["--files" "dir"]
@@ -63,11 +65,17 @@ test_type_globs_collected =
   length c.types == 7
 
 test_unknown_type =
-  refusal = bad_usage "unrecognized file type: nope"
-  parse ["-t" "nope" "x"] == refusal
+  why = "unrecognized file type: nope"
+  complaint (parse ["-t" "nope" "x"]) == why
 
 fn refused? (bad_usage _)
   true
 
 fn refused? _
   false
+
+fn complaint (bad_usage why)
+  why
+
+fn complaint _
+  ""

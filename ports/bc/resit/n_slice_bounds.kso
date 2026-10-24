@@ -1,0 +1,14 @@
+import "std/text"
+
+fn shown none
+  "none"
+
+fn shown s
+  "[{s}]"
+
+a = "{shown (text/slice "a" 2 1)} {shown (text/slice "" 1 0)}"
+b = "{shown (text/slice "" 2 0)} {shown (text/slice "ab" 3 2)}"
+c = "{shown (text/slice "ab" 4 2)} {shown (text/slice "ab" 2 1)}"
+d = "{shown (text/slice "ab" 0 1)} {shown (text/slice "ab" 4 3)}"
+
+print "{a} {b} {c} {d}"

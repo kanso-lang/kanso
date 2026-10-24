@@ -25,7 +25,8 @@ usage_rom = "ROM is a .ch8 binary, a .hex text file, or a .asm source."
 usage_run = "usage: chip8 run ROM [--cycles N] [--per-frame N] [--keys FILE]"
 
 pub fn main argv
-  chosen (or_blank argv[1]) (parsed (text/slice argv 2 (length argv)))
+  given = sliced (text/slice argv 2 (length argv)) []
+  chosen (or_blank argv[1]) (parsed given)
 
 fn chosen _ (usage_error reason)
   failed 2 reason
@@ -92,12 +93,12 @@ fn shown (rejected errors) path _
 fn located errors path
   text/join (list/to_list (list/map errors (e -> "{path}: {e}"))) "\nchip8: "
 
-fn hex_lines bytes
+pub fn hex_lines bytes
   return [] if length bytes == 0
   line = vm/upto bytes 16
-  rest = text/slice bytes 17 (length bytes)
+  rest = sliced (text/slice bytes 17 (length bytes)) []
   first = text/join (list/to_list (list/map line (b -> isa/hex b 2))) " "
-  text/concat [first] (hex_lines rest)
+  list/concat [first] (hex_lines rest)
 
 # dis: one instruction per two bytes, in syntax the assembler reads back,
 # with the address and opcode in a comment.
@@ -107,7 +108,7 @@ fn disassembly (load_failed reason)
 fn disassembly rom
   print (text/join (dis_lines rom 0) "\n")
 
-fn dis_lines rom at
+pub fn dis_lines rom at
   return [] if length rom <= at
   return [(odd_byte rom at)] if length rom == at + 1
   hi = or_zero rom[at + 1]
@@ -115,7 +116,7 @@ fn dis_lines rom at
   addr = isa/hex (512 + at) 3
   code = padded (isa/spell (isa/decode op)) 20
   spelled = "    {code}; {addr}  {isa/hex op 4}"
-  text/concat [spelled] (dis_lines rom (at + 2))
+  list/concat [spelled] (dis_lines rom (at + 2))
 
 fn odd_byte rom at
   b = or_zero rom[at + 1]
@@ -127,7 +128,7 @@ fn or_zero none
 fn or_zero n
   n
 
-fn padded s width
+pub fn padded s width
   return s if width <= length s
   padded "{s} " width
 
@@ -145,7 +146,7 @@ fn loaded_as "hex" path
 fn loaded_as _ path
   os/read_bytes path .> from_binary
 
-fn extension path
+pub fn extension path
   parts = text/split path "."
   or_blank parts[length parts]
 
@@ -164,7 +165,7 @@ fn from_assembly (assembled bytes _) _
 fn from_binary (file_not_found path)
   load_failed "no such file: {path}"
 
-# The interpreter's read_bytes answers a byte string that text/concat
+# The interpreter's read_bytes answers a byte string that list/concat
 # refuses (native code accepts it), so the bytes are copied into a plain list
 # before they meet the machine's memory. See bugs/read_bytes_concat.kso.
 fn from_binary bytes
@@ -203,3 +204,10 @@ fn emulated _ (bad_script reason) opts _
 fn emulated rom events opts cfg
   machine = vm/boot rom opts.seed
   print (text/join (vm/report (vm/run machine cfg events)) "\n")
+
+# A slice that starts past the end answers none; nothing is left.
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of

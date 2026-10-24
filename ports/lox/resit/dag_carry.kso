@@ -1,0 +1,26 @@
+type node
+  left
+  right
+
+type leaf
+
+fn tree 0
+  leaf
+
+fn tree d
+  t = tree (d - 1)
+  node t t
+
+fn size leaf
+  1
+
+fn size (node l _)
+  2 * size l
+
+fn spin 0 t
+  size t
+
+fn spin n t
+  spin (n - 1) (node t.left t.right)
+
+print "{spin 3 (tree 40)}"

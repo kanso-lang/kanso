@@ -1,0 +1,9 @@
+type options
+  cycles
+  files
+  seed
+
+pub fn shown n
+  opts = options n [] 2
+  { cycles files seed } = opts
+  "{cycles} {files} {seed}"

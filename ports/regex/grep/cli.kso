@@ -25,9 +25,9 @@ type progress
 pub fn run argv
   split_at = dashes argv 1
   front = text/slice argv 1 (split_at - 1)
-  back = text/slice argv (split_at + 1) (length argv)
+  back = sliced (text/slice argv (split_at + 1) (length argv)) []
   options = list/to_list (list/select front option?)
-  words = text/concat (list/to_list (list/reject front option?)) back
+  words = list/concat (list/to_list (list/reject front option?)) back
   return usage if list/any? options (o -> not known? o)
   chosen options words
 
@@ -36,13 +36,13 @@ fn dashes argv i
   return i if length argv < i or argv[i] == "--"
   dashes argv (i + 1)
 
-fn option? word
+pub fn option? word
   1 < length word and text/slice word 1 1 == "-"
 
-fn known? o
+pub fn known? o
   list/any? flags (f -> f == o)
 
-flags = text/concat short_flags long_flags
+flags = list/concat short_flags long_flags
 
 long_flags = ["--explain" "--groups" "--scale" "--steps" "--table"]
 
@@ -102,11 +102,18 @@ fn grep options r body
   report options final
 
 # The lines of a file, without the newline that ends the last one.
-fn split_lines body
+pub fn split_lines body
   return [] if body == ""
   parts = text/split body "\n"
   last = parts[length parts]
-  if (last == "") (text/slice parts 1 (length parts - 1)) parts
+  if (last == "") (sliced (text/slice parts 1 (length parts - 1)) []) parts
+
+# A range past the end answers none; here that is nothing left.
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of
 
 fn scanned options r t line
   cps = re/codes line
@@ -118,7 +125,7 @@ fn scanned options r t line
   shown = if picked (rendered options r t.line line cps hits) []
   count = if picked (t.selected + 1) t.selected
   spent = t.steps + re/steps_taken found
-  progress (t.line + 1) (text/concat t.out shown) count spent
+  progress (t.line + 1) (list/concat t.out shown) count spent
 
 fn rendered options r n line cps hits
   prefix = if (has? options "-n") "{n}:" ""
@@ -137,7 +144,7 @@ fn matched_text cps h
 
 # --groups prints each match, then each group under it.
 fn grouped prefix r cps hits
-  list/fold hits [] (acc h -> text/concat acc (group_lines prefix r cps h))
+  list/fold hits [] (acc h -> list/concat acc (group_lines prefix r cps h))
 
 fn group_lines prefix r cps h
   head = "{prefix}{matched_text cps h} [{re/hit_start h}-{re/hit_end h}]"

@@ -1,0 +1,9 @@
+type machine
+  ibase
+  last
+  obase
+  scale
+
+m = machine 10 0 10 0
+
+print "{merge m { "scale":5 }}"

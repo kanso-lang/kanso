@@ -1,0 +1,11 @@
+type trio
+  after
+  data
+  note
+
+fn show r
+  return "neg" if r.after < 0
+  { after data:lens } = r
+  "{after} {lens}"
+
+print (show (trio 1 2 "x"))

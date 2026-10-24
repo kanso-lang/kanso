@@ -1,0 +1,5 @@
+import "std/list"
+
+m = { "a":1 "b":2 }
+
+print "{list/fold (entries m) {} (acc e -> put acc e.key (e.value * 10))}"

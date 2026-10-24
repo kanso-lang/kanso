@@ -1,0 +1,5 @@
+pub fn handle x
+  step x 1 2 3 4
+
+fn step a b c d e
+  a + b + c + d + e

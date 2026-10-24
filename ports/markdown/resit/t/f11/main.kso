@@ -1,0 +1,3 @@
+import "./l"
+
+print "{l/use (l/first [{ "a":1 }]) "a"}"

@@ -1,0 +1,27 @@
+import "std/os"
+
+type ref_value
+  symbolic
+  value
+
+type ref_at
+  name
+  value
+
+fn followed name (file_not_found _)
+  effect (ref_at name (ref_value false none))
+
+fn followed name content
+  effect (ref_at name (ref_value false content))
+
+pub fn get_ref name
+  os/read_file name .> (c -> followed name c)
+
+fn ref_or_next (ref_value _ none) name
+  effect "none {name}"
+
+fn ref_or_next (ref_value _ oid) _
+  effect oid
+
+pub fn first name
+  get_ref name .> (at -> ref_or_next at.value name)

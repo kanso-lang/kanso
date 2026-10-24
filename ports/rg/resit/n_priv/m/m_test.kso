@@ -1,0 +1,1 @@
+test_join = list/concat [1] [2] == both [1] [2]

@@ -22,7 +22,7 @@ pub fn serve_file root rel req
   full = path/join root rel
   os/is_dir full .> (dir -> located full dir req)
 
-fn safe? s
+pub fn safe? s
   not http/starts_with? s "."
 
 fn located full true req
@@ -50,7 +50,7 @@ fn whole_file full tag content
   headers = [kind (http/field "etag" tag)]
   http/respond 200 headers (sized content)
 
-fn sized content
+pub fn sized content
   n = length content
   if (n > chunk_size) (http/chunked (pieces content 1 n [])) content
 
@@ -85,6 +85,10 @@ pub fn content_type "png"
 
 pub fn content_type "ico"
   "image/x-icon"
+
+# std/path's `extension` slices its argument, and a slice can answer none.
+pub fn content_type none
+  "application/octet-stream"
 
 pub fn content_type _
   "application/octet-stream"

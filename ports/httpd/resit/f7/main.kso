@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/handle 3} {m/total [1 2]}"

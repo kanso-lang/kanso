@@ -1,0 +1,11 @@
+type store
+  active
+  dir
+  size
+
+pub fn grown n
+  st = store 1 "db" 0
+  merge st { "size":(st.size + n) }
+
+pub fn shown st
+  "{st.active} {st.dir} {st.size}"

@@ -1,5 +1,12 @@
 import "std/list"
 
+# A failure becomes its reason, so a test can compare it like any value.
+fn surely (err r)
+  "error: {r}"
+
+fn surely v
+  v
+
 fn parsed_all pairs
   list/fold pairs {} with_template
 
@@ -9,7 +16,7 @@ fn with_template m pair
   put m name (parse_template name src)
 
 fn rendered name pairs ctx
-  eng = engine {} {} (parsed_all pairs)
+  eng = engine_of {} {} (parsed_all pairs)
   surely (render eng name ctx)
 
 fn one src ctx

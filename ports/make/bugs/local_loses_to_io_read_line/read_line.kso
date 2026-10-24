@@ -1,0 +1,24 @@
+# A file's own function loses to `io/read_line` on the interpreter only.
+#
+# std/io gained `read_line` on 2026-10-13 (gavel: names for the library gaps
+# the ports hit). This file imports std/io and declares its own two-argument
+# `read_line`, and calls it bare.
+#
+# Run: kanso play read_line.kso
+#      kanso play read_line.kso --interp
+#
+# Should print "1:x" on both engines: a name the author declared wins over an
+# import (log 2026-10-12, "a name the author declared wins over a builtin and
+# an import").
+#
+# Does: native prints "1:x". The interpreter stops with
+#   error[runtime]: `<io>` is not callable
+#     failed in the entry at read_line.kso:24
+# Nothing refuses it before it runs. In the make port this turned 57 of 82
+# fixtures red on the interpreter (update/recipe.kso, `read_line at s`).
+import "std/io"
+
+fn read_line at s
+  "{at}:{s}"
+
+io/write "{read_line 1 "x"}\n"

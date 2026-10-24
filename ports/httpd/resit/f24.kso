@@ -1,0 +1,4 @@
+fn dispatched ["serve"] opts
+  opts
+
+print (dispatched ["serve"] 1)

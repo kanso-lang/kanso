@@ -18,6 +18,6 @@ fn match_codes out len distance
   dbase = deflate/nth deflate/dist_base d
   emit with_dist (distance - dbase) (deflate/nth deflate/dist_extra d)
 
-fn dist_slot distance d
+pub fn dist_slot distance d
   return d if deflate/nth deflate/dist_base d <= distance
   dist_slot distance (d - 1)

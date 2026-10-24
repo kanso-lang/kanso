@@ -2,7 +2,7 @@ fn html_of s
   inlines_html (parse_inlines s {})
 
 fn with_ref s
-  refs = put {} "foo" (ref_def "/url" "title")
+  refs = put {} "foo" (new_ref_def "/url" "title")
   inlines_html (parse_inlines s refs)
 
 test_autolink_email =

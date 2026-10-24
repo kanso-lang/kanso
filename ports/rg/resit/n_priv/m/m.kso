@@ -1,0 +1,4 @@
+import "std/list"
+
+pub fn both a b
+  list/concat a b

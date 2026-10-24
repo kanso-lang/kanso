@@ -1,0 +1,5 @@
+import "std/regexp"
+import "std/text"
+
+print "{text/lowercase "CAFÉ"} {text/uppercase "café"}"
+print (regexp/find "(?i)CAFÉ" "un café")

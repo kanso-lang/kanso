@@ -1,0 +1,9 @@
+type huffman
+  counts
+  symbols
+  total
+
+h = huffman [1] [2] 3
+huffman counts _ _ = h
+
+print "{counts}"

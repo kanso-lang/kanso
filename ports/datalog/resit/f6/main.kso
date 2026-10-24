@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/lexed 1} {m/parsed 1}"

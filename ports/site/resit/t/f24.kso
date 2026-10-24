@@ -1,0 +1,9 @@
+import "std/os"
+
+fn said (os/file_not_found p)
+  "no {p}"
+
+fn said text
+  text
+
+os/read_file "/nonexistent/x" .> (r -> print (said r))

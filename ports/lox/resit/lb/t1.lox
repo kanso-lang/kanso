@@ -1,0 +1,15 @@
+class Tree {
+  init(depth) {
+    if (depth > 0) {
+      this.left = Tree(depth - 1);
+    } else {
+      this.left = nil;
+    }
+  }
+}
+var i = 0;
+while (i < 3) {
+  Tree(2);
+  i = i + 1;
+}
+print "done";

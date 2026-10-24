@@ -1,0 +1,7 @@
+fn moved c
+  cursor (c.pos + 1)
+
+type cursor
+  pos
+
+print "{moved (cursor 1)}"

@@ -41,6 +41,21 @@ type merging
   index
   notes
 
+# Only this module builds a decision; the tests ask for one here.
+pub missing = absent
+
+pub fn ours_of p
+  ours_stand p
+
+pub fn theirs_of oid p
+  theirs_win oid p
+
+pub fn text_merge b o p t
+  both_changed b o p t
+
+pub fn conflict_of o p t
+  modify_delete o p t
+
 fn merge_cmd args
   words = words_of (parsed args [])
   return misuse "merge <commit>" if length words != 1
@@ -85,7 +100,7 @@ fn three_way v rev other bf of
 fn decision p bf hf of
   decided p (known bf[p]) (known hf[p]) (known of[p])
 
-fn decided p b h o
+pub fn decided p b h o
   return ours_stand p if h == o or b == o
   return theirs_win o p if b == h
   return modify_delete h p o if h == absent or o == absent

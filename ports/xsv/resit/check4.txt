@@ -1,0 +1,100 @@
+error[exhaustive]: this can be a none and `list/concat` has no arm for it — resolve it here, or give `list/concat` a `none` arm (in args.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/args.kso:28:33
+  28 |   opts given (list/concat rest (text/slice argv (i + 1) (length argv)))
+                                       ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in args.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/args.kso:43:25
+  43 |   attached = text/join (text/slice parts 2 (length parts)) "="
+                               ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in args.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/args.kso:85:21
+  85 |   tail = text/join (text/slice cs (j + 1) (length cs)) ""
+                           ^
+error[exhaustive]: this can be a none and `launch` has no arm for it — resolve it here, or give `launch` a `none` arm (in cli.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/cli.kso:27:19
+  27 |   launch argv[1] (text/slice argv 2 (length argv))
+                         ^
+error[exhaustive]: this can be a none and `headed` has no arm for it — resolve it here, or give `headed` a `none` arm (in cli.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/cli.kso:149:29
+ 149 |   headed (list/first rows) (text/slice rows 2 (length rows))
+                                   ^
+error[exhaustive]: this can be a none and `one_input` has no arm for it — resolve it here, or give `one_input` a `none` arm (in cli.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/cli.kso:226:14
+ 226 |   one_input (text/slice rest 2 (length rest))
+                    ^
+error[exhaustive]: this can be a none and `trailing_zeros_dropped` has no arm for it — resolve it here, or give `trailing_zeros_dropped` a `none` arm (in floats.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/floats.kso:45:27
+  45 |   trailing_zeros_dropped (text/slice s 1 (n - 1))
+                                 ^
+error[exhaustive]: this can be an err and `frequencies` has no arm for it — dispatch on it here, or give `frequencies` an `(err _)` arm (in frequency.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/frequency.kso:42:44
+  42 |   unless_failed bad (_ -> frequencies o sh picked limit)
+                                                  ^
+error[exhaustive]: this can be an err and `frequencies` has no arm for it — dispatch on it here, or give `frequencies` an `(err _)` arm (in frequency.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/frequency.kso:42:51
+  42 |   unless_failed bad (_ -> frequencies o sh picked limit)
+                                                         ^
+error[exhaustive]: this can be a none and `list/map` has no arm for it — resolve it here, or give `list/map` a `none` arm (in join.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/join.kso:185:27
+ 185 |   list/to_list (list/map (text/slice ordered r.first r.last) (t -> t.spot))
+                                 ^
+error[exhaustive]: this can be a none and `sorted_by` has no arm for it — resolve it here, or give `sorted_by` a `none` arm (in order.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/order.kso:22:22
+  22 |   right = sorted_by (text/slice xs (half + 1) n) cmp
+                            ^
+error[exhaustive]: this can be a none and `sorted_by` has no arm for it — resolve it here, or give `sorted_by` a `none` arm (in order.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/order.kso:21:21
+  21 |   left = sorted_by (text/slice xs 1 half) cmp
+                           ^
+error[exhaustive]: this can be a none and `list/concat` has no arm for it — resolve it here, or give `list/concat` a `none` arm (in order.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/order.kso:27:27
+  27 |   return list/concat out (text/slice left i (length left)) if j > length right
+                                 ^
+error[exhaustive]: this can be a none and `list/concat` has no arm for it — resolve it here, or give `list/concat` a `none` arm (in order.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/order.kso:26:27
+  26 |   return list/concat out (text/slice right j (length right)) if i > length left
+                                 ^
+error[exhaustive]: this can be an err and `searched` has no arm for it — dispatch on it here, or give `searched` an `(err _)` arm (in search.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/search.kso:35:49
+  35 |   unless_failed bad (_ -> searched o sh pattern picked)
+                                                       ^
+error[exhaustive]: this can be an err and `after_selector` has no arm for it — dispatch on it here, or give `after_selector` an `(err _)` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:48:21
+  48 |   after_selector cs r items built cs[r.next]
+                           ^
+error[exhaustive]: this can be an err and `ranged` has no arm for it — dispatch on it here, or give `ranged` an `(err _)` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:62:13
+  62 |   ranged cs first cs[first.next]
+                   ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:88:21
+  88 |   name = text/join (text/slice cs (p + 1) (close - 1)) ""
+                           ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:93:21
+  93 |   word = text/join (text/slice cs p (stop - 1)) ""
+                           ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:144:22
+ 144 |   inner = text/join (text/slice cs (p + 1) (close - 1)) ""
+                            ^
+error[exhaustive]: this can be an err and `stepped` has no arm for it — dispatch on it here, or give `stepped` an `(err _)` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:199:11
+ 199 |   stepped from to
+                 ^
+error[exhaustive]: this can be an err and `stepped` has no arm for it — dispatch on it here, or give `stepped` an `(err _)` arm (in selection.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/selection.kso:199:16
+ 199 |   stepped from to
+                      ^
+error[exhaustive]: this can be an err and `laid` has no arm for it — dispatch on it here, or give `laid` an `(err _)` arm (in table.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/table.kso:38:37
+  38 |   unless_failed bad (_ -> laid rows least gap limit)
+                                           ^
+error[exhaustive]: this can be an err and `laid` has no arm for it — dispatch on it here, or give `laid` an `(err _)` arm (in table.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/table.kso:38:43
+  38 |   unless_failed bad (_ -> laid rows least gap limit)
+                                                 ^
+error[exhaustive]: this can be an err and `laid` has no arm for it — dispatch on it here, or give `laid` an `(err _)` arm (in table.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/table.kso:38:47
+  38 |   unless_failed bad (_ -> laid rows least gap limit)
+                                                     ^

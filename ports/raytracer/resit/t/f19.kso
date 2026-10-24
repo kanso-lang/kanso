@@ -1,0 +1,7 @@
+fn sky r
+  r * 2
+
+test_sky_is_white_at_the_horizon =
+  sky 0.375 == 0.75
+
+print "{test_sky_is_white_at_the_horizon}"

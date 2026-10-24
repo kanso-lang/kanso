@@ -23,15 +23,15 @@ pub fn capitalize ""
   ""
 
 pub fn capitalize s
-  "{upper (text/slice s 1 1)}{lower (text/slice s 2 (length s))}"
+  "{upper (clamped s 1 1)}{lower (clamped s 2 (length s))}"
 
 pub fn starts_with? s prefix
-  text/slice s 1 (length prefix) == prefix
+  clamped s 1 (length prefix) == prefix
 
 pub fn ends_with? s suffix
   n = length s
   m = length suffix
-  m <= n and text/slice s (n - m + 1) n == suffix
+  m <= n and clamped s (n - m + 1) n == suffix
 
 pub fn digit? none
   false
@@ -45,7 +45,7 @@ pub fn letter? none
 
 pub fn letter? c
   code = text/char_code c
-  64 < code and code < 91 or 96 < code and code < 123
+  (64 < code and code < 91) or (96 < code and code < 123)
 
 pub fn alnum? none
   false
@@ -66,7 +66,7 @@ pub fn index_of s needle from
 
 pub fn find_at cs ns p last
   return none if p > last
-  if (text/slice cs p (p + length ns - 1) == ns) p (find_at cs ns (p + 1) last)
+  if (clamped cs p (p + length ns - 1) == ns) p (find_at cs ns (p + 1) last)
 
 pub fn contains? s needle
   index_of s needle 1 != none
@@ -84,18 +84,18 @@ pub fn replace s from to
   text/join (swap cs fs to 1 (length cs - length fs + 1) []) ""
 
 fn swap cs fs to p last acc
-  return text/concat acc (text/slice cs p (length cs)) if p > last
-  hit = text/slice cs p (p + length fs - 1) == fs
+  return list/concat acc (clamped cs p (length cs)) if p > last
+  hit = clamped cs p (p + length fs - 1) == fs
   return swap cs fs to (p + length fs) last (push acc to) if hit
   swap cs fs to (p + 1) last (push acc cs[p])
 
 pub fn trim_start s
   cs = text/chars s
-  text/join (text/slice cs (first_solid cs 1) (length cs)) ""
+  text/join (clamped cs (first_solid cs 1) (length cs)) ""
 
 pub fn trim_end s
   cs = text/chars s
-  text/join (text/slice cs 1 (last_solid cs (length cs))) ""
+  text/join (clamped cs 1 (last_solid cs (length cs))) ""
 
 fn first_solid cs p
   if (p <= length cs and space? cs[p]) (first_solid cs (p + 1)) p
@@ -200,8 +200,8 @@ fn halves xs lo hi goes_first?
   meld left right 1 1 goes_first? []
 
 fn meld left right i j goes_first? acc
-  return text/concat acc (text/slice right j (length right)) if i > length left
-  return text/concat acc (text/slice left i (length left)) if j > length right
+  return list/concat acc (clamped right j (length right)) if i > length left
+  return list/concat acc (clamped left i (length left)) if j > length right
   r = right[j]
   l = left[i]
   meld_pick left right i j goes_first? acc (goes_first? r l)
@@ -212,8 +212,21 @@ fn meld_pick left right i j goes_first? acc true
 fn meld_pick left right i j goes_first? acc false
   meld left right (i + 1) j goes_first? (push acc left[i])
 
-# `text/slice` answers nothing at all when `to` runs past the end; this
-# clamps `to` first, the way most languages slice.
+# `text/slice` with `to` clamped to the end, the way most languages slice.
+# Since #1890 `text/slice` answers none for a range past the end, so every
+# slice in the port comes here and none of them can answer none.
 pub fn clamped xs from to
-  n = length xs
-  text/slice xs from (if (to > n) n to)
+  stop = if (to < length xs) to (length xs)
+  clip_or_empty (text/slice xs from stop) xs
+
+fn clip_or_empty none xs
+  empty_like xs
+
+fn clip_or_empty part _
+  part
+
+fn empty_like _:string
+  ""
+
+fn empty_like _
+  []

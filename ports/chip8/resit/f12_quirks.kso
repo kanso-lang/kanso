@@ -1,0 +1,10 @@
+type quirks
+  a
+
+type config
+  quirks
+
+fn shown (config quirks)
+  "{quirks}"
+
+print (shown (config 1))

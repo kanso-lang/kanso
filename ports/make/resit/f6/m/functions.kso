@@ -1,0 +1,5 @@
+pub fn other x
+  piece x
+
+fn piece x
+  x

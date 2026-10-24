@@ -1,0 +1,5 @@
+import "std/list"
+
+rows = []
+
+print "{length (list/first rows)}"

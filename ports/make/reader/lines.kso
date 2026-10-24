@@ -48,7 +48,7 @@ fn odd_run? line i n
   if (text/slice line i i == "\\") (odd_run? line (i - 1) (n + 1)) (n % 2 == 1)
 
 fn chop line
-  text/slice line 1 (length line - 1)
+  sub_text line 1 (length line - 1)
 
 fn line_of lines i
   given lines[i]
@@ -104,7 +104,7 @@ pub fn classify s
   hash = hash_at s 1
   inline = semi > 0 and (hash == 0 or semi < hash)
   head = if inline (text/slice s 1 (semi - 1)) (uncommented s)
-  classified head (assigned head) inline (text/slice s (semi + 1) (length s)) s
+  classified head (assigned head) inline (sub_text s (semi + 1) (length s)) s
 
 fn classified head unassigned true recipe _
   rule_line head recipe
@@ -134,8 +134,8 @@ pub fn assigned s
   in_rule = colon > 0 and colon < eq and not operator_colon? s colon eq
   return unassigned if in_rule
   op_start = operator_start s eq
-  name = words/squeeze (text/slice s 1 (op_start - 1))
-  value = words/trim_left (text/slice s (eq + 1) (length s))
+  name = words/squeeze (sub_text s 1 (op_start - 1))
+  value = words/trim_left (sub_text s (eq + 1) (length s))
   assignment name (text/slice s op_start eq) value
 
 fn operator_colon? s colon eq
@@ -153,14 +153,14 @@ fn colon_start s at
 
 pub fn split_rule expanded
   colon = words/find expanded ":" 1
-  targets = words/split_words (text/slice expanded 1 (colon - 1))
+  targets = words/split_words (sub_text expanded 1 (colon - 1))
   after = text/slice expanded (colon + 1) (length expanded)
   double = text/slice after 1 1 == ":"
   rest = if double (text/slice after 2 (length after)) after
   second = words/find rest ":" 1
   return parted targets "" rest if second == 0
-  pattern = words/squeeze (text/slice rest 1 (second - 1))
-  parted targets pattern (text/slice rest (second + 1) (length rest))
+  pattern = words/squeeze (sub_text rest 1 (second - 1))
+  parted targets pattern (sub_text rest (second + 1) (length rest))
 
 fn parted targets static rest
   bar = words/find rest "|" 1
@@ -174,14 +174,14 @@ fn parted targets static rest
 pub fn directive s
   word = words/first_word s
   return "" if not directive_word? word
-  rest = words/trim_left (text/slice s (length word + 1) (length s))
+  rest = words/trim_left (sub_text s (length word + 1) (length s))
   op = list/any? operators (o -> words/starts_with? rest o)
   if op "" word
 
 fn directive_word? w
   list/any? directives (d -> d == w)
 
-directives = text/concat conditionals (text/concat others refused)
+directives = list/concat conditionals (list/concat others refused)
 
 conditionals = ["else" "endif" "ifdef" "ifeq" "ifndef" "ifneq"]
 
@@ -194,4 +194,9 @@ refused = ["define" "endef" "vpath"]
 operators = ["=" ":=" "::=" "+=" "?=" "!="]
 
 pub fn after_word s word
-  words/trim_left (text/slice (words/trim_left s) (length word + 1) (length s))
+  words/trim_left (sub_text (words/trim_left s) (length word + 1) (length s))
+
+# A slice past the end answers none (gavel 2026-10-13). Every range the
+# reader cuts ends at or before the end of its text, so none means no text.
+fn sub_text s from to
+  words/or_blank (text/slice s from to)

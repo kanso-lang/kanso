@@ -54,7 +54,7 @@ fn finished (emitting _ bytes errors listing)
 # in key order.
 fn in_line_order errors
   by_line = list/group_by errors (e -> e.line)
-  told = list/map (list/fold (values by_line) [] text/concat) said
+  told = list/map (list/fold (values by_line) [] list/concat) said
   list/to_list told
 
 fn said (asm_error line reason)
@@ -106,27 +106,27 @@ fn named acc label addr n
   labelling next errors (put labels label addr)
 
 fn label_name? label
-  first = text/char_code (text/slice label 1 1)
-  65 <= first and first <= 90 or 97 <= first and first <= 122 or first == 95
+  first = text/char_code (sliced (text/slice label 1 1) "")
+  (65 <= first and first <= 90) or (97 <= first and first <= 122) or first == 95
 
 # How many bytes a statement assembles to. The sizes do not depend on any
 # label, so pass one can count them before the labels are known.
-fn size_of "" _
+pub fn size_of "" _
   0
 
-fn size_of "DB" operands
+pub fn size_of "DB" operands
   length operands
 
-fn size_of "DS" operands
+pub fn size_of "DS" operands
   reserved operands
 
-fn size_of "EQU" _
+pub fn size_of "EQU" _
   0
 
-fn size_of "DW" operands
+pub fn size_of "DW" operands
   2 * length operands
 
-fn size_of _ _
+pub fn size_of _ _
   2
 
 fn reserved operands
@@ -181,7 +181,7 @@ fn sized n limit _
 fn checked_all items width
   bad = list/find items trouble?
   return bad if bad != none
-  list/fold items [] (acc v -> text/concat acc (as_bytes v width))
+  list/fold items [] (acc v -> list/concat acc (as_bytes v width))
 
 fn as_bytes v 1
   [v]
@@ -201,7 +201,7 @@ fn recorded (emitting addr bytes errors listing) line (trouble reason)
 fn recorded (emitting addr bytes errors listing) line output
   row = listing_line addr output line.text
   next = addr + length output
-  emitting next (text/concat bytes output) errors (push listing row)
+  emitting next (list/concat bytes output) errors (push listing row)
 
 fn listing_line addr output text
   shown = text/join (list/to_list (list/map output (b -> isa/hex b 2))) ""

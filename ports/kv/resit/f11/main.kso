@@ -1,0 +1,3 @@
+import "./m"
+
+print "{length (m/live_keys {"a":1 "b":2})}"

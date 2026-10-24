@@ -1,0 +1,5 @@
+pending = """
+You have not concluded your merge (MERGE_HEAD exists).
+"""
+
+print pending

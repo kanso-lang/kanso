@@ -1,0 +1,23 @@
+type link
+  rest
+  value
+
+type stop
+
+fn run_from i d w
+  return w if 2 < i
+  run_from (i + 1) d (exec d w)
+
+fn exec 0 w
+  link w 0
+
+fn exec d w
+  run_from 1 (d - 1) (exec 0 w)
+
+fn count stop n
+  n
+
+fn count (link rest _) n
+  count rest (n + 1)
+
+print "{count (run_from 1 DEPTH stop) 0}"

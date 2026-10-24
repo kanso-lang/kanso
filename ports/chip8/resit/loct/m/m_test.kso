@@ -1,0 +1,12 @@
+import "std/list"
+import "std/text"
+
+xs = [1 2 3]
+
+test_positive = list/all? xs (n -> n > 0)
+
+test_parts = list/all? ["ab" "cd"] parts?
+
+fn parts? s
+  rest = text/slice s 5 (length s)
+  length (text/split rest ", ") > ident 0

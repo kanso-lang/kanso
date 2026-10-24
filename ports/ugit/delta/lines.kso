@@ -9,7 +9,7 @@ pub fn lines_of ""
 
 pub fn lines_of content
   pieces = text/split content "\n"
-  ended = text/slice pieces 1 (length pieces - 1)
+  ended = sliced (text/slice pieces 1 (length pieces - 1))
     . list/map (p -> "{p}\n")
     . list/to_list
   closing ended pieces[length pieces]
@@ -23,6 +23,14 @@ fn closing ended none
 
 fn closing ended tail
   push ended tail
+
+# A slice whose range the code just bounded is never none; the none arm is
+# there because the checker cannot see that.
+fn sliced none
+  []
+
+fn sliced xs
+  xs
 
 # The other direction: lines back into the text of a file.
 pub fn unlines xs

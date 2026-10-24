@@ -1,3 +1,4 @@
+import "std/list"
 import "std/text"
 
 # Everything a running bc program can change, threaded through every step:
@@ -77,7 +78,7 @@ pub fn slot_set xs i v blank
   return push (pad_to xs (i - 1) blank) v if length xs < i
   before = text/slice xs 1 (i - 1)
   after = text/slice xs (i + 1) (length xs)
-  text/concat (push before v) after
+  list/concat (push before v) after
 
 fn pad_to xs n blank
   return xs if n <= length xs

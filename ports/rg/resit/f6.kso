@@ -1,0 +1,3 @@
+m = { "globs":[] "invert":true }
+
+print (m["invert"] == true)

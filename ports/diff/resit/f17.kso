@@ -1,0 +1,14 @@
+fn verb 0 _
+  "a"
+
+fn verb _ 0
+  "d"
+
+fn verb _ _
+  "c"
+
+fn spacing _
+  "other"
+
+m = { "x":1 }
+print "{verb 0 2} {verb 2 0} {verb 1 1} {spacing m["y"]}"

@@ -18,7 +18,7 @@ pub type logged
 pub fn put_commit c
   put_object "commit" (commit_text c)
 
-fn commit_text (commit author message parents time tree)
+pub fn commit_text (commit author message parents time tree)
   lines = list/map parents (p -> "parent {p}\n")
   parent_lines = text/join (list/to_list lines) ""
   "tree {tree}\n{parent_lines}author {author} {time} +0000\n\n{message}\n"
@@ -31,13 +31,13 @@ pub fn parsed_commit content
   pieces = text/split content "\n\n"
   top = pieces[1]
   header = text/split top "\n"
-  body = text/join (text/slice pieces 2 (length pieces)) "\n\n"
+  body = text/join (sliced (text/slice pieces 2 (length pieces))) "\n\n"
   blank = commit "" (without_newline body) [] 0 ""
   list/fold header blank header_line
 
 fn header_line c line
   words = text/split line " "
-  rest = text/join (text/slice words 2 (length words)) " "
+  rest = text/join (sliced (text/slice words 2 (length words))) " "
   key = words[1]
   with_field c key rest
 
@@ -50,7 +50,7 @@ fn with_field (commit a m ps t tree) "parent" oid
 fn with_field (commit _ m ps _ tree) "author" rest
   words = text/split rest " "
   n = length words
-  who = text/join (text/slice words 1 (n - 2)) " "
+  who = text/join (sliced (text/slice words 1 (n - 2))) " "
   seconds = words[n - 1]
   commit who m ps (text/to_int seconds) tree
 
@@ -78,9 +78,9 @@ fn walking queue seen acc
   get_commit oid .> (c -> visited c oid rest seen acc)
 
 fn visited c oid rest seen acc
-  firsts = text/slice c.parents 1 1
-  others = text/slice c.parents 2 (length c.parents)
-  queue = text/concat (text/concat firsts rest) others
+  firsts = sliced (text/slice c.parents 1 1)
+  others = sliced (text/slice c.parents 2 (length c.parents))
+  queue = list/concat (list/concat firsts rest) others
   walking queue (put seen oid true) (push acc (logged c oid))
 
 # The nearest commit both `a` and `b` descend from, or none.

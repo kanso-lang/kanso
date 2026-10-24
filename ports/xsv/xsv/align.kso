@@ -4,7 +4,7 @@ import "std/text"
 # Elastic tabstops, as the Rust tabwriter crate lays them out: every column
 # but the last is padded to its widest cell plus `pad`, and never narrower
 # than `least`. The last cell of a line is written as it is.
-fn aligned rows least pad
+pub fn aligned rows least pad
   widths = column_widths rows least pad
   lines = list/map rows (r -> aligned_line r widths)
   text/join (list/to_list lines) ""

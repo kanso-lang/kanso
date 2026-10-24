@@ -1,0 +1,5 @@
+pub fn other xs
+  given xs[1] 9
+
+fn more n
+  n + 1

@@ -1,0 +1,3 @@
+pub fn shift x
+  moved = x * 2
+  moved + 1

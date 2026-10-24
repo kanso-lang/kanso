@@ -1,0 +1,6 @@
+import "std/bits"
+
+fn flip code acc
+  bits/shl acc 1 | (code & 1)
+
+print "{flip 6 3}"

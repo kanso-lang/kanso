@@ -1,0 +1,22 @@
+type machine
+  state
+
+fn deep 0
+  err "too deep"
+
+fn deep n
+  machine n
+
+fn middle n
+  step (deep n)
+
+fn step (machine s)
+  machine (s + 1)
+
+fn step e@(err _)
+  e
+
+fn settle (machine s)
+  "done {s}"
+
+print (settle (middle 3))

@@ -1,5 +1,5 @@
 import "../csv"
-import "std/text"
+import "std/list"
 
 # A half-open range [start, end) of 0-based record positions.
 type range
@@ -9,7 +9,7 @@ type range
 fn flags_of "slice"
   own = [(flag "--end" "-e" true) (flag "--index" "-i" true)]
   more = [(flag "--len" "-l" true) (flag "--start" "-s" true)]
-  flags_with (text/concat own more)
+  flags_with (list/concat own more)
 
 fn usage_of "slice"
   ["Returns the rows in the range specified (starting at 0, half-open"]

@@ -1,0 +1,6 @@
+import "std/text"
+
+s = "--select"
+padded = "[{text/pad_start "ab" 5 " "}] [{text/pad_end "ab" 5 "."}]"
+
+print "{text/starts_with? s "--"} {padded} {text/lowercase "KEY"}"

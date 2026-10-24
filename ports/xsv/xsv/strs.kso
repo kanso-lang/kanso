@@ -2,12 +2,12 @@ import "std/list"
 import "std/text"
 
 # Small string helpers std/text does not carry.
-fn prefix? s p
+pub fn prefix? s p
   text/slice s 1 (length p) == p
 
 # ASCII only. Folding through bytes and text/utf8 would read cleaner, but
 # utf8 can answer an err, and then so could every key built from this.
-fn lower s
+pub fn lower s
   text/join (list/to_list (list/map (text/chars s) lowered)) ""
 
 fn lowered c
@@ -61,7 +61,21 @@ fn or_empty s
 # text/slice answers an empty result when either bound falls outside the
 # list, so a slice that asks for "up to the tenth" of three items gets none
 # of them. This one clamps the bounds first, the way Python and Rust do.
-fn clamped xs from to
+pub fn clamped xs from to
   lo = if (from < 1) 1 from
   hi = if (to > length xs) (length xs) to
   text/slice xs lo hi
+
+# A slice whose range the code has just bounded is never none; the none arms
+# are there because the checker cannot see that.
+fn some_slice none
+  []
+
+fn some_slice xs
+  xs
+
+fn some_text none
+  ""
+
+fn some_text s
+  s

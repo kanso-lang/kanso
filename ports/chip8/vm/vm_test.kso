@@ -6,7 +6,7 @@ import "std/text"
 # and reads the machine afterwards. kanso has no hex literals, so the
 # programs are strings: "60 05" is LD V0, #05.
 fn ran program cycles q
-  cfg = config cycles 10 q false
+  cfg = configured cycles 10 q false
   (run (boot (isa/hex_table program) 1) cfg []).session.machine
 
 fn vip_run program cycles
@@ -19,13 +19,7 @@ fn status_of program cycles
   (run (boot (isa/hex_table program) 1) (vip_cfg cycles) []).status
 
 fn vip_cfg cycles
-  config cycles 10 vip false
-
-# profile answers none for an unknown name, and a call that can answer none
-# may not be passed straight to `ran`; a name bound to it may.
-vip = profile "vip"
-
-modern = profile "modern"
+  configured cycles 10 vip false
 
 fn reg_after program cycles x
   reg (vip_run program cycles).v x
@@ -138,7 +132,7 @@ test_limit_stops = status_of "70 01 12 00" 7 == "ran 7 cycles"
 test_wait_key_waits = (vip_run "F3 0A" 5).pc == 512
 
 fn keyed_run program cycles script
-  cfg = config cycles 10 vip false
+  cfg = configured cycles 10 vip false
   start = boot (isa/hex_table program) 1
   (run start cfg (script_events script)).session.machine
 
@@ -156,19 +150,19 @@ test_skip_key_not_held = reg (keyed_run skip_program 4 "").v 2 == 1
 
 sorted_script = script_events "5 down 1\n2 tap 3"
 
-tap_down = key_event true 2 3
+event_fields = list/map sorted_script (e -> [e.down e.frame e.key])
 
-tap_up = key_event false 4 3
+test_script_sorted =
+  wanted = [[true 2 3] [false 4 3] [true 5 1]]
+  list/to_list event_fields == wanted
 
-test_script_sorted = sorted_script == [tap_down tap_up (key_event true 5 1)]
+bad_action = "line 1: unknown action `press`"
 
-bad_action = bad_script "line 1: unknown action `press`"
+test_script_bad_action = (script_events "1 press 3").reason == bad_action
 
-test_script_bad_action = script_events "1 press 3" == bad_action
+bad_key = "line 2: a key is one hex digit, 0 to F"
 
-bad_key = bad_script "line 2: a key is one hex digit, 0 to F"
-
-test_script_bad_key = script_events "# keys\n1 down 10" == bad_key
+test_script_bad_key = (script_events "# keys\n1 down 10").reason == bad_key
 
 test_put_at = put_at [1 2 3] 1 9 == [1 9 3]
 

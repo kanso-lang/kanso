@@ -1,0 +1,11 @@
+import "std/io"
+
+fn known? s
+  s == "a"
+
+fn go s
+  odd = not (known? s)
+  return io/write "empty\n" if length s < 1
+  io/write "{s} {odd}\n"
+
+go "hey!"

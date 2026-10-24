@@ -1,0 +1,5 @@
+pub fn other a
+  emit a 2
+
+fn emit n acc
+  n + acc

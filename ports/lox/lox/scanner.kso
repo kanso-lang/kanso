@@ -108,7 +108,7 @@ fn advance c n
   lexer c.cs c.errors c.line (c.p + n) c.source c.tokens
 
 fn alpha? ch
-  "a" <= ch and ch <= "z" or "A" <= ch and ch <= "Z" or ch == "_"
+  ("a" <= ch and ch <= "z") or ("A" <= ch and ch <= "Z") or ch == "_"
 
 fn alnum? none
   false
@@ -196,7 +196,7 @@ fn string_from c q
 # time in proportion to the whole source on the interpreter, which made the
 # scanner quadratic there (FRICTION F31); slicing the character list does not.
 fn source_text c from to
-  text/join (text/slice c.cs from to) ""
+  text/join (sliced (text/slice c.cs from to) []) ""
 
 fn two c op
   lex (emit c op op op 2)

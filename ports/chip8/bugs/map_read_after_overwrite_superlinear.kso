@@ -1,0 +1,40 @@
+# Native only. A map of 16 keys, held in a record and threaded through a
+# tail-recursive loop; each lap reads one key and overwrites another. The
+# map never holds more than 16 keys.
+#
+# Should: cost the same per lap at any lap count, as the interpreter does
+# (8,000 laps: 0.1 s with --interp).
+# Does, with `kanso play` on this file:
+#   2,000 laps  0.33 s
+#   4,000 laps  0.63 s
+#   8,000 laps  2.4 s
+# The same loop without the read (only `put`) takes 0.1 s at 8,000 laps, so
+# the read after an overwrite is what grows. The lox port's journal (F4)
+# described native `put` as an append-only log sorted on the next read; the
+# write-only case is fixed, and this is the read-after-write case. The chip8
+# port's map-as-memory benchmark (scratch/perf_map, 16,000 steps) takes
+# 13.7 s natively against 1.6 s on the interpreter.
+import "std/list"
+
+type machine
+  memory
+  pc
+
+fn boot size
+  pairs = list/map (list/take list/naturals size) (n -> [n 0])
+  machine (list/to_h (list/to_list pairs)) 1
+
+fn run m 0
+  m.memory[1]
+
+fn run m n
+  seen = or_zero m.memory[(m.pc * 7) % 16 + 1]
+  run (machine (put m.memory m.pc (n + seen)) (m.pc % 16 + 1)) (n - 1)
+
+fn or_zero none
+  0
+
+fn or_zero x
+  x
+
+print "{run (boot 16) 8000}"

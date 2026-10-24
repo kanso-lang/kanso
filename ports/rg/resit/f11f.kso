@@ -1,0 +1,6 @@
+fn count names i n
+  return n if i > length names
+  more = if (names[i] == "*") 1 0
+  count names (i + 1) (n + more)
+
+print (count ["a" "*" "b"] 1 0)

@@ -1,0 +1,14 @@
+pub type hit
+  end
+  start
+
+pub type syntax_error
+  at
+  code
+  text
+
+pub fn compile "("
+  err (syntax_error 3 "missing )" "(")
+
+pub fn compile _
+  hit 0 2

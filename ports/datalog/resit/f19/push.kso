@@ -1,0 +1,8 @@
+type rel
+  tuples
+
+fn grow r n
+  return r if n == 0
+  grow (rel (push r.tuples n)) (n - 1)
+
+print "{length (grow (rel []) 40000).tuples}"

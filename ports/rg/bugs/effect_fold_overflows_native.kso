@@ -1,0 +1,24 @@
+# Bug: a chain of effects built with list/fold runs out of native stack at
+# about 65 links. The interpreter runs the same chain at 100,000.
+#
+# Run: kanso play effect_fold_overflows_native.kso [--interp]
+#
+# should: print `total 2485` on every engine (the sum 1..70).
+# does: --interp prints `total 2485`. Native (play, dev build) stops with
+#   "error[runtime]: the program ran out of stack". Built as a module with
+#   `kanso build --release`, the same program dies with SIGSEGV and prints
+#   nothing. 60 links pass and 70 fail on dev.
+#
+# This is the `in_turn` helper rg's walker uses for each directory's
+# entries (search/walk.kso), so rg on a directory of 100 files crashes on
+# dev and release while the interpreter answers. Writing the loop by hand,
+# right-nested (`effect x .> (a -> go (n - 1) a)`), runs 100,000 links
+# natively.
+import "std/list"
+
+fn added chain x
+  chain .> (acc -> effect (acc + x))
+
+steps = list/to_list (list/take (list/iterate 1 (n -> n + 1)) 70)
+
+list/fold steps (effect 0) added .> (n -> print "total {n}")

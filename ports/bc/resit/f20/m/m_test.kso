@@ -1,0 +1,11 @@
+autos = ["a" "b"]
+
+scoped = """
+  define g() \{ return (y) }
+  define f(y) \{ return (g()) }
+  f(4)
+"""
+
+test_enter = enter ["x"] autos == 3
+
+test_scoped_is_three_lines = length scoped > 40

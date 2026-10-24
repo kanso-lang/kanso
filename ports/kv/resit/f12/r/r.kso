@@ -1,0 +1,4 @@
+import "../m"
+
+pub fn report (m/merged files_in files_out)
+  "{files_in} into {files_out}"

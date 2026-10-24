@@ -1,0 +1,5 @@
+import "../f14t"
+
+parts = ["a" "b"]
+
+test_count = f14t/count parts == 2

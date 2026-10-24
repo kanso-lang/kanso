@@ -1,0 +1,2 @@
+s = "\u{2061}"
+print "{length s}"

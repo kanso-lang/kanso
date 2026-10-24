@@ -60,7 +60,7 @@ fn flag_at argv "--max-file-size" i _ expiry
   with_limit argv i (number argv[i + 1]) expiry
 
 fn flag_at argv dir i limit expiry
-  options dir expiry limit (text/slice argv (i + 1) (length argv))
+  options dir expiry limit (inside (text/slice argv (i + 1) (length argv)))
 
 fn with_expiry _ _ _ (bad_cmd reason)
   bad_cmd reason
@@ -139,7 +139,7 @@ fn execute st list_cmd
   print_lines (bitcask/live_keys st) st
 
 fn execute st merge_cmd
-  bitcask/merge st .> report_merge
+  bitcask/compact st .> report_merge
 
 fn execute st status_cmd
   os/list_dir st.dir

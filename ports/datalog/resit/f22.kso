@@ -1,0 +1,4 @@
+import "std/list"
+
+xs = list/map [1 2 3] (x -> x + 1)
+print "{xs[1]} {list/take list/naturals 3}"

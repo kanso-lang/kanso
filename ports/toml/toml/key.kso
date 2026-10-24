@@ -19,7 +19,7 @@ fn bare_end cs p
 fn bare_key cs p
   q = bare_end cs p
   return fail p "expected a key, found {shown cs p}" if q == p
-  parsed q (text/utf8 (text/slice cs p (q - 1)))
+  parsed q (text/utf8 (some_slice (text/slice cs p (q - 1))))
 
 # A key is one or more simple keys joined by dots, with blanks allowed around
 # each dot. The answer is the list of simple keys.
@@ -37,6 +37,9 @@ fn key_dot _ none p names
 
 fn key_dot _ _ p names
   parsed p names
+
+fn key_rest _ e@(err _) _
+  e
 
 fn key_rest cs (parsed p k) names
   q = skip_blank cs p

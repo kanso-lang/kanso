@@ -1,0 +1,4 @@
+fn bind f x
+  f x
+
+print "{bind (y -> y + 1) 2}"

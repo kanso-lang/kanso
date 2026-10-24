@@ -1,0 +1,15 @@
+keywords = {
+  "and":"and"
+  "class":"class"
+  "else":"else"
+  "false":"false"
+  "for":"for"
+  "fun":"fun"
+  "if":"if"
+  "nil":"nil"
+  "or":"or"
+  "print":"print"
+  "return":"return"
+}
+
+print "{keywords["fun"]} {length keywords}"

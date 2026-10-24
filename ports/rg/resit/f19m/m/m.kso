@@ -1,0 +1,2 @@
+pub fn regex_for words mode
+  "\\b(?:(?:fn))\\b"

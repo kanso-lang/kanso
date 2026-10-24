@@ -1,0 +1,14 @@
+# --- cursor ---
+
+type cursor
+  pos
+
+fn moved c
+  cursor (c.pos + 1)
+
+# --- statements ---
+
+fn twice c
+  moved (moved c)
+
+print "{twice (cursor 1)}"

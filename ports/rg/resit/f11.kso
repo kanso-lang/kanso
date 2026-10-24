@@ -1,0 +1,8 @@
+import "std/text"
+
+fn shout names i acc
+  return acc if i > length names
+  name = names[i]
+  shout names (i + 1) "{acc}{text/uppercase name}"
+
+print (shout ["a" "b"] 1 "")

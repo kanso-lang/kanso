@@ -22,7 +22,7 @@ pub fn write_tree files
 fn filed acc (entry file oid)
   parts = text/split file "/"
   top = parts[1]
-  below = text/join (text/slice parts 2 (length parts)) "/"
+  below = text/join (sliced (text/slice parts 2 (length parts))) "/"
   put acc top (filed_under acc[top] below oid)
 
 fn filed_under none "" oid
@@ -58,7 +58,7 @@ fn line_files line prefix
   parts = text/split line " "
   kind = parts[1]
   oid = parts[2]
-  name = text/join (text/slice parts 3 (length parts)) " "
+  name = text/join (sliced (text/slice parts 3 (length parts))) " "
   entry_files kind oid "{prefix}{name}"
 
 fn entry_files "blob" oid file

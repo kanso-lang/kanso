@@ -1,0 +1,12 @@
+type span
+  first
+  last
+
+fn inside? spans cp i
+  return false if length spans < i
+  s = spans[i]
+  return false if cp < s.first
+  return true if cp <= s.last
+  inside? spans cp (i + 1)
+
+print "{inside? [(span 1 3) (span 7 8)] 7 1}"

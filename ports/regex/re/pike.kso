@@ -64,14 +64,14 @@ pub fn execute prog cps start
 fn scan s pos q matched
   seeded = seed s pos q matched
   ran = tick s pos seeded 1 (queue {} seeded.steps []) matched
-  over = pos == s.n or ran.next.threads == [] and stopped? s pos ran
+  over = pos == s.n or (ran.next.threads == [] and stopped? s pos ran)
   return outcome ran.matched ran.next.steps if over
   scan s (pos + 1) ran.next ran.matched
 
 # No thread is left, and none will be started: either a match was found, or
 # the program only starts at the first position.
 fn stopped? s pos ran
-  ran.matched != unmatched or s.prog.anchored and s.start <= pos
+  ran.matched != unmatched or (s.prog.anchored and s.start <= pos)
 
 fn outcome unmatched steps
   lost steps

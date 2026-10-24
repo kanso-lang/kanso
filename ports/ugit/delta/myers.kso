@@ -48,7 +48,7 @@ fn start_x v d k
   if (from_above? v d k) v[k + 1] (v[k - 1] + 1)
 
 fn from_above? v d k
-  k == 0 - d or k != d and v[k - 1] < v[k + 1]
+  k == 0 - d or (k != d and v[k - 1] < v[k + 1])
 
 # Follow the diagonal while the lines agree.
 fn slide a b n m x k

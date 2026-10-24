@@ -48,14 +48,14 @@ pub fn new_first h
 pub fn apply_hunks rows hunks
   walked = list/fold hunks (progress 0 0 [] [] 0) (&apply_one rows)
   rest = text/slice rows (walked.pos + 1) (length rows)
-  applied (text/concat walked.out rest) walked.outcomes
+  applied (list/concat walked.out rest) walked.outcomes
 
 fn apply_one rows c h
   first = first_line h
   where = locate rows h first c.offset c.pos
   return passed_over c (missed (first + c.grown) c.grown) if where == 0
   before = text/slice rows (c.pos + 1) (lesser (where - 1) (length rows))
-  out = text/concat (text/concat c.out before) h.new
+  out = list/concat (list/concat c.out before) h.new
   offset = where - first
   told = push c.outcomes (found (where + c.grown) offset)
   grown = c.grown + h.new_len - h.old_len
@@ -141,14 +141,14 @@ fn swap_mark line
 # whatever follows the second "@@" of the header: diff -p's function name
 pub fn section h
   parts = text/split h.head "@@"
-  text/join (text/slice parts 3 (length parts)) "@@"
+  text/join (given (text/slice parts 3 (length parts)) []) "@@"
 
 # The body as GNU patch writes it back out: within each run of changed
 # lines, the removed ones first. A "\ No newline" line stays with its line.
 pub fn canonical raw
   groups = list/fold raw [] gather_line
   ordered = list/fold groups (ordering [] [] []) place_group
-  flat (text/concat (text/concat ordered.settled ordered.minus) ordered.plus)
+  flat (list/concat (list/concat ordered.settled ordered.minus) ordered.plus)
 
 fn gather_line groups line
   return push groups [line] if not starts? line "\\" or length groups == 0
@@ -159,8 +159,8 @@ fn place_group o g
   mark = text/slice (given g[1] " ") 1 1
   return ordering (push o.minus g) o.plus o.settled if mark == "-"
   return ordering o.minus (push o.plus g) o.settled if mark == "+"
-  settled = text/concat (text/concat o.settled o.minus) o.plus
+  settled = list/concat (list/concat o.settled o.minus) o.plus
   ordering [] [] (push settled g)
 
 fn flat groups
-  list/fold groups [] (acc g -> text/concat acc g)
+  list/fold groups [] (acc g -> list/concat acc g)

@@ -1,0 +1,17 @@
+import "std/text"
+
+fn lex ""
+  err "empty"
+
+fn lex s
+  text/chars s
+
+fn sized source
+  bound = lex source
+  length bound
+
+fn shown source
+  bound = lex source
+  text/join bound "-"
+
+print "{sized "cd"} {shown "ab"}"

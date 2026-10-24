@@ -1,0 +1,13 @@
+source = """
+  e(1).
+  p(X) :- e(X), !q(X).
+  q(X) :- e(X), r(X).
+  r(X) :- p(X).
+"""
+
+wanted = [
+  "2: the program cannot be stratified: `p` depends on the negation of `q`"
+  "at line 2, and `q` depends on `p` (q -> r -> p)"
+]
+
+print "{length source} {length wanted}"

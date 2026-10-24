@@ -42,7 +42,7 @@ fn add_edges graph (rule body head)
   list/fold body graph (g l -> edge_of g head.name l)
 
 fn all_edges graph
-  list/fold (values graph) [] text/concat
+  list/fold (values graph) [] list/concat
 
 fn closure graph names
   first = list/fold names {} (acc n -> put acc n (direct graph n))
@@ -121,7 +121,7 @@ fn ordered_or_not bad graph _ _
 
 fn path_between graph from to
   parents = search graph to [from] (put {} from from)
-  list/fold (walk_back parents from to []) [] (acc n -> text/concat [n] acc)
+  list/fold (walk_back parents from to []) [] (acc n -> list/concat [n] acc)
 
 fn reaches? reach from to
   present? reach[from][to]
@@ -139,7 +139,7 @@ fn search graph to frontier parents
   search graph to step.frontier step.parents
 
 fn sorted_onto acc names
-  text/concat acc (list/sort names)
+  list/concat acc (list/sort names)
 
 fn stratum_for reach rules leader
   names = component reach leader
@@ -166,12 +166,12 @@ fn widen graph names reach
 
 fn reach_from reach n
   mine = or_blank reach[n]
-  list/fold (keys mine) mine (acc q -> merge acc reach[q])
+  list/fold (keys mine) mine (acc q -> united acc reach[q])
 
-fn merge a none
+fn united a none
   a
 
-fn merge a b
+fn united a b
   list/fold (keys b) a (acc k -> put acc k true)
 
 fn zero_if_none none

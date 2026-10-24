@@ -1,0 +1,15 @@
+type box
+  v
+
+fn twice x
+  x * 2
+
+fn look m k
+  v = m[k]
+  return box 0 if v == none
+  box v
+
+fn use (box v)
+  twice v
+
+print "{use (look { "a":1 } "a")}"

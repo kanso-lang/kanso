@@ -1,0 +1,4 @@
+fn draft? meta
+  meta["draft"] == true
+
+print "{draft? { "draft":"yes" }}"

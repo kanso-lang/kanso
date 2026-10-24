@@ -1,0 +1,8 @@
+type tally
+  a
+  b
+  c
+
+t = tally false false true
+
+print "{t.c}"

@@ -20,7 +20,7 @@ pub fn replace_bytes path bs
   put_chunk path bs 1 ">"
 
 pub fn remove_files paths
-  os/run "rm" (text/concat ["-f"] paths) .> ran
+  os/run "rm" (list/concat ["-f"] paths) .> ran
 
 # text/slice answers an empty list when `to` runs past the end, rather
 # than stopping at the end (FRICTION.md F10), so the last chunk is cut to

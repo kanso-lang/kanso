@@ -38,6 +38,11 @@ pub fn searched cfg dest (contents nul body) explicit
   out = rendered cfg cfg.mode dest lines flags hits state
   report hits out
 
+# Only this module builds a `target`; a caller outside it, the tests
+# included, asks for one here.
+pub fn target_at path with_name
+  target path with_name
+
 fn binary_state true _
   text_file
 
@@ -227,7 +232,7 @@ fn start_of h line
 # Columns count bytes from 1, as ripgrep's do, so a line with accented
 # letters before the match reports a larger column than its character count.
 fn byte_column line from
-  length (text/bytes (text/slice line 1 (from - 1))) + 1
+  length (text/bytes (some_text (text/slice line 1 (from - 1)))) + 1
 
 # `-o` prints each match on a line of its own, and `--vimgrep` prints the
 # whole line once for each match in it, with the column that tells an editor
@@ -276,7 +281,7 @@ fn expanded none whole _
   whole
 
 fn expanded repl whole groups
-  expanding (text/chars repl) 1 "" (text/concat [whole] groups)
+  expanding (text/chars repl) 1 "" (list/concat [whole] groups)
 
 fn expanding cs i acc caps
   return acc if i > length cs

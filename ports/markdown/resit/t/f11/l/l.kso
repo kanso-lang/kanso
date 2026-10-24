@@ -1,0 +1,8 @@
+fn twice x
+  x * 2
+
+fn inner x
+  twice x
+
+pub fn use m k
+  inner m[k]

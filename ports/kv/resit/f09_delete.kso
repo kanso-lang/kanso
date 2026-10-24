@@ -1,0 +1,3 @@
+keydir = put (put {} "a" 1) "b" 2
+
+print "{delete keydir "a"}" .> (_ -> print "{length (delete keydir "a")}")

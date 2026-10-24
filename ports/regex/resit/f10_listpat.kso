@@ -1,0 +1,7 @@
+fn branched [one]
+  one
+
+fn branched bs
+  length bs
+
+print "{branched [7]}"

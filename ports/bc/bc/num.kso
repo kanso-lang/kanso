@@ -10,6 +10,11 @@ pub one = dec 0 1
 
 pub zero = dec 0 0
 
+# A number with `units` / 10^`scale`. The tests build their expected
+# values with it, because only this module may construct a dec.
+pub fn dec_of scale units
+  dec scale units
+
 pub fn add (dec sa ua) (dec sb ub)
   keep = larger sa sb
   dec keep (ua * ten_to (keep - sa) + ub * ten_to (keep - sb))

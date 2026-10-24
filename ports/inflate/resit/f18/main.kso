@@ -1,0 +1,3 @@
+import "./c"
+
+print "{c/shown 0} {c/shown 1}"

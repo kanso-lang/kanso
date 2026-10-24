@@ -14,7 +14,11 @@ type opts
   given
   rest
 
-fn parse_args specs argv
+# Only this module builds a `flag`; the tests ask for one here.
+pub fn flag_of long short takes
+  flag long short takes
+
+pub fn parse_args specs argv
   walk specs argv 1 {} []
 
 fn walk specs argv i given rest
@@ -25,7 +29,8 @@ fn arg_at _ _ _ given rest none
   opts given rest
 
 fn arg_at _ argv i given rest "--"
-  opts given (text/concat rest (text/slice argv (i + 1) (length argv)))
+  after = some_slice (text/slice argv (i + 1) (length argv))
+  opts given (list/concat rest after)
 
 fn arg_at specs argv i given rest "-"
   walk specs argv (i + 1) given (push rest "-")
@@ -40,7 +45,7 @@ fn long_flag specs argv i given rest a
   parts = text/split a "="
   name = parts[1]
   spec = list/find specs (f -> f.long == name)
-  attached = text/join (text/slice parts 2 (length parts)) "="
+  attached = text/join (some_slice (text/slice parts 2 (length parts))) "="
   known specs argv i given rest spec attached (length parts > 1) name
 
 fn known _ _ _ _ _ none _ _ name
@@ -82,14 +87,14 @@ fn short_flag specs argv i given rest cs j (flag long _ false)
 
 fn short_flag specs argv i given rest cs j (flag long _ true)
   return valued specs argv i given rest long argv[i + 1] if j == length cs
-  tail = text/join (text/slice cs (j + 1) (length cs)) ""
+  tail = text/join (some_slice (text/slice cs (j + 1) (length cs))) ""
   walk specs argv (i + 1) (put given long tail) rest
 
-fn on? o long
+pub fn on? o long
   o.given[long] != none
 
 # A flag's value, or the default when the flag is absent.
-fn value_or o long default
+pub fn value_or o long default
   chosen o.given[long] default
 
 fn chosen none default
@@ -99,7 +104,7 @@ fn chosen v _
   v
 
 # A flag whose value must be a whole number.
-fn number_or o long default
+pub fn number_or o long default
   whole_flag long (value_or o long "{default}")
 
 fn whole_flag long v

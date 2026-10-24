@@ -1,0 +1,25 @@
+pub type assignment
+  name
+  op
+  value
+
+pub type bare_line
+  text
+
+fn assigned "x := 1"
+  assignment "x" ":=" "1"
+
+fn assigned _
+  none
+
+fn classified head none false _ _
+  bare_line head
+
+fn classified _ found false _ _
+  found
+
+fn classified head _ true _ _
+  bare_line head
+
+pub fn classify s
+  classified s (assigned s) false 0 0

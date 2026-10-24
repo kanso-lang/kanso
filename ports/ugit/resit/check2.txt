@@ -1,0 +1,44 @@
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in commits.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:34:21
+  34 |   body = text/join (text/slice pieces 2 (length pieces)) "\n\n"
+                           ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in commits.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:40:21
+  40 |   rest = text/join (text/slice words 2 (length words)) " "
+                           ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in commits.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/commits.kso:53:20
+  53 |   who = text/join (text/slice words 1 (n - 2)) " "
+                          ^
+error[exhaustive]: this can be an err and an index wants a value — dispatch on it first with an `(err _)` arm (in objects.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/objects.kso:36:11
+  36 |   found = pieces[1]
+                 ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in objects.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/objects.kso:38:14
+  38 |   text/join (text/slice pieces 2 (length pieces)) nul
+                    ^
+error[exhaustive]: this can be an err and `text/slice` has no arm for it — dispatch on it here, or give `text/slice` an `(err _)` arm (in objects.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/objects.kso:38:25
+  38 |   text/join (text/slice pieces 2 (length pieces)) nul
+                               ^
+error[exhaustive]: this can be an err and an index wants a value — dispatch on it first with an `(err _)` arm (in objects.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/objects.kso:49:3
+  49 |   pieces[1]
+         ^
+error[exhaustive]: this can be a none and `os/make_dir` has no arm for it — resolve it here, or give `os/make_dir` a `none` arm (in refs.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/refs.kso:59:16
+  59 |   os/make_dir (path/dirname full) .> (_ -> os/write_file full content)
+                      ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in trees.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/trees.kso:25:22
+  25 |   below = text/join (text/slice parts 2 (length parts)) "/"
+                            ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in trees.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/trees.kso:61:21
+  61 |   name = text/join (text/slice parts 3 (length parts)) " "
+                           ^
+error[exhaustive]: this can be a none and `text/join` has no arm for it — resolve it here, or give `text/join` a `none` arm (in work.kso) (module /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store)
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/ugit/store/work.kso:53:14
+  53 |   text/join (text/slice parts 1 (length parts - 1)) "/"
+                    ^

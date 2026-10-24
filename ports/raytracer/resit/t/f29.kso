@@ -1,0 +1,10 @@
+fn step opts "--shade" raw
+  "shade {opts} {raw}"
+
+fn step _ flag none
+  "{flag} needs a value"
+
+fn step opts flag raw
+  "{opts} {flag} {raw}"
+
+print (step 1 "--seed" none)

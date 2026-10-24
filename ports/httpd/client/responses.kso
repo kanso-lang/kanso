@@ -109,10 +109,10 @@ fn read_body _ from no_body
 
 fn read_body bs from (by_length n)
   return cut_short if length bs - from + 1 < n
-  reading (from + n) (text/slice bs from (from + n - 1)) 0
+  reading (from + n) (or_empty (text/slice bs from (from + n - 1))) 0
 
 fn read_body bs from to_end
-  reading (length bs + 1) (text/slice bs from (length bs)) 0
+  reading (length bs + 1) (or_empty (text/slice bs from (length bs))) 0
 
 fn read_body bs from by_chunks
   chunk_loop bs from (text/bytes "") 0
@@ -156,9 +156,9 @@ pub fn shown_lines r:reply
   { body chunk_count fields status_line } = r
   heads = list/to_list (list/map fields (f -> "< {f}"))
   framing = if (chunk_count > 0) ["({chunk_count} chunks)"] []
-  lines = text/concat (text/concat ["< {status_line}"] heads) framing
+  lines = list/concat (list/concat ["< {status_line}"] heads) framing
   readable = textual? (field_map fields)["content-type"]
-  text/concat lines (body_lines body readable)
+  list/concat lines (body_lines body readable)
 
 pub fn shown_lines (leftover 0)
   ["(the server closed the connection)"]
@@ -189,3 +189,9 @@ fn textual? kind
   k = http/lower kind
   types = ["text/" "application/json" "application/javascript"]
   list/any? types (t -> http/starts_with? k t)
+
+fn or_empty none
+  []
+
+fn or_empty xs
+  xs

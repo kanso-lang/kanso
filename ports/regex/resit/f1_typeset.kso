@@ -1,0 +1,49 @@
+type alt
+
+type any_char
+
+type any_not_nl
+
+type begin_line
+
+type begin_text
+
+type capture
+
+type cat
+
+type cls
+
+type empty
+
+type end_line
+
+type end_text
+
+type lit
+
+type no_match
+
+type not_word_boundary
+
+type plus
+
+type quest
+
+type repeat
+
+type star
+
+type word_boundary
+
+type node alt any_char any_not_nl begin_line begin_text capture cat cls
+  empty end_line end_text lit no_match not_word_boundary plus quest repeat star
+  word_boundary
+
+fn kind _:node
+  "node"
+
+fn kind _
+  "other"
+
+print (kind lit)

@@ -71,14 +71,14 @@ fn definition line
   if opens (definition_at t close) none
 
 fn definition_at t close
-  label = textkit/lower (text/trim (text/slice t 2 (close - 1)))
-  rest = text/trim (text/slice t (close + 2) (length t))
+  label = textkit/lower (text/trim (textkit/clamped t 2 (close - 1)))
+  rest = text/trim (textkit/clamped t (close + 2) (length t))
   space = textkit/index_of rest " " 1
   cut = if (space == none) (length rest + 1) space
-  url = text/slice rest 1 (cut - 1)
-  after = text/trim (text/slice rest cut (length rest))
+  url = textkit/clamped rest 1 (cut - 1)
+  after = text/trim (textkit/clamped rest cut (length rest))
   quoted = length after > 1 and textkit/starts_with? after "\""
-  title = if quoted (text/slice after 2 (length after - 1)) ""
+  title = if quoted (textkit/clamped after 2 (length after - 1)) ""
   if (url == "") none (filed (ref_def title url) "ref:{label}")
 
 fn finish (sheet broken heads parts summary _) base
@@ -102,7 +102,7 @@ fn nest_one out h top
   put_last out (put last "children" kids)
 
 fn put_last xs x
-  push (text/slice xs 1 (length xs - 1)) x
+  push (textkit/clamped xs 1 (length xs - 1)) x
 
 fn add (sheet broken heads parts summary used) html
   sheet broken heads (push parts html) summary used
@@ -206,8 +206,8 @@ fn trim_newline (sheet broken heads parts summary used)
   n = length parts
   last = parts[n]
   ends = n > 0 and textkit/ends_with? last "\n"
-  trimmed = if ends (text/slice last 1 (length last - 1)) last
-  kept = if (n > 0) (push (text/slice parts 1 (n - 1)) trimmed) parts
+  trimmed = if ends (textkit/clamped last 1 (length last - 1)) last
+  kept = if (n > 0) (push (textkit/clamped parts 1 (n - 1)) trimmed) parts
   sheet broken heads kept summary used
 
 # `intro`, then `intro-1`, `intro-2`, the way Zola numbers repeats.

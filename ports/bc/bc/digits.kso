@@ -15,8 +15,8 @@ pub fn decimal_value digits
 pub fn in_base digits base
   bs = text/bytes digits
   point = text/find2 bs 1 46 46
-  whole = without_leading_zeros (text/slice bs 1 (point - 1)) 1
-  part = text/slice bs (point + 1) (length bs)
+  whole = without_leading_zeros (or_empty (text/slice bs 1 (point - 1))) 1
+  part = or_empty (text/slice bs (point + 1) (length bs))
   top = base - 1
   integer = whole_value whole base top
   return dec 0 integer if length part == 0
@@ -24,6 +24,15 @@ pub fn in_base digits base
   numer = list/fold part 0 (acc b -> acc * base + clamp (digit_value b) top)
   denom = raise base places
   dec places (integer * ten_to places + numer * ten_to places / denom)
+
+# With no point, find2 answers one past the end, and the fraction's range
+# starts past it: text/slice answers none, and there are no digits. The
+# integer part's range never misses.
+fn or_empty none
+  []
+
+fn or_empty bs
+  bs
 
 fn without_leading_zeros bs i
   b = bs[i]

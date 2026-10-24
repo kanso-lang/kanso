@@ -1,0 +1,4 @@
+import "std/os"
+import "std/text"
+
+os/args .> (a -> print "{text/to_int a[1]!}")

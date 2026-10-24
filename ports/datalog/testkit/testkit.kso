@@ -1,0 +1,22 @@
+# What a failing test shows. A test passes on `true`, and the runner prints
+# any other value it returns, so answering a record on a mismatch puts both
+# sides in the report. (std/expect does this, but is not shipped.) Each test
+# file is its own consumer of the module it tests, so the helpers they share
+# live here.
+
+pub type mismatch
+  got
+  wanted
+
+pub fn agrees failed@(err _) wanted
+  mismatch failed wanted
+
+pub fn agrees got wanted
+  if (got == wanted) true (mismatch got wanted)
+
+# Building long strings in tests: `with_line` adds a line, `then` adds text.
+pub fn with_line acc next
+  "{acc}\n{next}"
+
+pub fn then acc next
+  "{acc}{next}"

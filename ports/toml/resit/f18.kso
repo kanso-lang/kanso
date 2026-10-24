@@ -1,0 +1,7 @@
+type day
+  d
+  m
+
+x = { "d":day 27 5 }
+
+print x

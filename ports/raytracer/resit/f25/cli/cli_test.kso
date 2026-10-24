@@ -1,0 +1,42 @@
+import "../tracer"
+
+fn complaint (bad_flag text)
+  text
+
+fn fields (options d gr sa sc se sh w)
+  [d gr sa sc se sh w]
+
+test_defaults_when_no_flags = options_for "sky" ["sky"] == defaults "sky"
+
+test_every_flag_lands_in_its_field =
+  args = ["cover" "--width" "8" "--samples" "2" "--depth" "3" "--seed" "4"]
+  parsed = options_for "cover" (push (push args "--grid") "5")
+  fields parsed == [3 5 2 "cover" 4 tracer/full_shading 8]
+
+test_flag_without_value =
+  parsed = options_for "sky" ["sky" "--seed"]
+  complaint parsed == "--seed needs a value"
+
+test_later_flag_wins =
+  parsed = options_for "sky" ["sky" "--seed" "4" "--seed" "9"]
+  parsed.seed == 9
+
+test_unknown_flag =
+  parsed = options_for "sky" ["sky" "--fast" "1"]
+  complaint parsed == "unknown flag --fast"
+
+test_value_must_be_a_number =
+  parsed = options_for "sky" ["sky" "--width" "wide"]
+  complaint parsed == "--width takes a whole number"
+
+test_value_must_be_positive =
+  parsed = options_for "sky" ["sky" "--samples" "0"]
+  complaint parsed == "--samples takes a number above zero"
+
+test_shading_by_name =
+  parsed = options_for "sky" ["sky" "--shade" "normals"]
+  parsed.shade == tracer/shading_named "normals"
+
+test_unknown_shading =
+  parsed = options_for "sky" ["sky" "--shade" "phong"]
+  complaint parsed == "no shading called phong"

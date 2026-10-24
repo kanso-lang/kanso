@@ -1,0 +1,13 @@
+type config
+  after
+  before
+  regex
+  vimgrep
+
+fn with_regex c r
+  merge c { "regex":r }
+
+c = config 1 2 "a" false
+d = with_regex c "b"
+
+print "{d.after} {d.before} {d.regex} {d.vimgrep}"

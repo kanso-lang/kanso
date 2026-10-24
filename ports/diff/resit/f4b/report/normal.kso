@@ -1,0 +1,25 @@
+# The default format, the one diff has printed since 1974: an ed-like
+# command per change ("3c3,4", "5a6", "7d6"), then the old lines behind "<"
+# and the new ones behind ">".
+import "std/list"
+
+pub fn normal a b cs
+  list/fold cs [] (&normal_change a b)
+
+fn normal_change a b out c
+  head = push out (command c)
+  old = emit_range head a c.a_at (c.a_at + c.a_n - 1) "< "
+  rule = if (c.a_n > 0 and c.b_n > 0) (push old "---") old
+  emit_range rule b c.b_at (c.b_at + c.b_n - 1) "> "
+
+# a change is never empty on both sides, so the first two cases cannot meet
+fn command c
+  return "{c.a_at - 1}a{lines_of c.b_at c.b_n}" if c.a_n == 0
+  return "{lines_of c.a_at c.a_n}d{c.b_at - 1}" if c.b_n == 0
+  "{lines_of c.a_at c.a_n}c{lines_of c.b_at c.b_n}"
+
+fn lines_of s 1
+  "{s}"
+
+fn lines_of s n
+  "{s},{s + n - 1}"

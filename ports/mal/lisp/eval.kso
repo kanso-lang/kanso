@@ -166,7 +166,7 @@ fn bind_rest env nil _ _
   env
 
 fn bind_rest env name args i
-  extend env name (mlist (text/slice args i (length args)) nil)
+  extend env name (mlist (sliced (text/slice args i (length args)) []) nil)
 
 # (fn* (a b & more) body): the names before & are bound one each, and the one
 # after it takes whatever is left as a list.
@@ -313,4 +313,12 @@ fn form_items (mlist parts _)
   parts
 
 fn tail xs
-  text/slice xs 2 (length xs)
+  sliced (text/slice xs 2 (length xs)) []
+
+# A slice whose range starts past the end answers none; here that means
+# nothing is left, which is the empty value of the kind being sliced.
+fn sliced none empty
+  empty
+
+fn sliced part _
+  part

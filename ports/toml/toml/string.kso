@@ -21,7 +21,7 @@ fn line_at cs 39 p start acc 39
   closed cs p start acc 1
 
 fn line_at cs 92 p start acc 34
-  kept = text/append acc (text/slice cs start (p - 1))
+  kept = text/append acc (some_slice (text/slice cs start (p - 1)))
   esc = escape cs (p + 1)
   line_escaped cs esc kept
 
@@ -38,13 +38,16 @@ fn line_at cs c p start acc q
   return fail p "control character {c} in string" if control? c
   line_run cs (p + 1) start acc q
 
+fn line_escaped _ e@(err _) _
+  e
+
 fn line_escaped cs (parsed p bs) acc
   line_run cs p p (text/append acc bs) 34
 
 # The string's bytes run from `start` to just before `p`, and the closing
 # delimiter is `width` bytes long.
 fn closed cs p start acc width
-  whole = text/append acc (text/slice cs start (p - 1))
+  whole = text/append acc (some_slice (text/slice cs start (p - 1)))
   parsed (p + width) (text/utf8 whole)
 
 # Several lines. A newline straight after the opening delimiter is not part of
@@ -58,6 +61,15 @@ fn first_line cs p
   return p + 2 if cs[p] == 13 and cs[p + 1] == 10
   p
 
+fn block_run _ e@(err _) (err _) _ _
+  e
+
+fn block_run _ e@(err _) _ _ _
+  e
+
+fn block_run _ _ e@(err _) _ _
+  e
+
 fn block_run cs p start acc q
   block_at cs cs[p] p start acc q
 
@@ -68,7 +80,7 @@ fn block_at cs 39 p start acc 39
   block_quotes cs p start acc 39 (quote_count cs p 39)
 
 fn block_at cs 92 p start acc 34
-  kept = text/append acc (text/slice cs start (p - 1))
+  kept = text/append acc (some_slice (text/slice cs start (p - 1)))
   block_escape cs (p + 1) kept
 
 fn block_at _ none p _ _ _
@@ -80,7 +92,8 @@ fn block_at cs 10 p start acc q
 # A CRLF inside the string is read as a plain newline, as toml-rs reads it.
 fn block_at cs 13 p start acc q
   next = crlf cs p
-  kept = text/append (text/append acc (text/slice cs start (p - 1))) 10
+  run = some_slice (text/slice cs start (p - 1))
+  kept = text/append (text/append acc run) 10
   block_run cs next next kept q
 
 fn block_at cs c p start acc q
@@ -118,8 +131,14 @@ fn trim_at cs _ p _ acc
   esc = escape cs p
   block_escaped cs esc acc
 
+fn block_escaped _ e@(err _) _
+  e
+
 fn block_escaped cs (parsed p bs) acc
   block_run cs p p (text/append acc bs) 34
+
+fn skip_lines _ e@(err _)
+  e
 
 fn skip_lines cs p
   lines_at cs cs[p] p
@@ -184,6 +203,9 @@ fn escape_at cs _ p
 fn unicode cs p n
   code = hex_value cs p (p + n - 1) 0
   unicode_scalar p n code
+
+fn unicode_scalar _ _ e@(err _)
+  e
 
 fn unicode_scalar p n code
   ok = code < 55296 or in? code 57344 1114111

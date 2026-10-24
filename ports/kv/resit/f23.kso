@@ -1,0 +1,4 @@
+fn earlier? f g o p
+  f < g or (f == g and o < p)
+
+print "{earlier? 1 1 2 3}"

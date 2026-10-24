@@ -1,0 +1,4 @@
+import "../../../datalog"
+import "std/os"
+
+os/read_file! "in.dl" .> (s -> print "{length (datalog/lex s)}")

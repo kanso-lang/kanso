@@ -1,0 +1,50 @@
+import "std/text"
+
+pub type token
+  col
+  kind
+  line
+  text
+
+pub type mark_tok
+
+type scanner
+  cs
+  line
+  p
+  start
+
+pub fn lex source
+  scan (scanner (text/chars source) 1 1 1) []
+
+fn at (scanner cs _ p _) k
+  cs[p + k]
+
+fn advance (scanner cs line p start) n
+  scanner cs line (p + n) start
+
+fn column (scanner _ _ p start)
+  p - start + 1
+
+fn emit c kind text width acc
+  made = token (column c) kind c.line text
+  scan (advance c width) (push acc made)
+
+fn fail_at _ reason
+  err reason
+
+fn scan c acc
+  scan_char c (at c 0) acc
+
+fn skip_block c acc
+  scan (advance c 2) acc
+
+fn scan_char c none acc
+  push acc (token (column c) "end" c.line "")
+
+fn scan_char c "(" acc
+  emit c mark_tok "(" 1 acc
+
+fn scan_char c "/" acc
+  return skip_block c acc if at c 1 == "*"
+  fail_at c "unexpected character `/`"

@@ -1,0 +1,3 @@
+import "std/os"
+
+os/modified "stamp.txt" .> (ms -> print "{ms}")

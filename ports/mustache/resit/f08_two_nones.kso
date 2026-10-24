@@ -1,0 +1,12 @@
+m = { "a":1 }
+
+fn placed none _
+  "inline"
+
+fn placed _ none
+  "inline"
+
+fn placed first resume
+  "spot {first} {resume}"
+
+print "{placed m["a"] m["b"]} {placed m["a"] m["a"]}"

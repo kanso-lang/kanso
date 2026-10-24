@@ -50,7 +50,7 @@ fn key_order true false picked
 fn key_order true true picked
   (a b -> compare_numeric (numbers_at b picked) (numbers_at a picked))
 
-fn numbers_at record picked
+pub fn numbers_at record picked
   list/to_list (list/map (fields_at record picked) number_value)
 
 # A field read as a number, the way xsv reads one: an integer if it is one,
@@ -73,7 +73,7 @@ fn as_float f
 # xsv's numeric order. The first field that is not a number ends the
 # comparison: two such fields tie, and a missing number sorts before a
 # present one.
-fn compare_numeric a b
+pub fn compare_numeric a b
   numeric_from a b 1
 
 fn numeric_from a b i

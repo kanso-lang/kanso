@@ -40,7 +40,7 @@ fn trailing_trimmed cs n
   return "" if n < 1
   c = cs[n]
   return trailing_trimmed cs (n - 1) if c == "\r" or c == " "
-  text/join (text/slice cs 1 n) ""
+  text/join (some_list (text/slice cs 1 n)) ""
 
 pub fn rule_of base line
   negated = text/slice line 1 1 == "!"

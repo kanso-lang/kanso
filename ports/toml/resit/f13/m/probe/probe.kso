@@ -1,0 +1,14 @@
+import "std/text"
+
+fn pick 125 n
+  "size {size_of n}"
+
+fn pick _ _
+  "other"
+
+pub fn demo s
+  got = text/to_int s
+  pick 125 got
+
+fn size_of xs
+  length xs

@@ -1,0 +1,12 @@
+import "std/list"
+
+type tally_
+  total
+
+fn skipped acc n
+  tally_ (acc.total + n)
+
+fn sum_all xs
+  list/fold xs (tally_ 0) skipped
+
+print "{(sum_all [1 2 3]).total}"

@@ -1,0 +1,3 @@
+import "../m"
+
+print "{m/named_n 8000}"

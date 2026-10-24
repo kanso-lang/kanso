@@ -1,0 +1,10 @@
+import "../re"
+
+pub fn shown pattern
+  show (re/compile pattern)
+
+fn show (err e)
+  "error parsing regexp: {e.code}: `{e.text}` at {e.at}"
+
+fn show h
+  "{h.start}-{h.end}"

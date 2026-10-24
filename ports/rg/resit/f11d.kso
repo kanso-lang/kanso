@@ -1,0 +1,6 @@
+import "std/text"
+
+fn shout names i
+  text/join [names[i] "!"] ""
+
+print (shout ["a" "b"] 5)

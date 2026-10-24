@@ -1,0 +1,4 @@
+error[formatting]: a line holds at most 80 characters — this one has 81
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/csv/read.kso:93:81
+  93 |   quoted src (q + 2) (text/append acc (sliced (text/slice src.bytes p q))) fields
+                                                                                       ^

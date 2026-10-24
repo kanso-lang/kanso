@@ -1,0 +1,15 @@
+type begin_text
+
+fn anchored? none
+  false
+
+fn anchored? begin_text
+  true
+
+fn anchored? "x"
+  false
+
+fn anchored? _
+  false
+
+print "{anchored? begin_text}"

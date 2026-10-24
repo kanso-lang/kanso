@@ -1,0 +1,11 @@
+import "std/list"
+
+type bag
+  items
+
+fn half n
+  return err "odd" if n % 2 == 1
+  bag [n]
+
+r = half 4
+print "{list/first r.items}"

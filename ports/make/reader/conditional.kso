@@ -38,7 +38,15 @@ fn chained r i next f word rest
   tested r i word rest .> enter
 
 fn popped conds
-  text/slice conds 1 (length conds - 1)
+  frames (text/slice conds 1 (length conds - 1))
+
+# A slice past the end answers none (gavel 2026-10-13); `endif` pops only a
+# stack that is not empty.
+fn frames none
+  []
+
+fn frames fs
+  fs
 
 fn tested r i "ifdef" rest
   defined r i rest
@@ -81,19 +89,19 @@ fn parenthesised r at rest
   comma = expand/top_level inner "," 1 0
   bad = close == 0 or comma == 0
   return report/fatal at "invalid syntax in conditional" if bad
-  left = words/trim_right (text/slice inner 1 (comma - 1))
-  right = words/trim_left (text/slice inner (comma + 1) (length inner))
+  left = words/trim_right (sub_text inner 1 (comma - 1))
+  right = words/trim_left (sub_text inner (comma + 1) (length inner))
   equal r at left right
 
 fn quoted r at rest opener
   shut = words/find rest opener 2
   left = text/slice rest 2 (shut - 1)
-  after = words/trim_left (text/slice rest (shut + 1) (length rest))
+  after = words/trim_left (sub_text rest (shut + 1) (length rest))
   second = text/slice after 1 1
   ends = words/find after second 2
   ok = shut > 0 and (second == "\"" or second == "'") and ends > 0
   return report/fatal at "invalid syntax in conditional" if not ok
-  equal r at left (text/slice after 2 (ends - 1))
+  equal r at left (sub_text after 2 (ends - 1))
 
 fn equal r at left right
   sc = expand/scope_of r.db at

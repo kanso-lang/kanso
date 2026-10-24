@@ -34,8 +34,7 @@ fn compute "table" o sheets
   least = number_or o "--width" 2
   gap = number_or o "--pad" 2
   limit = number_or o "--condense" 0
-  bad = list/find [least gap limit] failed?
-  unless_failed bad (_ -> laid rows least gap limit)
+  least .> (w -> gap .> (g -> limit .> (c -> laid rows w g c)))
 
 fn laid rows least gap 0
   aligned rows least gap

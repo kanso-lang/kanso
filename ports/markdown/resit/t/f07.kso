@@ -1,0 +1,9 @@
+import "std/text"
+
+fn has? s piece
+  length (text/split s piece) > 1
+
+fn note s piece
+  if (has? s piece) "yes" "no"
+
+print (note "a,b" (text/from_code 44))

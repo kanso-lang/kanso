@@ -1,0 +1,22 @@
+# A type this file declares, named like a pub function of a module the file
+# imports. The file's own declaration should win (log, 2026-10-12, "a name
+# the author declared wins over a builtin and an import"; 2026-10-18, "a
+# module's own type beats an imported type's twin"). Should print
+# `own_type_loses_to_imported_function/env "x" 0` on every engine when run
+# with no arguments.
+#
+#   kanso play own_type_loses_to_imported_function.kso     the record, as above
+#   kanso play own_type_loses_to_imported_function.kso --interp
+#     <io> 0
+#
+# The interpreter builds `os/env "x"` instead, so the engines disagree.
+# The same file with `type run` (three fields) and `run 1 2 3` is refused
+# at check on every engine: `no 3-argument arm of `run` (arms take 2)`,
+# because `run` resolves to `os/run`. Without `import "std/os"` both
+# programs work, which is the case F1 of FRICTION.md was about.
+import "std/os"
+
+type env
+  name
+
+os/args .> (xs -> print "{env "x"} {length xs}")

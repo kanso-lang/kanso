@@ -1,0 +1,7 @@
+fn run_words []
+  "stdin"
+
+fn run_words words
+  "{length words} words"
+
+print "{run_words []} {run_words ["a"]}"

@@ -30,8 +30,8 @@ fn split_line pair
   labelled (labelled? code colon) code colon n original
 
 fn labelled true code colon n original
-  name = text/trim (text/slice code 1 (colon - 1))
-  rest = text/trim (text/slice code (colon + 1) (length code))
+  name = text/trim (sliced (text/slice code 1 (colon - 1)) "")
+  rest = text/trim (sliced (text/slice code (colon + 1) (length code)) "")
   statement name rest n original
 
 fn labelled false code _ n original
@@ -44,8 +44,8 @@ fn labelled? code colon
 
 fn statement label code n original
   space = position_of code " "
-  mnemonic = isa/upper (text/slice code 1 (space - 1))
-  rest = text/slice code (space + 1) (length code)
+  mnemonic = isa/upper (sliced (text/slice code 1 (space - 1)) "")
+  rest = sliced (text/slice code (space + 1) (length code)) ""
   source_line label mnemonic n (operand_texts rest) original
 
 fn operand_texts rest
@@ -53,12 +53,20 @@ fn operand_texts rest
   list/to_list (list/reject parts (p -> p == ""))
 
 fn before s mark
-  text/slice s 1 (position_of s mark - 1)
+  sliced (text/slice s 1 (position_of s mark - 1)) ""
+
+# A slice that starts past the end answers none; here it is the empty text,
+# which is what the old slice gave.
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of
 
 # The 1-based position of the first `mark` in `s`, or one past the end when
 # there is none. std/text has no search over strings; `find2` searches a byte
 # list for either of two bytes, so the mark is passed twice. Assembly source
 # is ASCII here, so a byte position is a character position.
-fn position_of s mark
+pub fn position_of s mark
   c = text/char_code mark
   text/find2 (text/bytes s) 1 c c

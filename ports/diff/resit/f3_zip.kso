@@ -1,0 +1,8 @@
+import "std/list"
+
+fn step acc a b
+  acc + a * b
+
+xs = [10 20 30]
+total = list/fold (list/zip xs [1 2 3]) 0 (acc pair -> step acc pair[1] pair[2])
+print "{total}"

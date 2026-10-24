@@ -1,0 +1,2 @@
+src = "[1 (2 \"three\" :four) {\"k\" [nil true false]}]"
+print src

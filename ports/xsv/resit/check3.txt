@@ -1,0 +1,16 @@
+error[import]: `list` is not imported here — a module's files share their declarations, not their imports
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/commands.kso:1:1
+   1 | import "std/text"
+       ^
+error[unused]: unused import "std/text"
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/frequency.kso:3:8
+   3 | import "std/text"
+              ^
+error[unused]: unused import "std/text"
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/slice.kso:2:8
+   2 | import "std/text"
+              ^
+error[import]: `list` is not imported here — a module's files share their declarations, not their imports
+  --> /tmp/claude-0/-home-user-kanso/6ec1888c-10a3-5af1-b695-de363b17dcf7/scratchpad/ports-run/ports/xsv/xsv/slice.kso:1:1
+   1 | import "../csv"
+       ^

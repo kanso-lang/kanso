@@ -43,7 +43,7 @@ fn replies_of raw methods
 fn statuses replies
   list/to_list (list/map replies status_or_rest)
 
-fn status_or_rest r:reply
+fn status_or_rest r:client/reply
   r.status
 
 fn status_or_rest l
@@ -85,7 +85,7 @@ test_shown_lines =
   got = replies_of "{typed}content-length: 2\r\n\r\nhi" ["GET"]
   r = got[1]
   heads = ["< HTTP/1.1 200 OK" "< content-type: text/plain"]
-  shown_lines r == text/concat heads ["< content-length: 2" "<" "hi"]
+  shown_lines r == list/concat heads ["< content-length: 2" "<" "hi"]
 
 test_binary_shown_by_digest =
   got = replies_of ok_two ["GET"]

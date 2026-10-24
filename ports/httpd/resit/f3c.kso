@@ -1,0 +1,5 @@
+fn sum_from ds i acc
+  return acc if i > length ds
+  sum_from ds (i + 1) (acc + ds[i])
+
+print "{sum_from [49 50] 1 0}"

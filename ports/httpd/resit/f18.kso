@@ -1,0 +1,4 @@
+fn received s chunk
+  "{s}{chunk}"
+
+print "DEBUG read [some chunk of bytes]" .> (_ -> print (received "state" "chunk"))

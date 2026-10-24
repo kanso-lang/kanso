@@ -1,0 +1,35 @@
+import "std/text"
+
+pub type token
+  col
+  kind
+  line
+  text
+
+type scanner
+  cs
+  line
+  p
+  start
+
+pub fn lex source
+  scan (scanner (text/chars source) 1 1 1) []
+
+fn advance (scanner cs line p start) n
+  scanner cs line (p + n) start
+
+fn column (scanner _ _ p start)
+  p - start + 1
+
+fn emit c kind text width acc
+  made = token (column c) kind c.line text
+  scan (advance c width) (push acc made)
+
+fn scan c acc
+  scan_char c c.cs[c.p] acc
+
+fn scan_char _ none acc
+  acc
+
+fn scan_char c ch acc
+  emit c "mark" ch 1 acc

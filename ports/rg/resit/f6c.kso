@@ -1,0 +1,3 @@
+m = { "globs":["a"] "invert":true }
+
+print (length m["globs"])

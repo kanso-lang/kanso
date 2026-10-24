@@ -1,0 +1,3 @@
+import "./acc"
+
+print "{acc/count_of (acc/boxed acc/empty 8000)}"

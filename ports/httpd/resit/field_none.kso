@@ -1,0 +1,17 @@
+import "std/text"
+
+type request
+  body
+
+type reading
+  body
+
+fn shout s
+  text/uppercase s
+
+fn told r
+  shout r.body
+
+xs = ["a"]
+kept = reading xs[2]
+print "{told (request "hi")} {kept.body}"

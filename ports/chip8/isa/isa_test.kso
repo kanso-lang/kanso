@@ -29,11 +29,11 @@ distinct = keys (list/index_by all_opcodes (op -> spell (decode op)))
 
 test_all_35_decode_to_distinct_instructions = length distinct == 35
 
-test_bad_opcodes_decode_as_bad = decode 20481 == bad 20481
+test_bad_opcodes_decode_as_bad = spelled 20481 == "DW #5001"
 
-test_decode_draw = decode 56533 == draw 5 12 13
+test_decode_draw = spelled 56533 == "DRW VC, VD, 5"
 
-test_decode_skip_key = decode 60574 == skip_key 12
+test_decode_skip_key = spelled 60574 == "SKP VC"
 
 test_every_opcode_round_trips = list/all? all_opcodes round_trips?
 
@@ -43,29 +43,29 @@ test_hex_widens = hex 65535 2 == "FFFF"
 
 test_hex_zero = hex 0 1 == "0"
 
-test_parse_drw = parsed "DRW" ["V1" "v2" "15"] == draw 15 1 2
+test_parse_drw = spell (parsed "DRW" ["V1" "v2" "15"]) == "DRW V1, V2, 15"
 
-test_parse_jp_v0 = parsed "JP" ["V0" "#300"] == jump_v0 768
+test_parse_jp_v0 = spell (parsed "JP" ["V0" "#300"]) == "JP V0, #300"
 
 jp_v1 = parsed "JP" ["V1" "#300"]
 
-refused = problem "`JP` does not take these 2 operand(s)"
+refused = "`JP` does not take these 2 operand(s)"
 
-test_parse_jp_v1_is_refused = jp_v1 == refused
+test_parse_jp_v1_is_refused = jp_v1.reason == refused
 
-test_parse_ld_store = parsed "LD" ["[i]" "VA"] == store 10
+test_parse_ld_store = spell (parsed "LD" ["[i]" "VA"]) == "LD [I], VA"
 
 too_big = parsed "LD" ["V1" "300"]
 
-test_parse_out_of_range = too_big == problem "byte 300 does not fit in 0..255"
+test_parse_out_of_range = too_big.reason == "byte 300 does not fit in 0..255"
 
 mov = parsed "MOV" ["V1" "V2"]
 
-test_parse_unknown = mov == problem "unknown instruction `MOV`"
+test_parse_unknown = mov.reason == "unknown instruction `MOV`"
 
 unresolved_jump = parsed "JP" ["nowhere"]
 
-test_parse_unresolved = unresolved_jump == problem "unknown label `nowhere`"
+test_parse_unresolved = unresolved_jump.reason == "unknown label `nowhere`"
 
 test_spell_add_i = spelled 62750 == "ADD I, V5"
 
@@ -84,6 +84,9 @@ fn spells_back? op
   instr == parsed m[1] (operand_texts rest)
 
 fn operand_texts ""
+  []
+
+fn operand_texts none
   []
 
 fn operand_texts rest

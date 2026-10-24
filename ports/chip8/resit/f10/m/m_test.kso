@@ -1,0 +1,3 @@
+q = 3
+
+test_scaled = scaled q 2 == 6

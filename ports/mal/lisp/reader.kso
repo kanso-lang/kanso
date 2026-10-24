@@ -10,7 +10,7 @@ type blank
 
 # Reading a line answers the form on it, `blank`, or an err naming what was
 # wrong. The err rides through every combinator below on its own arm.
-fn read_str s
+pub fn read_str s
   tokens = tokenize s
   first_form tokens
 
@@ -74,7 +74,7 @@ fn or_empty c
   c
 
 fn piece cs from to
-  text/join (text/slice cs from to) ""
+  text/join (sliced (text/slice cs from to) []) ""
 
 fn line_end cs i n
   return i if n < i

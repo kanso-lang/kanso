@@ -1,0 +1,14 @@
+type world
+  atoms
+  next_id
+
+fn bump store n
+  put store (n % 50) n
+
+fn count_up 0 w
+  length w.atoms
+
+fn count_up n w
+  count_up (n - 1) (world (bump w.atoms n) (w.next_id + 1))
+
+print "{count_up 160000 (world {} 0)}"

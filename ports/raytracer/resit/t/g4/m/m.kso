@@ -1,0 +1,12 @@
+import "../t"
+
+type options
+  mode
+  name
+
+fn defaults name
+  options (t/mode_named name) name
+
+pub fn run name
+  opts = defaults name
+  t/shade (t/mode_named name)

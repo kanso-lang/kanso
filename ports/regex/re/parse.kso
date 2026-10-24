@@ -86,10 +86,16 @@ fn fail at code text
   err (syntax_error at code text)
 
 # The pattern text from one position to another, inclusive. text/slice
-# answers nothing at all for a range that runs off the end, so `to` is
-# clamped first.
+# answers none for a range that runs off the end, so `to` is clamped first,
+# and a start past the end is the empty text.
 fn chunk cs from to
-  text/join (text/slice cs from (smaller to (length cs))) ""
+  text/join (sliced (text/slice cs from (smaller to (length cs))) []) ""
+
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of
 
 # alternation := sequence ("|" sequence)*
 fn alternation cs at st
@@ -174,7 +180,7 @@ fn quantify cs op at st acc _ least most
   sequence cs next st (push front wrapped) (after_loop op)
 
 fn too_many? least most
-  max_repeat < least or max_repeat < most or -1 < most and most < least
+  max_repeat < least or max_repeat < most or (-1 < most and most < least)
 
 # How many copies of its innermost piece a node stands for once counted
 # repetition is expanded. Go refuses a nesting whose counts multiply past

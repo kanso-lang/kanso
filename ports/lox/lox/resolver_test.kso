@@ -12,8 +12,9 @@ test_resolve_captured =
 
 test_resolve_depths =
   first = resolved_first "\{ var a = 1; \{ print a; } }"
-  inner = first.statements[2].statements[1]
-  inner.expression == local_get 1 (scan "a").tokens[1] 1
+  got = first.statements[2].statements[1].expression
+  a = (scan "a").tokens[1]
+  got.depth == 1 and got.name == a and got.slot == 1
 
 test_resolve_duplicate =
   errors = resolve_errors "\{ var a; var a; }"

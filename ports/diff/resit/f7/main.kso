@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/total [1 2]} {m/other []} {m/third [1]}"

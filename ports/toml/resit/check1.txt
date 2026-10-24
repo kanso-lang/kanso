@@ -1,0 +1,196 @@
+error[exhaustive]: this can be an err and `after_date` has no arm for it — dispatch on it here, or give `after_date` an `(err _)` arm (in datetime.kso) (module toml)
+  --> toml/datetime.kso:36:18
+  36 |   after_date tok date base
+                        ^
+error[exhaustive]: this can be a none and `list/fold` has no arm for it — resolve it here, or give `list/fold` a `none` arm (in datetime.kso) (module toml)
+  --> toml/datetime.kso:43:14
+  43 |   list/fold (text/slice tok i (i + n - 1)) 0 (acc b -> acc * 10 + b - 48)
+                    ^
+error[exhaustive]: this can be an err and `time_alone` has no arm for it — dispatch on it here, or give `time_alone` an `(err _)` arm (in datetime.kso) (module toml)
+  --> toml/datetime.kso:109:18
+ 109 |   time_alone tok timed base
+                        ^
+error[exhaustive]: this can be a none and `text/utf8` has no arm for it — resolve it here, or give `text/utf8` a `none` arm (in datetime.kso) (module toml)
+  --> toml/datetime.kso:135:25
+ 135 |   fraction = text/utf8 (text/slice tok (i + 1) (e - 1))
+                               ^
+error[exhaustive]: this can be a none and `text/utf8` has no arm for it — resolve it here, or give `text/utf8` a `none` arm (in key.kso) (module toml)
+  --> toml/key.kso:22:24
+  22 |   parsed q (text/utf8 (text/slice cs p (q - 1)))
+                              ^
+error[exhaustive]: this can be an err and `key_rest` has no arm for it — dispatch on it here, or give `key_rest` an `(err _)` arm (in key.kso) (module toml)
+  --> toml/key.kso:28:15
+  28 |   key_rest cs first []
+                     ^
+error[exhaustive]: this can be an err and `key_rest` has no arm for it — dispatch on it here, or give `key_rest` an `(err _)` arm (in key.kso) (module toml)
+  --> toml/key.kso:33:15
+  33 |   key_rest cs next names
+                     ^
+error[exhaustive]: this can be an err and `along` has no arm for it — dispatch on it here, or give `along` an `(err _)` arm (in lookup.kso) (module toml)
+  --> toml/lookup.kso:11:24
+  11 |   finish cs (along doc steps)
+                              ^
+error[exhaustive]: this can be a none and `text/utf8` has no arm for it — resolve it here, or give `text/utf8` a `none` arm (in lookup.kso) (module toml)
+  --> toml/lookup.kso:26:35
+  26 |   index = text/to_int (text/utf8 (text/slice cs (p + 1) (q - 1)))
+                                         ^
+error[exhaustive]: this can be an err and `after_key` has no arm for it — dispatch on it here, or give `after_key` an `(err _)` arm (in lookup.kso) (module toml)
+  --> toml/lookup.kso:32:16
+  32 |   after_key cs keyed steps
+                      ^
+error[exhaustive]: this can be an err and `after_key` has no arm for it — dispatch on it here, or give `after_key` an `(err _)` arm (in lookup.kso) (module toml)
+  --> toml/lookup.kso:37:16
+  37 |   after_key cs keyed steps
+                      ^
+error[exhaustive]: this can be a none and `list/reject` has no arm for it — resolve it here, or give `list/reject` a `none` arm (in number.kso) (module toml)
+  --> toml/number.kso:120:25
+ 120 |   digits = list/reject (text/slice tok i last) (b -> b == 95)
+                               ^
+error[exhaustive]: this can be an err and `dec_int_end` has no arm for it — dispatch on it here, or give `dec_int_end` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:158:21
+ 158 |   dec_int_end tok i e base
+                           ^
+error[exhaustive]: this can be an err and `dec_int_value` has no arm for it — dispatch on it here, or give `dec_int_value` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:162:23
+ 162 |   dec_int_value tok i last base
+                             ^
+error[exhaustive]: this can be an err and `based_end` has no arm for it — dispatch on it here, or give `based_end` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:205:17
+ 205 |   based_end tok e radix base
+                       ^
+error[exhaustive]: this can be an err and `based_value` has no arm for it — dispatch on it here, or give `based_value` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:209:19
+ 209 |   based_value tok last radix base
+                         ^
+error[exhaustive]: this can be an err and `float_whole` has no arm for it — dispatch on it here, or give `float_whole` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:218:21
+ 218 |   float_whole tok i e base
+                           ^
+error[exhaustive]: this can be an err and `float_exp` has no arm for it — dispatch on it here, or give `float_exp` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:227:17
+ 227 |   float_exp tok f base
+                       ^
+error[exhaustive]: this can be an err and `run_last` has no arm for it — dispatch on it here, or give `run_last` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:253:23
+ 253 |   last = run_last tok k base "float"
+                             ^
+error[exhaustive]: this can be an err and `float_text` has no arm for it — dispatch on it here, or give `float_text` an `(err _)` arm (in number.kso) (module toml)
+  --> toml/number.kso:254:18
+ 254 |   float_text tok last
+                        ^
+error[exhaustive]: this can be a none and `list/reject` has no arm for it — resolve it here, or give `list/reject` a `none` arm (in number.kso) (module toml)
+  --> toml/number.kso:257:39
+ 257 |   digits = list/to_list (list/reject (text/slice tok 1 last) (b -> b == 95))
+                                             ^
+error[exhaustive]: this can be an err and `newline_at` has no arm for it — dispatch on it here, or give `newline_at` an `(err _)` arm (in scan.kso) (module toml)
+  --> toml/scan.kso:54:17
+  54 |   newline_at cs q
+                       ^
+error[exhaustive]: this can be a none and `list/count` has no arm for it — resolve it here, or give `list/count` a `none` arm (in scan.kso) (module toml)
+  --> toml/scan.kso:86:15
+  86 |   list/count (text/slice cs 1 (p - 1)) (b -> b == 10) + 1
+                     ^
+error[exhaustive]: this can be a none and `text/utf8` has no arm for it — resolve it here, or give `text/utf8` a `none` arm (in scan.kso) (module toml)
+  --> toml/scan.kso:127:17
+ 127 |   "`{text/utf8 (text/slice cs p (p + utf8_width c - 1))}`"
+                       ^
+error[exhaustive]: this can be an err and `skip_space` has no arm for it — dispatch on it here, or give `skip_space` an `(err _)` arm (in scan.kso) (module toml)
+  --> toml/scan.kso:161:17
+ 161 |   skip_space cs q
+                       ^
+error[exhaustive]: this can be an err and `skip_space` has no arm for it — dispatch on it here, or give `skip_space` an `(err _)` arm (in scan.kso) (module toml)
+  --> toml/scan.kso:168:17
+ 168 |   skip_space cs q
+                       ^
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in string.kso) (module toml)
+  --> toml/string.kso:24:27
+  24 |   kept = text/append acc (text/slice cs start (p - 1))
+                                 ^
+error[exhaustive]: this can be an err and `line_escaped` has no arm for it — dispatch on it here, or give `line_escaped` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:26:19
+  26 |   line_escaped cs esc kept
+                         ^
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in string.kso) (module toml)
+  --> toml/string.kso:47:28
+  47 |   whole = text/append acc (text/slice cs start (p - 1))
+                                  ^
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in string.kso) (module toml)
+  --> toml/string.kso:71:27
+  71 |   kept = text/append acc (text/slice cs start (p - 1))
+                                 ^
+error[exhaustive]: this can be a none and `text/append` has no arm for it — resolve it here, or give `text/append` a `none` arm (in string.kso) (module toml)
+  --> toml/string.kso:83:40
+  83 |   kept = text/append (text/append acc (text/slice cs start (p - 1))) 10
+                                              ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:84:16
+  84 |   block_run cs next next kept q
+                      ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:84:21
+  84 |   block_run cs next next kept q
+                           ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:108:16
+ 108 |   block_run cs next next acc 34
+                      ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:108:21
+ 108 |   block_run cs next next acc 34
+                           ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:112:16
+ 112 |   block_run cs next next acc 34
+                      ^
+error[exhaustive]: this can be an err and `block_run` has no arm for it — dispatch on it here, or give `block_run` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:112:21
+ 112 |   block_run cs next next acc 34
+                           ^
+error[exhaustive]: this can be an err and `block_escaped` has no arm for it — dispatch on it here, or give `block_escaped` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:119:20
+ 119 |   block_escaped cs esc acc
+                          ^
+error[exhaustive]: this can be an err and `skip_lines` has no arm for it — dispatch on it here, or give `skip_lines` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:135:17
+ 135 |   skip_lines cs next
+                       ^
+error[exhaustive]: this can be an err and `unicode_scalar` has no arm for it — dispatch on it here, or give `unicode_scalar` an `(err _)` arm (in string.kso) (module toml)
+  --> toml/string.kso:186:22
+ 186 |   unicode_scalar p n code
+                            ^
+error[exhaustive]: this can be a none and `list/map` has no arm for it — resolve it here, or give `list/map` a `none` arm (in table.kso) (module toml)
+  --> toml/table.kso:63:35
+  63 |   parts = list/to_list (list/map (text/slice names 1 n) shown_key)
+                                         ^
+error[exhaustive]: this can be an err and `array_open` has no arm for it — dispatch on it here, or give `array_open` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:62:17
+  62 |   array_open cs q []
+                       ^
+error[exhaustive]: this can be an err and `array_after` has no arm for it — dispatch on it here, or give `array_after` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:75:18
+  75 |   array_after cs item items
+                        ^
+error[exhaustive]: this can be an err and `array_delim` has no arm for it — dispatch on it here, or give `array_delim` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:79:24
+  79 |   array_delim cs cs[q] q (push items v)
+                              ^
+error[exhaustive]: this can be an err and an index wants a value — dispatch on it first with an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:79:21
+  79 |   array_delim cs cs[q] q (push items v)
+                           ^
+error[exhaustive]: this can be an err and `array_open` has no arm for it — dispatch on it here, or give `array_open` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:83:17
+  83 |   array_open cs q items
+                       ^
+error[exhaustive]: this can be an err and `inline_key` has no arm for it — dispatch on it here, or give `inline_key` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:112:19
+ 112 |   inline_key cs p keyed slots
+                         ^
+error[exhaustive]: this can be an err and `inline_value` has no arm for it — dispatch on it here, or give `inline_value` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:117:31
+ 117 |   inline_value cs start names item slots
+                                     ^
+error[exhaustive]: this can be an err and `inline_after` has no arm for it — dispatch on it here, or give `inline_after` an `(err _)` arm (in value.kso) (module toml)
+  --> toml/value.kso:122:21
+ 122 |   inline_after cs q grown
+                           ^

@@ -50,7 +50,7 @@ fn lex_at 32 bs i line acc
 # a string runs to the next double quote, newlines and all
 fn lex_at 34 bs i line acc
   close = text/find2 bs (i + 1) 34 34
-  body = text/utf8 (text/slice bs (i + 1) (close - 1))
+  body = utf8_in (text/slice bs (i + 1) (close - 1))
   lines = line + newlines_in bs (i + 1) (close - 1) 0
   unclosed = tok "illegal" line "illegal character: \""
   return push (push acc unclosed) (tok "eof" line "") if length bs < close
@@ -70,7 +70,7 @@ fn lex_at 92 bs i line acc
   lex bs (i + 1) line (push acc (tok "illegal" line "illegal character: \\"))
 
 fn lex_at c bs i line acc
-  return number bs i line acc if digit? c or c == 46 and digit_after? bs i
+  return number bs i line acc if digit? c or (c == 46 and digit_after? bs i)
   return word bs i line acc if 97 <= c and c <= 122
   operator bs i line acc
 
@@ -96,7 +96,7 @@ fn newlines_in bs i last count
 # written; a backslash-newline inside a number is skipped, which is what
 # lets bc read back its own wrapped output.
 pub fn digit? c
-  48 <= c and c <= 57 or 65 <= c and c <= 90
+  (48 <= c and c <= 57) or (65 <= c and c <= 90)
 
 fn digit_after? bs i
   next = bs[i + 1]
@@ -125,17 +125,17 @@ fn digit_char? c
 
 fn word bs i line acc
   end = word_end bs i
-  spelled = text/utf8 (text/slice bs i (end - 1))
+  spelled = utf8_in (text/slice bs i (end - 1))
   lex bs end line (push acc (tok (keyword spelled) line spelled))
 
 fn word_end bs i
   c = bs[i]
   return i if c == none
-  return word_end bs (i + 1) if 97 <= c and c <= 122 or digit_or_bar? c
+  return word_end bs (i + 1) if (97 <= c and c <= 122) or digit_or_bar? c
   i
 
 fn digit_or_bar? c
-  48 <= c and c <= 57 or c == 95
+  (48 <= c and c <= 57) or c == 95
 
 fn keyword "auto"
   "auto"
@@ -206,11 +206,19 @@ fn keyword "while"
 fn keyword _
   "name"
 
+# The text of a slice of the source. Only the two-character operator at the
+# very last byte reaches past the end, and then there is no pair to find.
+fn utf8_in none
+  ""
+
+fn utf8_in bs
+  text/utf8 bs
+
 # Operators: the two-character spellings first, then one character.
 fn operator bs i line acc
-  pair = text/utf8 (text/slice bs i (i + 1))
+  pair = utf8_in (text/slice bs i (i + 1))
   return lex bs (i + 2) line (push acc (tok pair line pair)) if double? pair
-  single = text/utf8 (text/slice bs i i)
+  single = utf8_in (text/slice bs i i)
   return lex bs (i + 1) line (push acc (tok single line single)) if lone? single
   bad = tok "illegal" line "illegal character: {single}"
   lex bs (i + 1) line (push acc bad)

@@ -98,11 +98,19 @@ fn partials_at dir true
 fn partials_at file false
   os/read_file file .> json_partials
 
+# path/dirname answers none when its own text/slice could run past the end,
+# which it cannot; the arm is here because the checker cannot see that.
+fn here_if_none none
+  "."
+
+fn here_if_none dir
+  dir
+
 fn partials_from p
   os/is_dir p .> (dir? -> partials_at p dir?)
 
 fn partials_source template none
-  partials_from (path/dirname template)
+  partials_from (here_if_none (path/dirname template))
 
 fn partials_source _ given
   partials_from given

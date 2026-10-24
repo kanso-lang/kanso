@@ -1,4 +1,5 @@
 import "std/bits"
+import "std/list"
 import "std/text"
 
 # Conflict analysis to the first unique implication point.
@@ -54,7 +55,7 @@ fn walk tr db confl state p index
   walk tr bumped r next pl (at - 1)
 
 fn learned_from tr db order out seen pl
-  uip_first = text/concat [(neg pl)] (text/slice out 2 (length out))
+  uip_first = list/concat [(neg pl)] (ranged (text/slice out 2 (length out)))
   { clauses } = db
   abstract = abstraction tr uip_first 2 0
   kept = minimize tr clauses seen uip_first 2 [(neg pl)] abstract
@@ -171,5 +172,5 @@ fn swap c a b
   x = c[a]
   y = c[b]
   front = push (text/slice c 1 (a - 1)) y
-  middle = push (text/concat front (text/slice c (a + 1) (b - 1))) x
-  text/concat middle (text/slice c (b + 1) (length c))
+  middle = push (list/concat front (ranged (text/slice c (a + 1) (b - 1)))) x
+  list/concat middle (ranged (text/slice c (b + 1) (length c)))

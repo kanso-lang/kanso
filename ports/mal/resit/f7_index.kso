@@ -1,0 +1,11 @@
+fn shown v:int
+  "int {v}"
+
+fn shown v
+  "other {v}"
+
+fn walk items i
+  return "end" if length items < i
+  shown items[i]
+
+print (walk [1 2 3] 2)

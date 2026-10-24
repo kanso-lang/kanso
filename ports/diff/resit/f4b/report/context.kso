@@ -1,0 +1,51 @@
+# Context format: each hunk shows the old side and then the new side, with
+# "!" on lines that changed, "-" on lines only the old side has and "+" on
+# lines only the new side has. A side with nothing changed prints only its
+# range line.
+import "../lines"
+import "std/list"
+
+pub fn context a b label_a label_b cs ctx
+  head = ["*** {label_a}" "--- {label_b}"]
+  list/fold (hunks cs ctx) head (&context_hunk a b ctx)
+
+fn context_hunk a b ctx out group
+  first = group[1]
+  last = group[length group]
+  a_lo = larger 1 (first.a_at - ctx)
+  b_lo = first.b_at - (first.a_at - a_lo)
+  a_end = last.a_at + last.a_n
+  tail = smaller ctx (lines/count a - a_end + 1)
+  a_hi = a_end + tail - 1
+  b_hi = last.b_at + last.b_n + tail - 1
+  stars = push out "***************"
+  old_head = push stars "*** {range a_lo a_hi} ****"
+  gone? = list/any? group (c -> c.a_n > 0)
+  old = if gone? (old_side a group a_lo a_hi old_head) old_head
+  new_head = push old "--- {range b_lo b_hi} ----"
+  came? = list/any? group (c -> c.b_n > 0)
+  if came? (new_side b group b_lo b_hi new_head) new_head
+
+fn old_side a group lo hi out
+  walked = list/fold group (place out lo) (&old_change a)
+  emit_range walked.out a walked.pos hi "  "
+
+fn new_side b group lo hi out
+  walked = list/fold group (place out lo) (&new_change b)
+  emit_range walked.out b walked.pos hi "  "
+
+fn old_change a (place out pos) c
+  before = emit_range out a pos (c.a_at - 1) "  "
+  mark = if (c.b_n > 0) "! " "- "
+  stop = c.a_at + c.a_n
+  place (emit_range before a c.a_at (stop - 1) mark) stop
+
+fn new_change b (place out pos) c
+  before = emit_range out b pos (c.b_at - 1) "  "
+  mark = if (c.a_n > 0) "! " "+ "
+  stop = c.b_at + c.b_n
+  place (emit_range before b c.b_at (stop - 1) mark) stop
+
+fn range lo hi
+  return "{hi}" if lo > hi
+  if (lo == hi) "{lo}" "{lo},{hi}"

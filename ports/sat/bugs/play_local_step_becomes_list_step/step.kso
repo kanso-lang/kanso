@@ -1,0 +1,17 @@
+# BUG (engines disagree): under `kanso play`, a file's own function `step`
+# is replaced by std/list's record `list/step` on the native engine when the
+# file imports std/list. The interpreter calls the function.
+#
+#   kanso play step.kso --interp   prints 4
+#   kanso play step.kso            prints list/step 3
+#
+# The same function inside a module directory, run with `kanso run`, `build`
+# or `--interp`, prints 4 everywhere. Expected: 4 on every engine (the
+# 2026-10-12 gavel "arms travel with the value, and a file names only what
+# it can see" says a file's own name wins).
+import "std/list"
+
+fn step x
+  x + 1
+
+print "{step 3} {list/sum [1 2]}"

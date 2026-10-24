@@ -1,0 +1,6 @@
+import "std/text"
+
+fn cut _
+  text/slice 5 1 2
+
+print "{cut [1]}"

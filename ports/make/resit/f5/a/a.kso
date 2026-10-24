@@ -1,0 +1,9 @@
+pub type hot
+
+pub type cold
+
+pub type cup
+  temp
+
+pub fn hot_cup _
+  cup hot

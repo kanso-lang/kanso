@@ -1,0 +1,40 @@
+import "std/net"
+import "std/os"
+
+# A server that gives each connection its own fiber, and two clients: one
+# that connects and waits two seconds before it speaks, and one that
+# connects half a second in and speaks at once.
+pub fn race l p
+  accepting l 2
+  late p
+  early p
+
+fn accepting _ 0
+  effect done
+
+fn accepting l n
+  net/accept l .> (c -> both l n c)
+
+fn both l n c
+  answering c
+  accepting l (n - 1)
+
+fn answering c
+  net/read c
+    .> (_ -> net/write c "HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n")
+    .> (_ -> net/close_conn c)
+
+fn late p
+  argv = ["-c" (client "sleep 2; ") "late" "{p}"]
+  os/run "bash" argv .> (r -> print r.stdout)
+
+fn early p
+  argv = ["-c" (client "") "early" "{p}"]
+  os/run "bash" argv .> (r -> print r.stdout)
+
+fn client delay
+  stamp = "date +%s.%N | cut -c9-12"
+  send = "printf 'GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n'"
+  wait = if (delay == "") "sleep 0.5; " ""
+  talk = "\{ {delay}{send}; } | nc -N 127.0.0.1 $1 > /dev/null"
+  "{wait}{talk}; echo $0 $({stamp})"

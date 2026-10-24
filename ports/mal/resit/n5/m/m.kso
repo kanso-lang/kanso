@@ -1,0 +1,12 @@
+import "std/text"
+
+type case
+  expected
+  line
+
+pub fn run lines
+  c = case (text/slice lines 2 3) lines[1]
+  "{agrees? c.expected}"
+
+fn agrees? expected
+  length expected > 0

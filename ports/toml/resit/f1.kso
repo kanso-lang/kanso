@@ -1,0 +1,7 @@
+fn kind 0x22
+  "quote"
+
+fn kind _
+  "other"
+
+print (kind 34)

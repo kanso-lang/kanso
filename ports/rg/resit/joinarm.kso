@@ -1,0 +1,9 @@
+import "std/text"
+
+fn text/join none _
+  ""
+
+fn head cs n
+  text/join (text/slice cs 1 n) ""
+
+print (head (text/chars "hello") 9)

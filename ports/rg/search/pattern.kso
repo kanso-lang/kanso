@@ -95,7 +95,7 @@ fn upper_from? cs i
   c = string_at cs i
   return upper_from? cs (i + 2) if c == "\\"
   code = text/char_code c
-  code >= 65 and code <= 90 or upper_from? cs (i + 1)
+  (code >= 65 and code <= 90) or upper_from? cs (i + 1)
 
 # A regex that does not compile, as the sentence to show the user, or none
 # when it compiles. Matching it against nothing is the cheapest way to ask

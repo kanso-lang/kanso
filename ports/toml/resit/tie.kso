@@ -1,0 +1,16 @@
+fn check n
+  return err "bad {n}" if n < 0
+  n
+
+fn resume e@(err _) _
+  e
+
+fn resume _ e@(err _)
+  e
+
+fn resume a b
+  a + b
+
+a = check 1
+b = check (0 - 2)
+print (resume a b)

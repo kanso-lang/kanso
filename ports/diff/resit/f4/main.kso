@@ -1,0 +1,4 @@
+import "./lib"
+
+xs = [1 2]
+print (lib/shout xs[3])

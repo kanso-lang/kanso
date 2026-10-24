@@ -1,0 +1,6 @@
+pub type parsed
+  a
+  b
+
+pub fn make x
+  parsed x x

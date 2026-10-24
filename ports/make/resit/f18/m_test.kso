@@ -1,0 +1,3 @@
+import "../f18"
+
+test_expand = f18/expand "a" .> (v -> effect (v == "xa"))

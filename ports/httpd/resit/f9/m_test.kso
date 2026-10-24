@@ -1,0 +1,4 @@
+import "../f9"
+
+test_wrapped_after_the_operator = f9/outcome "GET / HTTP/2.0\r\n\r\n" ==
+  "505 unsupported version"

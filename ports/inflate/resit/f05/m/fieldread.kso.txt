@@ -1,0 +1,13 @@
+type pair
+  left
+  right
+
+fn halves 0
+  err "nothing to halve"
+
+fn halves n
+  pair (n / 2) (n - n / 2)
+
+pub fn total n
+  p = halves n
+  p.left + p.right

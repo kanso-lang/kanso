@@ -1,0 +1,4 @@
+fn begin o []
+  o
+
+print (begin 1 [])

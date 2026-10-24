@@ -1,0 +1,79 @@
+import "std/list"
+import "std/text"
+
+type holder
+  last
+  items
+
+type chains
+  heads
+  links
+
+fn bare_map m i n
+  return length m if i > n
+  bare_map (put m (i * 7 % 1000003) i) (i + 1) n
+
+fn rec_map ch i n
+  return length ch.heads if i > n
+  chains heads links = ch
+  rec_map (chains (put heads (i * 7 % 1000003) i) links) (i + 1) n
+
+fn read_then_put m i n
+  return length m if i > n
+  old = m[i - 1]
+  read_then_put (put m i (or_zero old)) (i + 1) n
+
+fn or_zero none
+  0
+
+fn or_zero v
+  v
+
+fn bare_push xs i n
+  return length xs if i > n
+  bare_push (push xs i) (i + 1) n
+
+fn append_bytes b i n
+  return length b if i > n
+  append_bytes (text/append b (i % 256)) (i + 1) n
+
+fn pick "map" n
+  bare_map {} 1 n
+
+fn pick "rec" n
+  rec_map (chains {} []) 1 n
+
+fn pick "readput" n
+  read_then_put {} 1 n
+
+fn pick "push" n
+  bare_push [] 1 n
+
+fn pick "recpush" n
+  rec_push n
+
+fn pick "foldpush" n
+  plain_fold n
+
+fn pick _ n
+  append_bytes (text/bytes "") 1 n
+
+pub fn run a
+  print "{pick (or_text a[1]) (or_zero (text/to_int (or_text a[2])))}"
+
+fn or_text none
+  ""
+
+fn or_text s
+  s
+
+fn rec_push n
+  h = list/fold (list/take list/naturals n) (holder 0 []) (s i -> rec_step s i)
+  length h.items
+
+fn rec_step (holder _ items) i
+  holder i (push items i)
+
+fn plain_fold n
+  xs = list/fold (list/take list/naturals n) [] (acc i -> push acc i)
+  length xs

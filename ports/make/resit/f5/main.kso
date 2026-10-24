@@ -1,0 +1,4 @@
+import "./a"
+import "./b"
+
+print (b/describe (a/hot_cup 1))

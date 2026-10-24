@@ -1,0 +1,7 @@
+fn code_text []
+  ""
+
+fn code_text lines
+  "{length lines}"
+
+print (code_text [])

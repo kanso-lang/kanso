@@ -1,0 +1,6 @@
+type cut
+  before
+  after
+
+c = cut "a" "b"
+print "{c.before}"

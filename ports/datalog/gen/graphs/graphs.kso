@@ -57,8 +57,8 @@ fn pick "tree" n
   rules = ["path(X, Y) :- edge(X, Y)." "path(X, Z) :- path(X, Y), edge(Y, Z)."]
   queries = ["?- path(1, {n})." "?- path({n}, 1)." "?- path(X, 2)."]
   header = ["% transitive closure over a generated tree of {n} nodes"]
-  body = text/concat header (tree_edges n)
-  finish (text/concat body (text/concat rules queries))
+  body = list/concat header (tree_edges n)
+  finish (list/concat body (list/concat rules queries))
 
 # `family N`: people 1..N in a random recursive tree, each person's parent
 # any person before them, and the same-generation program over it.
@@ -70,8 +70,8 @@ fn pick "family" n
     . push "sg(X, Y) :- parent(X, XP), sg(XP, YP), parent(Y, YP)."
   queries = ["?- sg({n}, {n - 1})." "?- sg({n}, 1)." "?- sg(2, Y)."]
   header = ["% same generation over a generated family of {n} people"]
-  body = text/concat header parents.lines
-  finish (text/concat body (text/concat rules queries))
+  body = list/concat header parents.lines
+  finish (list/concat body (list/concat rules queries))
 
 fn pick none _
   print "usage: gen <kind> <size>; try `tree 2500`"

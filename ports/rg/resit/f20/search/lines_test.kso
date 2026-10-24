@@ -1,0 +1,10 @@
+import "std/text"
+
+fn run args body
+  c = parse args
+  searched c (target_at "f.txt" false) (decoded (text/bytes body)) true
+
+fn printed_by args body
+  (run args body).out
+
+test_plain = printed_by ["x"] "x\n" == ["x\n"]

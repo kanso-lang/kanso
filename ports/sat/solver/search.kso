@@ -46,7 +46,7 @@ type solver
 # The literals of one input clause, sorted with duplicates removed: answers
 # none for a tautology or a clause already true at level 0, otherwise the
 # literals not already false.
-fn cleaned assigns ds
+pub fn cleaned assigns ds
   sorted = list/sort (list/to_list (list/map ds lit_of))
   unique = dedup sorted 1 []
   return none if tautology? unique 1
@@ -107,7 +107,7 @@ fn with_props (stats conflicts decisions learnt _ removed restarts) props
   stats conflicts decisions learnt props removed restarts
 
 # the luby sequence 1 1 2 1 1 2 4 1 1 2 1 1 2 4 8 ..., from x = 0
-fn luby_of x
+pub fn luby_of x
   luby_find x 1 0
 
 fn luby_find x size seq
@@ -125,13 +125,13 @@ fn power _ 0
 fn power b e
   b * power b (e - 1)
 
-fn budget geometric 0
+pub fn budget geometric 0
   100
 
-fn budget geometric k
+pub fn budget geometric k
   budget geometric (k - 1) * 3 / 2
 
-fn budget luby k
+pub fn budget luby k
   100 * luby_of k
 
 pub fn solve vars clauses strategy

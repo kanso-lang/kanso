@@ -1,0 +1,7 @@
+import "std/list"
+
+pub fn go n
+  "{step n 1 2 3} {list/sum [1]}"
+
+fn step u label m k
+  u + label + m + k

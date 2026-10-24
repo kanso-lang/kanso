@@ -1,0 +1,6 @@
+# The syntax tree.
+# Second header line.
+
+# A clause.
+pub type clause
+  head

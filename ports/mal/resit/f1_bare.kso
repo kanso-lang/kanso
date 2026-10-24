@@ -1,0 +1,4 @@
+fn show xs
+  "{length xs} items"
+
+print (show [1 2 3])

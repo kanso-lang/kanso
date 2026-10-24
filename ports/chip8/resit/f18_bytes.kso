@@ -1,0 +1,7 @@
+import "std/list"
+import "std/os"
+
+fn joined rom
+  list/concat [1 2 3] rom
+
+os/read_bytes! "../roms/digits.ch8" .> (rom -> print "{joined rom}")

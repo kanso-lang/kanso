@@ -1,0 +1,6 @@
+fn host m name
+  f = m[name]
+  return "none" if f == none
+  f 1
+
+print (host { "a":(x -> "got {x}") } "a")

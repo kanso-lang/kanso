@@ -1,0 +1,19 @@
+A pattern may name a type the file cannot see, and nothing refuses it.
+
+m/m.kso declares a private type `held` and a pub `make` that builds one.
+u/u.kso imports nothing and writes an arm `shown (held v)`. A call `held 1`
+in u would be error[name] (unknown name `held`). The pattern is not refused.
+
+  kanso check .          ok
+  kanso run . --interp   got nothing        (the arm never matches)
+  kanso run .            error: native backend: unknown type `held`
+
+Expected: error[name] at the pattern on every engine, the refusal a call to
+the same name gets. Today the engines disagree, and native's message is an
+internal one with no file or line.
+
+The same shape in a *_test.kso (a test is an outside consumer, gavel
+2026-10-12 on #1883) checks clean and makes the test fail at run time:
+the mal port's `outcome_text (finished v w)` arm stopped matching when
+`finished` was private, and kanso test reported "no overload of
+`outcome_text` matches these arguments" rather than an unknown name.

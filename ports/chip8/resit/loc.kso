@@ -1,0 +1,13 @@
+import "std/list"
+import "std/text"
+
+fn positive? n
+  n > 0
+
+fn parts? s
+  rest = text/slice s 5 (length s)
+  length (text/split rest ", ") > 0
+
+xs = [1 2 3]
+print "{list/all? xs positive?}"
+print "{list/all? ["ab" "cd"] parts?}"

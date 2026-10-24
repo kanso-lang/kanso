@@ -1,0 +1,13 @@
+fn fill m i n
+  return m if n < i
+  key = "k{i}"
+  fill (put m key (counted m[key])) (i + 1) n
+
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+pub fn read_put n
+  length (fill {} 1 n)

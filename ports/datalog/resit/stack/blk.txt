@@ -1,0 +1,6 @@
+fn skip_block c "*" acc
+  scan (advance c 2) acc
+
+fn skip_block c _ acc
+  next = advance c 1
+  skip_block next (at next 0) acc

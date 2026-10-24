@@ -1,0 +1,3 @@
+import "./m"
+
+print "{m/locate 1 (m/rec "a" 2 3) m/tombstone}"

@@ -1,0 +1,5 @@
+import "./m"
+import "std/os"
+import "std/text"
+
+os/args .> (a -> a[1]!) .> (s -> print "{m/spin_rec (text/to_int s)}")

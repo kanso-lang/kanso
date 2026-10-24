@@ -1,0 +1,8 @@
+fn hex_digit d
+  d - 48
+
+fn hex_from ds i acc
+  return acc if i > length ds
+  hex_from ds (i + 1) (acc * 16 + hex_digit ds[i])
+
+print "{hex_from [49 50] 1 0}"

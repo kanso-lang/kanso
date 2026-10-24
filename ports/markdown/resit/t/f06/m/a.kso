@@ -1,0 +1,5 @@
+type found
+  at
+
+pub fn hit n
+  found n

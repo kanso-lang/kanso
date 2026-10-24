@@ -1,0 +1,6 @@
+type delims
+  close
+  open
+
+d = delims "}}" "{{"
+print "{d.open} {d.close}"

@@ -1,0 +1,8 @@
+fn neg l
+  0 - l
+
+fn first_neg trail q
+  p = trail[q]
+  neg p
+
+print "{first_neg [1 2] 1}"

@@ -1,0 +1,12 @@
+import "std/text"
+
+fn head cs n
+  joined (text/slice cs 1 n)
+
+fn joined none
+  ""
+
+fn joined xs
+  text/join xs ""
+
+print (head (text/chars "hello") 3)

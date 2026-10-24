@@ -1,0 +1,37 @@
+# Reading a map into a name before putting into it makes native code
+# roughly cubic. Reading inline in the put's argument stays linear.
+#
+# Run from this directory: kanso build main.kso --release && ./main, then
+#  change 8000 in main.kso.
+#
+# should: both loops linear, as the inline one is.
+# does (release, 2026-10-24, shared 4-CPU box): `named` 2,000 / 4,000 /
+#   8,000 keys take 0.16 s / 1.22 s / 9.6 s; dev at 8,000 takes 4.5 s; the
+#   interpreter takes 1.0 s. `inline` at 8,000 takes 0.012 s on release. With
+#   40,000 iterations the release binary ran 219 s and was killed.
+#
+# The two functions differ only in whether `m[key]` gets a name. Naming it is
+# what a reader does to keep a line short, and the 2026-10-12 check change
+# that carries errs through names makes binding the ordinary style.
+fn named m i n
+  return m if n < i
+  key = "k{i}"
+  seen = m[key]
+  named (put m key (counted seen)) (i + 1) n
+
+fn inline m i n
+  return m if n < i
+  key = "k{i}"
+  inline (put m key (counted m[key])) (i + 1) n
+
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+pub fn named_n n
+  length (named {} 1 n)
+
+pub fn inline_n n
+  length (inline {} 1 n)

@@ -1,0 +1,2 @@
+pub fn moved x
+  x + 1

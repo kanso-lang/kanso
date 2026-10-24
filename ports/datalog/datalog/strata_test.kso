@@ -1,10 +1,10 @@
+import "../testkit"
 import "std/list"
 import "std/text"
 
 fn layered source
-  tree = parse source
-  shape = check_program tree
-  laid_out (stratify tree shape)
+  strata = parse source .> (t -> check_program t .> (c -> stratify t c))
+  laid_out strata
 
 fn laid_out (err e)
   "{e.line}: {e.reason}"

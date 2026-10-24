@@ -1,0 +1,23 @@
+# A none stored in one record type's field is charged to a different type's
+# field of the same name, in another module.
+#
+# Run: kanso check .      (or kanso run . / kanso run . --interp)
+#
+# Should: check ok, and print "<none> HI". cl's private `reading` holds a
+# maybe-none `body`; lib's `request` is only ever built from a string, and
+# `body_text` reads `request.body`.
+#
+# Does: refused, at a line in lib that never sees a none:
+#   error[exhaustive]: this can be a none and `text/uppercase` has no arm for
+#   it ... (in lib.kso) (module ./cl)
+#     --> ./lib/lib.kso:10:19
+# with no source line printed. `kanso check lib` says ok. Rename cl's field
+# from `body` to `data` and the program checks and runs.
+#
+# In the httpd port, client/responses.kso stored a `text/slice` (maybe none
+# since the 2026-10-13 gavel) in its private `reading.body`, and the refusal
+# landed on http/request.kso's `body_text`, a function the client never
+# calls.
+import "./cl"
+
+print (cl/read ["a"])

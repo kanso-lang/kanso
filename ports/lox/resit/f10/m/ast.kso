@@ -1,0 +1,5 @@
+type literal
+  value
+
+pub fn lit v
+  literal v

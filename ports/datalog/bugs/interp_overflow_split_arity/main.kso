@@ -1,0 +1,26 @@
+# The interpreter runs out of stack on a loop of tail calls that native runs
+# in constant stack. Found in the datalog lexer on a 2,000-line input.
+#
+# Run: kanso run . --interp      and      kanso run .
+#
+# Should print "30000 1" on both engines: scan, scan_char and emit call each
+# other only in tail position.
+#
+# Does: native prints "30000 1". The interpreter stops with
+#   error[runtime]: the program ran out of stack: recursion went deeper than
+#   the stack holds
+#     failed in m/skip at ./m/b.kso:15
+# although `skip` never runs (the input holds no "/").
+#
+# All three of these are needed; take any one away and the interpreter
+# finishes:
+#   - a second `emit` of another arity, in a file that sorts before b.kso
+#     (rename m/a.kso to m/z.kso and it passes);
+#   - the `skip` arm whose body is a block `if`/`else` with a binding in the
+#     `else` (written as a one-line `if` it passes);
+#   - the loop's step being called `emit` (rename it and it passes).
+import "./m"
+import "std/list"
+
+cs = list/to_list (list/take (list/repeat "(") 30000)
+print "{length (m/lex cs)} {m/other 1}"

@@ -1,0 +1,5 @@
+import "std/list"
+import "std/text"
+
+print "{list/concat [1] (text/bytes "ab")}"
+  .> (_ -> print "{text/append [] (text/bytes "cd")}")

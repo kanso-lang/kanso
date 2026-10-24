@@ -1,6 +1,7 @@
+import "std/list"
 import "std/text"
 
-sample = text/join (text/concat head_lines body_lines) "\n"
+sample = text/join (list/concat head_lines body_lines) "\n"
 
 body_lines = ["@@ -1,3 +1,3 @@" " 1" "-2" "+two" " 3"]
 
@@ -47,11 +48,15 @@ test_apply_in_place =
 
 test_apply_finds_offset =
   result = apply_hunks ["0" "0" "1" "2" "3"] [(only_hunk sample)]
-  result.rows == ["0" "0" "1" "two" "3"] and result.outcomes == [(found 3 2)]
+  o = result.outcomes[1]
+  one = length result.outcomes == 1
+  result.rows == ["0" "0" "1" "two" "3"] and one and o.at == 3 and o.offset == 2
 
 test_apply_reports_miss =
   result = apply_hunks ["1" "X" "3"] [(only_hunk sample)]
-  result.rows == ["1" "X" "3"] and result.outcomes == [(missed 1 0)]
+  o = result.outcomes[1]
+  one = length result.outcomes == 1
+  result.rows == ["1" "X" "3"] and one and o.at == 1 and o.out == 0
 
 test_reversed_undoes =
   back = reversed (only_hunk sample)

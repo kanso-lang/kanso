@@ -1,0 +1,4 @@
+fn rescue x
+  x
+
+print "{rescue 1}"

@@ -1,0 +1,26 @@
+type pair
+  left
+  right
+
+type world
+  next
+  tree
+
+fn run_from i d w
+  return w if 2 < i
+  run_from (i + 1) d (exec d w)
+
+fn exec 0 w
+  world (w.next + 1) (put_at w.tree w.next)
+
+fn exec d w
+  run_from 1 (d - 1) (exec 0 w)
+
+fn put_at (pair l r) n
+  return pair (pair l.left n) r if n % 2 == 0
+  pair l (pair r.left n)
+
+fn shown w
+  "{w.next} {w.tree.left.right} {w.tree.right.right}"
+
+print (shown (run_from 1 DEPTH (world 0 (pair (pair 0 0) (pair 0 0)))))

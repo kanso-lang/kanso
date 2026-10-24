@@ -107,11 +107,11 @@ type halt
 
 # What the machine answers when it stops. It stops when the work is acc, when
 # an exception reaches the top, or when it needs the outside world.
-type finished
+pub type finished
   value
   world
 
-type threw
+pub type threw
   error
   world
 

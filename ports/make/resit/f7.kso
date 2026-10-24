@@ -1,0 +1,9 @@
+type rule
+  static
+  targets
+
+fn parted targets static
+  rule static targets
+
+r = parted ["a"] none
+print "{r.targets}"

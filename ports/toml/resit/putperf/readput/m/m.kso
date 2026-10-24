@@ -1,0 +1,20 @@
+import "std/list"
+
+fn fill m i n
+  return m if n < i
+  key = "k{i % 5000}"
+  seen = m[key]
+  fill (put m key (counted seen)) (i + 1) n
+
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+pub fn read_put n
+  length (fill {} 1 n)
+
+pub fn grouped n
+  xs = list/to_list (list/take (list/iterate 1 (k -> k + 1)) n)
+  length (list/group_by xs (x -> "s{x}"))

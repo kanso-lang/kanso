@@ -3,7 +3,6 @@ import "../tera"
 import "../textkit"
 import "../toml"
 import "std/list"
-import "std/text"
 
 # A file the build writes, relative to the output directory, and its
 # sitemap entry or `unlisted`.
@@ -73,7 +72,10 @@ fn configured m base_override
   put m "base_url" (strip_slash "{given}")
 
 fn strip_slash s
-  if (textkit/ends_with? s "/") (text/slice s 1 (length s - 1)) s
+  if (textkit/ends_with? s "/") (textkit/clamped s 1 (length s - 1)) s
+
+fn with_config _ _ e@(err _)
+  e
 
 fn with_config input drafts config
   content = read_content input.files drafts
@@ -115,11 +117,11 @@ fn get_url base links args
   internal = textkit/starts_with? path "@/"
   return linked_url links path if internal
   slashed = textkit/starts_with? path "/"
-  tail = if slashed (text/slice path 2 (length path)) path
+  tail = if slashed (textkit/clamped path 2 (length path)) path
   "{base}/{tail}"
 
 fn linked_url links path
-  rel = text/slice path 3 (length path)
+  rel = textkit/clamped path 3 (length path)
   found = links[rel]
   if (found == none) (err "`get_url` found no content file `{rel}`") found
 

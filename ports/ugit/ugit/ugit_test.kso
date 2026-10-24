@@ -22,25 +22,25 @@ test_changes_name_every_kind =
 test_no_changes_between_equal_maps = changes { "a":"1" } { "a":"1" } == []
 
 test_untouched_by_theirs_keeps_ours =
-  want = ours_stand "p"
+  want = ours_of "p"
   decided "p" "base" "mine" "base" == want
 
 test_untouched_by_us_takes_theirs =
-  want = theirs_win "theirs" "p"
+  want = theirs_of "theirs" "p"
   decided "p" "base" "base" "theirs" == want
 
 test_deleted_by_them_unchanged_by_us =
-  want = theirs_win absent "p"
-  decided "p" "base" "base" absent == want
+  want = theirs_of missing "p"
+  decided "p" "base" "base" missing == want
 
-test_same_change_both_sides = decided "p" "b" "x" "x" == ours_stand "p"
+test_same_change_both_sides = decided "p" "b" "x" "x" == ours_of "p"
 
 test_edit_against_delete_conflicts =
-  want = modify_delete "mine" "p" absent
-  decided "p" "base" "mine" absent == want
+  want = conflict_of "mine" "p" missing
+  decided "p" "base" "mine" missing == want
 
 test_both_edited_is_a_text_merge =
-  want = both_changed "b" "o" "p" "t"
+  want = text_merge "b" "o" "p" "t"
   decided "p" "b" "o" "t" == want
 
 test_head_label_names_its_branch = label_for "HEAD" "main" == "HEAD -> main"

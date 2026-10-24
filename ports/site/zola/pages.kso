@@ -176,10 +176,10 @@ fn ancestors_of st dir
   present = list/select chain (d -> st.sections[section_rel d] != none)
   list/to_list (list/map present section_rel)
 
-fn dirs_up "" acc
-  text/concat [""] (reversed_dirs acc)
+pub fn dirs_up "" acc
+  list/concat [""] (reversed_dirs acc)
 
-fn dirs_up dir acc
+pub fn dirs_up dir acc
   dirs_up (parent_dir dir) (push acc dir)
 
 fn reversed_dirs xs

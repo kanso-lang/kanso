@@ -1,0 +1,32 @@
+test_clamp_high = clamp 1.5 0.0 0.999 == 0.999
+
+test_clamp_low = clamp -0.5 0.0 0.999 == 0.0
+
+test_cos_zero = cos 0.0 == 1.0
+
+test_floor_fraction = floors_to? 255.744 255
+
+test_floor_negative = floors_to? -0.5 -1
+
+test_floor_whole = floors_to? 3.0 3
+
+test_floor_zero = floors_to? 0.0 0
+
+test_sin_sixth_turn =
+  s = sin (radians 30.0)
+  0.4999999999 < s and s < 0.5000000001
+
+test_tan_quarter_turn =
+  t = tan (radians 45.0)
+  0.9999999999 < t and t < 1.0000000001
+
+# `floor` answers an err for a non-finite number, and `==` takes only a
+# value, so the comparison dispatches first.
+fn floors_to? x want
+  same? (floor x) want
+
+fn same? (err _) _
+  false
+
+fn same? got want
+  got == want

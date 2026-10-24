@@ -60,18 +60,16 @@ fn material_line (reading camera n materials objects) words
   reading camera n (put materials words[2] made) objects
 
 fn material_of "dielectric" rest n
-  index = scalar rest n
-  tracer/new_dielectric index
+  scalar rest n .> tracer/new_dielectric
 
 fn material_of "lambertian" rest n
-  albedo = triple rest n
-  tracer/new_lambertian albedo
+  triple rest n .> tracer/new_lambertian
 
 fn material_of "metal" rest n
   return fails n "metal takes r g b and a fuzz" if length rest < 4
-  albedo = triple (text/slice rest 1 3) n
-  fuzz = scalar (text/slice rest 4 (length rest)) n
-  tracer/new_metal albedo fuzz
+  albedo = triple [rest[1] rest[2] rest[3]] n
+  fuzz = scalar (list/to_list (list/drop rest 3)) n
+  albedo .> (a -> fuzz .> (f -> tracer/new_metal a f))
 
 fn material_of kind _ n
   fails n "unknown material kind {kind}"
@@ -111,9 +109,9 @@ fn scalar rest n
 
 fn set_camera (camera_spec _ d f la lf vf vu) "aspect" rest n
   return fails n "aspect takes a width and a height" if length rest < 2
-  wide = scalar (text/slice rest 1 1) n
-  high = scalar (text/slice rest 2 (length rest)) n
-  camera_spec (wide / high) d f la lf vf vu
+  wide = scalar [rest[1]] n
+  high = scalar (list/to_list (list/drop rest 1)) n
+  wide .> (w -> high .> (h -> camera_spec (w / h) d f la lf vf vu))
 
 fn set_camera (camera_spec a _ f la lf vf vu) "defocus" rest n
   angle = scalar rest n
@@ -147,9 +145,9 @@ fn sphere_line (reading camera n materials objects) words
   return fails n "unexpected {words[7]}" if 6 < length words
   mat = materials[words[6]]
   return fails n "no material called {words[6]}" if mat == none
-  center = triple (text/slice words 2 4) n
-  radius = scalar (text/slice words 5 5) n
-  made = tracer/new_sphere center mat radius
+  center = triple [words[2] words[3] words[4]] n
+  radius = scalar [words[5]] n
+  made = center .> (c -> radius .> (r -> tracer/new_sphere c mat r))
   reading camera n materials (push objects made)
 
 fn triple rest n

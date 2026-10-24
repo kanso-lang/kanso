@@ -1,0 +1,21 @@
+# A function this file declares, named like a type std/list exports
+# (`pub type repeated`, one field). Should print `3 1` on every engine.
+#
+#   kanso play play_native_builds_std_type_for_own_function.kso --interp
+#     3 1
+#   kanso play play_native_builds_std_type_for_own_function.kso
+#     list/repeated 1 2 1
+#
+# The native build constructs std/list's `repeated` record, with two values
+# in a one-field type, instead of calling the function. `kanso check` cannot
+# check a play file with declarations, so nothing warns. The same function
+# in a module directory gives `3 1` on every engine (that is FRICTION.md
+# F10's case, which is fixed). kv's re-sit has the mirror image: in a play
+# file the interpreter resolves a local `stdin` to io/stdin and native does
+# not.
+import "std/list"
+
+fn repeated a b
+  a + b
+
+print "{repeated 1 2} {list/sum [1]}"

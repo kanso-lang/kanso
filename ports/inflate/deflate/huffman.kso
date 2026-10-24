@@ -12,7 +12,6 @@
 # group in symbol order.
 import "std/bits"
 import "std/list"
-import "std/text"
 
 # The decoder's answer: the bit offset after the code, and the symbol.
 # The running state while codes are handed out: the next code, the table
@@ -106,7 +105,7 @@ fn spread_code table code len sym
   count = bits/shl 1 (fast_bits - len)
   more = list/take list/naturals count
     . list/map (k -> (rev + (k - 1) * step) * 65536 + sym * 16 + len)
-  text/concat table (list/to_list more)
+  list/concat table (list/to_list more)
 
 fn reverse_bits _ 0 acc
   acc

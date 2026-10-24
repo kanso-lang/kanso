@@ -1,0 +1,6 @@
+pub type merged
+  files_in
+  files_out
+
+pub fn merge_of a b
+  merged a b

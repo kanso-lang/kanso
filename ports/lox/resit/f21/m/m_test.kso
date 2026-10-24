@@ -1,0 +1,29 @@
+# Run with: kanso test test_runner_aborts_on_deep_recursion.kso
+#
+# One test recurses too deep. `kanso run --interp` and `kanso play` report
+# this shape cleanly ("error[runtime]: the program ran out of stack"), but the
+# test runner aborts the whole process, so no other test's result is
+# reported and the exit status is 134.
+#
+# Should: report test_deep as failed (or as out of stack), report
+# test_shallow ... ok, and exit 1.
+#
+# Does:
+#   test_shallow ... ok
+#   thread 'main' has overflowed its stack
+#   fatal runtime error: stack overflow, aborting        (exit 134)
+#
+# In the Lox port the same abort comes from a Lox recursion only 700 calls
+# deep, while `kanso run --interp` handles 2,000.
+fn depth 0
+  0
+
+fn depth n
+  mix (depth (n - 1)) n
+
+fn mix total n
+  total + n % 7
+
+test_shallow = depth 10 == 27
+
+test_deep = depth 1000000 > 0

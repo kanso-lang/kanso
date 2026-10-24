@@ -1,0 +1,20 @@
+# Bug: a type declared in the file loses its constructor to a same-named
+# function of an imported module.
+#
+# Run: kanso play type_constructor_hidden_by_import.kso
+#
+# should: print `true`. The file declares `type tally` with three fields, and
+#   a local function named `tally` with three parameters is found the same
+#   way with std/list imported (the 2026-10-12 gavel: a local arm shadows).
+# does: error[arity]: no 3-argument arm of `tally` (arms take 1). The one
+#   arm it sees is `list/tally`. Dropping the import makes it run.
+import "std/list"
+
+type tally
+  a
+  b
+  c
+
+t = tally false false true
+
+print "{t.c} {list/sum [1 2]}"

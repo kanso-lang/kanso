@@ -1,0 +1,8 @@
+pub fn shout s
+  louder s
+
+fn louder 0
+  "zero!"
+
+fn louder s
+  "{s}!"

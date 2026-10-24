@@ -1,4 +1,5 @@
 import "std/io"
+import "std/list"
 import "std/os"
 import "std/text"
 import "std/time"
@@ -26,7 +27,7 @@ fn run_file _ source started
 pub fn run_source source started
   lexed = scan source
   syntax = parse lexed.tokens
-  early = text/concat lexed.errors syntax.errors
+  early = list/concat lexed.errors syntax.errors
   return static_failure early if 0 < length early
   bound = resolve_program syntax.statements
   return static_failure bound.errors if 0 < length bound.errors

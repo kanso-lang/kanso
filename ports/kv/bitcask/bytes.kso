@@ -11,7 +11,7 @@ pub fn be32 n
   [(byte_at n 24) (byte_at n 16) (byte_at n 8) (n & 255)]
 
 pub fn be64 n
-  text/concat (be32 (bits/shr n 32)) (be32 (n & 4294967295))
+  list/concat (be32 (bits/shr n 32)) (be32 (n & 4294967295))
 
 fn byte_at n shift
   bits/shr n shift & 255
@@ -22,7 +22,7 @@ pub fn read_be bs offset width
   field = text/slice bs (offset + 1) (offset + width)
   list/fold field 0 (acc b -> acc * 256 + b)
 
-# `bs` added to the end of `acc`. Growing a list with text/concat copies
+# `bs` added to the end of `acc`. Growing a list with list/concat copies
 # the whole list each time and, natively, keeps every copy until the
 # enclosing fold ends (bugs/concat_accumulator_memory.kso); push reuses the
 # list in place.
@@ -44,3 +44,12 @@ fn hex_byte b
 
 fn digit n
   text/slice "0123456789abcdef" (n + 1) (n + 1)
+
+# A slice whose range the caller has already checked against the length.
+# text/slice answers none for a range past the end, and these never are, so
+# the none arm is never taken.
+pub fn inside none
+  []
+
+pub fn inside xs
+  xs

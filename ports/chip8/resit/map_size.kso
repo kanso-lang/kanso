@@ -1,0 +1,24 @@
+import "std/list"
+
+type machine
+  memory
+  pc
+
+fn boot size
+  pairs = list/map (list/take list/naturals size) (n -> [n 0])
+  machine (list/to_h (list/to_list pairs)) 1
+
+fn run m 0
+  m.memory[1]
+
+fn run m n
+  seen = or_zero m.memory[(m.pc * 7) % SIZE + 1]
+  run (machine (put m.memory m.pc (n + seen)) (m.pc % SIZE + 1)) (n - 1)
+
+fn or_zero none
+  0
+
+fn or_zero x
+  x
+
+print "{run (boot SIZE) 8000}"

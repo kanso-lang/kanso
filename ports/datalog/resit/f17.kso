@@ -1,0 +1,11 @@
+type plan
+  steps
+
+fn exec s
+  s * 2
+
+fn run_from pl i
+  return 0 if i < 1 or length pl.steps < i
+  exec pl.steps[i]
+
+print "{run_from (plan [1 2]) 2}"

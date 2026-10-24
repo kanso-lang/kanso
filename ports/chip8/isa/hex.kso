@@ -41,34 +41,42 @@ fn word_value w
 # `0x2A`, binary `%101010` or `0b101010`. Anything else answers none.
 pub fn literal t
   return none if t == ""
-  prefixed (text/slice t 1 1) t
+  prefixed (sliced (text/slice t 1 1) "") t
 
 # `#` and `0x` cannot both start one string, but dispatching on the first
 # character and the first two in one arm group makes the checker call those
 # arms a tie, so the `0` prefixes get a second step of their own.
 fn prefixed "#" t
-  digits_in (text/slice t 2 (length t)) 16
+  digits_in (sliced (text/slice t 2 (length t)) "") 16
 
 fn prefixed "$" t
-  digits_in (text/slice t 2 (length t)) 16
+  digits_in (sliced (text/slice t 2 (length t)) "") 16
 
 fn prefixed "%" t
-  digits_in (text/slice t 2 (length t)) 2
+  digits_in (sliced (text/slice t 2 (length t)) "") 2
 
 fn prefixed "0" t
-  after_zero (text/slice t 2 2) t
+  after_zero (sliced (text/slice t 2 2) "") t
 
 fn prefixed _ t
   digits_in t 10
 
 fn after_zero "b" t
-  digits_in (text/slice t 3 (length t)) 2
+  digits_in (sliced (text/slice t 3 (length t)) "") 2
 
 fn after_zero "x" t
-  digits_in (text/slice t 3 (length t)) 16
+  digits_in (sliced (text/slice t 3 (length t)) "") 16
 
 fn after_zero _ t
   digits_in t 10
+
+# A slice that starts past the end answers none; here it is the empty text,
+# which is what the old slice gave.
+fn sliced none fallback
+  fallback
+
+fn sliced piece_of _
+  piece_of
 
 fn digits_in "" _
   none

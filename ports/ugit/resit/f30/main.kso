@@ -1,0 +1,5 @@
+import "std/os"
+import "std/sha256"
+import "std/text"
+
+os/read_file "big.txt" .> (t -> print (sha256/hex (text/bytes t)))

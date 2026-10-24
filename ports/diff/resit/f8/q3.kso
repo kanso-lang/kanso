@@ -1,0 +1,5 @@
+fn filled m k n
+  return m if k > n
+  filled (put m k 1) (k + 1) n
+
+print "{length (filled {} 1 80000)}"

@@ -1,0 +1,6 @@
+import "../m"
+
+fn run x
+  x
+
+test_total = run (m/total [1 2]) == 3

@@ -1,0 +1,20 @@
+# Bug: under `kanso play`, the native engine calls std/list's `step` record
+# constructor where the file's own function `step` is meant. The
+# interpreter calls the local function. The engines disagree.
+#
+# Run: kanso play play_native_calls_imported_type.kso [--interp]
+#
+# should: print `3 3` on every engine, as `--interp` does, and as `kanso run`
+#   and `kanso build` do on all three engines when the same code sits in a
+#   module (re-sit's resit/f3m/).
+# does: `kanso play` without `--interp` prints `3 list/step 1 2`.
+#
+# This is local_fn_loses_to_imported_type.kso from 2026-10-10. Since then
+# the module path was fixed (2026-10-12, "a name the author declared wins over
+# a builtin and an import"), and the play path's native engine was not.
+import "std/list"
+
+fn step a b
+  a + b
+
+print "{list/sum [1 2]} {step 1 2}"

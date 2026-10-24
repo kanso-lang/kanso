@@ -1,6 +1,6 @@
 import "../lines"
 import "../myers"
-import "std/text"
+import "std/list"
 
 fn blocks_of x y
   a = lines/parse x
@@ -47,4 +47,4 @@ test_context_marks =
   out = context_of "a\nb\nc\n" "a\nB\nc\nd\n"
   old = ["*** a" "--- b" "***************" "*** 1,3 ****" "  a" "! b" "  c"]
   new = ["--- 1,4 ----" "  a" "! B" "  c" "+ d"]
-  out == text/concat old new
+  out == list/concat old new

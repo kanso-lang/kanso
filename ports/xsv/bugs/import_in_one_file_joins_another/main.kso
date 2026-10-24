@@ -1,0 +1,18 @@
+# Bug: std/regexp, imported by one file of a module, adds its `matches`
+# arms to a private `matches` in another file that never imported it.
+#
+# Run from this directory: kanso run main.kso --interp
+#
+# should: print `true true`. m/join.kso declares its own two-arm `matches`
+#   and imports nothing. The 2026-10-12 gavel ("arms travel with the value,
+#   and a file names only what it can see") and the message "a module's
+#   files share their declarations, not their imports" both say regexp's
+#   arms cannot reach it.
+# does: error[exhaustive]: this can be an err and `!=` wants a value, at
+#   m/join.kso:8, because regexp's `matches` arms can answer an err. Delete
+#   m/search.kso (and the `m/found` call) and join.kso compiles and prints
+#   `true`. The message never mentions regexp.
+
+import "./m"
+
+print "{m/hits? { "a":[1] } "a"} {m/found "a" "cat"}"

@@ -1,0 +1,2 @@
+pub fn scaled q n
+  q * n

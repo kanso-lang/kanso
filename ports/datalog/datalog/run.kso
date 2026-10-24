@@ -12,17 +12,15 @@ type refused
 # The pipeline from a parsed program to output lines. Each stage can refuse
 # the program; a refusal is an err that rides past every later stage.
 pub fn run_tree tree
-  shape = check_program tree
-  strata = stratify tree shape
   table = intern_program tree
   facts = list/to_list (list/select tree.clauses fact?)
-  ev = evaluate table shape strata facts
-  answer_all tree table ev
+  check_program tree
+    .> (shape -> stratify tree shape .> (s -> evaluate table shape s facts))
+    .> (ev -> answer_all tree table ev)
 
 # Source text to output lines, for a program with no `.input`.
 pub fn run_source source
-  tree = parse source
-  run_tree tree
+  parse source .> run_tree
 
 # `datalog [--time] [file]`: runs a program from a file, or from standard
 # input when no file is named. `--time` reports the time taken on standard
@@ -118,4 +116,4 @@ fn with_facts _ _ _ _ (err e)
   effect (refused e)
 
 fn with_facts dir wanted i cs facts
-  read_inputs dir wanted (i + 1) (text/concat cs facts)
+  read_inputs dir wanted (i + 1) (list/concat cs facts)

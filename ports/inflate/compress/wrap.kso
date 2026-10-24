@@ -17,6 +17,14 @@ fn stored_size src
 fn stored src
   stored_from src 1 (text/bytes "")
 
+# The range sliced in stored_from ends at the end of src at the latest, so
+# it is never none; the arm is there because the checker cannot see that.
+fn stored_part none
+  []
+
+fn stored_part part
+  part
+
 fn stored_from src i acc
   n = length src
   last = if (i + 65534 < n) (i + 65534) n
@@ -24,7 +32,7 @@ fn stored_from src i acc
   len = last - i + 1
   head = text/append acc (text/to_bytes [final])
   sized = text/append (text/append head (le16 len)) (le16 (bits/xor len 65535))
-  out = text/append sized (text/slice src i last)
+  out = text/append sized (stored_part (text/slice src i last))
   return out if final == 1
   stored_from src (last + 1) out
 

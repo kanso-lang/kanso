@@ -1,0 +1,6 @@
+pub type logged
+  commit
+  oid
+
+pub fn entry c o
+  logged c o

@@ -1,0 +1,3 @@
+import "../f23"
+
+test_shown = f23/shown 1 == "2"

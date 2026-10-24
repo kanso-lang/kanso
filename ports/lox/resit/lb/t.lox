@@ -1,0 +1,17 @@
+class Tree {
+  init(depth) {
+    if (depth > 0) {
+      this.left = Tree(depth - 1);
+      this.right = Tree(depth - 1);
+    } else {
+      this.left = nil;
+      this.right = nil;
+    }
+  }
+}
+var i = 0;
+while (i < 1) {
+  Tree(8);
+  i = i + 1;
+}
+print "done";

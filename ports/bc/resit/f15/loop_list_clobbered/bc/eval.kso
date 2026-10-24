@@ -1,0 +1,263 @@
+import "std/list"
+
+# Evaluating expressions. Every expression can change the machine -- an
+# assignment, a ++, a call that prints -- so each step takes the machine and
+# answers it back beside the value. A runtime error is raised as
+# err (fault ...) by fail_with and rides out to the unit that started it.
+pub type evaluated
+  machine
+  value
+
+# Where an assignment or a ++ writes: a scalar, a register, or one element
+# of an array whose index has already been evaluated.
+type cell
+  at
+  name
+  slot
+
+type located
+  machine
+  place
+
+# A halt raised inside an expression, bound for the top of the program.
+pub type halting
+  machine
+
+# Built by these calls rather than by the constructors, so that a failure
+# arriving in both arguments stays one failure (FRICTION F11).
+pub fn ev m v
+  evaluated m v
+
+fn found_at m place
+  located m place
+
+pub fn eval (constant decimal digits) m
+  return ev m decimal if m.ibase == 10
+  ev m (in_base digits m.ibase)
+
+pub fn eval (scalar _ slot) m
+  ev m (get_var m slot)
+
+pub fn eval (element index name slot) m
+  found = locate (element index name slot) m
+  ev found.machine (fetch found.place found.machine)
+
+pub fn eval (register what) m
+  ev m (fetch (register what) m)
+
+pub fn eval (negation operand) m
+  r = eval operand m
+  ev r.machine (negate r.value)
+
+pub fn eval (inverse operand) m
+  r = eval operand m
+  ev r.machine (truth (zero? r.value))
+
+pub fn eval (arith left op right) m
+  a = eval left m
+  b = eval right a.machine
+  arithmetic op a.value b.value b.machine
+
+pub fn eval (relation left op right) m
+  a = eval left m
+  b = eval right a.machine
+  ev b.machine (truth (holds? op (compare a.value b.value)))
+
+pub fn eval (both left right) m
+  a = eval left m
+  return ev a.machine zero if zero? a.value
+  b = eval right a.machine
+  ev b.machine (truth (not zero? b.value))
+
+pub fn eval (either left right) m
+  a = eval left m
+  return ev a.machine one if not zero? a.value
+  b = eval right a.machine
+  ev b.machine (truth (not zero? b.value))
+
+pub fn eval (grouped inner) m
+  eval inner m
+
+pub fn eval (assignment "=" target value) m
+  found = locate target m
+  r = eval value found.machine
+  store found.place r.value r.machine
+
+pub fn eval (assignment op target value) m
+  found = locate target m
+  r = eval value found.machine
+  current = fetch found.place r.machine
+  combined = arithmetic (text_head op) current r.value r.machine
+  store found.place combined.value combined.machine
+
+pub fn eval (pre_step delta target) m
+  found = locate target m
+  current = fetch found.place found.machine
+  store found.place (add current (from_int delta)) found.machine
+
+pub fn eval (post_step delta target) m
+  found = locate target m
+  current = fetch found.place found.machine
+  stored = store found.place (add current (from_int delta)) found.machine
+  ev stored.machine current
+
+pub fn eval (measure operand "length") m
+  r = eval operand m
+  ev r.machine (from_int (length_of r.value))
+
+pub fn eval (measure operand "scale") m
+  r = eval operand m
+  { scale:places } = r.value
+  ev r.machine (from_int places)
+
+pub fn eval (measure operand _) m
+  r = eval operand m
+  sad = "Square root of a negative number"
+  return fail_with r.machine sad if negative? r.value
+  ev r.machine (square_root r.value r.machine.scale)
+
+pub fn eval read_call m
+  fail_with m "read() is not supported by this bc"
+
+pub fn eval (call args name slot) m
+  def = get_func m slot
+  invoke def args name m
+
+fn text_head "+="
+  "+"
+
+fn text_head "-="
+  "-"
+
+fn text_head "*="
+  "*"
+
+fn text_head "/="
+  "/"
+
+fn text_head "%="
+  "%"
+
+fn text_head _
+  "^"
+
+pub fn truth true
+  one
+
+pub fn truth false
+  zero
+
+fn holds? "<" c
+  c < 0
+
+fn holds? "<=" c
+  c <= 0
+
+fn holds? ">" c
+  c > 0
+
+fn holds? ">=" c
+  c >= 0
+
+fn holds? "==" c
+  c == 0
+
+fn holds? _ c
+  c != 0
+
+fn arithmetic "+" a b m
+  ev m (add a b)
+
+fn arithmetic "-" a b m
+  ev m (subtract a b)
+
+fn arithmetic "*" a b m
+  ev m (multiply a b m.scale)
+
+fn arithmetic "/" a b m
+  return fail_with m "Divide by zero" if zero? b
+  ev m (divide a b m.scale)
+
+fn arithmetic "%" a b m
+  return fail_with m "Modulo by zero" if zero? b
+  ev m (modulo a b m.scale)
+
+fn arithmetic _ a b m
+  warned = if (integral? b) m (warn m "non-zero scale in exponent")
+  exponent_of a (int_part b) warned
+
+fn exponent_of _ 0 m
+  ev m one
+
+fn exponent_of a n m
+  return ev m (power a n m.scale) if 0 < n
+  return fail_with m "divide by zero" if zero? a
+  ev m (divide one (exact_power a (0 - n)) m.scale)
+
+# Finding the place an assignment writes evaluates an array index first,
+# and refuses one outside 0 .. BC_DIM_MAX.
+fn locate (element index name slot) m
+  r = eval index m
+  at = int_part r.value
+  sad = "Array {name} subscript out of bounds."
+  return fail_with r.machine sad if not in_bounds? at
+  found_at r.machine (cell at name slot)
+
+fn locate target m
+  found_at m target
+
+fn in_bounds? at
+  0 <= at and at <= 16777215
+
+fn fetch (scalar _ slot) m
+  get_var m slot
+
+fn fetch (cell at _ slot) m
+  slot_get (get_array m slot) (at + 1) zero
+
+fn fetch (register "scale") m
+  from_int m.scale
+
+fn fetch (register "ibase") m
+  from_int m.ibase
+
+fn fetch (register "obase") m
+  from_int m.obase
+
+fn fetch (register _) m
+  m.last
+
+fn store (scalar _ slot) v m
+  ev (set_var m slot v) v
+
+fn store (cell at _ slot) v m
+  grown = slot_set (get_array m slot) (at + 1) v zero
+  ev (set_array m slot grown) v
+
+fn store (register "scale") v m
+  r = limit "scale" (int_part v) 0 2147483647 m
+  ev (set_scale r.machine r.value) v
+
+fn store (register "ibase") v m
+  r = limit "ibase" (int_part v) 2 36 m
+  ev (set_ibase r.machine r.value) v
+
+fn store (register "obase") v m
+  r = limit "obase" (int_part v) 2 2147483647 m
+  ev (set_obase r.machine r.value) v
+
+fn store (register _) v m
+  ev (set_last m v) v
+
+# A register assigned out of range is set to the nearest end, with a
+# warning on standard error.
+fn limit what wanted lo hi m
+  return ev (warn m (too_small what lo)) lo if wanted < lo
+  return ev (warn m "{what} too large, set to {hi}") hi if hi < wanted
+  ev m wanted
+
+fn too_small "scale" _
+  "negative scale, set to 0"
+
+fn too_small what lo
+  "{what} too small, set to {lo}"

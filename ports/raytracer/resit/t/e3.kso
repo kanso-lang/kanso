@@ -1,0 +1,21 @@
+import "std/text"
+
+fn number_of (err _) word
+  err "{word} is not a number"
+
+fn number_of x _
+  x
+
+fn scalar word
+  number_of (text/to_float word) word
+
+fn wrap x
+  [x]
+
+fn use word
+  scalar word .> wrap
+
+fn size xs
+  length xs
+
+print "{size (use "2.5")} {use "x"}"

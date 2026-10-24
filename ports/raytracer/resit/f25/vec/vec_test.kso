@@ -1,0 +1,21 @@
+test_add = new 1.0 2.0 3.0 + new 4.0 5.0 6.0 == new 5.0 7.0 9.0
+
+test_cross = cross (new 1.0 0.0 0.0) (new 0.0 1.0 0.0) == new 0.0 0.0 1.0
+
+test_dot = dot (new 1.0 2.0 3.0) (new 4.0 5.0 6.0) == 32.0
+
+test_near_zero = near_zero? (new 0.000000001 0.0 0.0)
+
+test_not_near_zero = not near_zero? (new 0.001 0.0 0.0)
+
+test_reflect =
+  bounced = reflect (new 1.0 -1.0 0.0) (new 0.0 1.0 0.0)
+  bounced == new 1.0 1.0 0.0
+
+test_scale_both_sides = new 1.0 2.0 3.0 * 2.0 == 2.0 * new 1.0 2.0 3.0
+
+test_straight_through =
+  out = refract (new 0.0 -1.0 0.0) (new 0.0 1.0 0.0) 1.0
+  out == new 0.0 -1.0 0.0
+
+test_unit = unit (new 3.0 0.0 4.0) == new 0.6 0.0 0.8

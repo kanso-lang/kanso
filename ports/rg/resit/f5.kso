@@ -1,0 +1,14 @@
+import "std/list"
+
+valued_flags = [
+  "--after-context"
+  "--before-context"
+  "--context"
+  "--glob"
+  "--max-count"
+  "--regexp"
+  "--replace"
+  "--type"
+]
+
+print (list/any? valued_flags (f -> f == "--glob"))

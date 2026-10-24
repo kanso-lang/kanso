@@ -240,7 +240,7 @@ fn v_shaped? up
 # `V0`..`VF`, either case; anything else is left for `resolve`.
 fn register_number up
   return none if length up != 2 or text/slice up 1 1 != "V"
-  hex_digit (text/slice up 2 2)
+  hex_digit (sliced (text/slice up 2 2) "")
 
 fn register up original none
   return problem "`{original}` is not a register" if v_shaped? up
@@ -256,7 +256,8 @@ fn shaped shape _
   shape
 
 fn numbered none t
-  return problem "`{t}` is not a number" if numeric? (text/slice t 1 1)
+  lead = sliced (text/slice t 1 1) ""
+  return problem "`{t}` is not a number" if numeric? lead
   problem "unknown label `{t}`"
 
 fn numbered n _
