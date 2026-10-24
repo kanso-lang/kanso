@@ -1882,6 +1882,25 @@ same output each time: `index_inline` reads 800,950,764,
 `number_span_inline` 804,913,953, `slice_parsers_inline` 804,964,001, and
 the byte scanners' row 822,443,871.
 
+CI's rows for this branch against main, all taken into the goldens:
+
+- runbench 813,606,641 -> 797,155,036 (-2.02%), jsonbench 578,723,373 ->
+  560,280,234 (-3.19%), indexbench 1,947,279 -> 1,837,323 (-5.65%),
+  deepbench 201,099,671 -> 200,299,696, oneshot 10,256,694 -> 10,133,710,
+  livebench 961,524,285 -> 961,402,064 and widebench 28,476,897 ->
+  28,461,000. The other seven moved by 184 or fewer.
+- The release codegen row 425,508,082 -> 360,870,405 (-15.2%).
+- The dev codegen row +63,185 and `emit_instructions` +1,239, from the
+  rewrap lines the emitter now writes.
+- The tab's compile 220,923,316 -> 221,032,408 (+109,092) and its run
+  33,372,898 -> 33,404,578 (+31,680), for the same lines.
+- Every binary's text grew by about 3,440 bytes, the runtime's own copies of
+  the four helpers the hot unit used to define, and the four decoding
+  benchmarks by 15,113 to 16,999 with the parsers inlined at their sites.
+- The emitted-code vein: 4 to 12 more lines in the five programs that index
+  strings or read numbers.
+- No allocation counter moved. Welfare 93.14 -> 93.24, banked.
+
 Measured and set aside: the renderer's whole-float test without `floor`,
 as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
 the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
