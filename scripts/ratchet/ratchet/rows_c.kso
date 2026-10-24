@@ -3372,4 +3372,17 @@ slice_parsers_inline = row
 
 rows_cq57 = list/concat rows_cq56 [slice_parsers_inline]
 
-rows_c = list/concat rows_cq57 [itself]
+# The empty list and map join them, so the decoder opens an array or an
+# object without a call (2026-10-24). The mutation puts noinline in place of
+# both always_inlines.
+empty_inline = row
+  "the empty collections called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_empty_collections_called_out_of_line")
+  benches
+
+rows_cq58 = list/concat rows_cq57 [empty_inline]
+
+rows_c = list/concat rows_cq58 [itself]
