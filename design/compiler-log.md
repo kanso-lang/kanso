@@ -1892,3 +1892,19 @@ the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
 back in front of the room test in `k_b_append_mut_int`, the twin the
 encoder's separators go through, and reads runbench 811,580,683 and
 encodebench 2,346,183,576.
+
+CI's rows for this branch against the empty collections', all taken into
+the goldens:
+
+- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
+  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
+  and oneshot 10,114,082 -> 10,051,248.
+- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
+  not isolated.
+- The twins' text grew by a few lines where a block moved: the compile
+  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
+  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
+  `codegen_instructions_dev` 116,426,119 (+5,840) and
+  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
+- `emit_instructions`, both tab rows and `text` fell.
+- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
