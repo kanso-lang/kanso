@@ -1780,7 +1780,9 @@ goldens:
 - runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
   557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
   4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
-  work rows fell by 20 to 5,610.
+  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
+  the string index's rise: `work_escapebench` 40,308,388 and
+  `work_scanbench` 274,349.
 - `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
   the two bodies the link now inlines at every empty list and map.
 - `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
@@ -1833,7 +1835,10 @@ the goldens:
   `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
   `codegen_instructions_dev` 116,426,119 (+5,840) and
   `codegen_instructions_release` 370,142,417 (+6,648) follow them.
-- `emit_instructions`, both tab rows and `text` fell.
+- `emit_instructions` 5,665,979, `browser_compile_instructions`
+  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
+  fell from the empty collections' values. All but the tab's run row stay
+  above main, from the two branches below this one.
 - No allocation counter moved. Welfare 93.24 -> 93.27, banked.
 
 ## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
