@@ -235,3 +235,32 @@ fn the_rescore_refuses_when_the_splice_rows_moved() {
         "the refusal should say what it refused:\n{said}"
     );
 }
+
+/// Each phase's share comes from the measured table in the run program's
+/// header, read there by the phase's name. When every phase moves by one
+/// ratio the shares cancel, so here each moves by its own: the decode phase
+/// runs at 0.4 of the anchor, the index phase at 0.05 and the split phase at
+/// twice. The rebuilt count is the share-weighted ratio, and it moves when a
+/// share is read wrong, or read as the same for every phase.
+#[test]
+fn a_row_whose_phases_moved_apart_is_weighted_by_the_headers_shares() {
+    let ph = phase_counters();
+    let each = [400, 900, 1200, 700, 50, 1300, 800, 2000];
+    assert_eq!(ph.len(), each.len(), "the fixture names one count per phase");
+    let mut fields: Vec<String> = vec!["\"commit\":\"aaaaaaa\"".to_string()];
+    for (c, n) in ph.iter().zip(each) {
+        fields.push(format!("\"{c}\":{n}"));
+    }
+    let uneven = format!("{{{}}}", fields.join(","));
+    let anchor = row("bbbbbbb", 1000, None, &ph);
+    let modern = row("ccccccc", 1000, Some(1000), &["encode_instructions".to_string()]);
+
+    let (ok, said) = rescore("uneven", &[uneven, anchor, modern]);
+    assert!(ok, "the rescore should hold:\n{said}");
+    let out: Vec<&str> = said.lines().filter(|l| l.starts_with('{')).collect();
+    assert!(
+        out[0].contains("\"run_instructions\":762"),
+        "the uneven row rebuilds to its share-weighted 762:\n{}",
+        out[0]
+    );
+}
