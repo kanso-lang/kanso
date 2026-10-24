@@ -3255,4 +3255,18 @@ tab_narrowing = row
 
 rows_cq48 = list/concat rows_cq47 [tab_narrowing]
 
-rows_c = list/concat rows_cq48 [itself]
+# A short float's text is written right to left in one pass over its scaled
+# decimal, the point placed on the way (2026-10-24). The mutation splits the
+# whole part off by a division again, and the work vein reads runbench
+# heavier.
+float_one_pass = row
+  "a short float written in two parts"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_float_written_in_two_parts")
+  benches
+
+rows_cq49 = list/concat rows_cq48 [float_one_pass]
+
+rows_c = list/concat rows_cq49 [itself]

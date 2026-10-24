@@ -30,6 +30,13 @@
 //! And a fourth time on 2026-09-25, when the short search began starting from
 //! the place count the last float took: with the walk down from a passing
 //! guess removed, 975,871 of 5,809,326 were not shortest.
+//!
+//! THE TEXT IS CHECKED TOO, against the digits placed by the rule the
+//! interpreter follows. The other checks pass `.5` for `0.5`, since it reads
+//! back. When the short path began writing its text in one pass on
+//! 2026-10-24, dropping the whole part's zero gave 141,779 text failures and
+//! none of the other four, and the sweep at ten times its size read
+//! 50,807,850 doubles with no failure of any kind.
 
 use std::process::Command;
 
@@ -84,7 +91,7 @@ static long long render(double d, char* buf) {{
 }}
 static uint64_t bits_of(double d) {{ uint64_t b; memcpy(&b, &d, 8); return b; }}
 
-static long long seen, bad_trip, bad_len, bad_short, bad_near;
+static long long seen, bad_trip, bad_len, bad_short, bad_near, bad_text;
 static double first_bad; static int have_first;
 static const char* first_why = "";
 
@@ -133,6 +140,39 @@ static void one(double d) {{
             if (bad_near <= 5)
                 printf("  near %.17g -> \"%s\" but the nearest %d digits are \"%s\"\n",
                        d, dig, k, got);
+        }}
+    }}
+    /* The text: those k digits placed by the rule the interpreter's
+       `render_float` follows, written here from the digits and nothing else.
+       The exponent form when the leading digit's power of ten X is below -4
+       or at least max(15, k), and the plain form otherwise, with no point
+       when nothing follows it. render_ryu has two writers for the plain form,
+       the short path's and the general one, and both answer to this. */
+    if (d != 0) {{
+        int x10 = e10 + k - 1, top = k > 15 ? k : 15;
+        char want[80]; char* o = want;
+        if (d < 0) *o++ = '-';
+        if (x10 < -4 || x10 >= top) {{
+            *o++ = dig[0]; *o++ = '.';
+            if (k > 1) {{ memcpy(o, dig + 1, (size_t)(k - 1)); o += k - 1; }}
+            else *o++ = '0';
+            o += sprintf(o, "e%c%02d", x10 < 0 ? '-' : '+', x10 < 0 ? -x10 : x10);
+        }} else if (x10 >= 0) {{
+            for (int i = 0; i <= x10; i++) *o++ = i < k ? dig[i] : '0';
+            if (k > x10 + 1) {{
+                *o++ = '.';
+                memcpy(o, dig + x10 + 1, (size_t)(k - x10 - 1)); o += k - x10 - 1;
+            }}
+        }} else {{
+            *o++ = '0'; *o++ = '.';
+            for (int i = 0; i < -x10 - 1; i++) *o++ = '0';
+            memcpy(o, dig, (size_t)k); o += k;
+        }}
+        *o = 0;
+        if (strcmp(want, buf) != 0) {{
+            bad_text++;
+            if (!have_first) {{ first_bad = d; have_first = 1; first_why = "text"; }}
+            if (bad_text <= 5) printf("  text %.17g -> \"%s\" but the rule says \"%s\"\n", d, buf, want);
         }}
     }}
     if (k > 1) {{
@@ -191,11 +231,11 @@ int main(void) {{
     }}
 
     printf("%lld rendered, %lld do not read back, %lld length disagrees, "
-           "%lld not shortest, %lld not closest\n", seen, bad_trip, bad_len, bad_short,
-           bad_near);
+           "%lld not shortest, %lld not closest, %lld text disagrees\n", seen, bad_trip,
+           bad_len, bad_short, bad_near, bad_text);
     if (have_first) printf("first %s at %.17g (bits %016llx)\n",
                            first_why, first_bad, (unsigned long long)bits_of(first_bad));
-    return (bad_trip || bad_len || bad_short || bad_near) != 0;
+    return (bad_trip || bad_len || bad_short || bad_near || bad_text) != 0;
 }}
 "#
     );

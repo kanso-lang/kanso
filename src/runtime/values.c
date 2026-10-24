@@ -2139,28 +2139,52 @@ static long long render_ryu(double d, char* buf) {
            below with P = 15: m / 10^p, then when p > 0 a point and m's last
            p digits, zeros kept in front. That is what the plain branches
            write from ryu's digits, and they walked those digits a byte at a
-           time to place the point. */
+           time to place the point.
+
+           It is written right to left in one pass over m, two digits at a
+           time: the p digits after the point, the point, then what is left
+           of m, which is the whole part. Dividing m by 10^p first to split
+           the two, and counting the whole part's digits to start it, was
+           ten instructions a float on runbench. The text is built at the
+           top of a scratch buffer and moved out as three words, since a
+           short float is at most 17 bytes and the caller's buffer holds
+           64. */
         uint64_t m = (uint64_t)sm;
         uint64_t pw = RYU_POW10U[sp];
         if (m < 1000000000000000ULL && m * 10000 >= pw) {
-            uint64_t whole = m / pw, part = m - whole * pw;
-            char* o = buf + ryu_write(whole, buf);
-            if (sp) {
-                *o++ = '.';
-                char* w = o + sp;
-                o = w;
-                int left = sp;
-                while (left >= 2) {
-                    uint32_t c = (uint32_t)(part % 100);
-                    part /= 100;
-                    w -= 2;
-                    __builtin_memcpy(w, RYU_DIGITS + c * 2, 2);
-                    left -= 2;
-                }
-                if (left) *--w = (char)('0' + (uint32_t)part);
+            char tmp[48];
+            char* e = tmp + 24;
+            char* w = e;
+            uint64_t x = m;
+            int left = sp;
+            while (left >= 2) {
+                uint32_t c = (uint32_t)(x % 100);
+                x /= 100;
+                w -= 2;
+                __builtin_memcpy(w, RYU_DIGITS + c * 2, 2);
+                left -= 2;
             }
-            *o = 0;
-            return (long long)(o - buf);
+            if (left) {
+                *--w = (char)('0' + (uint32_t)(x % 10));
+                x /= 10;
+            }
+            if (sp) *--w = '.';
+            while (x >= 100) {
+                uint32_t c = (uint32_t)(x % 100);
+                x /= 100;
+                w -= 2;
+                __builtin_memcpy(w, RYU_DIGITS + c * 2, 2);
+            }
+            if (x >= 10) {
+                w -= 2;
+                __builtin_memcpy(w, RYU_DIGITS + (uint32_t)x * 2, 2);
+            } else {
+                *--w = (char)('0' + (uint32_t)x);
+            }
+            long long n = (long long)(e - w);
+            __builtin_memcpy(buf, w, 24);
+            buf[n] = 0;
+            return n;
         }
         k = ryu_short_digits(sm, sp, dig, &e10);
     } else {

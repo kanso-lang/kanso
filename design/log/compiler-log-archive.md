@@ -106460,3 +106460,14 @@ floor follows. CLAUDE.md's welfare section carries the rule.
 
 Owes, on #2017: the floor re-based in #2016 by CI's measured cost, recorded
 with this entry as the reason; #2014 and #2018 merging main after it.
+
+## 2026-10-20 — directive: a required feature's cost is never asked about
+
+Clay, after #2017: "it should never need to ask to lower the welfare for a
+feature implementation that's required." The language exception already let
+a ruled feature lower the floor by what it costs. #1987 still came to him
+because the build measured several times its estimate. CLAUDE.md now says
+that a cost above the estimate changes nothing: the floor moves by what CI
+measures, and only a choice about the language itself, such as narrowing the
+ruling when the full build is impossible or contradicts another ruling, goes
+to Clay.

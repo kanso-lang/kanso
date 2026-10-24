@@ -21,17 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — directive: a required feature's cost is never asked about
-
-Clay, after #2017: "it should never need to ask to lower the welfare for a
-feature implementation that's required." The language exception already let
-a ruled feature lower the floor by what it costs. #1987 still came to him
-because the build measured several times its estimate. CLAUDE.md now says
-that a cost above the estimate changes nothing: the floor moves by what CI
-measures, and only a choice about the language itself, such as narrowing the
-ruling when the full build is impossible or contradicts another ruling, goes
-to Clay.
-
 ## 2026-10-20 — a carried list keeps its buffer outside the arena
 
 #2014 left the run program holding one list buffer of 8,192 slots at exit,
@@ -2152,3 +2141,22 @@ narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
 against the 5,863,976 the assume change left it, a move of 178; the dev
 build that row counts still narrows its module, and writes the same text.
 CI's browser rows matched this container's.
+
+## 2026-10-24 — a short float written in one pass
+
+`render_ryu`'s short path wrote a float from its scaled decimal m and place
+count p by dividing m by 10^p, writing the whole part forward after counting
+its digits, and then writing the fraction behind the point. It now writes m
+right to left in one pass, two digits at a time: the p fraction digits, the
+point, then what is left of m. The text goes into the top of a scratch buffer
+and moves out as three words. On runbench 191,070 floats take this path, and
+in this container the run program fell from 815,624,421 to 813,607,261
+instructions (-0.25%), with byte-identical output.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` now checks the text as
+well: the digits ryu chose, placed by the rule the interpreter's
+`render_float` follows. Its other checks pass `.5` for `0.5`, which reads
+back. With the whole part's zero dropped, it reported 141,779 text failures
+and none of the other kinds. At ten times its size it read 50,807,850
+doubles with no failure. The ratchet row `float_one_pass` puts the division
+back.
