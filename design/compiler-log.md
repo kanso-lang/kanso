@@ -1839,3 +1839,10 @@ What is left in the lexer is `lex_line` itself, about 1,150 instructions a
 code line, most of it a scanner that decodes each line into a `Vec<char>`
 before it reads a token. A scanner over bytes would touch every token
 method and the column arithmetic, so it is a change of its own.
+
+Measured and set aside: the scanner reading an ascii line's bytes in place
+instead of widening them into its `Vec<char>`, through accessors that test
+`ascii` at every read. The widening costs 348,608 instructions of the entry
+compile, and the test at every character cost more: `entry_instructions`
+71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
+24,224,312.
