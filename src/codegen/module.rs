@@ -95,8 +95,9 @@ impl Written {
         // bench/compile_corpus that search was 17.08% of the process.
         let mut body_calls = crate::hash::Set::default();
         let mut body_lines = crate::hash::Set::default();
+        let mut named = vec![[false; 2]; self.strings.len()];
         for piece in &pieces {
-            called_and_ending(piece, &mut body_calls, &mut body_lines);
+            called_and_ending(piece, &mut body_calls, &mut body_lines, &mut named);
         }
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
@@ -161,11 +162,15 @@ impl Written {
         // may since have been pruned: on the codegen corpus 198 of 270
         // strings and 264 of their literal cells were named by nothing, 36% of
         // the module's bytes, each parsed and laid out by clang all the same.
-        // Only the body and the type tables name a string.
-        let texts: Vec<&str> =
-            pieces.iter().map(String::as_str).chain([self.globals.as_str()]).collect();
-        let named = named_strings(&texts, self.strings.len());
-        drop(texts);
+        // Only the body and the type tables name a string. The body's marks
+        // came from the pass above, which reads every at in it already; the
+        // tables in `globals` are read here.
+        for (all, globals) in
+            named.iter_mut().zip(named_strings(&[&self.globals], self.strings.len()))
+        {
+            all[0] |= globals[0];
+            all[1] |= globals[1];
+        }
         for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
             if string {
                 let _ = writeln!(

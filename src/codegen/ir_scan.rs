@@ -27,7 +27,6 @@ fn branches_to(text: &str, label: &str) -> bool {
 /// of `kanso play`'s start-up on a one-line program, most of it hashing names
 /// nothing would ask about.
 fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
-    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
     let mut named = vec![[false; 2]; count];
     for text in texts {
         let bytes = text.as_bytes();
@@ -35,30 +34,36 @@ fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
         // `find("@s")` builds a two-way searcher, which a needle this short
         // lets skip almost nothing; `@` is found by memchr and the `s` checked.
         while let Some(at_sign) = crate::compare::find(&bytes[at..], b'@') {
-            let from = at + at_sign + 1;
-            at = from;
-            if bytes.get(from) != Some(&b's') {
-                continue;
-            }
-            let from = from + 1;
-            let mut to = from;
-            let mut n = 0usize;
-            while to < bytes.len() && bytes[to].is_ascii_digit() {
-                n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
-                to += 1;
-            }
-            if to == from || n >= count {
-                continue;
-            }
-            let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
-            if ends(to) {
-                named[n][0] = true;
-            } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
-                named[n][1] = true;
-            }
+            at += at_sign + 1;
+            string_named(bytes, at, &mut named);
         }
     }
     named
+}
+
+/// Marks the string an at names in `named`, when the at's name starts at
+/// `from` and is `sN` or `sN_lit` for an N below its length.
+fn string_named(bytes: &[u8], from: usize, named: &mut [[bool; 2]]) {
+    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
+    if bytes.get(from) != Some(&b's') {
+        return;
+    }
+    let from = from + 1;
+    let mut to = from;
+    let mut n = 0usize;
+    while to < bytes.len() && bytes[to].is_ascii_digit() {
+        n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
+        to += 1;
+    }
+    if to == from || n >= named.len() {
+        return;
+    }
+    let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
+    if ends(to) {
+        named[n][0] = true;
+    } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
+        named[n][1] = true;
+    }
 }
 
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
@@ -95,18 +100,23 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
 /// newline, which every symbol the module writer asks about is: they are
 /// generated identifiers.
 ///
-/// These were two scans of every piece, one for each set, and the second
+/// The same pass marks in `named` the interned strings the text names, as
+/// `named_strings` would.
+///
+/// These were three scans of every piece, one for each answer, and the second
 /// stopped at every newline as well as every at. Merged, the tab's compile of
-/// its corpus fell by 2,791,169 instructions, 1.2%.
+/// its corpus fell by 3,783,309 instructions, 1.7%.
 fn called_and_ending<'t>(
     text: &'t str,
     calls: &mut crate::hash::Set<&'t str>,
     ending: &mut crate::hash::Set<&'t str>,
+    named: &mut [[bool; 2]],
 ) {
     let bytes = text.as_bytes();
     let mut next = crate::compare::find(bytes, b'@');
     while let Some(at) = next {
         let from = at + 1;
+        string_named(bytes, from, named);
         let to = crate::compare::either_from(bytes, from, b'(', b'\n');
         next = crate::compare::find(&bytes[from..], b'@').map(|n| from + n);
         if to >= bytes.len() {
@@ -345,7 +355,7 @@ mod called_symbols_agrees {
     fn agrees_over(text: &str) {
         let index = called_symbols(text);
         let mut merged = crate::hash::Set::default();
-        called_and_ending(text, &mut merged, &mut crate::hash::Set::default());
+        called_and_ending(text, &mut merged, &mut crate::hash::Set::default(), &mut []);
         assert!(merged == index, "the merged scan found other calls than called_symbols");
         let mut asked = 0;
         for line in DECLARES.lines() {
@@ -392,7 +402,7 @@ mod called_symbols_agrees {
         ] {
             let mut calls = crate::hash::Set::default();
             let mut index = crate::hash::Set::default();
-            called_and_ending(text, &mut calls, &mut index);
+            called_and_ending(text, &mut calls, &mut index, &mut []);
             // Every symbol the module writer asks about is a generated
             // identifier, so the queries here hold no at, no paren and no
             // newline -- see the note on called_and_ending.
@@ -403,6 +413,25 @@ mod called_symbols_agrees {
                     "index and search disagree on `@{sym}\\n` in {text:?}"
                 );
             }
+        }
+    }
+
+    /// The strings the merged pass marks are the ones `named_strings` marks,
+    /// over the shapes a name can end in.
+    #[test]
+    fn the_merged_pass_names_the_strings_named_strings_does() {
+        for text in [
+            "  %v = load %KValue, ptr @s1_lit\n  call void @k(ptr @s0)\n",
+            "@s12 @s1 @s120",
+            "@s2_lit @s2_litx @s3.x @s @sx @s4(",
+            "call @f(ptr @s1, ptr @s5)\n@s0\n",
+            "",
+        ] {
+            let mut named = vec![[false; 2]; 13];
+            let mut calls = crate::hash::Set::default();
+            let mut ending = crate::hash::Set::default();
+            called_and_ending(text, &mut calls, &mut ending, &mut named);
+            assert_eq!(named, named_strings(&[text], 13), "the marks differ on {text:?}");
         }
     }
 
@@ -422,7 +451,7 @@ mod called_symbols_agrees {
         ] {
             let index = called_symbols(text);
             let mut merged = crate::hash::Set::default();
-            called_and_ending(text, &mut merged, &mut crate::hash::Set::default());
+            called_and_ending(text, &mut merged, &mut crate::hash::Set::default(), &mut []);
             assert!(merged == index, "the merged scan disagrees on calls in {text:?}");
             for sym in ["a", "b", "c", "@a", "a@b", "", "ab"] {
                 assert_eq!(

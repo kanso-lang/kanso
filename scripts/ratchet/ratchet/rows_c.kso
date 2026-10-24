@@ -3282,4 +3282,17 @@ one_scan = row
 
 rows_cq50 = list/concat rows_cq49 [one_scan]
 
-rows_c = list/concat rows_cq50 [itself]
+# The strings the body names are marked in the same pass, and only the type
+# tables are scanned for them after (2026-10-24). The mutation scans the body
+# for them again, and the browser compile row reads heavier.
+strings_in_scan = row
+  "the strings found by a scan of their own"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_strings_found_by_a_scan_of_their_own")
+  release
+
+rows_cq51 = list/concat rows_cq50 [strings_in_scan]
+
+rows_c = list/concat rows_cq51 [itself]
