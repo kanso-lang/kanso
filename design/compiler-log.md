@@ -21,56 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — a bind chain measures its drift from where it began
-
-A bind chain stages a step's continuation (sizes it, copies it through the
-carry pair and rewinds) only when the arena has drifted a quarter megabyte
-since the chain's last stage; otherwise the continuation stays where it is.
-`k_exec` set the carry's `at_arena` to null when it pushed the chain's beat,
-because the depth's last stage, if any, was another chain's. That made every
-chain's first step size and stage its continuation however little it had
-allocated, and the run program pushes a chain 7,091 times: 7,162 stages,
-15,288,786 instructions in `k_beat_iter_carry` and 6,099,136 sizing in
-`k_copy_size`. The push now records the arena's position and block, so the
-drift is measured from where this chain began. A skipped step was already
-sound everywhere, since the 2026-09-07 drift gate made the copy-out at a
-carried pop walk deep.
-
-Measured here, the run program read 966,447,210 -> 935,900,947 (-3.16%) with
-the same output, and `k_beat_iter_carry` left the profile.
-
-CI's rows: work_runbench 966,449,322 -> 935,902,128 (-3.16%) and
-work_deepbench 406,819,829 -> 203,571,400 (-49.96%). work_pendbench
-176,534,752 -> 176,531,937, work_readbench 4,583,965 -> 4,582,072,
-work_jsonbench 682,006,171 -> 682,004,279 and work_livebench 1,033,424,160
--> 1,033,424,099 fall a little, and work_encodebench 2,456,796,277 ->
-2,456,796,762, work_oneshot 11,118,597 -> 11,118,893, work_widebench
-28,619,441 -> 28,619,457 and work_digestbench 5,241,183 -> 5,241,199 rise
-by a few hundred instructions or less. Every binary's machine code grows 16
-bytes (text 5,223,390 -> 5,223,614 over all of them; runbench 721,753 -> 721,769).
-codegen_instructions_dev 116,068,622 -> 116,068,667 and
-codegen_instructions_release 422,580,983 -> 422,581,877 rise. In the tab, browser_run_instructions 31,370,234 ->
-31,370,376 rises. The
-welfare sum rose, and the floor moves 92.41 -> 92.53.
-
-The counter veins move where chains no longer stage their first step. The
-run program's run_evac_allocs 48,955 -> 1,624, run_evac_bytes 9,271,408 ->
-7,416,368, run_allocs 1,446,735 -> 1,438,645, run_alloc_bytes 221,966,568 ->
-221,297,400, run_beat_iters 92,018 -> 84,938, run_survive_slots 4,854 ->
-4,560, run_buf_reuse 134 -> 139 and run_sh_buf 87,167,344 -> 86,585,920; no
-peak moves. pend_allocs 805,977 -> 805,967, pend_alloc_bytes 45,563,312 ->
-45,539,584, pend_beat_iters 101 -> 99, pend_evac_allocs 2,225 -> 2,210,
-pend_evac_bytes 381,648 -> 378,048, pend_survive_slots 78,611 -> 77,616,
-pend_buf_reuse 502 -> 505 and pend_sh_buf 15,860,144 -> 15,838,096;
-read_beat_iters 201 -> 200, read_evac_allocs 19 -> 16 and read_evac_bytes
-656 -> 576; the decoder's beat_iters 151 -> 150, evac_allocs 19 -> 16 and
-evac_bytes 688 -> 576.
-The mem corpus moves in nineteen fixtures, each where a chain's first step no
-longer stages: a_carried_value_written_into_an_older_node_alloc_bytes 2,595,040 -> 2,568,080, a_carried_value_written_into_an_older_node_beat_iters 11 -> 9, a_carried_value_written_into_an_older_node_evac_allocs 1,697 -> 1,692, a_carried_value_written_into_an_older_node_evac_bytes 174,224 -> 168,896, a_carried_value_written_into_an_older_node_survive_slots 407 -> 404, a_carried_value_written_into_an_older_node_carry_dedup 446 -> 621, a_carried_value_written_into_an_older_node_buf_reuse 781 -> 783, a_carried_value_written_into_an_older_node_sh_buf 682,096 -> 657,104; a_loop_invariant_capture_is_copied_every_rewind_beat_iters 502 -> 501, a_loop_invariant_capture_is_copied_every_rewind_evac_allocs 10 -> 4, a_loop_invariant_capture_is_copied_every_rewind_evac_bytes 8,336 -> 144; a_repaired_node_below_the_mark_holds_tenure_allocs 34,047 -> 34,049, a_repaired_node_below_the_mark_holds_tenure_alloc_bytes 2,493,952 -> 2,510,528, a_repaired_node_below_the_mark_holds_tenure_beat_iters 10 -> 9, a_repaired_node_below_the_mark_holds_tenure_evac_allocs 2,469 -> 2,468, a_repaired_node_below_the_mark_holds_tenure_evac_bytes 162,960 -> 171,840, a_repaired_node_below_the_mark_holds_tenure_carry_dedup 46 -> 80, a_repaired_node_below_the_mark_holds_tenure_sh_buf 567,232 -> 579,536; a_slice_bang_chain_builds_no_slice_beat_iters 2 -> 0, a_slice_bang_chain_builds_no_slice_evac_allocs 15 -> 8, a_slice_bang_chain_builds_no_slice_evac_bytes 528 -> 288; an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 180,196 -> 179,380, an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes 14,926,832 -> 14,712,048, an_inner_beat_opens_its_tenure_in_the_block_outside_beat_iters 60 -> 54, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 48,411 -> 45,168, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 3,002,288 -> 2,788,720, an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 2,004 -> 11,204, an_inner_beat_opens_its_tenure_in_the_block_outside_carry_dedup 209 -> 459, an_inner_beat_opens_its_tenure_in_the_block_outside_buf_reuse 3,895 -> 3,907, an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf 5,070,416 -> 4,887,632; an_insisting_form_that_settled_builds_no_step_beat_iters 2 -> 0, an_insisting_form_that_settled_builds_no_step_evac_allocs 18 -> 9, an_insisting_form_that_settled_builds_no_step_evac_bytes 560 -> 288; effect_push_shape_allocs 56 -> 52, effect_push_shape_alloc_bytes 2,544 -> 2,320, effect_push_shape_beat_iters 5 -> 0, effect_push_shape_evac_allocs 50 -> 14, effect_push_shape_evac_bytes 1,696 -> 464, effect_push_shape_survive_slots 10 -> 4, effect_push_shape_sh_buf 768 -> 608; stream_write_beat_iters 1,601 -> 1,600, stream_write_evac_allocs 12 -> 6, stream_write_evac_bytes 480 -> 240, stream_write_held_peak_bytes 16,000 -> 16,160; the_same_capture_built_below_the_mark_is_shared_beat_iters 502 -> 501, the_same_capture_built_below_the_mark_is_shared_evac_allocs 10 -> 6, the_same_capture_built_below_the_mark_is_shared_evac_bytes 8,352 -> 8,192, the_same_capture_built_below_the_mark_is_shared_survive_slots 504 -> 4; tie_cycle_beat_iters 1 -> 0, tie_cycle_evac_allocs 15 -> 12, tie_cycle_evac_bytes 560 -> 464; work_ahead_forces_what_follows_a_park_beat_iters 2 -> 0, work_ahead_forces_what_follows_a_park_evac_allocs 11 -> 7, work_ahead_forces_what_follows_a_park_evac_bytes 368 -> 240; work_ahead_leaves_a_chain_never_run_beat_iters 1 -> 0, work_ahead_leaves_a_chain_never_run_evac_allocs 5 -> 4, work_ahead_leaves_a_chain_never_run_evac_bytes 192 -> 144; work_ahead_leaves_a_literal_where_it_is_beat_iters 2 -> 0, work_ahead_leaves_a_literal_where_it_is_evac_allocs 11 -> 7, work_ahead_leaves_a_literal_where_it_is_evac_bytes 368 -> 240; work_ahead_leaves_an_extending_builtin_beat_iters 4,002 -> 4,000, work_ahead_leaves_an_extending_builtin_evac_allocs 13 -> 9, work_ahead_leaves_an_extending_builtin_evac_bytes 448 -> 320; work_ahead_lifts_a_parking_lambda_beat_iters 1,001 -> 1,000, work_ahead_lifts_a_parking_lambda_evac_allocs 12 -> 4, work_ahead_lifts_a_parking_lambda_evac_bytes 384 -> 144; work_ahead_moves_a_binding_into_the_park_beat_iters 2 -> 0, work_ahead_moves_a_binding_into_the_park_evac_allocs 11 -> 7, work_ahead_moves_a_binding_into_the_park_evac_bytes 368 -> 240; work_ahead_pools_a_call_on_a_builtin_read_beat_iters 3,002 -> 3,000, work_ahead_pools_a_call_on_a_builtin_read_evac_allocs 15 -> 11, work_ahead_pools_a_call_on_a_builtin_read_evac_bytes 496 -> 368; work_ahead_pools_a_call_on_a_local_beat_iters 1,002 -> 1,000, work_ahead_pools_a_call_on_a_local_evac_allocs 13 -> 9, work_ahead_pools_a_call_on_a_local_evac_bytes 416 -> 288; work_ahead_reads_a_moved_binding_beat_iters 2 -> 0, work_ahead_reads_a_moved_binding_evac_allocs 11 -> 7, work_ahead_reads_a_moved_binding_evac_bytes 368 -> 240. The only peak among them is stream_write's held peak, 160 bytes higher. The ratchet row `a_chain_staged_on_its_first_step` puts the null back
-and turns the run counters red. `tests/a_document_read_from_a_file_keeps_its_loop.rs`
-counted one beat per iteration and one for the program; the program's own
-chain no longer stages, and its four programs read 200, 800, 200 and 200.
-
 ## 2026-10-22 — five JSON decoder states skip a blank run out of line
 
 Each state of the JSON decoder read whitespace with an arm that called the
@@ -1880,3 +1830,24 @@ emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
 Nothing at run time moved. Welfare fell by less than a hundredth, and the
 floor follows: this makes the engines agree, which the welfare script's own
 header puts ahead of the score.
+
+## 2026-10-24 — a module's own function beats an imported constant of its name
+
+#2090's first item, from the kv port. A module that imports std/io and
+declares `fn read_line acc x`, then hands `read_line` to `list/fold`, stopped
+on every engine with "`<io>` is not callable". #2084 fixed the play-file form
+of this in the interpreter's `resolve`. A module takes another path.
+
+`qualify` gives a name the module declares and an import also enrols a
+spelling of its own, the shared bare space (`m/~read_line`), where the
+module's own arms join the import's twin as synthetic clones. #2084's test
+for an arm the author wrote finds only clones there, so it never fires, and
+std/io's `read_line` is a constant, which answers any mention of the name
+read as a value. A constant has no arity a call could dispatch on, so it
+cannot share a name with a function by overloading. `qualify` now drops an
+import's constant twin wherever the module declares the name, and the name
+takes its plain qualified spelling. A module that declares no `read_line`
+still reads std/io's bare.
+
+`micro/a_modules_function_named_like_an_imported_constant` prints `6` on
+every engine, and main stops it with "`<io>` is not callable".
