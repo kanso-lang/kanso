@@ -2811,7 +2811,9 @@ impl<'a> Backend<'a> {
             // which LLVM keeps apart from `%KValue`. So the call takes that type
             // and the two words are put back into a `%KValue` after it.
             let raw = f.tmp();
-            f.line_fmt(format_args!("{raw} = call {{ i64, i64 }} @k_b_at_str(ptr {sptr}, i64 {idx})"));
+            f.line_fmt(format_args!(
+                "{raw} = call {{ i64, i64 }} @k_b_at_str(ptr {sptr}, i64 {idx})"
+            ));
             let tag = f.tmp();
             f.line_fmt(format_args!("{tag} = extractvalue {{ i64, i64 }} {raw}, 0"));
             let pay = f.tmp();
