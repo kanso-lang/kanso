@@ -1879,6 +1879,15 @@ static inline int ryu_short_at(double f, int p, int64_t* mo) {
     return (double)m / RYU_POW10D[p] == f;
 }
 
+/* Whether u is a multiple of ten, without the quotient: u is a multiple
+   of five exactly when u times five's inverse modulo 2^64 is at most
+   (2^64 - 1) / 5, and rotating right by one folds the even test into the
+   same compare. */
+static inline int k_tenfold(uint64_t u) {
+    uint64_t x = u * 0xCCCCCCCCCCCCCCCDULL;
+    return ((x >> 1) | (x << 63)) <= 0x1999999999999999ULL;
+}
+
 /* The place count the last short decimal took. */
 static int k_ryu_places = 0;
 
@@ -1898,15 +1907,20 @@ static inline int ryu_short(double f, int64_t* mo, int* po) {
        the answer changes, which is the fewest places, as before. Floats in
        one document tend to share a precision: on runbench 170,820 of
        191,070 take four places, and starting from zero tried five places
-       for each of them where starting from the last answer tries two. */
+       for each of them where starting from the last answer tries one.
+
+       The walk down needs no tries. While the bound holds, the interval
+       holds at most one decimal with p places, so a decimal with p - 1
+       places in it is m / 10, and it exists exactly when m ends in a
+       zero. Taking the zeros off gives the place count a try at each
+       place below would have found, and the same m. */
     int p = k_ryu_places;
     int64_t m;
     if (RYU_POW10D[p] > limit) p = 0;
     if (ryu_short_at(f, p, &m)) {
-        int64_t below;
-        while (p > 0 && ryu_short_at(f, p - 1, &below)) {
+        while (p > 0 && k_tenfold((uint64_t)m)) {
             p--;
-            m = below;
+            m = (int64_t)((uint64_t)m / 10);
         }
     } else {
         for (p++; ; p++) {

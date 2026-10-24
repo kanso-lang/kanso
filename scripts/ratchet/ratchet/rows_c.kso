@@ -3200,4 +3200,17 @@ rows_cq44d = list/concat rows_cq44c [narrowing_word late_line]
 
 rows_cq44 = list/concat rows_cq44d [two_byte_borrow]
 
-rows_c = list/concat rows_cq44 [itself]
+# A float that passes at the guessed place count takes the zeros off its scaled
+# decimal to reach the fewest places, instead of trying each place below. The
+# mutation puts the tries back, and the work vein reads runbench heavier.
+float_walk = row
+  "a float walked down by tries"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_float_walked_down_by_tries")
+  benches
+
+rows_cq45 = list/concat rows_cq44 [float_walk]
+
+rows_c = list/concat rows_cq45 [itself]
