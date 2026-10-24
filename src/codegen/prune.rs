@@ -57,8 +57,9 @@ fn prune_unnamed(
         // practice -- and the correctness of the index does not rest on that
         // being true, which is the point of having it.
         let odd: Vec<&str> = queries.iter().copied().filter(|sym| !one_pass_reads(sym)).collect();
+        let leads = leads_of(&queries);
         let mut names: Vec<crate::hash::Set<&str>> =
-            blocks.iter().map(|(_, text)| queries_named(text, &queries)).collect();
+            blocks.iter().map(|(_, text)| queries_named(text, &queries, &leads)).collect();
         for (written, (_, text)) in names.iter_mut().zip(blocks.iter()) {
             for sym in &odd {
                 if names_symbol(text, sym) {
@@ -172,7 +173,25 @@ fn one_pass_reads(sym: &str) -> bool {
 /// from `"` to the next `"`, which is how `quoted()` spells a name holding a
 /// slash or an operator character. Scanning the unquoted run alone would stop
 /// at the slash inside `@"d_add/2"` and miss it.
-fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::hash::Set<&'a str> {
+/// The bytes the names in `queries` start with. `queries_named` passes over a
+/// name that starts with any other before measuring and hashing it: a
+/// module's ats are mostly runtime calls, strings and intrinsics, and the
+/// names a caller asks about are its own groups'.
+fn leads_of(queries: &crate::hash::Set<&str>) -> [bool; 256] {
+    let mut leads = [false; 256];
+    for query in queries.iter() {
+        if let Some(&b) = query.as_bytes().first() {
+            leads[b as usize] = true;
+        }
+    }
+    leads
+}
+
+fn queries_named<'a>(
+    text: &str,
+    queries: &crate::hash::Set<&'a str>,
+    leads: &[bool; 256],
+) -> crate::hash::Set<&'a str> {
     let held = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'"';
     let bytes = text.as_bytes();
     let mut found = crate::hash::Set::default();
@@ -181,6 +200,9 @@ fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::
     while let Some(next) = crate::compare::find(&bytes[at..], b'@') {
         let from = at + next + 1;
         at = from;
+        if !bytes.get(from).is_some_and(|b| leads[*b as usize]) {
+            continue;
+        }
         let end = match bytes.get(from) {
             Some(b'"') => match bytes[from + 1..].iter().position(|b| *b == b'"') {
                 Some(close) => from + close + 2,

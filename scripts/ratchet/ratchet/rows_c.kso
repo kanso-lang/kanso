@@ -3321,4 +3321,17 @@ equal_bcmp = row
 
 rows_cq53 = list/concat rows_cq52 [equal_bcmp]
 
-rows_c = list/concat rows_cq53 [itself]
+# queries_named passes over a name no query starts like before hashing it
+# (2026-10-24). The mutation admits every byte, and the browser compile row
+# reads heavier.
+query_leads = row
+  "every name hashed whatever it starts with"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_name_hashed_whatever_it_starts_with")
+  release
+
+rows_cq54 = list/concat rows_cq53 [query_leads]
+
+rows_c = list/concat rows_cq54 [itself]
