@@ -21,27 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
-
-Clay ruled #2017. The dev codegen row counts `ld.gold`, which reads its `-L`
-directory in readdir order. On ext4 that order is a hash seeded per
-filesystem, so each CI runner drew its own, and the row moved by a few
-instructions between commits that changed no code. #2016 puts the directory
-on tmpfs, which lists in creation order, and the row now reads the same on
-every run: 620 instructions above main's golden. Welfare reads 91.29 either
-way, but the floor is compared exactly.
-
-**The ruling.** The floor comes down by exactly what CI measures under the
-fixed order, with the reason in its history. It is also the standing rule: a
-change that only normalizes what a row reads re-bases the floor by what CI
-measures after it, with no ruling. The banked value was a draw. Picking among
-fixed orders by which reads lowest would choose the measurement by its
-result, so the order is fixed by what is natural (creation order) and the
-floor follows. CLAUDE.md's welfare section carries the rule.
-
-Owes, on #2017: the floor re-based in #2016 by CI's measured cost, recorded
-with this entry as the reason; #2014 and #2018 merging main after it.
-
 ## 2026-10-20 — directive: a required feature's cost is never asked about
 
 Clay, after #2017: "it should never need to ask to lower the welfare for a
@@ -2145,8 +2124,28 @@ A dispatcher still records a byte position as an int, which the emitter reads
 itself; only the lines for LLVM go. The release IR of all nineteen
 benchmarks built from their directories is byte-identical before and after.
 
-In this container, at the golden's rustc, the tab's compile of the corpus
-fell from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from
-598,093 to 532,354 bytes (-11%), and the run fell from 34,963,054 to
-33,372,898 (-4.5%), the compares it no longer executes. The ratchet row
-`an_assume_written_for_no_optimizer` writes them for every body again.
+In this container, at the golden's rustc, the tab's compile of the corpus fell
+from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from 598,093
+to 532,354 bytes (-11%), and the run fell from 34,963,054 to 33,372,898
+(-4.5%), the compares it no longer executes. On CI the dev build's two rows
+fell with the emitted text: emit_instructions 5,918,172 -> 5,863,976 and
+codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
+IR lost ten of its twelve assumes. Every other compile row reads what main
+left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
+every body again.
+
+## 2026-10-24 — the tab leaves its tail calls as written
+
+`Written::finish_pieces`, which hands the tab its module, ran the same
+tail-call narrowing as `finish`, which writes a native one. The narrowing
+keeps `tailcc` only on the functions a `musttail` reaches and sends a call to
+a function that spills its arguments through a trampoline. Both work around
+an arm64 miscompile. The tab's translator skips `tailcc` and `ccc` as words,
+so the pass searched the module for nothing it lowers. `finish_pieces` now
+stops before it, and `finish` narrows what `assembled` gives it.
+
+On `bench/interp_corpus`, in this container at the golden's rustc, the tab's
+compile fell from 235,063,784 to 227,562,045 instructions (-3.2%). Its peak
+and the run did not move, since the corpus's module holds no trampoline.
+Native IR is unchanged. The ratchet row `the_tab_narrowing_its_tail_calls`
+narrows the tab's pieces again.

@@ -50,7 +50,8 @@ impl Written {
     /// joined at their summed size, each let go as it is copied.
     fn finish(self) -> String {
         let convention = self.convention;
-        let pieces = self.finish_pieces();
+        let (all, declared) = self.assembled();
+        let pieces = narrowed_pieces(all, declared);
         let mut module = String::with_capacity(pieces.iter().map(String::len).sum());
         for piece in pieces {
             module.push_str(&piece);
@@ -58,15 +59,25 @@ impl Written {
         through_doors(module, convention)
     }
 
-    /// The module as the emitter wrote it, in pieces, with the body pruned,
-    /// the declarations and globals it names written in front of it, and the
-    /// tail calls narrowed: first the declarations,
-    /// the globals and the site table, then the body's pieces, none of which
-    /// splits a definition. The tab translates the pieces as they are, so
+    /// The module as the emitter wrote it, in pieces, with the body pruned
+    /// and the declarations and globals it names written in front of it:
+    /// first the declarations, the globals and the site table, then the
+    /// body's pieces, none of which splits a definition. The tail calls are
+    /// left as written: the narrowing `finish` applies works around an arm64
+    /// miscompile, the tab's translator reads no calling convention, and the
+    /// trampolines it adds only put a call in front of one. On
+    /// `bench/interp_corpus` it was 3.2% of the tab's compile.
+    /// The tab translates the pieces as they are, so
     /// the module is never held twice; joining them while every piece was
     /// still live was the tab's compile peak, 352,805 bytes of module on top
     /// of the same bytes in pieces.
     fn finish_pieces(self) -> Vec<String> {
+        self.assembled().0
+    }
+
+    /// `finish_pieces` and the offset in the first piece where the body's
+    /// declarations end, which is where `finish` starts narrowing.
+    fn assembled(self) -> (Vec<String>, usize) {
         let pruned = match self.has_entry {
             true => prune_unnamed(self.pieces, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => self.pieces,
@@ -186,7 +197,7 @@ impl Written {
         let mut all = Vec::with_capacity(pieces.len() + 1);
         all.push(head);
         all.extend(pieces);
-        narrowed_pieces(all, declared)
+        (all, declared)
     }
 }
 
