@@ -1870,3 +1870,13 @@ function named `read_line` passed by value to `list/fold` in a module that
 imports std/io, stops every engine with "`<io>` is not callable", on main and
 on this branch. The module's own name is lost in `qualify`, a path none of
 these fixes touch.
+
+CI's rows. The front end asks the two new questions of every program it
+compiles, and the tab compiles with the same front end:
+compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
+-> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
+emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
+385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
+Nothing at run time moved. Welfare fell by less than a hundredth, and the
+floor follows: this makes the engines agree, which the welfare script's own
+header puts ahead of the score.
