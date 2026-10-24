@@ -2123,3 +2123,9 @@ this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
 on every position of every length up to 24; skipping the last word of a run
 longer than eight turned both red. The ratchet row `equal_bcmp` makes `bcmp`
 the ordering compare again.
+
+The calls come from `==` on short strings, which wasm32 lowers to `bcmp`
+even against a literal: the type names in `P::ty` and the attribute words in
+`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
+keys built from their bytes cost more than it saved, 222,368,963 ->
+222,475,311 on the tree before this change, and was set aside.
