@@ -1859,3 +1859,8 @@ instead of widening them into its `Vec<char>`, through accessors that test
 compile, and the test at every character cost more: `entry_instructions`
 71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
 24,224,312.
+
+Measured and set aside: an unchecked `u64` sum for the tab translator's
+integers of eighteen digits or fewer, ahead of the checked `i128` loop.
+`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
+ratchet row of its own.
