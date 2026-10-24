@@ -107284,3 +107284,59 @@ other, and the golden goes red under both; the first is the ratchet row
 `a_short_key_read_from_the_slot_beside_it`. The row
 `a_short_key_left_to_the_call` sends every key to the call again and turns
 the instructions gate red.
+
+## 2026-10-22 — a plain number is read a word at a time
+
+`number_span` finds where a JSON number's bytes end by classifying sixteen
+bytes a step against the five characters a number holds besides digits. The
+run program's 417,483 numbers are four to nine bytes long and all of one
+shape: an optional minus, digits, and an optional point with digits after
+it. `k_b_number_span_raw` now reads that shape first, finding the end of each
+run of digits eight bytes at a time and checking that the byte after the
+number is one no number holds. A leading zero, an exponent, a point with no
+digit after it, any other byte a number may hold after the run, and any number
+within forty bytes of the end of its document go to the sixteen-byte scan,
+which starts again from the beginning. That scan moved into its own function,
+`k_number_span_scan`, because the registers it wants made every call build a
+frame. `k_nondigits8` moved from numbers.c to text.c, which comes first in the
+runtime, so both files use one copy.
+
+The float parse had the same shape of cost. `k_to_float_text` answers the
+`[-]I.F` shape from two words and parses everything else with a scan that ends
+in a strtod fallback, and the fallback's buffer made every call build a frame.
+The slice doors now call that scan out of line, and the shaped case is a
+leaf. `k_b_to_float`, the door for a string, keeps it inline: a short string
+has no room for the shape's two words and always scans, and with the scan out
+of line there CI read widebench 28,619,441 -> 28,939,500.
+
+Measured here, the run program read 977,794,290 -> 966,447,210 (-1.16%) with
+the same output: the span 977,794,290 -> 968,235,476, `k_b_number_span_raw`
+34,243,704 -> 24,644,367, and the float split 968,235,476 -> 966,447,210,
+`k_b_to_float_slice_raw` 28,270,242 -> 26,482,302. Moving the slice that an
+out-of-range float or integer builds out of line as well read 966,243,735, a
+further 203,475, and made the integer door slower by 217,306; it was dropped. The new
+path and the old function, both extracted from the source, agreed on
+50,000,000 random byte strings and positions. The harness saw a float answered
+as an integer and a leading zero let through, each in about 2,000 of a
+million cases.
+
+CI's rows: work_runbench 977,795,537 -> 966,449,322 (-1.16%), work_jsonbench
+699,198,721 -> 682,006,171 (-2.46%), work_oneshot 11,233,739 -> 11,118,597
+(-1.02%), work_livebench 1,033,539,043 -> 1,033,424,160 and
+work_encodebench 2,456,796,655 -> 2,456,796,277. Every binary's machine code
+shrinks by 1,376 bytes, the float scan no longer inlined into the slice doors
+(text 5,242,654 -> 5,223,390 over all of them; runbench 723,129 -> 721,753).
+codegen_instructions_release 422,642,173 -> 422,580,983 falls and
+codegen_instructions_dev 116,064,144 -> 116,068,622 rises. In the tab, browser_run_instructions 31,449,729 ->
+31,370,234 falls. The
+welfare sum rose, and the floor moves 92.36 -> 92.41.
+
+The micro golden `a_number_far_from_the_end_is_read_a_word_at_a_time` decodes
+documents whose numbers sit ahead of a long string, so they are within reach
+of the new path: plain numbers of both kinds beside exponents, a sixteen-digit
+run and `-0`, then eight malformed numbers. The ratchet row
+`a_point_forgotten_on_the_fast_path` answers a float as an integer there and
+turns the golden red; `a_number_scanned_sixteen_bytes_at_a_time_anyway` turns
+the path off and turns the instructions gate red. The row
+`a_digit_word_that_reads_a_colon_as_ten` patched `k_nondigits8` in
+numbers.c and would not apply once it moved; it patches text.c now.
