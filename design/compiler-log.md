@@ -21,56 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — a short key is found in the token cache without a call
-
-The decoder reads an object's key through `k_b_plain_string_fast`, which finds
-the closing quote and, when no backslash came first, calls
-`k_b_utf8_slice_raw` for the string. A key of four to seven bytes is almost
-always in the token cache, a direct-mapped table of strings keyed by the
-token's bytes and length, so the call usually did a bounds test, a hash and
-two loads. The helper's IR now does the hash and the compare itself and loads
-the cached string when the slot's key matches; anything else, including a key
-that went to the slot beside its own, still takes the call. `k_token_key` and
-`k_token_cache` lose `static` so the emitted code can read them.
-
-The run program's calls into the slice from the key path fall from 784,179 to
-17,501, and it read 997,774,087 -> 977,794,290 here (-2.0%) with the same
-output.
-
-Lifting `k_b_utf8_slice_raw` into the hot unit beside `k_b_find2_raw`, so the
-LTO link could inline it, was tried first and read 997,020,816, because the
-link kept the call. The emitted IR spells the return type `%KValue` and
-clang's unit a literal `{ i64, i64 }`, which may be what stopped it; that was
-not isolated.
-
-CI's rows: work_runbench 997,775,288 -> 977,795,537 (-2.00%), work_jsonbench
-731,748,677 -> 699,198,721 (-4.45%), work_oneshot 11,424,128 -> 11,233,739
-(-1.67%) and work_livebench 1,033,729,698 -> 1,033,539,043. The four
-programs that decode objects carry the inline path and grow: text jsonbench
-373,113 -> 374,057, oneshot 379,641 -> 380,585, livebench 383,177 ->
-384,121 and runbench 722,249 -> 723,129, text 5,238,942 -> 5,242,654 over
-all the binaries. Every program declares the two tables: emitted_lines
-13,104 -> 13,134 and emitted_branches 1,305 -> 1,307 for the decoder,
-emitted_other_lines 158,210 -> 158,320 and emitted_other_branches 16,888 ->
-16,894, module_lines 1,161 -> 1,163, and each compile sample two lines more
-(recursion 451 -> 453, dispatch 350 -> 352, guards 307 -> 309, records 408
--> 410; lines 1,516 -> 1,524 in all). emit_instructions 6,426,328 -> 6,435,278 and
-codegen_instructions_release 422,367,718 -> 422,642,173 rise, and
-codegen_instructions_dev 116,068,279 -> 116,064,144 falls. In the tab, browser_run_instructions
-31,602,327 -> 31,449,729 falls, and browser_compile_instructions 402,017,479
--> 402,486,449 and browser_compile_peak_bytes 733,103 -> 735,005 rise. The
-welfare sum rose, and the floor moves 92.28 -> 92.36.
-
-The micro golden `a_short_key_is_found_in_the_cache_in_place` decodes two
-objects with the same fifteen keys, the second reading what the first filled.
-Two of its keys, `aaaz` and `abae`, hash to one slot, so the second goes to
-the slot beside it. Reading the string from the neighbouring slot, or taking
-a slot as a hit without comparing its key, answers one of the two for the
-other, and the golden goes red under both; the first is the ratchet row
-`a_short_key_read_from_the_slot_beside_it`. The row
-`a_short_key_left_to_the_call` sends every key to the call again and turns
-the instructions gate red.
-
 ## 2026-10-22 — a plain number is read a word at a time
 
 `number_span` finds where a JSON number's bytes end by classifying sixteen
@@ -1868,3 +1818,48 @@ Measured and set aside: the two scanners without `always_inline`. The link
 then left 6 calls, and kq read print_small 26,132,733 and path_small
 10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
 forced inlining is not what costs kq. The cause is not isolated.
+
+## 2026-10-24 — a chain built from the left runs past the beat stack
+
+The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
+stopped at its first compile error, under rulings made since, so each was
+migrated and its journal re-tested; the re-sit has its own entry. Two ports,
+rg and site, hit the same native crash, and this entry fixes it.
+
+rg walks a directory by folding `.>` onto an effect, once per entry:
+`list/fold entries (effect 0) added`, where `added` answers
+`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
+and native code runs it by entering `k_exec` for the inner chain from the
+outer one, a frame per link. The interpreter printed the sum at 100,000 links.
+Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
+
+Two faults were behind it, and both were in `k_exec`.
+
+- Each chain pushes a beat mark and then reads and writes
+  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
+  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
+  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
+  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
+  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
+  runs in `k_exec_unmarked`, which does what a beat past the stack has always
+  done: it keeps count and stages nothing, and its garbage waits for an outer
+  mark.
+- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
+  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
+  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
+  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
+  360 bytes a link.
+
+`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
+and prints `total 500500` on every engine. Main stops it with "ran out of
+stack". With the frame fix alone and the depth guard removed, it stops the
+same way. A chain of 100,000 links still runs out of native stack: the
+interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
+gives, as any deep recursion does. Running a left-built chain without
+recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
+there would lose the failure it is owed, so it is not attempted here.
+
+A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
+links one segfaults on main as well as on this branch, at 20 links, before
+printing anything. The sweep's own `--prove` was not run, and nothing here
+claims a clean sweep.
