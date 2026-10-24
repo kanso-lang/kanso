@@ -1864,7 +1864,7 @@ shape; main stops it on the interpreter.
 main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
 on both engines, and the walk over the play corpus now reads twelve goldens.
 
-Two shapes from the same family are not fixed here. kv's module form, a
+One shape from the same family is not fixed here. kv's module form, a
 function named `read_line` passed by value to `list/fold` in a module that
 imports std/io, stops every engine with "`<io>` is not callable", on main and
 on this branch. The module's own name is lost in `qualify`, a path none of
