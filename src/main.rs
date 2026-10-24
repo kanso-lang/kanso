@@ -2618,26 +2618,32 @@ mod the_hot_unit_is_taken_from_the_runtime {
             "k_beat_push",
             "k_b_find2_raw",
             "k_b_find2_below_raw",
+            "k_b_at_str",
+            "k_b_number_span_raw",
+            "k_b_to_int_slice_raw",
+            "k_b_to_float_slice_raw",
         ] {
             assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
         }
     }
 
-    /// The ratchet row for the two scanners removes their `always_inline`,
-    /// and the release build must still find them: a lift keyed on the
-    /// attribute stopped the mutated tree building, and the row read UNBUILT
-    /// on kanso#1585. Watched red with the scanners' start strings keyed on
-    /// the attribute again.
+    /// The ratchet row for the two scanners puts `noinline` where their
+    /// `always_inline` was, and the release build must still find them: a
+    /// lift keyed on the attribute stopped the mutated tree building, and the
+    /// row read UNBUILT on kanso#1585. Watched red with the scanners' start
+    /// strings keyed on the attribute again.
     #[test]
     fn the_scanners_are_found_without_their_attribute() {
-        let bare = kanso::RUNTIME_C
-            .replace("__attribute__((always_inline)) long long k_b_find2", "long long k_b_find2");
-        assert_ne!(bare, kanso::RUNTIME_C, "the attribute is no longer there to remove");
+        let bare = kanso::RUNTIME_C.replace(
+            "__attribute__((always_inline)) long long k_b_find2",
+            "__attribute__((noinline)) long long k_b_find2",
+        );
+        assert_ne!(bare, kanso::RUNTIME_C, "the attribute is no longer there to replace");
         let unit = super::hot_source_of(&bare);
         for name in ["k_b_find2_raw", "k_b_find2_below_raw"] {
             assert!(
-                unit.contains(&format!("\nlong long {name}(")),
-                "the bare {name} was not lifted"
+                unit.contains(&format!("\ninline __attribute__((noinline)) long long {name}(")),
+                "the mutated {name} was not lifted as an inline copy"
             );
         }
     }
