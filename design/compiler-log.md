@@ -1808,6 +1808,20 @@ links one segfaults on main as well as on this branch, at 20 links, before
 printing anything. The sweep's own `--prove` was not run, and nothing here
 claims a clean sweep.
 
+CI's rows. Every benchmark does less work, because a frame that reserved
+64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
+work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
+28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
+2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
+work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
+4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
+4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
+and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
+274,348. Every binary's text grows 2,576 bytes for the two new functions,
+runbench's to 762,112. Linking the codegen corpus compiles the larger runtime:
+codegen_instructions_dev 116,426,119 -> 116,447,795 and
+codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
+
 ## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
 
 The 2026-10-12 entry "a name the author declared wins over a builtin and an
@@ -1833,9 +1847,25 @@ paths the rule did not reach, from three ports.
   name, before the file's own group. The call stopped with "`<io>` is not
   callable", and 57 of make's 82 fixtures went red on that engine. A group
   with an arm the program declares now wins both rungs.
+- **Both engines, a type.** mustache declares `type env` and imports std/os,
+  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
+  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
+  the bare name to `os/env`, because the only declarations it counted were
+  functions, and `apply_wrappers` sent that on to `builtin_env`. The
+  interpreter printed `<io>`; native code still built the record, by a path
+  this did not reach. Both passes now leave a name the program declares as a
+  type, and each alone leaves the interpreter printing `<io>`.
 
 `tests/golden/play/a_function_named_like_an_imported_type` gains the direct
 call, and main prints `2 list/counting 3 4` for it natively.
 `tests/golden/play/a_function_named_like_an_imported_constant` is make's
-shape; main stops it on the interpreter. `play_verb.rs` runs both on both
-engines, and the walk over the play corpus now reads eleven goldens.
+shape; main stops it on the interpreter.
+`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
+main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
+on both engines, and the walk over the play corpus now reads twelve goldens.
+
+Two shapes from the same family are not fixed here. kv's module form, a
+function named `read_line` passed by value to `list/fold` in a module that
+imports std/io, stops every engine with "`<io>` is not callable", on main and
+on this branch. The module's own name is lost in `qualify`, a path none of
+these fixes touch.
