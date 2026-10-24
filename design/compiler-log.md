@@ -1874,6 +1874,7 @@ work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
 4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
 and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
 274,348. Every binary's text grows 2,576 bytes for the two new functions,
-runbench's to 762,112. Linking the codegen corpus compiles the larger runtime:
+runbench's to 762,112, and text, the sum over fourteen binaries, from
+5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
 codegen_instructions_dev 116,426,119 -> 116,447,795 and
 codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
