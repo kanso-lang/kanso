@@ -3456,7 +3456,7 @@ impl<'a> Backend<'a> {
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t.to_string());
         }
-        if let Some(id) = self.type_ids.get(name).copied() {
+        if let Some(id) = self.constructs(name) {
             if let Some(parent) = self.sub_parents.get(name).cloned() {
                 if emitted.len() != 1 {
                     return Err(format!("native backend: `{name}` wraps one value"));

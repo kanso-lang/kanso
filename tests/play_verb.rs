@@ -64,7 +64,8 @@ fn a_type_named_like_a_builtin_is_the_files_own() {
 /// A function the file declares wins over a type an import enrols under the
 /// same bare name. std/list exports a record `counting`; the interpreter built
 /// one from this file's two-argument `counting` and stopped on its field count,
-/// where native code called the function.
+/// where native code called the function. Called directly rather than passed,
+/// it was native code that built the record, printing `list/counting 3 4`.
 #[test]
 fn a_function_named_like_an_imported_type_is_the_files_own() {
     let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -72,6 +73,52 @@ fn a_function_named_like_an_imported_type_is_the_files_own() {
     let want = std::fs::read_to_string(&golden).expect("the golden reads");
     for engine in [&[][..], &["--interp"][..]] {
         let run = play("a_function_named_like_an_imported_type.kso", engine);
+
+        assert_eq!(
+            String::from_utf8_lossy(&run.stdout),
+            want,
+            "engine {engine:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(run.status.success(), "engine {engine:?}");
+    }
+}
+
+/// A function the file declares wins over a constant an import enrols under
+/// the same bare name. std/io exports `read_line`, a constant; the make port
+/// declared `fn read_line at s`, and the interpreter read the call's head as
+/// std/io's description and stopped with "`<io>` is not callable", where
+/// native code called the function.
+#[test]
+fn a_function_named_like_an_imported_constant_is_the_files_own() {
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/play/a_function_named_like_an_imported_constant.stdout");
+    let want = std::fs::read_to_string(&golden).expect("the golden reads");
+    for engine in [&[][..], &["--interp"][..]] {
+        let run = play("a_function_named_like_an_imported_constant.kso", engine);
+
+        assert_eq!(
+            String::from_utf8_lossy(&run.stdout),
+            want,
+            "engine {engine:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(run.status.success(), "engine {engine:?}");
+    }
+}
+
+/// A type the file declares wins over a function an import brings under the
+/// same bare name. std/os exports `env`, a wrapper over a builtin; mustache
+/// declared `type env`, and two front-end passes rewrote its constructions
+/// into std/os's call before either engine saw them. The interpreter read
+/// the environment and printed `<io>`, where native code built the record.
+#[test]
+fn a_type_named_like_an_imported_function_is_the_files_own() {
+    let golden = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/play/a_type_named_like_an_imported_function.stdout");
+    let want = std::fs::read_to_string(&golden).expect("the golden reads");
+    for engine in [&[][..], &["--interp"][..]] {
+        let run = play("a_type_named_like_an_imported_function.kso", engine);
 
         assert_eq!(
             String::from_utf8_lossy(&run.stdout),
@@ -340,7 +387,7 @@ fn every_play_golden_is_read() {
             read += 1;
         }
     }
-    // Ten goldens today: four `.stdout`, five `.stderr` and one `.run.stderr`.
-    // A walk that found none would pass on an empty corpus.
-    assert_eq!(read, 10, "the walk read {read} goldens");
+    // Twelve goldens today: six `.stdout`, five `.stderr` and one
+    // `.run.stderr`. A walk that found none would pass on an empty corpus.
+    assert_eq!(read, 12, "the walk read {read} goldens");
 }

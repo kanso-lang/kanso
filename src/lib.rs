@@ -1337,6 +1337,14 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
             entry.0 = false;
         }
     }
+    // A type the program declares is its own name as well: mustache's `type
+    // env` beside std/os's `env` was rewritten to `os/env`, and the
+    // interpreter called std/os where native code built the record.
+    for t in program.types.iter().filter(|t| t.origin.is_none()) {
+        if let Some(entry) = by_name.get_mut(t.name.as_str()) {
+            entry.0 = false;
+        }
+    }
     // The escape hatch's names come from the environment rather than the
     // program, so they are owned here and borrowed into `skip` beside the
     // program's own.

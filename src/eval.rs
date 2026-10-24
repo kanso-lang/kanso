@@ -1806,8 +1806,16 @@ impl<'a> Interp<'a> {
     /// decides the answer: a constant beats a descriptor name, a descriptor
     /// name beats a field-less type, and a literal beats a reference.
     fn resolve(&self, name: &str, span: Span) -> Result<Named<'a>, RuntimeError> {
+        // A name the program declares wins over what an import enrolled under
+        // the same bare name and over the descriptor names below, as an
+        // enrolled type gives way in `callee`: make's `fn read_line at s`
+        // beside std/io's `read_line` constant was read as the constant and
+        // stopped with "`<io>` is not callable".
+        let own = self.fns.get(name).is_some_and(|decls| decls.iter().any(|d| !d.synthetic));
         if let Some(decls) = self.fns.get(name) {
-            if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
+            if let Some(constant) =
+                decls.iter().find(|d| d.params.is_empty() && !(d.synthetic && own))
+            {
                 // Every constant goes through the knot, not only one that
                 // names itself. `knotted` installs a blackhole before it
                 // evaluates, so re-entering the name finds it — and a cycle
@@ -1818,7 +1826,11 @@ impl<'a> Interp<'a> {
                 return Ok(Named::Constant(constant));
             }
         }
-        match name.strip_prefix("builtin_").unwrap_or(name) {
+        let described = match own {
+            true => "",
+            false => name.strip_prefix("builtin_").unwrap_or(name),
+        };
+        match described {
             "args" => return Ok(Named::Args),
             "stdin" => return Ok(Named::Stdin),
             "read_line" => return Ok(Named::ReadLine),

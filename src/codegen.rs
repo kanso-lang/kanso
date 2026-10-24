@@ -2664,6 +2664,18 @@ impl<'a> Backend<'a> {
         !self.group_named(name).is_empty()
     }
 
+    /// Whether a bare call to `name` builds a record. An imported type enrolled
+    /// under its bare name gives way to a group the program declares, as the
+    /// interpreter's `callee` does: the author's own name wins.
+    fn constructs(&self, name: &str) -> Option<i64> {
+        let id = self.type_ids.get(name).copied()?;
+        let enrolled = || self.program.types.iter().any(|t| t.name == name && t.origin.is_some());
+        match self.declares(name) && enrolled() {
+            true => None,
+            false => Some(id),
+        }
+    }
+
     fn declares_at(&self, name: &str, arity: usize) -> bool {
         self.group_indices(name, arity).next().is_some()
     }
