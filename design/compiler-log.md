@@ -21,86 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-21 — a position read beside its byte is in range, and a length
-
-The decoder hands a byte on together with the position it was read at:
-`array_delim cs cs[p + 1] (p + 1) acc`. In an arm that takes the byte as a
-byte, either through a literal or after an arm that took `none`, the read
-succeeded, so the position indexes `cs`. Adding one to it cannot leave the
-machine word, but each `p + 1` carried an overflow test and a way to the
-bignum body. `src/read_at.rs` finds the groups where every call passes a
-collection, a read out of it and the read's position, the collection and
-the index written alike in both places. A partial, a piped call or a bare
-mention of the name refuses the group. In each arm that took the byte as a
-byte, the emitter tells LLVM the position is an int whose word lies between
--2^62 and 2^62, and LLVM drops the tests. A read or a position that may
-arrive deferred is left alone, because a thunk passes the `none` arm's tag
-test and may still force to `none`.
-
-Six decoder groups qualify: `array_delim`, `array_open`, `obj_delim`,
-`obj_key_start`, `obj_key_end` and `obj_open`. On the run program
-15,265,858 `jo`/`jno` executed before and 8,754,624 after, and here it read
-1,085,159,551 -> 1,073,408,863 (-1.08%). LLVM inlined differently with the
-tests gone: `parse_value` fell 42.3M and `array_delim` rose 20.8M, and
-`parse_number` left `parse_value` as a call of its own.
-
-`assume_length` said a length is never negative. It now says a length is
-below 2^62, and the inline `length` load uses it, so a guard like
-`return acc if i < 1 or length xs < i` lets LLVM step `i + 1` without a
-test. Here the run program read 1,073,408,863 -> 1,068,720,545 more, with
-`sha256/digested` and json's encode loops the gainers.
-
-CI's rows: work_runbench 1,085,160,738 -> 1,068,721,732 (-1.51%),
-work_jsonbench 749,951,027 -> 731,748,677 (-2.43%), work_digestbench
-5,992,543 -> 5,241,183 (-12.5%), work_livebench 1,370,528,510 ->
-1,356,883,942, work_encodebench 2,464,443,931 -> 2,456,797,406,
-work_oneshot 12,362,488 -> 12,207,627, work_widebench 28,580,079 ->
-28,571,443 and work_basket 31,162,668 -> 31,152,439. work_scanbench rises
-274,236 -> 274,277, by 41. Machine code shrinks in every benchmark: text
-runbench 737,929 -> 715,289 and jsonbench 379,049 -> 364,137, the rest by
-256 to 24,576 bytes. codegen_instructions_release 453,689,156 ->
-422,291,078 (-6.9%) and codegen_instructions_dev 115,990,552 ->
-115,922,261 fall with the code LLVM no longer keeps. emit_instructions
-6,232,336 -> 6,283,165 rises by the analysis and the assumes it writes.
-compile_instructions 24,321,293 -> 24,286,340, entry_instructions
-75,148,170 -> 75,053,355, library_instructions 74,843,912 -> 74,749,069 and
-interp_instructions 463,217,423 -> 463,213,463. In the tab,
-browser_run_instructions 34,370,238 -> 34,153,178 and
-browser_compile_peak_bytes 752,985 -> 735,031 fall, and
-browser_compile_instructions 412,332,402 -> 413,098,267 rises by 765,865.
-The assumes are calls in the emitted IR, so the counts that read them rise:
-emitted_calls 1,261 -> 1,394 and emitted_lines 12,909 -> 13,078 for the
-decoder, emitted_other_calls 18,298 -> 19,150 and emitted_other_lines
-157,080 -> 158,441 for the other programs, and the module compile's
-module_calls 109 -> 111 and module_lines 1,131 -> 1,135. Emitted branches
-fall in every program that decodes JSON. The welfare sum rose, and the
-floor moves 91.84 -> 91.92.
-
-The micro golden `a_position_read_beside_its_byte_stays_exact` runs one
-group linked at every call, from positions at both ends of the word, past
-it and below zero, and one group whose second call passes a literal byte
-beside the largest word. With the call sites' intersection taken out, that
-second group is linked anyway and a release build's `p + 1` wraps to
--9223372036854775808 where the interpreter prints 9223372036854775808. The
-dev tier never acts on the assume, so the ratchet's row reads the
-release-built corpus. The ratchet carries that as
-`a_read_position_assumed_past_a_literal`, and `a_read_position_left_unbounded`
-drops every link, which the emitted goldens read.
-
-A dead-value pass in `src/ir_wasm.rs`, which drops pure instructions nothing
-reads and counts an `llvm.assume` as reading nothing, was measured and
-dropped. It took browser_run_instructions 34,370,238 -> 33,477,523 (-2.60%)
-against browser_compile_instructions 412,332,402 -> 414,726,069 (+0.58%),
-and welfare fell below the floor: the browser run term is saturated, with a
-baseline of 2,331,914,518, so the compile cost outweighs the run's gain.
-
-TBAA tags on the IR append helpers, for the header, the buffer's frontier
-word, its bytes and the `k_site` stores, were measured and dropped: the run
-program's binary came out byte-identical. The three appends `encode_map`
-makes for each pair cannot share their header loads because each append's
-slow path may hand back a different builder, so the next append's header
-pointer is a merge of the two paths. Aliasing was not what kept them apart.
-
 ## 2026-10-21 — a JSON key goes out in one claim
 
 lib/json wrote an object's key as three appends around a call: the opening
@@ -2067,3 +1987,18 @@ In this container runbench fell from 813,607,261 to 809,811,674 instructions
 (-0.47%), with byte-identical output, and `tally_4` no longer calls the
 index. The ratchet row `index_inline` takes the `always_inline` away and
 reads 813,606,898.
+
+## 2026-10-24 — the number span inlined into the decoder
+
+The same move for `k_b_number_span_raw`, the word-at-a-time scan the
+decoder's number twin calls at every number, 417,483 times on runbench. It
+returns an `i64`, so the call's type already matched, and only the definition
+had to move. It is defined in the hot unit under the same `K_HOT_ELSEWHERE`
+guard, with `k_nondigits8`, `k_digits_end` and the `k_number_bytes` table
+beside it. `k_number_span_scan`, the RFC checks it hands everything else to,
+stays out of line and now has external linkage.
+
+In this container runbench fell from 809,811,674 to 804,150,430 instructions
+(-0.70%), with byte-identical output, and no function in the program calls
+the span any more. The ratchet row `number_span_inline` takes the
+`always_inline` away and reads 809,811,999.
