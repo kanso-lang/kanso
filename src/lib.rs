@@ -1674,13 +1674,24 @@ fn qualify(
     // mention of the name read as a value: kv's `fn read_line acc x`, handed
     // to `list/fold` beside std/io's `read_line`, was std/io's description on
     // every engine.
-    let declared_here: crate::hash::Set<String> = dep
-        .fns
-        .iter()
-        .filter(|f| !is_twin(f) && !ast::has_slash(&f.name))
-        .map(|f| f.name.clone())
-        .collect();
-    dep.fns.retain(|f| !(is_twin(f) && f.params.is_empty() && declared_here.contains(&f.name)));
+    let shadowed: Vec<String> = {
+        let declared_here: crate::hash::Set<&str> = dep
+            .fns
+            .iter()
+            .filter(|f| !is_twin(f) && !ast::has_slash(&f.name))
+            .map(|f| f.name.as_str())
+            .collect();
+        dep.fns
+            .iter()
+            .filter(|f| {
+                is_twin(f) && f.params.is_empty() && declared_here.contains(f.name.as_str())
+            })
+            .map(|f| f.name.to_string())
+            .collect()
+    };
+    if !shadowed.is_empty() {
+        dep.fns.retain(|f| !(is_twin(f) && f.params.is_empty() && shadowed.contains(&f.name)));
+    }
     let mut own_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     let mut twin_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     for f in &dep.fns {
