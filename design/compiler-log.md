@@ -21,64 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — a call into a loop keeps its cohort bracket under a cycle
-
-A cohort bracket marks the arena before a call that crosses into another
-module with immutable arguments, and its pop gives back what the call left.
-The license refused every caller a cycle reaches (`cycle_reached`), since such
-a caller can run once per element of something and its calls are usually
-small. It now admits one when the callee reaches a cycle that allocates
-(`reaches_cycle`: the members of every cycle whose members the beat analysis
-finds allocating, and everything that mentions them, followed backward) and
-answers no heap value. A call into a loop pays
-its push and pop once against the whole loop, and with no heap value to keep
-the pop rewinds without copying anything out.
-
-On the run program the index phase builds 1.5 MB of text to answer an int,
-and nothing marked the arena around it, so the string lived until the program
-ended. `tally` is reached by a cycle, so the license refused the call. Measured
-here, arena_peak_bytes 4,718,608 -> 3,670,032 and the run read 999,948,734 ->
-999,793,761 with the same output. The peak now sits at two live megabyte
-blocks, the file read and its decoded document, and the 1,572,880-byte string
-the phase builds; the program needs all three at that moment.
-
-Three other shapes were measured on the way. Seeded from every cycle, the
-reach admitted widebench's whitespace skip, a loop that builds nothing, called
-once per value from its parser; CI read widebench 28,619,441 -> 34,955,663
-(+22%) and encodebench 2,456,796,655 -> 2,461,704,983, 4.0M of it
-`k_cohort_pop` with nothing to give back. The ratchet row
-`a_loop_that_builds_nothing_bracketed` puts that seed back and turns the
-instructions gate red. Without the heap-value condition
-one bracket evacuated a heap result through the carry, and `k_deep_copy` and
-`k_copy_size` cost 1.7M more. A region of the beat analysis's kind, marked
-before the arguments, made `a_long_chain_answers_survival_from_its_index`
-evacuate its 100,000 rows on every lap (evac_allocs 25 -> 480,009), because
-the rows its argument built landed inside the mark.
-
-CI's rows: work_runbench 999,949,921 -> 999,794,948 (-0.02%), and no other
-benchmark's work moves. The run program's run_arena_peak_bytes 4,718,608 ->
-3,670,032 and run_cohort_frees 1 -> 4; run_allocs 1,446,734 -> 1,446,735,
-run_alloc_bytes 221,966,536 -> 221,966,568, run_evac_allocs 48,953 -> 48,955,
-run_evac_bytes 9,271,280 -> 9,271,408, run_survive_slots 4,856 -> 4,854,
-run_str_scans 1,023 -> 1,024, run_str_scan_bytes 17,996,094 -> 17,996,158 and
-run_sh_rec 3,776,192 -> 3,776,128. The run program makes 24 more calls
-(emitted_other_calls 19,064 -> 19,088, emitted_other_lines 158,186 ->
-158,210) and its machine code grows 719,977 -> 722,233 bytes (text 5,236,670
--> 5,238,926 over all the binaries). compile_instructions 23,713,618 ->
-23,736,301, entry_instructions 74,424,236 -> 74,485,199, library_instructions
-74,085,135 -> 74,147,760 and emit_instructions 6,377,307 -> 6,423,478 rise,
-and interp_instructions 384,232,761 -> 384,228,496 falls. In the tab,
-browser_compile_instructions 406,034,117 -> 401,989,712 falls. The welfare
-sum rose, and the floor moves 92.25 -> 92.28.
-
-`tests/cohort.rs` `a_call_into_a_loop_gives_back_what_it_built` runs a new
-two-module fixture, `tests/golden/cohort/phases`: each pass of a loop calls
-`grow/total` twice, and each call builds a megabyte of text to answer its
-length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
-license it read 0 and 3145760. The ratchet row
-`a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
-counters red.
-
 ## 2026-10-22 — the JSON helpers store their call's site only where they can fail
 
 A failure names its place through `k_site`, which the emitter stamps before a
@@ -1884,3 +1826,57 @@ goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
 and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
 `prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
 Welfare rose under the second decimal, 93.27 as printed, and is banked.
+
+## 2026-10-24 — the lexer reads a line before it walks it
+
+The entry compile spent 9,277,662 instructions in the lexer, and about a
+quarter of that came before any token: the work `lex` does on each raw line
+to decide what kind of line it is. Five pieces of it are cheaper now, with
+every diagnostic unchanged.
+
+- The source is split into lines a word at a time, with
+  `compare::byte_from`, where `str::lines` called memchr once a line. A
+  `\r` before a newline still comes off, and one at the end of a file
+  without a newline still stays.
+- The tab test is `compare::find` on the bytes. `str::find('\t')` went
+  through the char searcher and a `bcmp` for every line.
+- The line is trimmed once, where it was trimmed twice.
+- The width cap counts a line's characters only when its bytes exceed the
+  cap, since a character is at least one byte.
+- The text-block opener and the span opener each walked every byte of a
+  code line, tracking quotes and stopping at `#`. A line with no quote and
+  no `#` has no text block and its span opener is its last byte, so one
+  scan for either byte, a word at a time, answers both for most lines.
+
+Measured in this container at the tip of the lines-a-word-at-a-time branch:
+`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
+`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
+
+The ratchet row `lex_lines` puts `str::lines` back and reads
+`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
+reads 24,561,382.
+
+CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
+71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
+(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
+`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
+the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
+whose process lexes its program before it emits. Nothing else moved.
+Welfare 93.27 -> 93.28, banked.
+
+What is left in the lexer is `lex_line` itself, about 1,150 instructions a
+code line, most of it a scanner that decodes each line into a `Vec<char>`
+before it reads a token. A scanner over bytes would touch every token
+method and the column arithmetic, so it is a change of its own.
+
+Measured and set aside: the scanner reading an ascii line's bytes in place
+instead of widening them into its `Vec<char>`, through accessors that test
+`ascii` at every read. The widening costs 348,608 instructions of the entry
+compile, and the test at every character cost more: `entry_instructions`
+71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
+24,224,312.
+
+Measured and set aside: an unchecked `u64` sum for the tab translator's
+integers of eighteen digits or fewer, ahead of the checked `i128` loop.
+`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
+ratchet row of its own.

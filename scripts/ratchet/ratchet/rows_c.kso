@@ -3420,4 +3420,27 @@ ascii_trim = row
 
 rows_cq60 = list/concat rows_cq59 [prune_lines ascii_trim]
 
-rows_c = list/concat rows_cq60 [itself]
+# The lexer finds each line of a source a word at a time (2026-10-24). The
+# mutation puts `str::lines` back, a memchr call a line.
+lex_lines = row
+  "the lexer splits its lines with str::lines"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_splits_its_lines_with_str_lines")
+  release
+
+# The lexer answers both openers for a line with no quote and no `#` from one
+# scan a word at a time (2026-10-24). The mutation sends every line through
+# the two byte-at-a-time scans.
+lex_openers = row
+  "the lexer scans every line for its openers byte by byte"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_scans_every_line_for_its_openers")
+  release
+
+rows_cq61 = list/concat rows_cq60 [lex_lines lex_openers]
+
+rows_c = list/concat rows_cq61 [itself]

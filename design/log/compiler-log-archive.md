@@ -107143,3 +107143,61 @@ write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
 `a_builder_copied_at_the_frontier` turns the mem corpus red, and
 `a_maps_count_held_as_allocating` puts the region back and turns the run
 counters red.
+
+## 2026-10-22 — a call into a loop keeps its cohort bracket under a cycle
+
+A cohort bracket marks the arena before a call that crosses into another
+module with immutable arguments, and its pop gives back what the call left.
+The license refused every caller a cycle reaches (`cycle_reached`), since such
+a caller can run once per element of something and its calls are usually
+small. It now admits one when the callee reaches a cycle that allocates
+(`reaches_cycle`: the members of every cycle whose members the beat analysis
+finds allocating, and everything that mentions them, followed backward) and
+answers no heap value. A call into a loop pays
+its push and pop once against the whole loop, and with no heap value to keep
+the pop rewinds without copying anything out.
+
+On the run program the index phase builds 1.5 MB of text to answer an int,
+and nothing marked the arena around it, so the string lived until the program
+ended. `tally` is reached by a cycle, so the license refused the call. Measured
+here, arena_peak_bytes 4,718,608 -> 3,670,032 and the run read 999,948,734 ->
+999,793,761 with the same output. The peak now sits at two live megabyte
+blocks, the file read and its decoded document, and the 1,572,880-byte string
+the phase builds; the program needs all three at that moment.
+
+Three other shapes were measured on the way. Seeded from every cycle, the
+reach admitted widebench's whitespace skip, a loop that builds nothing, called
+once per value from its parser; CI read widebench 28,619,441 -> 34,955,663
+(+22%) and encodebench 2,456,796,655 -> 2,461,704,983, 4.0M of it
+`k_cohort_pop` with nothing to give back. The ratchet row
+`a_loop_that_builds_nothing_bracketed` puts that seed back and turns the
+instructions gate red. Without the heap-value condition
+one bracket evacuated a heap result through the carry, and `k_deep_copy` and
+`k_copy_size` cost 1.7M more. A region of the beat analysis's kind, marked
+before the arguments, made `a_long_chain_answers_survival_from_its_index`
+evacuate its 100,000 rows on every lap (evac_allocs 25 -> 480,009), because
+the rows its argument built landed inside the mark.
+
+CI's rows: work_runbench 999,949,921 -> 999,794,948 (-0.02%), and no other
+benchmark's work moves. The run program's run_arena_peak_bytes 4,718,608 ->
+3,670,032 and run_cohort_frees 1 -> 4; run_allocs 1,446,734 -> 1,446,735,
+run_alloc_bytes 221,966,536 -> 221,966,568, run_evac_allocs 48,953 -> 48,955,
+run_evac_bytes 9,271,280 -> 9,271,408, run_survive_slots 4,856 -> 4,854,
+run_str_scans 1,023 -> 1,024, run_str_scan_bytes 17,996,094 -> 17,996,158 and
+run_sh_rec 3,776,192 -> 3,776,128. The run program makes 24 more calls
+(emitted_other_calls 19,064 -> 19,088, emitted_other_lines 158,186 ->
+158,210) and its machine code grows 719,977 -> 722,233 bytes (text 5,236,670
+-> 5,238,926 over all the binaries). compile_instructions 23,713,618 ->
+23,736,301, entry_instructions 74,424,236 -> 74,485,199, library_instructions
+74,085,135 -> 74,147,760 and emit_instructions 6,377,307 -> 6,423,478 rise,
+and interp_instructions 384,232,761 -> 384,228,496 falls. In the tab,
+browser_compile_instructions 406,034,117 -> 401,989,712 falls. The welfare
+sum rose, and the floor moves 92.25 -> 92.28.
+
+`tests/cohort.rs` `a_call_into_a_loop_gives_back_what_it_built` runs a new
+two-module fixture, `tests/golden/cohort/phases`: each pass of a loop calls
+`grow/total` twice, and each call builds a megabyte of text to answer its
+length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
+license it read 0 and 3145760. The ratchet row
+`a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
+counters red.
