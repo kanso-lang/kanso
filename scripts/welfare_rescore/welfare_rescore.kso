@@ -237,17 +237,48 @@ fn or_empty piece
 # one this tool makes, and a future row pair could agree on encode and diverge
 # elsewhere. tests/the_reconstruction_refuses_a_splice_that_moved.rs holds the
 # refusal red.
-fn phase_map raw
+# Each phase as its counter and its share. The map names the counter; the
+# share is read from the run program's own header table, where it was
+# measured, so it lives in one place.
+fn phase_map raw shares
   rows = list/select (text/split raw "\n") phase_line?
-  list/to_list (list/map rows one_phase)
+  list/to_list (list/map rows (l -> one_phase l shares))
 
 fn phase_line? l
   length l > 0 and text/slice l 1 1 != "#"
 
-fn one_phase line
+fn one_phase line shares
   parts = text/split line " "
-  return ["" 0.0] if length parts < 3
-  [parts[2] (text/to_float parts[3])]
+  return ["" 0.0] if length parts < 2
+  [parts[2] (share_of shares parts[1])]
+
+fn share_of shares name
+  found = shares[name]
+  return err "runbench's header gives no share for {name}" if found == none
+  found
+
+# The header's phase table, as phase name to per cent: each row is a comment
+# whose words end in a share such as `34.54%`. Other tables in the header end
+# the same way, and the map's names pick out the phases it links.
+fn header_shares text
+  rows = list/select (text/split text "\n") (l -> share_row? (words_of l))
+  list/to_h (list/to_list (list/map rows (l -> named_share (words_of l))))
+
+fn words_of l
+  list/to_list (list/select (text/split l " ") (w -> length w > 0))
+
+fn share_row? ws
+  length ws > 2 and ws[1] == "#" and per_cent? ws[length ws]
+
+fn per_cent? w
+  length w > 1 and text/slice w (length w) (length w) == "%"
+
+fn named_share ws
+  shares = list/to_list (list/select ws per_cent?)
+  return ["" 0.0] if length ws < 2 or length shares < 1
+  digits = text/split shares[length shares] "%"
+  return ["" 0.0] if length digits < 1
+  [ws[2] (text/to_float digits[1])]
 
 fn carries_all? row phases
   here = list/to_list (list/select phases (p -> row[p[1]] != none))
@@ -521,7 +552,14 @@ fn at_row m divs row
 fn over_rows m given
   path = where given
   phases = "bench/runbench_phases.txt"
-  os/read_file! phases .> (t -> with_phases m (phase_map t) path)
+  os/read_file! phases .> (t -> with_header m t path)
+
+fn with_header m map path
+  header = "bench/runbench/runbench/runbench.kso"
+  os/read_file! header .> (h -> with_shares m map (header_shares h) path)
+
+fn with_shares m map shares path
+  with_phases m (phase_map map shares) path
 
 fn with_phases m phases path
   epochs = "bench/compile_epochs.txt"

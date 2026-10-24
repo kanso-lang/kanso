@@ -3213,4 +3213,19 @@ float_walk = row
 
 rows_cq45 = list/concat rows_cq44 [float_walk]
 
-rows_c = list/concat rows_cq45 [itself]
+# welfare_rescore weighs each phase by the share the run program's header
+# measured for it (2026-10-24). The mutation gives every phase one share, and
+# the uneven fixture in the reconstruction spec rebuilds to the wrong count.
+splice_test = "the_reconstruction_refuses_a_splice_that_moved"
+
+one_share = row
+  "every phase weighted by one share"
+  true
+  "cargo test --release --test {splice_test}"
+  "specs (unit, golden, differential)"
+  (breaking "every_phase_weighted_by_one_share")
+  no_setup
+
+rows_cq46 = list/concat rows_cq45 [one_share]
+
+rows_c = list/concat rows_cq46 [itself]
