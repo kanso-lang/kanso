@@ -3301,299 +3301,9 @@ impl<'a> Backend<'a> {
             }
             return self.emit_if_value(f, args);
         }
-        // utf8 of a slice reads a byte view for a pointer and a length and
-        // drops it, three million times in a decode. The wrapper inlining
-        // above has already turned `text/utf8` and `text/slice` into their
-        // builtins, so the pair is visible here as written, before either
-        // argument is emitted.
-        // An err's birthplace is the function it is emitted in, so fusing a
-        // call that still names a wrapper would move it out of `text/utf8` and
-        // into the caller — the oracle, which really does call the wrapper,
-        // would then disagree about where an invalid byte was found. The
-        // wrapper inlining above rewrites the call to the builtin wherever it
-        // can, and only that spelling is fused.
-        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
-            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
-                if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
-                        && inner_args.len() == 3
-                    {
-                        let mut parts = Vec::new();
-                        for a in inner_args {
-                            let v = self.emit_expr(f, a)?;
-                            let v = self.maybe_force(f, v);
-                            parts.push(self.unsub(f, v));
-                        }
-                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
-                        // the wrapper's own line, where the unfused call
-                        // would have been emitted, or this site when the
-                        // spelling is already the builtin
-                        let origin = match name.as_str() {
-                            "builtin_utf8" => self.origin_arg(f, span),
-                            _ => match self.forwarder_origin(name, 1) {
-                                Some(o) => o,
-                                None => self.origin_arg(f, span),
-                            },
-                        };
-                        // only a value that is not bytes stops the program,
-                        // and the oracle stops it inside the wrapper
-                        if sets[0] != BYTES {
-                            self.stamp(f, &origin);
-                        }
-                        let t = f.tmp();
-                        // three KValues and the origin pointer want seven of
-                        // the six integer registers the abi has, so the last
-                        // spills and the callee reloads it; the twin tests the
-                        // three tags here and hands the raw door five scalars.
-                        f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
-                            parts[0], parts[1], parts[2]
-                        ));
-                        f.record(&t, infer::builtin_set("utf8", &[sliced]));
-                        return Ok(t.to_string());
-                    }
-                }
-            }
-        }
-        // `length (bytes s)` builds a view header in the arena for the only
-        // purpose of reading its length, and a string's header already holds
-        // that length. The twin reads it there when the tag says string and
-        // takes both builtins otherwise, so a value that is not a string
-        // fails or dies as it did.
-        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "length" {
-            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
-                if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if inner_args.len() == 1 && self.builtin_named(inner, 1) == "bytes" {
-                        let v = self.emit_expr(f, &inner_args[0])?;
-                        let v = self.maybe_force(f, v);
-                        let v = self.unsub(f, v);
-                        let viewed = infer::builtin_set("bytes", &[f.set_of(&v)]);
-                        let site = self.origin_arg(f, span);
-                        let t = f.tmp();
-                        f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_byte_length_fast(%KValue {v}, {site})"
-                        ));
-                        f.record(&t, infer::builtin_set("length", &[viewed]));
-                        return Ok(t.to_string());
-                    }
-                }
-            }
-        }
-        // `append acc (slice cs a b)` builds a view header for the only
-        // purpose of copying its bytes out and dropping it. The slice's whole
-        // content is a pointer and a length the accumulator's copy needs
-        // anyway, so the fused door reads the range out of `cs` and never
-        // boxes it. Same wrapper-spelling rule as the pair above: only the
-        // builtin spelling is fused, and `append` never gives birth to an err,
-        // so no origin has to move with it.
-        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
-            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[1] {
-                if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
-                        && inner_args.len() == 3
-                    {
-                        let acc = self.emit_expr(f, &args[0])?;
-                        let acc = self.maybe_force(f, acc);
-                        let mut parts = Vec::new();
-                        for a in inner_args {
-                            let v = self.emit_expr(f, a)?;
-                            let v = self.maybe_force(f, v);
-                            parts.push(self.unsub(f, v));
-                        }
-                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
-                        // the same uniqueness the unfused site would have got
-                        let mutate = self.in_place_pushes.contains(&(
-                            f.file.clone(),
-                            span.line as usize,
-                            span.col as usize,
-                        ));
-                        let t = f.tmp();
-                        // only an accumulator that is not bytes stops the program
-                        if f.set_of(&acc) != BYTES {
-                            self.stamp_site(f, span);
-                        }
-                        f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
-                            parts[0], parts[1], parts[2], i64::from(mutate)
-                        ));
-                        f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
-                        return Ok(t.to_string());
-                    }
-                }
-            }
-        }
-        // `to_int (slice cs a b)` and `to_float (slice cs a b)` build a view
-        // for the one purpose of reading a number out of it, which is every
-        // number the JSON decoder meets. The fused doors read the range out
-        // of `cs` in place. Only the builtin spelling is fused, as above, and
-        // the origin moves with the call because both conversions can give
-        // birth to an err.
-        if first.is_none() && args.len() == 1 {
-            let door = match self.builtin_named(name, 1).as_str() {
-                "to_int" => Some("to_int"),
-                "to_float" => Some("to_float"),
-                _ => None,
-            };
-            if let (
-                Some(door),
-                Expr::App { head: inner_head, args: inner_args, piped: false, .. },
-            ) = (door, &args[0])
-            {
-                if let Expr::Ident(inner, _, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice"
-                        && inner_args.len() == 3
-                    {
-                        let mut parts = Vec::new();
-                        for a in inner_args {
-                            let v = self.emit_expr(f, a)?;
-                            let v = self.maybe_force(f, v);
-                            parts.push(self.unsub(f, v));
-                        }
-                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
-                        let sliced = infer::builtin_set("slice", &sets);
-                        // the wrapper's own line, as for `utf8` above: the
-                        // oracle calls the wrapper, and the err is born there
-                        let origin = match name.starts_with("builtin_") {
-                            true => self.origin_arg(f, span),
-                            false => match self.forwarder_origin(name, 1) {
-                                Some(o) => o,
-                                None => self.origin_arg(f, span),
-                            },
-                        };
-                        let t = f.tmp();
-                        // three KValues and the origin want seven of the six
-                        // integer registers, so the last spilled at every
-                        // number; the twin tests the tags and hands the raw
-                        // door a pointer, a length, two positions and the
-                        // origin
-                        f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_b_{door}_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
-                            parts[0], parts[1], parts[2]
-                        ));
-                        f.record(&t, infer::builtin_set(door, &[sliced]));
-                        return Ok(t.to_string());
-                    }
-                }
-            }
-        }
-        // `append acc "{x}"` where `x` is a number: the template rendered
-        // `x` into a string for the one purpose of copying its bytes into
-        // `acc` and dropping it, which is every scalar the JSON encoder
-        // writes. The fused door renders the digits into a stack buffer and
-        // copies them from there, so no string is built. A value the ambient
-        // to_string group could claim keeps the dispatch the template would
-        // have made, so a user arm is never skipped; every other tag the door
-        // hands to k_render itself, the same call the template makes, so the
-        // bytes cannot differ. Same wrapper-spelling rule as the pair above.
-        // `bytes ""` starts a builder, and the next thing that happens to it
-        // is an append. As a view of the empty string it owned no storage, so
-        // that append grew it from nothing: 175,527 grows a run on runbench,
-        // one for each escaped string the decoder unescapes, at about 88
-        // instructions each. The literal takes a builder with 64 bytes of room
-        // instead, which is the capacity that first grow chose, so every later
-        // grow is the one it was. Only the literal: a view of any other string
-        // is what `bytes` has always built, and testing for an empty string at
-        // run time cost encodebench two instructions on every string it
-        // escapes.
-        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "bytes" {
-            if let Expr::Str(parts, _) = &args[0] {
-                if parts.iter().all(|p| matches!(p, TemplatePart::Lit(s) if s.is_empty())) {
-                    let t = f.tmp();
-                    f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_seed()"));
-                    f.record(&t, infer::builtin_set("bytes", &[STR]));
-                    return Ok(t.to_string());
-                }
-            }
-        }
-        // `append acc "true"`: a literal of one to eight bytes into a builder
-        // the linearity analysis proved this site owns. `k_b_append_mut_word`
-        // says why the literal travels as a word.
-        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
-            if let Expr::Str(parts, _) = &args[1] {
-                let text: Option<String> = parts
-                    .iter()
-                    .map(|p| match p {
-                        TemplatePart::Lit(s) => Some(s.as_str()),
-                        _ => None,
-                    })
-                    .collect();
-                let mutate = self.in_place_pushes.contains(&(
-                    f.file.clone(),
-                    span.line as usize,
-                    span.col as usize,
-                ));
-                if let Some(text) = text.filter(|t| mutate && (1..=8).contains(&t.len())) {
-                    let acc = self.emit_expr(f, &args[0])?;
-                    let acc = self.maybe_force(f, acc);
-                    let mut bytes = [0u8; 8];
-                    bytes[..text.len()].copy_from_slice(text.as_bytes());
-                    let word = i64::from_le_bytes(bytes);
-                    let (lit, n) = self.intern(&text);
-                    let t = f.tmp();
-                    // only an accumulator that is not bytes stops the program
-                    if f.set_of(&acc) != BYTES {
-                        self.stamp_site(f, span);
-                    }
-                    f.line_fmt(format_args!(
-                        "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
-                    ));
-                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), STR]));
-                    return Ok(t.to_string());
-                }
-            }
-        }
-        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
-            if let Expr::Str(parts, _) = &args[1] {
-                if let [TemplatePart::Interp(inner)] = parts.as_slice() {
-                    let acc = self.emit_expr(f, &args[0])?;
-                    let acc = self.maybe_force(f, acc);
-                    let value = self.emit_expr(f, inner)?;
-                    let value = self.maybe_force(f, value);
-                    let mutate = self.in_place_pushes.contains(&(
-                        f.file.clone(),
-                        span.line as usize,
-                        span.col as usize,
-                    ));
-                    let fusable = !self.render_dispatchable(f, &value);
-                    let fuse_render = f.set_of(&value) & (INT | FLOAT) != 0 && fusable;
-                    let t = f.tmp();
-                    let rendered_set = match fuse_render {
-                        true => {
-                            let fails = f.set_of(&value) & ERR;
-                            let value = self.as_value(f, &value);
-                            // only an accumulator that is not bytes stops the program
-                            if f.set_of(&acc) != BYTES {
-                                self.stamp_site(f, span);
-                            }
-                            f.line_fmt(format_args!(
-                                "{t} = call %KValue @k_b_append_rendered(%KValue {acc}, %KValue {value}, i64 {})",
-                                i64::from(mutate)
-                            ));
-                            STR | fails
-                        }
-                        false => {
-                            // both operands are already emitted, so the call
-                            // the generic path would have made is made here:
-                            // the byte twin, whose string arm copies inline.
-                            // The first cut called k_b_append_mut instead and
-                            // paid 22,789,710 in k_b_append_wide on runbench.
-                            let (rendered, fails) = self.render_interp(f, &value);
-                            let sym = match mutate {
-                                true => "k_b_append_mut_byte",
-                                false => "k_b_append_byte",
-                            };
-                            let site = self.origin_arg(f, span);
-                            f.line_fmt(format_args!(
-                                "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered}, {site})"
-                            ));
-                            STR | fails
-                        }
-                    };
-                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), rendered_set]));
-                    return Ok(t.to_string());
-                }
+        if first.is_none() {
+            if let Some(t) = self.emit_fused_builtin(f, name, args, &first, span)? {
+                return Ok(t);
             }
         }
         // a region: the mark goes down before the arguments, so what they
@@ -3812,173 +3522,7 @@ impl<'a> Backend<'a> {
         // and a dispatcher that was never defined is invalid IR the user
         // meets as a clang error.
         if !was_builtin && self.declares_at(name, emitted.len()) {
-            let n = emitted.len();
-            let args_ir: Vec<String> = emitted
-                .iter()
-                .enumerate()
-                .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
-                .collect();
-            let callee_ret = self.ret_ty(name, n);
-            // A register-returned record comes back as three raw field words,
-            // not a tagged value, and both pops read a KValue. Reinterpreting
-            // one would hand them a pair of fields to treat as a tag and a
-            // payload, so the frontier goes unmarked instead: these calls give
-            // up the rewind rather than get it wrong.
-            let register_returned = callee_ret == "%parsed";
-            let beat_entry =
-                self.beat.ids.contains_key(&(name.to_string(), n)) && !register_returned;
-            // a construction cohort: a qualified call from user code whose
-            // arguments are all immutable shapes (scalars, strings) cannot
-            // have its caller's storage grown by the callee, so the call's
-            // garbage dies with the pop. loops keep their own tier, and a
-            // caller already inside a beat cluster lets its rewind do the
-            // reclaiming instead.
-            let heapish: Set = BYTES | LIST | MAP | REC | DESC | infer::FN | crate::infer::THUNK;
-            // the call must cross down into a nested module — the caller's
-            // own code reaching a dependency, at whatever depth the import
-            // graph put the caller. a caller that is itself a rewinding loop
-            // member keeps its own tier. a group that appears in the beat
-            // ids only as a demoted entry is not a loop: its bracket never
-            // rewinds mid-body, so the cohort wrap still applies inside it.
-            let caller = (f.group.clone(), f.arity);
-            let caller_loops = self.beat.ids.contains_key(&caller)
-                && !self.beat.demoted.iter().any(|(_, callee)| *callee == caller);
-            // bytes join scalars and strings in the license: raw bytes hold
-            // no pointers and no thunks, so nothing a rewind frees can be
-            // reached through them, and a mut-grown unique arg is
-            // unreachable after its last use. containers stay excluded —
-            // they can carry thunks whose forced values would die under a
-            // cell the caller still holds.
-            let arg_heapish = heapish & !BYTES;
-            let crosses_down = self
-                .group_named(name)
-                .first()
-                .is_some_and(|&i| *self.program.fns[i].file != *f.file);
-            let cohort_entry = !beat_entry
-                && !region
-                && !register_returned
-                && crosses_down
-                && (!self.cycle_reached.contains(f.group.as_str())
-                    || (self.reaches_cycle.contains(name)
-                        && self.group_return_set(name, n) & heapish == 0))
-                && !f.synthetic
-                && !caller_loops
-                && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
-            // The twin's arguments are rendered here too, below the mark the
-            // push sets, and a slot that is not a word reuses the general
-            // rendering. Rendered after the push, a string builder's seed sat
-            // above the mark, and the string it grew was evacuated whole at
-            // the pop: 55,136 bytes for basket's document.
-            let no_pack: Vec<Option<String>> = vec![None; n];
-            let twin = self.twin_test(f, name, n, &emitted, &no_pack);
-            let twin_ir: Vec<String> = match twin {
-                Some(_) => (0..n)
-                    .map(|i| match self.twin_param(name, n, i) {
-                        true => self.call_arg_to(f, name, n, i, &emitted[i], args.get(i), true),
-                        false => args_ir[i].clone(),
-                    })
-                    .collect(),
-                None => Vec::new(),
-            };
-            if !region && (beat_entry || cohort_entry) {
-                // entering a beat loop or a cohort: mark the frontier; args
-                // are already evaluated, so they live below the mark
-                f.line("call void @k_beat_push()");
-            }
-            if self.can_miss_with(f, name, n, &emitted) {
-                self.stamp_site(f, span);
-            }
-            let t = match twin {
-                None => {
-                    let t = f.tmp();
-                    f.line_fmt(format_args!(
-                        "{t} = call tailcc {callee_ret} @{}({})",
-                        dsym(name, n),
-                        args_ir.join(", ")
-                    ));
-                    t
-                }
-                Some(words) => {
-                    let call_twin = |f: &mut FnEmit| {
-                        let t = f.tmp();
-                        f.line_fmt(format_args!(
-                            "{t} = call tailcc {callee_ret} @{}({})",
-                            tsym(name, n),
-                            twin_ir.join(", ")
-                        ));
-                        t
-                    };
-                    match words {
-                        None => call_twin(f),
-                        // a call into a loop from outside it picks the body
-                        // once, and the loop's own calls pick from there
-                        Some(words) => {
-                            let to_twin = f.label();
-                            let to_general = f.label();
-                            let joined = f.label();
-                            f.line_fmt(format_args!(
-                                "br i1 {words}, label %{to_twin}, label %{to_general}"
-                            ));
-                            f.start_block(&to_twin);
-                            let a = call_twin(f);
-                            f.line_fmt(format_args!("br label %{joined}"));
-                            f.start_block(&to_general);
-                            let b = f.tmp();
-                            f.line_fmt(format_args!(
-                                "{b} = call tailcc {callee_ret} @{}({}) #90",
-                                dsym(name, n),
-                                args_ir.join(", ")
-                            ));
-                            f.line_fmt(format_args!("br label %{joined}"));
-                            f.start_block(&joined);
-                            let t = f.tmp();
-                            f.line_fmt(format_args!(
-                                "{t} = phi {callee_ret} [ {a}, %{to_twin} ], [ {b}, %{to_general} ]"
-                            ));
-                            t
-                        }
-                    }
-                }
-            };
-            let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
-            let result = if region {
-                let p = f.tmp();
-                f.line_fmt(format_args!("{p} = call %KValue @k_region_pop(%KValue {t})"));
-                p
-            } else if beat_entry {
-                let p = f.tmp();
-                f.line_fmt(format_args!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
-                p
-            } else if cohort_entry {
-                let p = f.tmp();
-                f.line_fmt(format_args!("{p} = call %KValue @k_cohort_pop(%KValue {t})"));
-                p
-            } else {
-                t
-            };
-            // an insisting form names its caller's line (ruled on #1975)
-            let result = match name.ends_with('!') && callee_ret == "%KValue" {
-                true => {
-                    let site = self.insisted_site(f, name, n, span);
-                    let w = f.tmp();
-                    f.line_fmt(format_args!(
-                        "{w} = call %KValue @k_b_insisted(%KValue {result}, {site})"
-                    ));
-                    w
-                }
-                false => result,
-            };
-            if let Some(ty) = self.escape.returns_ty(name, n) {
-                if callee_ret == "%parsed" {
-                    f.record_parsed(&result, ty, self.type_ids[ty]);
-                }
-            }
-            let returned = self.group_return_set(name, n) | fails;
-            f.record(&result, returned);
-            if callee_ret == "%KValue" && self.sub_parents.is_empty() {
-                self.assume_tag(f, &result, returned);
-            }
-            return Ok(result.to_string());
+            return self.emit_declared_call(f, name, args, &emitted, region, span);
         }
         // Declared, but at no arity this call can reach. The interpreter
         // reports it when the call runs, so native reports the same words at
@@ -4186,5 +3730,496 @@ impl<'a> Backend<'a> {
             return Ok(t.to_string());
         }
         Err(format!("native backend: `{name}` is not yet supported"))
+    }
+
+    /// The builtins whose call is fused with what feeds it: `utf8` of a slice,
+    /// `length`, the three shapes of `append` and the one-argument doors. Each
+    /// reads its arguments as written and answers the call, or leaves it to the
+    /// general path by answering nothing.
+    fn emit_fused_builtin(
+        &mut self,
+        f: &mut FnEmit,
+        name: &Name,
+        args: &[Expr],
+        first: &Option<String>,
+        span: Span,
+    ) -> Result<Option<String>, String> {
+        // utf8 of a slice reads a byte view for a pointer and a length and
+        // drops it, three million times in a decode. The wrapper inlining
+        // above has already turned `text/utf8` and `text/slice` into their
+        // builtins, so the pair is visible here as written, before either
+        // argument is emitted.
+        // An err's birthplace is the function it is emitted in, so fusing a
+        // call that still names a wrapper would move it out of `text/utf8` and
+        // into the caller — the oracle, which really does call the wrapper,
+        // would then disagree about where an invalid byte was found. The
+        // wrapper inlining above rewrites the call to the builtin wherever it
+        // can, and only that spelling is fused.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
+                    {
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        // the wrapper's own line, where the unfused call
+                        // would have been emitted, or this site when the
+                        // spelling is already the builtin
+                        let origin = match name.as_str() {
+                            "builtin_utf8" => self.origin_arg(f, span),
+                            _ => match self.forwarder_origin(name, 1) {
+                                Some(o) => o,
+                                None => self.origin_arg(f, span),
+                            },
+                        };
+                        // only a value that is not bytes stops the program,
+                        // and the oracle stops it inside the wrapper
+                        if sets[0] != BYTES {
+                            self.stamp(f, &origin);
+                        }
+                        let t = f.tmp();
+                        // three KValues and the origin pointer want seven of
+                        // the six integer registers the abi has, so the last
+                        // spills and the callee reloads it; the twin tests the
+                        // three tags here and hands the raw door five scalars.
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            parts[0], parts[1], parts[2]
+                        ));
+                        f.record(&t, infer::builtin_set("utf8", &[sliced]));
+                        return Ok(Some(t.to_string()));
+                    }
+                }
+            }
+        }
+        // `length (bytes s)` builds a view header in the arena for the only
+        // purpose of reading its length, and a string's header already holds
+        // that length. The twin reads it there when the tag says string and
+        // takes both builtins otherwise, so a value that is not a string
+        // fails or dies as it did.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "length" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if inner_args.len() == 1 && self.builtin_named(inner, 1) == "bytes" {
+                        let v = self.emit_expr(f, &inner_args[0])?;
+                        let v = self.maybe_force(f, v);
+                        let v = self.unsub(f, v);
+                        let viewed = infer::builtin_set("bytes", &[f.set_of(&v)]);
+                        let site = self.origin_arg(f, span);
+                        let t = f.tmp();
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_byte_length_fast(%KValue {v}, {site})"
+                        ));
+                        f.record(&t, infer::builtin_set("length", &[viewed]));
+                        return Ok(Some(t.to_string()));
+                    }
+                }
+            }
+        }
+        // `append acc (slice cs a b)` builds a view header for the only
+        // purpose of copying its bytes out and dropping it. The slice's whole
+        // content is a pointer and a length the accumulator's copy needs
+        // anyway, so the fused door reads the range out of `cs` and never
+        // boxes it. Same wrapper-spelling rule as the pair above: only the
+        // builtin spelling is fused, and `append` never gives birth to an err,
+        // so no origin has to move with it.
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[1] {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
+                    {
+                        let acc = self.emit_expr(f, &args[0])?;
+                        let acc = self.maybe_force(f, acc);
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        // the same uniqueness the unfused site would have got
+                        let mutate = self.in_place_pushes.contains(&(
+                            f.file.clone(),
+                            span.line as usize,
+                            span.col as usize,
+                        ));
+                        let t = f.tmp();
+                        // only an accumulator that is not bytes stops the program
+                        if f.set_of(&acc) != BYTES {
+                            self.stamp_site(f, span);
+                        }
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
+                            parts[0], parts[1], parts[2], i64::from(mutate)
+                        ));
+                        f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
+                        return Ok(Some(t.to_string()));
+                    }
+                }
+            }
+        }
+        // `to_int (slice cs a b)` and `to_float (slice cs a b)` build a view
+        // for the one purpose of reading a number out of it, which is every
+        // number the JSON decoder meets. The fused doors read the range out
+        // of `cs` in place. Only the builtin spelling is fused, as above, and
+        // the origin moves with the call because both conversions can give
+        // birth to an err.
+        if first.is_none() && args.len() == 1 {
+            let door = match self.builtin_named(name, 1).as_str() {
+                "to_int" => Some("to_int"),
+                "to_float" => Some("to_float"),
+                _ => None,
+            };
+            if let (
+                Some(door),
+                Expr::App { head: inner_head, args: inner_args, piped: false, .. },
+            ) = (door, &args[0])
+            {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
+                    {
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        // the wrapper's own line, as for `utf8` above: the
+                        // oracle calls the wrapper, and the err is born there
+                        let origin = match name.starts_with("builtin_") {
+                            true => self.origin_arg(f, span),
+                            false => match self.forwarder_origin(name, 1) {
+                                Some(o) => o,
+                                None => self.origin_arg(f, span),
+                            },
+                        };
+                        let t = f.tmp();
+                        // three KValues and the origin want seven of the six
+                        // integer registers, so the last spilled at every
+                        // number; the twin tests the tags and hands the raw
+                        // door a pointer, a length, two positions and the
+                        // origin
+                        f.line_fmt(format_args!(
+                            "{t} = call %KValue @k_b_{door}_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            parts[0], parts[1], parts[2]
+                        ));
+                        f.record(&t, infer::builtin_set(door, &[sliced]));
+                        return Ok(Some(t.to_string()));
+                    }
+                }
+            }
+        }
+        // `append acc "{x}"` where `x` is a number: the template rendered
+        // `x` into a string for the one purpose of copying its bytes into
+        // `acc` and dropping it, which is every scalar the JSON encoder
+        // writes. The fused door renders the digits into a stack buffer and
+        // copies them from there, so no string is built. A value the ambient
+        // to_string group could claim keeps the dispatch the template would
+        // have made, so a user arm is never skipped; every other tag the door
+        // hands to k_render itself, the same call the template makes, so the
+        // bytes cannot differ. Same wrapper-spelling rule as the pair above.
+        // `bytes ""` starts a builder, and the next thing that happens to it
+        // is an append. As a view of the empty string it owned no storage, so
+        // that append grew it from nothing: 175,527 grows a run on runbench,
+        // one for each escaped string the decoder unescapes, at about 88
+        // instructions each. The literal takes a builder with 64 bytes of room
+        // instead, which is the capacity that first grow chose, so every later
+        // grow is the one it was. Only the literal: a view of any other string
+        // is what `bytes` has always built, and testing for an empty string at
+        // run time cost encodebench two instructions on every string it
+        // escapes.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "bytes" {
+            if let Expr::Str(parts, _) = &args[0] {
+                if parts.iter().all(|p| matches!(p, TemplatePart::Lit(s) if s.is_empty())) {
+                    let t = f.tmp();
+                    f.line_fmt(format_args!("{t} = call %KValue @k_b_bytes_seed()"));
+                    f.record(&t, infer::builtin_set("bytes", &[STR]));
+                    return Ok(Some(t.to_string()));
+                }
+            }
+        }
+        // `append acc "true"`: a literal of one to eight bytes into a builder
+        // the linearity analysis proved this site owns. `k_b_append_mut_word`
+        // says why the literal travels as a word.
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::Str(parts, _) = &args[1] {
+                let text: Option<String> = parts
+                    .iter()
+                    .map(|p| match p {
+                        TemplatePart::Lit(s) => Some(s.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                let mutate = self.in_place_pushes.contains(&(
+                    f.file.clone(),
+                    span.line as usize,
+                    span.col as usize,
+                ));
+                if let Some(text) = text.filter(|t| mutate && (1..=8).contains(&t.len())) {
+                    let acc = self.emit_expr(f, &args[0])?;
+                    let acc = self.maybe_force(f, acc);
+                    let mut bytes = [0u8; 8];
+                    bytes[..text.len()].copy_from_slice(text.as_bytes());
+                    let word = i64::from_le_bytes(bytes);
+                    let (lit, n) = self.intern(&text);
+                    let t = f.tmp();
+                    // only an accumulator that is not bytes stops the program
+                    if f.set_of(&acc) != BYTES {
+                        self.stamp_site(f, span);
+                    }
+                    f.line_fmt(format_args!(
+                        "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
+                    ));
+                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), STR]));
+                    return Ok(Some(t.to_string()));
+                }
+            }
+        }
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::Str(parts, _) = &args[1] {
+                if let [TemplatePart::Interp(inner)] = parts.as_slice() {
+                    let acc = self.emit_expr(f, &args[0])?;
+                    let acc = self.maybe_force(f, acc);
+                    let value = self.emit_expr(f, inner)?;
+                    let value = self.maybe_force(f, value);
+                    let mutate = self.in_place_pushes.contains(&(
+                        f.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    ));
+                    let fusable = !self.render_dispatchable(f, &value);
+                    let fuse_render = f.set_of(&value) & (INT | FLOAT) != 0 && fusable;
+                    let t = f.tmp();
+                    let rendered_set = match fuse_render {
+                        true => {
+                            let fails = f.set_of(&value) & ERR;
+                            let value = self.as_value(f, &value);
+                            // only an accumulator that is not bytes stops the program
+                            if f.set_of(&acc) != BYTES {
+                                self.stamp_site(f, span);
+                            }
+                            f.line_fmt(format_args!(
+                                "{t} = call %KValue @k_b_append_rendered(%KValue {acc}, %KValue {value}, i64 {})",
+                                i64::from(mutate)
+                            ));
+                            STR | fails
+                        }
+                        false => {
+                            // both operands are already emitted, so the call
+                            // the generic path would have made is made here:
+                            // the byte twin, whose string arm copies inline.
+                            // The first cut called k_b_append_mut instead and
+                            // paid 22,789,710 in k_b_append_wide on runbench.
+                            let (rendered, fails) = self.render_interp(f, &value);
+                            let sym = match mutate {
+                                true => "k_b_append_mut_byte",
+                                false => "k_b_append_byte",
+                            };
+                            let site = self.origin_arg(f, span);
+                            f.line_fmt(format_args!(
+                                "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered}, {site})"
+                            ));
+                            STR | fails
+                        }
+                    };
+                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), rendered_set]));
+                    return Ok(Some(t.to_string()));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// A call to a group the program declares at this arity: its arguments
+    /// passed as the callee takes them, the bracket that frees what it leaves
+    /// behind, and what inference says about the value it returns.
+    fn emit_declared_call(
+        &mut self,
+        f: &mut FnEmit,
+        name: &str,
+        args: &[Expr],
+        emitted: &[String],
+        region: bool,
+        span: Span,
+    ) -> Result<String, String> {
+        let n = emitted.len();
+        let args_ir: Vec<String> = emitted
+            .iter()
+            .enumerate()
+            .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
+            .collect();
+        let callee_ret = self.ret_ty(name, n);
+        // A register-returned record comes back as three raw field words,
+        // not a tagged value, and both pops read a KValue. Reinterpreting
+        // one would hand them a pair of fields to treat as a tag and a
+        // payload, so the frontier goes unmarked instead: these calls give
+        // up the rewind rather than get it wrong.
+        let register_returned = callee_ret == "%parsed";
+        let beat_entry =
+            self.beat.ids.contains_key(&(name.to_string(), n)) && !register_returned;
+        // a construction cohort: a qualified call from user code whose
+        // arguments are all immutable shapes (scalars, strings) cannot
+        // have its caller's storage grown by the callee, so the call's
+        // garbage dies with the pop. loops keep their own tier, and a
+        // caller already inside a beat cluster lets its rewind do the
+        // reclaiming instead.
+        let heapish: Set = BYTES | LIST | MAP | REC | DESC | infer::FN | crate::infer::THUNK;
+        // the call must cross down into a nested module — the caller's
+        // own code reaching a dependency, at whatever depth the import
+        // graph put the caller. a caller that is itself a rewinding loop
+        // member keeps its own tier. a group that appears in the beat
+        // ids only as a demoted entry is not a loop: its bracket never
+        // rewinds mid-body, so the cohort wrap still applies inside it.
+        let caller = (f.group.clone(), f.arity);
+        let caller_loops = self.beat.ids.contains_key(&caller)
+            && !self.beat.demoted.iter().any(|(_, callee)| *callee == caller);
+        // bytes join scalars and strings in the license: raw bytes hold
+        // no pointers and no thunks, so nothing a rewind frees can be
+        // reached through them, and a mut-grown unique arg is
+        // unreachable after its last use. containers stay excluded —
+        // they can carry thunks whose forced values would die under a
+        // cell the caller still holds.
+        let arg_heapish = heapish & !BYTES;
+        let crosses_down = self
+            .group_named(name)
+            .first()
+            .is_some_and(|&i| *self.program.fns[i].file != *f.file);
+        let cohort_entry = !beat_entry
+            && !region
+            && !register_returned
+            && crosses_down
+            && (!self.cycle_reached.contains(f.group.as_str())
+                || (self.reaches_cycle.contains(name)
+                    && self.group_return_set(name, n) & heapish == 0))
+            && !f.synthetic
+            && !caller_loops
+            && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
+        // The twin's arguments are rendered here too, below the mark the
+        // push sets, and a slot that is not a word reuses the general
+        // rendering. Rendered after the push, a string builder's seed sat
+        // above the mark, and the string it grew was evacuated whole at
+        // the pop: 55,136 bytes for basket's document.
+        let no_pack: Vec<Option<String>> = vec![None; n];
+        let twin = self.twin_test(f, name, n, emitted, &no_pack);
+        let twin_ir: Vec<String> = match twin {
+            Some(_) => (0..n)
+                .map(|i| match self.twin_param(name, n, i) {
+                    true => self.call_arg_to(f, name, n, i, &emitted[i], args.get(i), true),
+                    false => args_ir[i].clone(),
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        if !region && (beat_entry || cohort_entry) {
+            // entering a beat loop or a cohort: mark the frontier; args
+            // are already evaluated, so they live below the mark
+            f.line("call void @k_beat_push()");
+        }
+        if self.can_miss_with(f, name, n, emitted) {
+            self.stamp_site(f, span);
+        }
+        let t = match twin {
+            None => {
+                let t = f.tmp();
+                f.line_fmt(format_args!(
+                    "{t} = call tailcc {callee_ret} @{}({})",
+                    dsym(name, n),
+                    args_ir.join(", ")
+                ));
+                t
+            }
+            Some(words) => {
+                let call_twin = |f: &mut FnEmit| {
+                    let t = f.tmp();
+                    f.line_fmt(format_args!(
+                        "{t} = call tailcc {callee_ret} @{}({})",
+                        tsym(name, n),
+                        twin_ir.join(", ")
+                    ));
+                    t
+                };
+                match words {
+                    None => call_twin(f),
+                    // a call into a loop from outside it picks the body
+                    // once, and the loop's own calls pick from there
+                    Some(words) => {
+                        let to_twin = f.label();
+                        let to_general = f.label();
+                        let joined = f.label();
+                        f.line_fmt(format_args!(
+                            "br i1 {words}, label %{to_twin}, label %{to_general}"
+                        ));
+                        f.start_block(&to_twin);
+                        let a = call_twin(f);
+                        f.line_fmt(format_args!("br label %{joined}"));
+                        f.start_block(&to_general);
+                        let b = f.tmp();
+                        f.line_fmt(format_args!(
+                            "{b} = call tailcc {callee_ret} @{}({}) #90",
+                            dsym(name, n),
+                            args_ir.join(", ")
+                        ));
+                        f.line_fmt(format_args!("br label %{joined}"));
+                        f.start_block(&joined);
+                        let t = f.tmp();
+                        f.line_fmt(format_args!(
+                            "{t} = phi {callee_ret} [ {a}, %{to_twin} ], [ {b}, %{to_general} ]"
+                        ));
+                        t
+                    }
+                }
+            }
+        };
+        let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
+        let result = if region {
+            let p = f.tmp();
+            f.line_fmt(format_args!("{p} = call %KValue @k_region_pop(%KValue {t})"));
+            p
+        } else if beat_entry {
+            let p = f.tmp();
+            f.line_fmt(format_args!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
+            p
+        } else if cohort_entry {
+            let p = f.tmp();
+            f.line_fmt(format_args!("{p} = call %KValue @k_cohort_pop(%KValue {t})"));
+            p
+        } else {
+            t
+        };
+        // an insisting form names its caller's line (ruled on #1975)
+        let result = match name.ends_with('!') && callee_ret == "%KValue" {
+            true => {
+                let site = self.insisted_site(f, name, n, span);
+                let w = f.tmp();
+                f.line_fmt(format_args!(
+                    "{w} = call %KValue @k_b_insisted(%KValue {result}, {site})"
+                ));
+                w
+            }
+            false => result,
+        };
+        if let Some(ty) = self.escape.returns_ty(name, n) {
+            if callee_ret == "%parsed" {
+                f.record_parsed(&result, ty, self.type_ids[ty]);
+            }
+        }
+        let returned = self.group_return_set(name, n) | fails;
+        f.record(&result, returned);
+        if callee_ret == "%KValue" && self.sub_parents.is_empty() {
+            self.assume_tag(f, &result, returned);
+        }
+        Ok(result.to_string())
     }
 }
