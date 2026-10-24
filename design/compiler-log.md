@@ -1863,3 +1863,17 @@ A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
 links one segfaults on main as well as on this branch, at 20 links, before
 printing anything. The sweep's own `--prove` was not run, and nothing here
 claims a clean sweep.
+
+CI's rows. Every benchmark does less work, because a frame that reserved
+64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
+work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
+28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
+2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
+work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
+4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
+4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
+and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
+274,348. Every binary's text grows 2,576 bytes for the two new functions,
+runbench's to 762,112. Linking the codegen corpus compiles the larger runtime:
+codegen_instructions_dev 116,426,119 -> 116,447,795 and
+codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
