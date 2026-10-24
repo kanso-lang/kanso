@@ -342,7 +342,8 @@ struct Numbered {
 }
 
 impl Numbered {
-    fn new(prefix: &[u8], n: usize) -> Numbered {
+    fn new(prefix: &str, n: usize) -> Numbered {
+        let prefix = prefix.as_bytes();
         let mut buf = [0u8; 24];
         buf[..prefix.len()].copy_from_slice(prefix);
         let mut digits = [0u8; 20];
@@ -366,8 +367,12 @@ impl Numbered {
 impl std::ops::Deref for Numbered {
     type Target = str;
     fn deref(&self) -> &str {
-        // a prefix and ASCII digits, nothing else
-        std::str::from_utf8(&self.buf[..self.len as usize]).unwrap_or_default()
+        // SAFETY: `Numbered::new` is the only place a `Numbered` is built, and
+        // it writes a `&str` prefix and ASCII digits after it, so `buf[..len]`
+        // is UTF-8 by construction. Checking it on every read was 1.1M of the
+        // tab's 257M compile instructions; the emitter reads one for nearly
+        // every instruction it writes.
+        unsafe { std::str::from_utf8_unchecked(&self.buf[..self.len as usize]) }
     }
 }
 
@@ -504,16 +509,35 @@ pub fn emit_ir_dev_owned(
     emit_ir_for(Given::Owned(program), convention, false)
 }
 
-/// `emit_ir_dev_owned` for the playground tab. It emits only the groups the
-/// entry can reach, as every build does; the prune in `Written::finish` drops
-/// the rest from the module either way. On `bench/interp_corpus` that was 132
-/// definitions and 127,415 bytes of text, a third of what the tab wrote, held
-/// beside the program at the most its compile ever holds.
-pub fn emit_ir_tab_owned(
+/// `emit_ir_dev_owned` for the playground tab, in the pieces
+/// `ir_wasm::translate_pieces` reads (`Written::finish_pieces`). It emits only
+/// the groups the entry can reach, as every build does; the prune in
+/// `Written::finish_pieces` drops the rest from the module either way. On
+/// `bench/interp_corpus` that was 132 definitions and 127,415 bytes of text, a
+/// third of what the tab wrote, held beside the program at the most its
+/// compile ever holds.
+///
+/// The groups the entry cannot reach are let go before anything is emitted,
+/// where every other build keeps them in case the emitter asks for one; that
+/// held 65,530 bytes of syntax at the tab's compile peak on the corpus. A miss
+/// answers `None`, and the tab compiles the source again and calls
+/// `emit_ir_tab_pieces_whole`, which keeps them, so a miss costs the tab a
+/// second compile and never changes the module.
+pub fn emit_ir_tab_pieces(
     program: Program,
     convention: ClosureConvention,
-) -> Result<String, String> {
-    emit_written(Given::Owned(program), convention, false).map(Written::finish)
+) -> Result<Option<Vec<String>>, String> {
+    let written = emit_written_as(Given::Owned(program), convention, false, true)?;
+    Ok(written.map(Written::finish_pieces))
+}
+
+/// `emit_ir_tab_pieces` holding what the entry cannot reach, for a program
+/// that missed without it.
+pub fn emit_ir_tab_pieces_whole(
+    program: Program,
+    convention: ClosureConvention,
+) -> Result<Vec<String>, String> {
+    emit_written(Given::Owned(program), convention, false).map(Written::finish_pieces)
 }
 
 /// A group's name and arity, and a position in it.
@@ -782,6 +806,18 @@ fn emit_written(
     convention: ClosureConvention,
     inline_helpers: bool,
 ) -> Result<Written, String> {
+    emit_written_as(program, convention, inline_helpers, false)
+        .map(|written| written.expect("a build that keeps what it left out never misses"))
+}
+
+/// `emit_written`, and when `lean`, letting the groups the entry cannot reach
+/// go before emitting and answering `None` where the emitter missed one.
+fn emit_written_as(
+    program: Given<'_>,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+    lean: bool,
+) -> Result<Option<Written>, String> {
     // The prune also answers the positions a group read as written and no
     // longer reads. A thunk handed to such a position is forced by
     // the interpreter, whose dispatcher still holds the dropped arm and has to
@@ -835,7 +871,25 @@ fn emit_written(
             }
         }
     }
+    // The tab is priced by the most it holds, and that is during emission,
+    // with the syntax alive. A list the parser grew by pushing keeps the room
+    // it doubled into; what the walk kept gives it back here, where a native
+    // build has no reason to pay for the copies.
+    if let (true, Given::Owned(owned)) = (lean, &mut program) {
+        for decl in owned.fns.iter_mut() {
+            decl.body.shrink_to_fit();
+            decl.params.shrink_to_fit();
+        }
+        owned.fns.shrink_to_fit();
+    }
     let names: crate::hash::Set<String> = left_out.iter().map(|(_, d)| d.name.clone()).collect();
+    let left_names: Vec<(String, usize)> = match lean {
+        true => std::mem::take(&mut left_out)
+            .into_iter()
+            .map(|(_, d)| (d.name, d.params.len()))
+            .collect(),
+        false => Vec::new(),
+    };
     let first = emit_with(&program, convention, inline_helpers, &unread_positions, names);
     // The walk reads names the bodies mention, and the emitter can reach a
     // group no body names, by calling it or by asking whether it exists. Either
@@ -843,12 +897,29 @@ fn emit_written(
     // in its place, and emits it again, so a miss costs time and never changes
     // the module. So does a refusal: a call to a group that is not there is one
     // the emitter declines to lower, and the program as written may not be.
+    if lean {
+        let missed = match &first {
+            Ok(written) => {
+                written.asked_left_out
+                    || written.names_any(left_names.iter().map(|(n, a)| (n.as_str(), *a)))
+            }
+            Err(_) => true,
+        };
+        return match (missed && !left_names.is_empty(), first) {
+            (true, _) => Ok(None),
+            (false, first) => first.map(Some),
+        };
+    }
     let missed = match &first {
-        Ok(written) => written.asked_left_out || written.names_any(left_out.iter().map(|(_, d)| d)),
+        Ok(written) => {
+            written.asked_left_out
+                || written
+                    .names_any(left_out.iter().map(|(_, d)| (d.name.as_str(), d.params.len())))
+        }
         Err(_) => true,
     };
     if left_out.is_empty() || !missed {
-        return first;
+        return first.map(Some);
     }
     if let Given::Owned(owned) = &mut program {
         let total = owned.fns.len() + left_out.len();
@@ -861,7 +932,7 @@ fn emit_written(
             }
         }
     }
-    emit_with(&program, convention, inline_helpers, &unread_positions, Default::default())
+    emit_with(&program, convention, inline_helpers, &unread_positions, Default::default()).map(Some)
 }
 
 /// The names the entry reaches, by what each body mentions, or `None` for a
@@ -1360,12 +1431,12 @@ impl FnEmit {
 
     fn tmp(&mut self) -> Numbered {
         self.tmp += 1;
-        Numbered::new(b"%t", self.tmp)
+        Numbered::new("%t", self.tmp)
     }
 
     fn label(&mut self) -> Numbered {
         self.label += 1;
-        Numbered::new(b"L", self.label)
+        Numbered::new("L", self.label)
     }
 
     /// Only a carried argument slot reads the two-word convention. Every other
@@ -4216,9 +4287,25 @@ mod a_group_the_walk_misses_is_put_back {
         assert_eq!(out.len(), gone.len(), "the fixture lacks one of {gone:?}");
         let names = out.iter().map(|d| d.name.clone()).collect();
         match emit_with(&program, ClosureConvention::Absent, false, &Vec::new(), names) {
-            Ok(written) => written.asked_left_out || written.names_any(out.iter()),
+            Ok(written) => {
+                written.asked_left_out
+                    || written.names_any(out.iter().map(|d| (d.name.as_str(), d.params.len())))
+            }
             Err(_) => true,
         }
+    }
+
+    /// The tab lets go of what its walk left out before it emits, and a
+    /// module it writes that way is the module the build that keeps them
+    /// writes.
+    #[test]
+    fn the_lean_emit_writes_what_the_whole_one_writes() {
+        let lean = super::emit_ir_tab_pieces(program(), ClosureConvention::Absent)
+            .expect("the fixture emits")
+            .expect("the fixture misses nothing");
+        let whole = super::emit_ir_tab_pieces_whole(program(), ClosureConvention::Absent)
+            .expect("the fixture emits");
+        assert!(lean == whole, "the lean emit wrote another module");
     }
 
     #[test]

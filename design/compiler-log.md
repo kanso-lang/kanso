@@ -21,51 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — a JSON number skips its tag ladders, and a long slice counts in blocks
-
-Two changes on the run program's hot paths, in one pull request (#2012, part
-of #2011).
-
-The decoder reads a number with `number_span` and then `to_int` or `to_float`
-on the span. Both went through the checked builtins, which test the failure
-flag and every tag before the work. Fast twins in `src/codegen/declares.rs`
-now test the tags inline and call raw entries on the bytes:
-`k_b_number_span_raw`, and `k_b_to_int_slice_raw` and `k_b_to_float_slice_raw`,
-which convert the span where it lies. Native and the interpreter agreed on
-54,000 generated number strings at every position, and 100,000 random strings
-matched the RFC 8259 grammar with no mismatch.
-
-`k_slice_skip` counted characters eight bytes at a time. While the target is
-more than sixty-four characters off it now hands whole sixty-four-byte blocks
-to `k_utf8_chars`, and a block that ends inside a character steps back to that
-character's first byte. The bound assumes one byte a character, so on wider
-text the step repeats until the target is close. The micro golden
-`a_long_slice_counts_whole_characters` puts a block's end inside two-, three-
-and four-byte characters; without the step-back it answers three of its lines
-wrongly. A differential fuzz of `text/slice` (24,000 cases, native and
-interpreted, against Python's slicing under kanso's range rules) found no
-mismatch, and 1,533 in 4,000 with the step-back removed. The ratchet mutation
-that disables the skip now makes it return at once.
-
-CI's rows. runbench 1,230,554,702 -> 1,215,752,133; jsonbench 885,497,327 ->
-871,505,027; indexbench 2,482,746 -> 2,326,925; oneshot 13,636,623 ->
-13,543,502; livebench 1,498,605,914 -> 1,498,512,457; encodebench
-2,464,678,788 -> 2,464,678,410. The twins' declarations and the block count
-add about 5.7 KB of machine code to every program: text 5,119,726 ->
-5,201,182 over the corpus, runbench text=725,209 -> 731,497. The three twins
-are defined in every module, so the compile goldens read lines 1,372 -> 1,396
-and module_lines 1,131 -> 1,137, and the decoder's emitted code reads
-emitted_defines 127 -> 130, emitted_calls 1,216 -> 1,222, emitted_branches
-1,300 -> 1,303 and emitted_lines 12,296 -> 12,368; across the other programs,
-emitted_other_defines 2,169 -> 2,178, emitted_other_calls 18,424 -> 18,442,
-emitted_other_branches 17,160 -> 17,169 and emitted_other_lines 157,010 ->
-157,286. codegen_instructions_dev 115,648,918 -> 115,822,000, codegen_instructions_release 453,327,164 ->
-453,660,707, emit_instructions 6,178,365 -> 6,202,944,
-browser_compile_instructions 422,962,643 -> 424,273,317,
-browser_compile_peak_bytes 753,318 -> 758,624 and browser_run_instructions
-37,653,273 -> 37,747,192 rise with the larger declarations. Welfare rises and
-is banked.
-
 ## 2026-10-20 — a JSON string is read and written in one call
 
 The decoder read a string through a span to the first quote or backslash, a
@@ -2135,3 +2090,105 @@ the anchor byte. Anchoring each word on its rarest byte in the module, `f` in
 `define `, `m` in `musttail call` and `c` in `tailcc `, read 267,916,152
 against 266,884,355: the searches took 8.3M where the two-way searcher took
 6.8M.
+
+## 2026-10-23 — the tab holds its module once
+
+Five more changes to the tab's compile of `bench/interp_corpus`, three for its
+instructions and two for the most it holds.
+
+**Three more costs.** `Numbered`, the emitter's `%tN` and `LN` names, checked
+its bytes were UTF-8 on every read, and it is built in one place from a `&str`
+prefix and ASCII digits, so the read now skips the check, as `Name::as_str`
+does: 256,933,580 -> 255,076,345. `paired_appends`, the narrowing and the prune
+each compact a module's bytes around whole lines and then validated the whole
+buffer again; a release build no longer does, and a debug build still checks:
+-> 253,497,498. `line_end` became `kanso::compare::byte_from`, which finds any
+byte eight at a time, and the emitter's three scans for `@` use it:
+-> 250,608,006. Its fuzzer moved beside the word compare's and now tries five
+target bytes, each with neighbours one bit away.
+
+**Where the peak was.** A marker set at the start of each phase and read by the
+allocator when a new peak was reached put the peak in `Written::finish`: it
+allocated the module at its final size, 352,805 bytes, while every piece of the
+body was still live, so the module was held twice. The emitter never splits a
+definition between two pieces, so the tab now takes the pieces as they are.
+`Written::finish_pieces` hands them over, `finish` joins them for clang, the
+narrowing walks them in order and rewrites each where it stands, and
+`ir_wasm::translate_pieces` reads every piece's heads and then lowers the
+bodies a piece at a time, letting each piece go when its functions are done.
+
+    browser_compile_peak_bytes     769,408 -> 724,714
+    browser_compile_instructions  250,608,006 -> 251,137,543
+
+Rewriting six pieces and slicing them costs 529,537 more instructions than one
+join. Welfare read 93.05 against 93.04 without it, so the peak pays for them.
+
+**What the walk left out.** With the join gone the peak moved into emission.
+A census of the native route at its peak, every live allocation grouped by its
+caller, held 330 KB of body text and about 300 KB of syntax. Part of the syntax
+was the groups the entry cannot reach, kept so that a miss can put them back
+and emit again. The tab now lets them go before it emits. A miss answers
+`None`, and the tab compiles the source again and emits with them
+(`emit_ir_tab_pieces_whole`), so a miss costs a second compile and never changes
+the module. None of the 348 programs in the micro corpus misses.
+
+    browser_compile_peak_bytes     724,714 -> 664,061
+    browser_compile_instructions  251,137,543 -> 251,140,915
+
+**Room the parser doubled into.** The same census showed statement and pattern
+lists grown by `push` and `extend`, which keep the room they doubled into. The
+tab's emit now gives that room back for every kept function's body and
+parameters, and for the function list, before it emits. A native build skips
+the copies, since nothing prices its holdings at that moment.
+
+    browser_compile_peak_bytes     664,061 -> 598,093
+    browser_compile_instructions  251,140,915 -> 251,201,816
+
+Shrinking where the parser builds a body instead read 615,869 and cost 116K
+instructions, because it also shrinks the groups the walk leaves out and every
+native build pays for it.
+
+**The narrowing's searches by one byte.** With `byte_from` inline, the
+narrowing's three whole-module searches find `define `, `musttail call` and
+`tailcc ` by their `f`, `m` and `c` and compare the word where one lands. The
+same anchors read through `str::find` lost to the two-way searcher earlier
+today, because each hit paid for a searcher and a call into memchr; inline,
+the three cost less than the 7.1M the searcher took.
+
+    browser_compile_instructions  251,201,816 -> 248,961,764
+
+A spec builds 20,000 random texts from the three words, their anchors and near
+misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
+the anchor rather than from the word's start, or reporting a line once per
+anchor in it, each fail it.
+
+**Two bytes at a time.** `symbols_before_newline` walks the whole module for
+each line's last `@`, a byte a pass, and that walk was 5.5M. It now asks
+`compare::either_from` for whichever of `@` and a newline comes next, testing
+each eight-byte word for both.
+
+    browser_compile_instructions  248,961,764 -> 244,730,101
+
+`called_symbols`, which reads from each `@` to its `(` or the line's end, uses
+it too: -> 244,413,637.
+
+`either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
+target bytes, and dropping the second test's `& !` fails it.
+
+**Specs.** The interp corpus cut into pieces every seventh definition translates
+to the same module as the whole text, and letting a piece go before its
+functions are lowered fails it. The lean emit writes the pieces the whole emit
+writes. Ratchet rows undo each change; the browser rows are the witness for
+six of them.
+
+**CI's rows.** The emitter's own count falls with its scans:
+emit_instructions 6,249,687 -> 5,919,265 (-5.3%). interp_instructions moves
+385,504,156 -> 385,492,276; no change here touches the interpreter's code.
+compile_instructions, entry_instructions, library_instructions and both
+codegen rows read what #2065 left them.
+
+**Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
+at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
+`paired_appends`'s long needle saved 172,616 instructions and for
+`branches_to`'s `label %` probe 286,197, too little to give either a helper of
+its own.

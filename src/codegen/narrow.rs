@@ -20,6 +20,37 @@ fn lines_holding<'a>(text: &'a str, needle: &'a str) -> impl Iterator<Item = (us
     })
 }
 
+/// `lines_holding`, found by one byte of the needle, `needle[at]`, eight bytes
+/// a pass (`crate::compare::byte_from`), and the needle compared where that
+/// byte lands. The two-way searcher behind `match_indices` can rarely skip a
+/// needle's length in IR when the needle holds a space, as the narrowing's
+/// three do; in the tab's compile the three searches were 7.1M of 251M
+/// instructions. Pick `at` so the byte is rare in the emitter's text.
+fn lines_holding_at<'a>(
+    text: &'a str,
+    needle: &'a str,
+    at: usize,
+) -> impl Iterator<Item = (usize, usize)> + 'a {
+    let bytes = text.as_bytes();
+    let anchor = needle.as_bytes()[at];
+    let mut from = at;
+    std::iter::from_fn(move || loop {
+        let hit = crate::compare::byte_from(bytes, from, anchor);
+        if hit >= bytes.len() {
+            return None;
+        }
+        from = hit + 1;
+        let s = hit - at;
+        if !bytes[s..].starts_with(needle.as_bytes()) {
+            continue;
+        }
+        let start = text[..s].rfind('\n').map_or(0, |n| n + 1);
+        let end = crate::compare::byte_from(bytes, s, b'\n');
+        from = from.max(end);
+        return Some((start, end));
+    })
+}
+
 /// Two ascending runs of line ranges as one, a line in both given once.
 fn merged_lines(
     a: impl Iterator<Item = (usize, usize)>,
@@ -77,23 +108,33 @@ fn holds(line: &str, needle: &str, at: usize) -> bool {
 /// declared length, and clang refused the module.
 #[cfg(test)]
 fn narrow_tailcc(ir: String) -> String {
-    narrowed_in_place(ir, 0)
+    narrowed_pieces(vec![ir], 0).concat()
 }
 
-/// `narrow_tailcc`'s answer for everything in `text` after `from`, written
-/// over the lines it replaces. Every rewrite takes words out of a line or
-/// renames a callee to its trampoline, which is shorter than the words it
-/// lost, so a line never outgrows the one it replaces and the text only moves
-/// down. A rewrite that did grow would send the whole answer into a buffer of
-/// its own, so the answer does not rest on that.
-fn narrowed_in_place(text: String, from: usize) -> String {
+/// `narrow_tailcc`'s answer for a module held as pieces, the first read from
+/// `from`, written over the lines it replaces. No line spans two pieces,
+/// because the emitter opens a piece only between definitions, so the walk
+/// that decides which functions keep the convention reads the pieces in order
+/// as one text would be read, and each piece is rewritten where it stands.
+/// Trampolines go after the last.
+///
+/// Every rewrite takes words out of a line or renames a callee to its
+/// trampoline, which is shorter than the words it lost, so a line never
+/// outgrows the one it replaces and a piece only moves down. A rewrite that
+/// did grow would send its piece into a buffer of its own, so the answer does
+/// not rest on that.
+fn narrowed_pieces(mut pieces: Vec<String>, from: usize) -> Vec<String> {
     let code = |line: &str| !line.starts_with('@');
     // Two walks over the lines, neither of which keeps a list of them: one
     // reads which functions keep the convention and sets aside the few
     // `define tailcc` lines the trampolines are decided from, and one finds
     // the lines to rewrite. A list of every line, held across the three
     // walks this used to make, was a third of the module's size again.
-    let ir = &text[from..];
+    let texts: Vec<&str> = pieces
+        .iter()
+        .enumerate()
+        .map(|(k, piece)| if k == 0 { &piece[from..] } else { piece.as_str() })
+        .collect();
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
     let mut tailcc_defines: Vec<&str> = Vec::new();
@@ -101,9 +142,6 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     // searching the text for the words. On the tab's corpus 125 lines of 8,726
     // are a `define` and 96 a musttail call, and the line-by-line walk this
     // replaced was 3.9 million instructions of finding newlines.
-    let defines =
-        lines_holding(ir, "define ").filter(|&(start, _)| ir[start..].starts_with("define "));
-    let musttails = lines_holding(ir, "musttail call");
     // `k_tcall{n}` jumps to a lambda through the pointer its closure carries,
     // an edge this reading cannot see, so every lambda keeps the convention in
     // a module that defines one. Both are read off the define lines the walk
@@ -111,30 +149,35 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     // 739,426 instructions of the tab's compile natively.
     let mut jumps_to_lambdas = false;
     let mut lambdas: Vec<String> = Vec::new();
-    for (start, end) in merged_lines(defines, musttails) {
-        let line = &ir[start..end];
-        if !code(line) {
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix("define ") {
-            current = symbol_of(rest);
-            if rest.starts_with("tailcc ") {
-                tailcc_defines.push(line);
+    for &ir in &texts {
+        let defines = lines_holding_at(ir, "define ", 2)
+            .filter(|&(start, _)| ir[start..].starts_with("define "));
+        let musttails = lines_holding_at(ir, "musttail call", 0);
+        for (start, end) in merged_lines(defines, musttails) {
+            let line = &ir[start..end];
+            if !code(line) {
+                continue;
             }
-            jumps_to_lambdas |= rest.starts_with("internal tailcc %KValue @k_tcall");
-            if current.as_deref().is_some_and(|n| {
-                n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
-            }) {
-                lambdas.extend(current.clone());
+            if let Some(rest) = line.strip_prefix("define ") {
+                current = symbol_of(rest);
+                if rest.starts_with("tailcc ") {
+                    tailcc_defines.push(line);
+                }
+                jumps_to_lambdas |= rest.starts_with("internal tailcc %KValue @k_tcall");
+                if current.as_deref().is_some_and(|n| {
+                    n.strip_prefix("klam").is_some_and(|d| d.bytes().all(|b| b.is_ascii_digit()))
+                }) {
+                    lambdas.extend(current.clone());
+                }
             }
-        }
-        if line.contains("musttail call") {
-            // both ends of a musttail edge must agree on the convention
-            if let Some(callee) = symbol_of(line) {
-                keep.insert(callee);
-            }
-            if let Some(name) = current.clone() {
-                keep.insert(name);
+            if line.contains("musttail call") {
+                // both ends of a musttail edge must agree on the convention
+                if let Some(callee) = symbol_of(line) {
+                    keep.insert(callee);
+                }
+                if let Some(name) = current.clone() {
+                    keep.insert(name);
+                }
             }
         }
     }
@@ -182,10 +225,40 @@ fn narrowed_in_place(text: String, from: usize) -> String {
     }
 
     drop(tailcc_defines);
+    drop(texts);
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
+    for (k, piece) in pieces.iter_mut().enumerate() {
+        let text = std::mem::take(piece);
+        *piece = rewritten(text, if k == 0 { from } else { 0 }, &keep, &spilling, &mut rerouted);
+    }
+    let last = pieces.last_mut().expect("a module has a piece");
+    if !last.ends_with('\n') {
+        last.push('\n');
+    }
+    // A trampoline no call was rerouted through is a function nothing names,
+    // which clang compiles at `-O0` all the same.
+    for (name, t) in trampolines {
+        if rerouted.contains(&name) {
+            last.push_str(&t);
+        }
+    }
+    pieces
+}
+
+/// One piece with the narrowing's lines rewritten, everything in `text`
+/// after `from`.
+fn rewritten(
+    text: String,
+    from: usize,
+    keep: &crate::hash::Set<String>,
+    spilling: &crate::hash::Set<String>,
+    rerouted: &mut crate::hash::Set<String>,
+) -> String {
+    let code = |line: &str| !line.starts_with('@');
+    let ir = &text[from..];
     // (start, end, replacement) for each line that changes, in order.
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
-    for (start, end) in lines_holding(ir, "tailcc ") {
+    for (start, end) in lines_holding_at(ir, "tailcc ", 4) {
         // Every rewrite below needs the word, so a line without it stands as
         // it is and its callee is never looked up.
         let line = &ir[start..end];
@@ -216,7 +289,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
         edits.push((at, at + line.len(), rewritten));
     }
     let shrinks = edits.iter().all(|(start, end, line)| line.len() <= end - start);
-    let mut out = match shrinks {
+    match shrinks {
         true => {
             let mut bytes = text.into_bytes();
             let (mut to, mut kept) = (0, 0);
@@ -230,7 +303,10 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             let len = bytes.len();
             bytes.copy_within(kept..len, to);
             bytes.truncate(to + len - kept);
-            String::from_utf8(bytes).expect("each edit replaces a whole line")
+            // SAFETY: as in `paired_appends`: whole lines of a `String` moved,
+            // `&str` lines written in. A debug build still checks.
+            debug_assert!(std::str::from_utf8(&bytes).is_ok(), "each edit replaces a whole line");
+            unsafe { String::from_utf8_unchecked(bytes) }
         }
         false => {
             let mut out = String::with_capacity(text.len());
@@ -243,18 +319,7 @@ fn narrowed_in_place(text: String, from: usize) -> String {
             out.push_str(&text[kept..]);
             out
         }
-    };
-    if !out.ends_with('\n') {
-        out.push('\n');
     }
-    // A trampoline no call was rerouted through is a function nothing names,
-    // which clang compiles at `-O0` all the same.
-    for (name, t) in trampolines {
-        if rerouted.contains(&name) {
-            out.push_str(&t);
-        }
-    }
-    out
 }
 
 /// The first symbol a line names, without its quotes.
@@ -342,5 +407,53 @@ mod a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it {
     fn narrowed_without_it() {
         let out = narrow_tailcc(LAMBDA.to_string());
         assert!(out.contains("define %KValue @klam3("), "the lambda kept tailcc:\n{out}");
+    }
+}
+
+#[cfg(test)]
+mod a_line_found_by_one_byte_is_a_line_found_by_the_word {
+    use super::{lines_holding, lines_holding_at};
+
+    /// Texts of random lines built from the narrowing's three words, the
+    /// bytes they are anchored on, and near misses, against `lines_holding`.
+    #[test]
+    fn the_two_searches_agree() {
+        let words = [
+            "define ",
+            "define",
+            "tailcc ",
+            "tailcc",
+            "musttail call",
+            "musttail",
+            "call ",
+            "f",
+            "m",
+            "c",
+            "d",
+            "  ",
+            "@g(",
+            "%t1 = ",
+            "x",
+            "\n",
+            "\n",
+            "\n",
+        ];
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            seed ^= seed >> 12;
+            seed ^= seed << 25;
+            seed ^= seed >> 27;
+            seed.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        };
+        for case in 0..20_000 {
+            let n = (next() % 40) as usize;
+            let text: String =
+                (0..n).map(|_| words[(next() % words.len() as u64) as usize]).collect();
+            for (needle, at) in [("define ", 2), ("musttail call", 0), ("tailcc ", 4)] {
+                let want: Vec<_> = lines_holding(&text, needle).collect();
+                let got: Vec<_> = lines_holding_at(&text, needle, at).collect();
+                assert_eq!(got, want, "case {case}, {needle:?} in {text:?}");
+            }
+        }
     }
 }
