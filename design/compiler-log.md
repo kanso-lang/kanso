@@ -21,70 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — a JSON string value goes out in one claim
-
-The encoder wrote a string value as an opening quote, `escape_onto` and a
-closing quote. `escape_onto` scanned the string for a byte that needs escaping
-and either appended it as it stands or handed it to `append_escaped`, which
-scanned it again as it escaped it. On the run program's document 1,773 of every
-2,114 string values need escaping. They average 16 bytes with 2.6 escapes each,
-so most values paid for both scans. `builtin_append_string acc s` now writes the
-quotes and the escaped bytes in one call. Where the builder is at its frontier
-with room for the worst case, the C writes the quote, escapes straight into the
-builder and writes the closing quote. A value the decoder shared as a clean
-token takes the same inline path as a key, with a closing quote where a key has
-`":`. The interpreter's arm writes the same bytes.
-
-Measured here, on top of the map read, the run program read 1,039,464,472 ->
-1,028,684,506 (-1.04%) with the same output, and the interpreted corpus read
-401,548,849 -> 384,232,761 instructions and 420,781 -> 400,588 allocations.
-
-CI's rows: work_runbench 1,039,465,659 -> 1,028,685,693 (-1.04%), work_livebench
-1,219,792,784 -> 1,172,094,931 (-3.9%) and work_oneshot 11,902,783 -> 11,785,186
-(-0.99%); work_encodebench 2,456,797,749 -> 2,456,797,637. The counters:
-find2_calls falls in run (1,667,049 -> 1,488,669), live (807,837 -> 15,037) and
-oneshot (17,019 -> 15,037), since a value no longer passes through escape_onto's
-scan, and append_fast falls in the same three, the quote appends no longer made
-one at a time: run_append_fast 5,737,050 -> 5,328,270, live_append_fast
-25,498,000 -> 23,681,200 and oneshot_append_fast 63,745 -> 59,203.
-interp_instructions 401,548,849 -> 384,232,761, interp_allocs 420,781 -> 400,588
-and interp_peak_bytes 616,944 -> 608,798. The library is smaller to compile:
-compile_instructions 24,218,897 -> 23,713,618, entry_instructions 75,050,737 ->
-74,424,236, library_instructions 74,724,744 -> 74,085,135, compile_allocs 13,427
--> 13,179, front_end_visits 7,010 -> 6,914 and compile_peak_bytes 575,175 ->
-565,175, and codegen_instructions_release 422,550,641 -> 422,357,890. The
-runtime's C entry adds about 5,000 bytes of text to every program (text
-jsonbench 367,721 -> 372,777, runbench 720,681 -> 721,209), and
-codegen_instructions_dev 116,025,482 -> 116,064,263 and emit_instructions
-6,341,758 -> 6,364,404 rise with the path. Emitted code: the decoder's
-emitted_lines 13,098 -> 13,102; runbench, oneshot and livebench lose
-escape_onto's steps (runbench defines 782 -> 778, calls 7,376 -> 7,357, lines
-56,741 -> 56,666) and gain 5 branches (6,410 -> 6,415); the compile corpus's
-lines 1,492 -> 1,508 and module_lines 1,155 -> 1,159; in all,
-emitted_other_branches 16,882 -> 16,897 and text 5,179,630 -> 5,236,430. In the
-tab, browser_run_instructions 32,722,014 -> 32,241,456 (-1.5%),
-browser_compile_instructions 412,895,911 -> 406,640,369 (-1.5%) and
-browser_compile_peak_bytes 735,564 -> 732,776 fall. The welfare sum rose, and
-the floor moves 92.07 -> 92.13.
-
-The micro golden `a_string_value_goes_out_between_its_quotes` decodes and
-encodes string values at the edges twice: empty, one byte, seven and eight
-bytes, `été`, an escaped `\u00e9`, and tokens with a quote, a backslash or a
-tab. With the inline path's length short by one, the clean tokens lost their
-closing quotes; with the C's closing quote replaced, the values it wrote showed
-the replacement. The ratchet row `a_string_value_claimed_three_times` writes
-values the old way and turns the emitted gate red. The book's chapter 08 panel
-showed the string arm as `_escape_onto` and called its sample the library's
-escape functions verbatim, which stopped being true when escaping moved to the
-runtime; it now shows the one call and says what the runtime does.
-
-The ratchet row `a_clean_token_scanned_anyway` went blind with this change.
-It turns off the clean-token skip in `find2_below`, which served
-`escape_onto`, and the run program's values no longer reach `escape_onto`.
-encodebench's own copy of lib/json still sends every string through it, so the
-row now gates on the encode vein, where the mutation moves `find2_calls`
-803,275 -> 4,200,475.
-
 ## 2026-10-22 — a map entry's key and value are read with one test
 
 `entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
@@ -1887,3 +1823,23 @@ as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
 the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
 `__floor_sse41`, three instructions a call on this host, and the cast pair
 cost one more per float.
+
+## 2026-10-24 — the empty list and map inlined into the decoder
+
+The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
+called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
+arena bump and a header written into it. Both now have inline copies in the
+hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
+and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
+which the string index uses too. The cold paths for a short arena or a
+counting build stay in the runtime as calls.
+
+Without `always_inline` the link would not inline them. Its remark was
+"conflicting attributes", which `alwaysinline` overrides; that is why the
+earlier helpers all carry the attribute. The conflict is between kanso's
+functions and clang's, and is most likely the hot unit's `+ssse3`, which the
+LTO link's target does not carry. That is a measurement still to take.
+
+runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
+function in the binary calls either. The ratchet row `empty_inline` puts
+`noinline` in place of both `always_inline`s and reads 797,156,333.
