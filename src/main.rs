@@ -1951,6 +1951,13 @@ fn hot_source_of(runtime: &str) -> String {
         "__attribute__((preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w);\n",
         "extern long long k_stat_number_spans;\n",
         "long long k_number_span_scan(const unsigned char* d, long long len, long long from);\n",
+        "__attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin);\n",
+        "__attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len, const char* origin);\n",
+        "KValue k_b_to_int(KValue sv, const char* origin);\n",
+        "KValue k_b_to_float(KValue v, const char* origin);\n",
+        "KValue k_b_slice_raw(const unsigned char* data, long long len, long long from, long long to);\n",
+        "extern long long k_stat_el_parses;\n",
+        "extern const struct { unsigned long long hi, lo; int e2; } k_el_pow10[];\n",
     ));
     // Each definition is found by its name and taken from the start of the
     // line that names it, attribute and all. The two scanners are matched on
@@ -1973,6 +1980,41 @@ fn hot_source_of(runtime: &str) -> String {
         "static inline uint64_t k_nondigits8(uint64_t x) {",
         "static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,",
         "long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {",
+    ] {
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
+    }
+    // The decoder's two slice parsers, with what they inline. `k_int` and
+    // `k_float` are plain functions in runtime.c, so the unit takes its own
+    // static copy of each rather than calling them.
+    for start in ["KValue k_int(long long i) {", "KValue k_float(double d) {"] {
+        out.push_str("static inline ");
+        out.push_str(hot_line_text(runtime, start, "}\n"));
+    }
+    out.push_str(hot_text(runtime, "#define K_EL_POW10_MIN ", "\n"));
+    out.push_str(hot_text(runtime, "#define K_EL_POW10_MAX ", "\n"));
+    out.push_str(hot_text(runtime, "static const unsigned long long k_pow10_small[8] = {", "};\n"));
+    for start in [
+        "static inline __attribute__((always_inline)) int k_span_in(long long from, long long to,",
+        "static inline long long k_digits8_value(uint64_t w, long long n) {",
+        "static inline int k_digits_back8(const char* end, long long n, long long* out) {",
+        "static int k_el_parse(unsigned long long w, long long q, double* out) {",
+        "static inline int k_float_shape8(const char* data, long long len, long long room,",
+    ] {
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
+    }
+    out.push_str(hot_text(
+        runtime,
+        "static KValue k_to_int_text(const char* data, long long len, long long room,\n                            const char* origin) {",
+        "\n}\n",
+    ));
+    out.push_str(hot_text(
+        runtime,
+        "static inline __attribute__((always_inline)) KValue\nk_to_float_text(const char* data, long long len, long long room, const char* origin) {",
+        "\n}\n",
+    ));
+    for start in [
+        "KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
+        "KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
     ] {
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }

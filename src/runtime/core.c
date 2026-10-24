@@ -157,7 +157,7 @@ static long long k_stat_thunk_forces = 0;
 static long long k_stat_thunk_evals = 0;
 static long long k_stat_thunk_frees = 0;
 static long long k_stat_thunk_escaped = 0;
-static long long k_stat_el_parses = 0;
+long long k_stat_el_parses = 0;
 static long long k_stat_ryu_renders = 0;
 /* renders whose digits the short path found, without ryu's multiplies; a
    merge that loses the path takes this to zero */
@@ -530,10 +530,10 @@ typedef struct {
    -4,571,478, `utf8` -2,157,799 and `to_float_slice` -1,113,156. The same
    trial made `at` dearer by 9,209,935 and `utf8_slice_raw` by 4,306,698,
    because their callers keep more live across the call than the callee used
-   to save, so they stay on the C convention. Two joined later, measured the
-   same way on the run program: `append_string_mut` -2,228,335 and
-   `to_float_slice_raw`, the door the decoder's number twin calls now,
-   -1,113,877; `to_int_slice_raw` read +472,341 and stays. The emitter writes
+   to save, so they stay on the C convention. `append_string_mut` joined
+   later, measured the same way on the run program: -2,228,335. The two slice
+   parsers the decoder's number twins call are inlined into them in a release
+   build, so their convention is the C one. The emitter writes
    the keyword on the declares and calls of exactly these, in
    `PRESERVE_NONE_DOORS`, and `tests/the_doors_the_program_calls_agree.rs`
    holds the two lists equal. */

@@ -931,7 +931,11 @@ read:
   %d = load ptr, ptr %dp
   %fv = extractvalue %KValue %from, 1
   %tv = extractvalue %KValue %to, 1
-  %r = call %KValue @k_b_to_int_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  %w = call { i64, i64 } @k_b_to_int_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  %wt = extractvalue { i64, i64 } %w, 0
+  %wp = extractvalue { i64, i64 } %w, 1
+  %rt = insertvalue %KValue undef, i64 %wt, 0
+  %r = insertvalue %KValue %rt, i64 %wp, 1
   ret %KValue %r
 slow:
   %s = call %KValue @k_b_to_int_slice(%KValue %cs, %KValue %from, %KValue %to, ptr %origin)
@@ -955,7 +959,11 @@ read:
   %d = load ptr, ptr %dp
   %fv = extractvalue %KValue %from, 1
   %tv = extractvalue %KValue %to, 1
-  %r = call %KValue @k_b_to_float_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  %w = call { i64, i64 } @k_b_to_float_slice_raw(ptr %d, i64 %len, i64 %fv, i64 %tv, ptr %origin)
+  %wt = extractvalue { i64, i64 } %w, 0
+  %wp = extractvalue { i64, i64 } %w, 1
+  %rt = insertvalue %KValue undef, i64 %wt, 0
+  %r = insertvalue %KValue %rt, i64 %wp, 1
   ret %KValue %r
 slow:
   %s = call %KValue @k_b_to_float_slice(%KValue %cs, %KValue %from, %KValue %to, ptr %origin)
@@ -1895,8 +1903,8 @@ declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
 declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr)
-declare %KValue @k_b_to_int_slice_raw(ptr, i64, i64, i64, ptr)
-declare %KValue @k_b_to_float_slice_raw(ptr, i64, i64, i64, ptr)
+declare { i64, i64 } @k_b_to_int_slice_raw(ptr, i64, i64, i64, ptr)
+declare { i64, i64 } @k_b_to_float_slice_raw(ptr, i64, i64, i64, ptr)
 declare i64 @k_json_escaped(ptr, i64, i64, i64)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
