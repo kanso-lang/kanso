@@ -1584,8 +1584,8 @@ static int k_number_byte(unsigned char c) {
 /* Every number the word-at-a-time path in `k_b_number_span_raw` turns
    away: the RFC's checks, then sixteen bytes a step. Out of line, because
    the registers the step wants made every call build a frame. */
-static __attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
-                                                             long long len, long long from) {
+__attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
+                                                      long long len, long long from) {
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1653,7 +1653,11 @@ static __attribute__((noinline)) long long k_number_span_scan(const unsigned cha
    what they say skips the failure and tag ladder below; on the run program
    that is 417,483 calls. `k_b_number_span` is the same scan for anything the
    twin turns away. The counter is here so both doors count a call once. */
-long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
+/* Defined in the release build's hot unit when the runtime is compiled
+   -DK_HOT_ELSEWHERE, so the LTO link can inline it into the decoder. */
+long long k_b_number_span_raw(const unsigned char* d, long long len, long long from);
+#ifndef K_HOT_ELSEWHERE
+__attribute__((always_inline)) long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
     if (K_COUNTING) k_stat_number_spans++;
     if (from < 1 || from > len) return from;
     /* The shape nearly every number has, `-?D+` or `-?D+.D+` with no
@@ -1677,6 +1681,7 @@ long long k_b_number_span_raw(const unsigned char* d, long long len, long long f
     }
     return k_number_span_scan(d, len, from);
 }
+#endif
 
 KValue k_b_number_span(KValue cs, KValue fromv) {
     if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) {

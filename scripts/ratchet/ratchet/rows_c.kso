@@ -3347,4 +3347,17 @@ index_inline = row
 
 rows_cq55 = list/concat rows_cq54 [index_inline]
 
-rows_c = list/concat rows_cq55 [itself]
+# The word-at-a-time number span joins the string index in the LTO unit, so
+# the decoder's walk scans a number without a call (2026-10-24). The mutation
+# takes its always_inline away.
+number_span_inline = row
+  "a number span called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_number_span_called_out_of_line")
+  benches
+
+rows_cq56 = list/concat rows_cq55 [number_span_inline]
+
+rows_c = list/concat rows_cq56 [itself]

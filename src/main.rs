@@ -1949,6 +1949,8 @@ fn hot_source_of(runtime: &str) -> String {
         "KValue k_b_at_str_seek(KStr* s, long long want);\n",
         "KValue k_at_ascii_miss(KStr* s, long at);\n",
         "__attribute__((preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w);\n",
+        "extern long long k_stat_number_spans;\n",
+        "long long k_number_span_scan(const unsigned char* d, long long len, long long from);\n",
     ));
     // Each definition is found by its name and taken from the start of the
     // line that names it, attribute and all. The two scanners are matched on
@@ -1957,6 +1959,7 @@ fn hot_source_of(runtime: &str) -> String {
     // it found nothing and the tree stopped building: the row read UNBUILT
     // on kanso#1585.
     out.push_str(hot_text(runtime, "static KStr* k_as_str(KValue v) {", "\n"));
+    out.push_str(hot_text(runtime, "static const unsigned char k_number_bytes[256] = {", "};\n"));
     for start in [
         "static inline int k_tail_window(",
         "static inline void k_beat_rewind(KMark* m) {",
@@ -1967,6 +1970,9 @@ fn hot_source_of(runtime: &str) -> String {
         "static long k_cp_len(unsigned char b) {",
         "static inline __attribute__((always_inline)) KValue k_at_char(KStr* s, long at) {",
         "KValue k_b_at_str(KStr* s, long long want) {",
+        "static inline uint64_t k_nondigits8(uint64_t x) {",
+        "static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,",
+        "long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {",
     ] {
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }
