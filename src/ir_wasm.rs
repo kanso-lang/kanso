@@ -1085,7 +1085,9 @@ fn parse_into(m: &mut Ir, ir: &str, piece: usize) -> Result<(), String> {
         let end = line_end(ir.as_bytes(), at);
         let raw = &ir[at..end];
         at = end + 1;
-        let line = raw.trim();
+        // ASCII whitespace only: emitted IR is ASCII, and `trim` decoded every
+        // character at both ends to ask the Unicode table.
+        let line = raw.trim_ascii();
         if line.is_empty()
             || line.starts_with(';')
             || line.starts_with("target ")
@@ -1202,7 +1204,7 @@ fn body(text: &str, types: &HashMap<String, Ty>) -> Result<Func, String> {
         // are read, so the native module translates as it is and needs no
         // retargeted copy of its own. `codegen::retarget_wasm32` makes the
         // same substitution for the text clang reads.
-        let line = raw.trim();
+        let line = raw.trim_ascii();
         let line = crate::codegen::WASM32_LINES
             .iter()
             .find(|(native, _)| *native == line)
