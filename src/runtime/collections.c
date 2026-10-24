@@ -256,7 +256,7 @@ static inline __attribute__((always_inline)) KValue k_list_seed(unsigned char* w
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
 }
 
-static __attribute__((noinline, cold)) KValue k_list_empty_slow(void) {
+__attribute__((noinline, cold)) KValue k_list_empty_slow(void) {
     size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_LIST_SEED + 15) & ~(size_t)15;
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_buf += (long long)buf_bytes;
@@ -268,7 +268,7 @@ static __attribute__((noinline, cold)) KValue k_list_empty_slow(void) {
    pop that bought it were on every empty literal. The counting path and an
    arena too short go to the slow entry as a tail call, so the common one
    takes no frame. */
-KValue k_list_empty(void) {
+__attribute__((always_inline)) KValue k_list_empty(void) {
     if (__builtin_expect((K_COUNTING && k_stats_on > 0) || K_LIST_SEED_BYTES > k_arena_left, 0))
         return k_list_empty_slow();
     unsigned char* whole = (unsigned char*)k_arena;
@@ -879,7 +879,7 @@ static inline __attribute__((always_inline)) KValue k_map_seed(unsigned char* wh
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
-static __attribute__((noinline, cold)) KValue k_map_empty_slow(void) {
+__attribute__((noinline, cold)) KValue k_map_empty_slow(void) {
     size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15;
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_buf += (long long)buf_bytes;
@@ -887,7 +887,7 @@ static __attribute__((noinline, cold)) KValue k_map_empty_slow(void) {
 }
 
 /* As k_list_empty: the bump in place, and everything else a tail call. */
-KValue k_map_empty(void) {
+__attribute__((always_inline)) KValue k_map_empty(void) {
     if (__builtin_expect((K_COUNTING && k_stats_on > 0) || K_MAP_SEED_BYTES > k_arena_left, 0))
         return k_map_empty_slow();
     unsigned char* whole = (unsigned char*)k_arena;

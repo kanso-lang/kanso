@@ -1444,6 +1444,26 @@ impl FnEmit {
         Numbered::new("%t", self.tmp)
     }
 
+    /// A call to a runtime function the release build's hot unit holds a
+    /// copy of, and the `%KValue` it answers. The link inlines the copy only
+    /// when the call's type is the one clang gave the definition: a C struct
+    /// comes back as `{ i64, i64 }`, which LLVM keeps apart from `%KValue`. So
+    /// the call takes that type and the two words are put back into a
+    /// `%KValue` after it. `callee` is the name and the arguments.
+    fn call_pair(&mut self, callee: std::fmt::Arguments) -> Numbered {
+        let raw = self.tmp();
+        self.line_fmt(format_args!("{raw} = call {{ i64, i64 }} {callee}"));
+        let tag = self.tmp();
+        self.line_fmt(format_args!("{tag} = extractvalue {{ i64, i64 }} {raw}, 0"));
+        let pay = self.tmp();
+        self.line_fmt(format_args!("{pay} = extractvalue {{ i64, i64 }} {raw}, 1"));
+        let half = self.tmp();
+        self.line_fmt(format_args!("{half} = insertvalue %KValue undef, i64 {tag}, 0"));
+        let t = self.tmp();
+        self.line_fmt(format_args!("{t} = insertvalue %KValue {half}, i64 {pay}, 1"));
+        t
+    }
+
     fn label(&mut self) -> Numbered {
         self.label += 1;
         Numbered::new("L", self.label)
