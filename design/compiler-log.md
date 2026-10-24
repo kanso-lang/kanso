@@ -1868,3 +1868,11 @@ rows replace these.
 The ratchet row `prune_lines` puts the per-line `str::find` back in
 `ir_defines` and reads 220,266,296 on the same count; `ascii_trim` puts
 `str::trim` back on both of the translator's trims and reads 219,737,668.
+
+CI's rows for this branch against room-first appends, all taken into the
+goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
+`compile_instructions` 25,172,884 -> 25,077,347, `entry_instructions`
+74,435,723 -> 74,133,494, `library_instructions` 74,096,953 -> 73,794,737
+and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
+`prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
+Welfare rose under the second decimal, 93.27 as printed, and is banked.
