@@ -147,7 +147,7 @@ counted_run = row
   (breaking "a_counted_run_that_ignores_its_ceiling")
   release
 
-rows_b1q = list/concat rows_b1o [list_test_first framed_view]
+rows_b1q = list/concat rows_b1o [framed_view]
 
 rows_b1p = list/concat rows_b1q [ordered_view regrow counted_run]
 
