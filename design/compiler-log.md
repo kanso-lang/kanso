@@ -1888,17 +1888,23 @@ CI's rows for this branch against main, all taken into the goldens:
   560,280,234 (-3.19%), indexbench 1,947,279 -> 1,837,323 (-5.65%),
   deepbench 201,099,671 -> 200,299,696, oneshot 10,256,694 -> 10,133,710,
   livebench 961,524,285 -> 961,402,064 and widebench 28,476,897 ->
-  28,461,000. The other seven moved by 184 or fewer.
+  28,461,000.
+- Five work rows rose by 111 or fewer, which I have not isolated:
+  `work_basket` 31,068,030 (+48), `work_digestbench` 4,152,335 (+111),
+  `work_escapebench` 40,308,408 (+41), `work_readbench` 4,582,008 (+104)
+  and `work_scanbench` 274,369 (+41).
 - The release codegen row 425,508,082 -> 360,870,405 (-15.2%).
-- The dev codegen row +63,185 and `emit_instructions` +1,239, from the
-  rewrap lines the emitter now writes.
-- The tab's compile 220,923,316 -> 221,032,408 (+109,092) and its run
-  33,372,898 -> 33,404,578 (+31,680), for the same lines.
-- Every binary's text grew by about 3,440 bytes, the runtime's own copies of
-  the four helpers the hot unit used to define, and the four decoding
-  benchmarks by 15,113 to 16,999 with the parsers inlined at their sites.
-- The emitted-code vein: 4 to 12 more lines in the five programs that index
-  strings or read numbers.
+- `codegen_instructions_dev` 116,281,615 (+63,185) and `emit_instructions`
+  5,652,483 (+1,239), from the rewrap lines the emitter now writes.
+- The tab's rows rose for the same lines: `browser_compile_instructions`
+  221,032,408 (+109,092) and `browser_run_instructions` 33,404,578
+  (+31,680).
+- `text` 5,419,472, up 97,154. Every binary grew by about 3,440 bytes, the
+  runtime's own copies of the four helpers the hot unit used to define, and
+  the four decoding benchmarks by 15,113 to 16,999 with the parsers inlined
+  at their sites.
+- `emitted_lines` 14,304 (+8) and `emitted_other_lines` 160,289 (+32): 4 to
+  12 more lines in the five programs that index strings or read numbers.
 - No allocation counter moved. Welfare 93.14 -> 93.24, banked.
 
 Measured and set aside: the renderer's whole-float test without `floor`,
