@@ -107201,3 +107201,36 @@ length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
 license it read 0 and 3145760. The ratchet row
 `a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
 counters red.
+
+## 2026-10-22 — the JSON helpers store their call's site only where they can fail
+
+A failure names its place through `k_site`, which the emitter stamps before a
+call that can stop the program. Since #1975 an inline twin that takes the site
+as its last argument stores it only on the branch that reaches the C, and its
+caller skips the stamp. Five twins the encoder calls once per pair or item
+took none: `append_key`, `append_string`, `entry_count`, `key_at` and
+`value_at`. They now take the site and store it in their slow blocks. The run
+program executed 5,384,347 `k_site` stores and now 4,366,872, and read
+999,793,761 -> 997,774,101 here with the same output.
+
+Passing the string index (`s[i]`, 690,000 calls in the index phase) its site
+the same way, through a C entry that stored it only before refusing, was
+measured and dropped: -275k, since the extra argument costs what the store
+did.
+
+CI's rows: work_runbench 999,794,948 -> 997,775,288 (-0.20%), work_livebench
+1,043,615,776 -> 1,033,729,698 (-0.95%) and work_oneshot 11,443,335 ->
+11,424,128 (-0.17%). The run program's machine code grows 722,233 -> 722,249
+bytes (text 5,238,926 -> 5,238,942 over all the binaries), and
+emit_instructions rises 6,423,478 -> 6,426,328. In the tab,
+browser_run_instructions falls 31,623,429 -> 31,602,327, and
+browser_compile_instructions 401,989,712 -> 402,017,479 and
+browser_compile_peak_bytes 732,887 -> 733,103 rise. The welfare sum rose, and
+the floor moves 92.276 -> 92.284.
+
+The builtins are internal to the standard library and every call in lib/json
+passes the types they take, so no program reaches the branches that store the
+site and no output moves. The emitted counts do not move either: each twin
+loses a store at its call and gains one in its slow block. The ratchet row
+`a_sited_call_stamped_anyway` stamps every sited call as well; the run
+program then reads 1,012,744,021, and the instructions gate goes red.
