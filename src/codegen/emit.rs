@@ -4067,8 +4067,7 @@ impl<'a> Backend<'a> {
         // payload, so the frontier goes unmarked instead: these calls give
         // up the rewind rather than get it wrong.
         let register_returned = callee_ret == "%parsed";
-        let beat_entry =
-            self.beat.ids.contains_key(&(name.to_string(), n)) && !register_returned;
+        let beat_entry = self.beat.ids.contains_key(&(name.to_string(), n)) && !register_returned;
         // a construction cohort: a qualified call from user code whose
         // arguments are all immutable shapes (scalars, strings) cannot
         // have its caller's storage grown by the callee, so the call's
@@ -4092,10 +4091,8 @@ impl<'a> Backend<'a> {
         // they can carry thunks whose forced values would die under a
         // cell the caller still holds.
         let arg_heapish = heapish & !BYTES;
-        let crosses_down = self
-            .group_named(name)
-            .first()
-            .is_some_and(|&i| *self.program.fns[i].file != *f.file);
+        let crosses_down =
+            self.group_named(name).first().is_some_and(|&i| *self.program.fns[i].file != *f.file);
         let cohort_entry = !beat_entry
             && !region
             && !register_returned
