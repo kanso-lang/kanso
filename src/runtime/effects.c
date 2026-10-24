@@ -632,6 +632,44 @@ static KStep k_step(KDesc* d);
 static int k_argc_global = 0;
 static char** k_argv_global = NULL;
 
+/* A read from a connection, out of line for its 64 KiB buffer. Inside k_exec
+   the buffer was part of every k_exec frame, and a bind chain built from the
+   left enters k_exec once a link, so each link held 64 KiB of stack it never
+   used and 8 MiB ran out near the 120th. */
+static __attribute__((noinline)) KValue k_conn_read(long long h) {
+    int fd = k_socket_of(h);
+    if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
+    char buf[65536];
+    k_out_settle();
+    ssize_t got = read(fd, buf, sizeof(buf));
+    if (got < 0) return k_err(k_str("cannot read"), NULL);
+    return k_str_n(buf, (long long)got);
+}
+
+static KValue k_exec(KDesc* d);
+
+/* A bind chain entered past the beat stack's last mark. A chain built from the
+   left runs each link inside the one before it, so a fold of a hundred effects
+   is a hundred chains deep, and the stack holds sixty-four marks. Past the
+   last one there is no mark to rewind to and no carry pair to stage through,
+   and a beat there keeps count and nothing else, as k_beat_push_deep says: the
+   steps run and their garbage stays for an outer mark to take. The chain below
+   used to index the carries at the depth regardless, and wrote past their end. */
+static __attribute__((noinline)) KValue k_exec_unmarked(KDesc* d) {
+    k_beat_push();
+    KValue cur;
+    cur.tag = K_DESC;
+    cur.payload = k_ptr(d);
+    for (;;) {
+        KDesc* dd = k_as_desc(cur);
+        if (dd->dtag != 6 && dd->dtag != 29) return k_beat_pop(k_exec(dd));
+        KValue yielded = k_exec(k_as_desc(dd->x));
+        KValue next = k_worded_step(dd->dtag, yielded, dd->y);
+        if (next.tag != K_DESC) return k_beat_pop(next);
+        cur = next;
+    }
+}
+
 static KValue k_exec(KDesc* d) {
     switch (d->dtag) {
         case 31: return d->x;
@@ -759,15 +797,8 @@ static KValue k_exec(KDesc* d) {
                 return k_err(k_str("that is not a listener"), NULL);
             return k_err(k_str("nothing connected"), NULL);
         }
-        case 22: {
-            int fd = k_socket_of(d->x.payload);
-            if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
-            char buf[65536];
-            k_out_settle();
-            ssize_t got = read(fd, buf, sizeof(buf));
-            if (got < 0) return k_err(k_str("cannot read"), NULL);
-            return k_str_n(buf, (long long)got);
-        }
+        case 22:
+            return k_conn_read(d->x.payload);
         case 23: {
             int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
@@ -1085,6 +1116,7 @@ static KValue k_exec(KDesc* d) {
                memory stays flat across any chain length, and the chain
                costs constant C stack. the final result goes through the
                pop, which copies a heap survivor out of the buffers. */
+            if (k_beat_depth >= K_BEAT_MAX) return k_exec_unmarked(d);
             k_beat_push();
             /* The drift is measured from where this chain began: the
                depth's last stage, if any, was another chain's. */
