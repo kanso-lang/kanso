@@ -106963,3 +106963,241 @@ and book_quotes refused it once the encoder stopped naming `keys` and `values`;
 it now shows the map going in whole with its count. The ratchet row
 `a_map_entry_read_through_the_c` sends `key_at` to the C and turns the emitted
 gate red.
+
+## 2026-10-22 — a JSON string value goes out in one claim
+
+The encoder wrote a string value as an opening quote, `escape_onto` and a
+closing quote. `escape_onto` scanned the string for a byte that needs escaping
+and either appended it as it stands or handed it to `append_escaped`, which
+scanned it again as it escaped it. On the run program's document 1,773 of every
+2,114 string values need escaping. They average 16 bytes with 2.6 escapes each,
+so most values paid for both scans. `builtin_append_string acc s` now writes the
+quotes and the escaped bytes in one call. Where the builder is at its frontier
+with room for the worst case, the C writes the quote, escapes straight into the
+builder and writes the closing quote. A value the decoder shared as a clean
+token takes the same inline path as a key, with a closing quote where a key has
+`":`. The interpreter's arm writes the same bytes.
+
+Measured here, on top of the map read, the run program read 1,039,464,472 ->
+1,028,684,506 (-1.04%) with the same output, and the interpreted corpus read
+401,548,849 -> 384,232,761 instructions and 420,781 -> 400,588 allocations.
+
+CI's rows: work_runbench 1,039,465,659 -> 1,028,685,693 (-1.04%), work_livebench
+1,219,792,784 -> 1,172,094,931 (-3.9%) and work_oneshot 11,902,783 -> 11,785,186
+(-0.99%); work_encodebench 2,456,797,749 -> 2,456,797,637. The counters:
+find2_calls falls in run (1,667,049 -> 1,488,669), live (807,837 -> 15,037) and
+oneshot (17,019 -> 15,037), since a value no longer passes through escape_onto's
+scan, and append_fast falls in the same three, the quote appends no longer made
+one at a time: run_append_fast 5,737,050 -> 5,328,270, live_append_fast
+25,498,000 -> 23,681,200 and oneshot_append_fast 63,745 -> 59,203.
+interp_instructions 401,548,849 -> 384,232,761, interp_allocs 420,781 -> 400,588
+and interp_peak_bytes 616,944 -> 608,798. The library is smaller to compile:
+compile_instructions 24,218,897 -> 23,713,618, entry_instructions 75,050,737 ->
+74,424,236, library_instructions 74,724,744 -> 74,085,135, compile_allocs 13,427
+-> 13,179, front_end_visits 7,010 -> 6,914 and compile_peak_bytes 575,175 ->
+565,175, and codegen_instructions_release 422,550,641 -> 422,357,890. The
+runtime's C entry adds about 5,000 bytes of text to every program (text
+jsonbench 367,721 -> 372,777, runbench 720,681 -> 721,209), and
+codegen_instructions_dev 116,025,482 -> 116,064,263 and emit_instructions
+6,341,758 -> 6,364,404 rise with the path. Emitted code: the decoder's
+emitted_lines 13,098 -> 13,102; runbench, oneshot and livebench lose
+escape_onto's steps (runbench defines 782 -> 778, calls 7,376 -> 7,357, lines
+56,741 -> 56,666) and gain 5 branches (6,410 -> 6,415); the compile corpus's
+lines 1,492 -> 1,508 and module_lines 1,155 -> 1,159; in all,
+emitted_other_branches 16,882 -> 16,897 and text 5,179,630 -> 5,236,430. In the
+tab, browser_run_instructions 32,722,014 -> 32,241,456 (-1.5%),
+browser_compile_instructions 412,895,911 -> 406,640,369 (-1.5%) and
+browser_compile_peak_bytes 735,564 -> 732,776 fall. The welfare sum rose, and
+the floor moves 92.07 -> 92.13.
+
+The micro golden `a_string_value_goes_out_between_its_quotes` decodes and
+encodes string values at the edges twice: empty, one byte, seven and eight
+bytes, `été`, an escaped `\u00e9`, and tokens with a quote, a backslash or a
+tab. With the inline path's length short by one, the clean tokens lost their
+closing quotes; with the C's closing quote replaced, the values it wrote showed
+the replacement. The ratchet row `a_string_value_claimed_three_times` writes
+values the old way and turns the emitted gate red. The book's chapter 08 panel
+showed the string arm as `_escape_onto` and called its sample the library's
+escape functions verbatim, which stopped being true when escaping moved to the
+runtime; it now shows the one call and says what the runtime does.
+
+The ratchet row `a_clean_token_scanned_anyway` went blind with this change.
+It turns off the clean-token skip in `find2_below`, which served
+`escape_onto`, and the run program's values no longer reach `escape_onto`.
+encodebench's own copy of lib/json still sends every string through it, so the
+row now gates on the encode vein, where the mutation moves `find2_calls`
+803,275 -> 4,200,475.
+
+## 2026-10-22 — a map entry's key and value are read with one test
+
+`entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
+(builtin_value_at m i)`, and each read tested the map's view on its own: the
+tags, the view pointer and its mark, and the bounds. Where one call's
+arguments read a key and then a value of the same local map at the same local
+position, the emitter now calls `k_b_entry_pair_fast` once. It tests the view,
+returns the key and stores the value into a slot in the caller's frame, which
+the call's next argument loads. A view that is missing or marked goes to the
+C for both reads, as each read did alone. The pair is found in both places the
+emitter writes a call's arguments, the plain call and the tail call, and
+`entry_onto`'s call is a tail call.
+
+Measured here, the run program read 1,028,684,506 -> 1,018,405,282 (-1.0%)
+with the same output.
+
+CI's rows: work_runbench 1,028,685,693 -> 1,018,406,469 (-1.0%),
+work_livebench 1,172,094,931 -> 1,126,408,749 (-3.9%) and work_oneshot
+11,785,186 -> 11,669,620 (-1.0%). The three programs that encode objects lose
+one define, two calls and three branches each and are smaller (text runbench
+721,209 -> 720,921, oneshot 380,633 -> 380,393, livebench 384,409 ->
+384,169; emitted runbench lines 56,666 -> 56,634, oneshot 13,898 -> 13,866,
+livebench 14,221 -> 14,189). Every other program carries the helper's two
+lines (emitted_lines 13,102 -> 13,104 for the decoder, and +2 in the others),
+the compile corpus's lines move by two each (recursion 449 -> 451, dispatch
+348 -> 350, guards 305 -> 307, records 406 -> 408; lines 1,508 -> 1,516) and
+module_lines 1,159 -> 1,161.
+codegen_instructions_dev 116,064,263 -> 116,067,612,
+codegen_instructions_release 422,357,890 -> 422,361,029 and
+emit_instructions 6,364,404 -> 6,377,706 rise with them. In the tab,
+browser_run_instructions 32,241,456 -> 31,991,504 and
+browser_compile_instructions 406,640,369 -> 406,222,752 fall, and
+browser_compile_peak_bytes rises 732,776 -> 733,266. The welfare sum rose, and
+the floor moves 92.13 -> 92.17.
+
+The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
+witness for its bytes: with the value loaded from the key's slot, every value
+printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
+and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
+`key_at_fast` and read BLIND once the pair took every key the encoder reads;
+it now sends the pair to the C, which reads the run program 935,900,947 ->
+967,870,853, and it gates the instructions vein.
+
+## 2026-10-22 — a builder at the arena's frontier grows where it stands
+
+A builder that outgrew its buffer took a new one and copied, in the arena or
+from malloc depending on where its header sat against the innermost mark. When
+the header lies above that mark, the buffer is arena storage, and when the
+buffer is also the last thing the arena handed out, it now grows by moving
+the frontier past it: no new buffer and no copy. A header above the innermost
+mark was allocated after it, and a buffer at the frontier after the header, so
+the extension dies with the header at the same rewind. The grow also requires
+the header to own the buffer's frontier, since a grow is how an append reaches
+a buffer another header has written past. The extension's bytes count in
+`alloc_bytes`.
+
+That made a second change pay. On 2026-10-21 `entry_count` was left
+allocating to the beat analysis, which kept a region around each map the
+encoder descends into: inside the region the builder's header sat below the
+mark and grew by realloc, and without it the builder grew in the arena by
+doubling and copying (+24.7M memcpy). `entry_count` is now pure, as `key_at`
+and `value_at` are. The view it may build comes from malloc, and only a sort's
+scratch index lands in the arena, where the enclosing loop's rewind takes it.
+The region is gone, and the builder now grows in place.
+
+Measured here, the run program read 1,018,405,282 -> 999,948,734 (-1.81%)
+with the same output: `k_region_pop`'s 10.7M is gone, and `encode_list` and
+`encode_map` fall 3.5M and 3.8M.
+
+CI's rows: work_runbench 1,018,406,469 -> 999,949,921 (-1.81%),
+work_livebench 1,126,408,749 -> 1,043,615,776 (-7.3%), work_oneshot
+11,669,620 -> 11,443,335 (-1.9%) and work_encodebench 2,456,797,637 ->
+2,456,796,655. work_widebench rises 28,571,443 -> 28,619,441 (+0.17%); it
+carries its own copy of lib/json and grows its builders in the arena too. The
+run program's held_peak_bytes falls 200,978 -> 111,920, and run allocs
+1,447,994 -> 1,446,734, alloc_bytes 249,236,356 -> 221,966,536, append_grow
+1,260 -> 1,080, append_fast 5,328,270 -> 5,328,540, bytes_malloc 9,140 ->
+7,880 and bytes_freed 9,010 -> 7,750. The one-shot and live programs'
+builders never leave the arena: held_peak_bytes 200,978 -> 0 in both,
+bytes_malloc and bytes_freed 14 -> 0 and 5,600 -> 0, oneshot allocs 7,531 ->
+7,517, alloc_bytes 1,790,518 -> 1,487,520, append_grow 14 -> 12, append_fast
+59,203 -> 59,206; live allocs 13,914 -> 8,314, alloc_bytes 235,351,504 ->
+114,152,304, append_grow 5,600 -> 4,800, append_fast 23,681,200 ->
+23,682,400. Without the region runbench, oneshot and livebench make three
+fewer calls (runbench calls 7,355 -> 7,352, lines 56,634 -> 56,636; oneshot
+calls 1,484 -> 1,481, lines 13,866 -> 13,868; livebench calls 1,523 -> 1,520,
+lines 14,189 -> 14,191). The runtime's text grows 336 bytes in every program
+(text jsonbench 372,777 -> 373,113) and shrinks where the region went (text
+runbench 720,921 -> 719,977, oneshot 380,393 -> 379,641, livebench 384,169 ->
+383,177). codegen_instructions_dev 116,067,612 -> 116,068,279 and
+codegen_instructions_release 422,361,029 -> 422,367,718 rise, and
+emit_instructions 6,377,706 -> 6,377,307 falls. In the tab,
+browser_run_instructions 31,991,504 -> 31,623,429,
+browser_run_peak_bytes 1,441,792 -> 1,376,256, browser_compile_instructions
+406,222,752 -> 406,034,117 and browser_compile_peak_bytes 733,266 -> 732,887
+fall. The welfare sum rose, and the floor moves 92.17 -> 92.25.
+
+The frees fall with the mallocs they answered: run_bytes_freed 9,010 -> 7,750,
+oneshot_bytes_freed 14 -> 0, live_bytes_freed 5,600 -> 0 and
+a_literal_appended_across_a_rewind_bytes_freed 40 -> 0. Over all programs,
+emitted_other_lines 158,180 -> 158,186 and text 5,235,662 -> 5,236,670.
+
+The mem corpus moves where builders grow in the arena:
+`a_literal_appended_across_a_rewind` allocs 136 -> 96, alloc_bytes 11,920 ->
+9,040, bytes_malloc and bytes_freed 40 -> 0, held_peak_bytes 152 -> 0;
+`three_storage_regimes_share_one_append` allocs 1,640 -> 1,040, alloc_bytes
+186,274 -> 114,274; `append_of_a_slice_boxes_nothing` allocs 14 -> 12,
+alloc_bytes 2,396 -> 2,156. The micro golden
+`a_builder_grows_where_it_stands_until_something_follows_it` grows a builder
+in place, appends a string made after the buffer, and grows again by copying,
+300 rounds inside a loop against one built outside any; with the in-place
+write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
+`a_builder_copied_at_the_frontier` turns the mem corpus red, and
+`a_maps_count_held_as_allocating` puts the region back and turns the run
+counters red.
+
+## 2026-10-22 — a call into a loop keeps its cohort bracket under a cycle
+
+A cohort bracket marks the arena before a call that crosses into another
+module with immutable arguments, and its pop gives back what the call left.
+The license refused every caller a cycle reaches (`cycle_reached`), since such
+a caller can run once per element of something and its calls are usually
+small. It now admits one when the callee reaches a cycle that allocates
+(`reaches_cycle`: the members of every cycle whose members the beat analysis
+finds allocating, and everything that mentions them, followed backward) and
+answers no heap value. A call into a loop pays
+its push and pop once against the whole loop, and with no heap value to keep
+the pop rewinds without copying anything out.
+
+On the run program the index phase builds 1.5 MB of text to answer an int,
+and nothing marked the arena around it, so the string lived until the program
+ended. `tally` is reached by a cycle, so the license refused the call. Measured
+here, arena_peak_bytes 4,718,608 -> 3,670,032 and the run read 999,948,734 ->
+999,793,761 with the same output. The peak now sits at two live megabyte
+blocks, the file read and its decoded document, and the 1,572,880-byte string
+the phase builds; the program needs all three at that moment.
+
+Three other shapes were measured on the way. Seeded from every cycle, the
+reach admitted widebench's whitespace skip, a loop that builds nothing, called
+once per value from its parser; CI read widebench 28,619,441 -> 34,955,663
+(+22%) and encodebench 2,456,796,655 -> 2,461,704,983, 4.0M of it
+`k_cohort_pop` with nothing to give back. The ratchet row
+`a_loop_that_builds_nothing_bracketed` puts that seed back and turns the
+instructions gate red. Without the heap-value condition
+one bracket evacuated a heap result through the carry, and `k_deep_copy` and
+`k_copy_size` cost 1.7M more. A region of the beat analysis's kind, marked
+before the arguments, made `a_long_chain_answers_survival_from_its_index`
+evacuate its 100,000 rows on every lap (evac_allocs 25 -> 480,009), because
+the rows its argument built landed inside the mark.
+
+CI's rows: work_runbench 999,949,921 -> 999,794,948 (-0.02%), and no other
+benchmark's work moves. The run program's run_arena_peak_bytes 4,718,608 ->
+3,670,032 and run_cohort_frees 1 -> 4; run_allocs 1,446,734 -> 1,446,735,
+run_alloc_bytes 221,966,536 -> 221,966,568, run_evac_allocs 48,953 -> 48,955,
+run_evac_bytes 9,271,280 -> 9,271,408, run_survive_slots 4,856 -> 4,854,
+run_str_scans 1,023 -> 1,024, run_str_scan_bytes 17,996,094 -> 17,996,158 and
+run_sh_rec 3,776,192 -> 3,776,128. The run program makes 24 more calls
+(emitted_other_calls 19,064 -> 19,088, emitted_other_lines 158,186 ->
+158,210) and its machine code grows 719,977 -> 722,233 bytes (text 5,236,670
+-> 5,238,926 over all the binaries). compile_instructions 23,713,618 ->
+23,736,301, entry_instructions 74,424,236 -> 74,485,199, library_instructions
+74,085,135 -> 74,147,760 and emit_instructions 6,377,307 -> 6,423,478 rise,
+and interp_instructions 384,232,761 -> 384,228,496 falls. In the tab,
+browser_compile_instructions 406,034,117 -> 401,989,712 falls. The welfare
+sum rose, and the floor moves 92.25 -> 92.28.
+
+`tests/cohort.rs` `a_call_into_a_loop_gives_back_what_it_built` runs a new
+two-module fixture, `tests/golden/cohort/phases`: each pass of a loop calls
+`grow/total` twice, and each call builds a megabyte of text to answer its
+length. It pins cohort_frees=6 and arena_peak_bytes=2097168; under the old
+license it read 0 and 3145760. The ratchet row
+`a_call_into_a_loop_left_unbracketed` takes the license back and turns the run
+counters red.

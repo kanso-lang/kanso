@@ -3372,4 +3372,75 @@ slice_parsers_inline = row
 
 rows_cq57 = list/concat rows_cq56 [slice_parsers_inline]
 
-rows_c = list/concat rows_cq57 [itself]
+# The empty list and map join them, so the decoder opens an array or an
+# object without a call (2026-10-24). The mutation puts noinline in place of
+# both always_inlines.
+empty_inline = row
+  "the empty collections called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_empty_collections_called_out_of_line")
+  benches
+
+rows_cq58 = list/concat rows_cq57 [empty_inline]
+
+# The in-place byte append asks for room before it reads the buffer's header,
+# and the separate test for a borrowed view is gone (2026-10-24). The mutation
+# puts that test back in the twin the json encoder's separators go through.
+room_first = row
+  "a byte append that asks ownership first"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_append_asks_ownership_first")
+  benches
+
+rows_cq59 = list/concat rows_cq58 [room_first]
+
+# The prune finds each line of the emitted IR a word at a time (2026-10-24).
+# The mutation puts the per-line `str::find` back, a memchr call a line.
+prune_lines = row
+  "the prune splits its lines with memchr"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_prune_splits_its_lines_with_memchr")
+  release
+
+# The tab's translator trims its lines as ASCII (2026-10-24). The mutation
+# puts `str::trim` back on both per-line trims.
+ascii_trim = row
+  "the translator trims unicode whitespace"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_translator_trims_unicode_whitespace")
+  release
+
+rows_cq60 = list/concat rows_cq59 [prune_lines ascii_trim]
+
+# The lexer finds each line of a source a word at a time (2026-10-24). The
+# mutation puts `str::lines` back, a memchr call a line.
+lex_lines = row
+  "the lexer splits its lines with str::lines"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_splits_its_lines_with_str_lines")
+  release
+
+# The lexer answers both openers for a line with no quote and no `#` from one
+# scan a word at a time (2026-10-24). The mutation sends every line through
+# the two byte-at-a-time scans.
+lex_openers = row
+  "the lexer scans every line for its openers byte by byte"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_scans_every_line_for_its_openers")
+  release
+
+rows_cq61 = list/concat rows_cq60 [lex_lines lex_openers]
+
+rows_c = list/concat rows_cq61 [itself]

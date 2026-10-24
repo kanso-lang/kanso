@@ -80,6 +80,25 @@ const OPS: [&str; 14] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", "
 
 pub const MAX_WIDTH: usize = 80;
 
+/// `str::lines`, with each newline found a word at a time: the lines without
+/// their `\n`, a `\r` before it taken off too, and no empty line after the
+/// last newline.
+fn source_lines(source: &str) -> Vec<&str> {
+    let bytes = source.as_bytes();
+    let mut lines = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let end = crate::compare::byte_from(bytes, at, b'\n');
+        let line = &source[at..end];
+        lines.push(match end < bytes.len() {
+            true => line.strip_suffix('\r').unwrap_or(line),
+            false => line,
+        });
+        at = end + 1;
+    }
+    lines
+}
+
 pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut lines = Vec::new();
@@ -92,7 +111,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             Span::at(source.lines().count(), 1),
         ));
     }
-    let raws: Vec<&str> = source.lines().collect();
+    let raws = source_lines(source);
     let mut idx = 0;
     while idx < raws.len() {
         let raw = raws[idx];
@@ -101,7 +120,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         // `find` answers in bytes and a column is counted in characters, the
         // same parting of ways `block_opener` had: with `ééé` ahead of the
         // tab the caret used to land three columns right of it.
-        if let Some(at) = raw.find('\t') {
+        if let Some(at) = crate::compare::find(raw.as_bytes(), b'\t') {
             diags.push(Diagnostic::new(
                 "formatting",
                 "tabs are not part of the canonical grammar; indent with spaces".to_string(),
@@ -109,19 +128,25 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             ));
             continue;
         }
-        if raw.trim_end() != raw {
+        let trimmed = raw.trim_end();
+        if trimmed.len() != raw.len() {
             diags.push(Diagnostic::new(
                 "formatting",
                 "trailing whitespace is not part of the canonical grammar".to_string(),
-                Span::at(number, raw.trim_end().len() + 1),
+                Span::at(number, trimmed.len() + 1),
             ));
         }
-        let trimmed = raw.trim_end();
         if trimmed.is_empty() {
             blank_lines.push(number);
             continue;
         }
-        let width = trimmed.chars().count();
+        // A character is at least a byte, so only a line with more bytes than
+        // the cap can have more characters than it, and only that one is
+        // counted.
+        let width = match trimmed.len() > MAX_WIDTH {
+            true => trimmed.chars().count(),
+            false => trimmed.len(),
+        };
         if width > MAX_WIDTH {
             let hint = match holds_literal(trimmed) {
                 true => "; a list or map that long spans lines, one element to a line",
@@ -135,12 +160,18 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         }
         let indent = trimmed.len() - trimmed.trim_start().len();
         let content = &trimmed[indent..];
+        // Both openers below read quoting and comments, and a line with no
+        // quote and no `#` has neither: no text block opens on it, and the
+        // byte its span opener would read is its last, since the line is
+        // trimmed. One scan a word at a time answers that for most lines,
+        // where each opener walked every byte.
+        let plain = crate::compare::either_from(content.as_bytes(), 0, b'"', b'#') == content.len();
         // A text block opens at the end of a statement's line and its content
         // sits two spaces deeper, so the lines it holds are consumed here
         // rather than reaching the per-line rules: a blank line inside a block
         // is a newline in a value, not a statement break, and a content line
         // is data the width cap has no way to re-render.
-        if let Some(at) = block_opener(content) {
+        if let Some(at) = (!plain).then(|| block_opener(content)).flatten() {
             // `at` is a byte offset and a column is counted in characters, so
             // the two part company the moment the line holds anything outside
             // ASCII. Every column below is the character count of what
@@ -171,7 +202,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         // a line, and the closing bracket sits alone at this line's indent.
         // It is only legal when the literal would not fit on the one line.
         let dot_lead = content.starts_with(". ") || content.starts_with('.');
-        if let Some(open) = span_opener(content).filter(|_| !dot_lead) {
+        let open = match plain {
+            true => content.bytes().last().filter(|b| matches!(b, b'[' | b'{')),
+            false => span_opener(content),
+        };
+        if let Some(open) = open.filter(|_| !dot_lead) {
             let lexed_line = match lex_line(content, number, indent + 1) {
                 Ok(l) => l,
                 Err(d) => {

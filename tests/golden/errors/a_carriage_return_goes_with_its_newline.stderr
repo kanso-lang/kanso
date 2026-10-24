@@ -1,0 +1,8 @@
+error[formatting]: file must end with exactly one newline
+  --> a_carriage_return_goes_with_its_newline.kso:2:1
+   2 | pub play = print "x"
+       ^
+error[formatting]: trailing whitespace is not part of the canonical grammar
+  --> a_carriage_return_goes_with_its_newline.kso:2:21
+   2 | pub play = print "x"
+                           ^

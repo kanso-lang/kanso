@@ -1,0 +1,28 @@
+# A builder's in-place append asks for room before it reads the header behind
+# the buffer, and only an owned buffer has that header. A borrowed view, here
+# the bytes of a literal, the empty bytes and a slice, has no room, so each
+# append below falls to the runtime and builds a new buffer. The room test is
+# what keeps the twin off the view: with an empty view admitted, it read the
+# word in front of the literal's bytes as the buffer's length.
+import "std/text"
+
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append acc (64 + n)) (n - 1)
+
+fn sliced none
+  text/bytes "no slice"
+
+fn sliced b
+  b
+
+pub play =
+  empty = grown (text/bytes "") 3
+  literal = grown (text/bytes "ab") 2
+  whole = text/bytes (text/pad_end "abcdefghij" 80 "x")
+  part = grown (sliced (text/slice whole 4 70)) 2
+  print "{text/utf8 empty} {text/utf8 literal}"
+  print "{text/utf8 part}"
+  print "{length whole}"
