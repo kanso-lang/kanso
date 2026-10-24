@@ -106781,3 +106781,97 @@ program's binary came out byte-identical. The three appends `encode_map`
 makes for each pair cannot share their header loads because each append's
 slow path may hand back a different builder, so the next append's header
 pointer is a merge of the two paths. Aliasing was not what kept them apart.
+
+## 2026-10-21 — a JSON key goes out in one claim
+
+lib/json wrote an object's key as three appends around a call: the opening
+quote after the brace or comma, `escape_onto` for the key, and the closing
+quote and colon as one word. Each append made its own ownership and room
+tests on the builder. `builtin_append_key acc k` now writes `"k":` in one
+call. The decoder shares every string of four to seven bytes as a token, and
+each token records whether its bytes need escaping, so for a clean token the
+emitter's inline path claims the builder once and writes three stores: the
+quote, the token's whole eight-byte word, and `":` over the bytes past the
+key. Any other key, and any build that counts, goes to the C, which writes
+the same bytes the long way. The interpreter writes the same bytes.
+
+The inline path finds a token's clean flag from where its bytes sit in the
+token store, dividing by the size of a token. A token is a `KStr` and eight
+bytes, which is 24 bytes natively and 20 on wasm32, where a pointer is four.
+The first version used 24 everywhere. Two `WASM32_LINES` rows now give the
+tab its own bound and divisor. `retarget_wasm32` searched only
+`getelementptr` lines for rows to rewrite, so the clang-built wasm32 harness
+kept the native numbers while the playground's translator, which matches
+every line, took the new ones; it now searches for each row by its own text.
+The micro golden `a_dirty_key_beside_a_clean_one_is_escaped` places `ke"y`
+in the slot whose 24-byte reading on wasm32 is `ammo`'s. Before the rows,
+the wasm32 build printed the quote unescaped.
+
+Measured here, the run program read 1,068,720,545 -> 1,049,790,947
+(-1.77%) with the same output, all of it in `encode_map`; the C path ran
+82,800 instructions. The interpreted corpus read 463,213,463 -> 402,112,576
+instructions and 502,624 -> 423,390 allocations, because the interpreter's
+builtin writes into the builder where `escape_onto` and three appends ran as
+kanso.
+
+CI's rows: work_runbench 1,068,721,732 -> 1,049,792,134 (-1.77%),
+work_livebench 1,356,883,942 -> 1,272,755,954 (-6.2%), work_oneshot
+12,207,627 -> 11,997,046 (-1.7%) and work_encodebench 2,456,797,406 ->
+2,456,796,902; jsonbench and widebench carry their own copy of lib/json and
+hold. interp_instructions 463,213,463 -> 402,108,616 (-13.2%),
+interp_allocs 502,624 -> 423,390 and interp_peak_bytes 617,367 -> 616,817.
+The C path adds 3,264 bytes of text to every program (text runbench 715,289
+-> 717,129, jsonbench 364,137 -> 367,401), and codegen_instructions_dev
+115,922,261 -> 115,971,597 and emit_instructions 6,283,165 -> 6,307,623 rise
+with the helper. codegen_instructions_release 422,291,078 -> 422,279,602,
+compile_instructions 24,286,340 -> 24,227,124, entry_instructions
+75,053,355 -> 75,007,797, library_instructions 74,749,069 -> 74,686,591,
+compile_allocs 13,465 -> 13,434, compile_peak_bytes 575,715 -> 575,051 and
+front_end_visits 7,063 -> 7,047 fall. The
+counters: perm_allocs falls by one in run (101 -> 100), live (8 -> 7) and
+oneshot (9 -> 8), the closing pair's literal, and append_fast rises in the
+same three (run 5,735,070 -> 5,737,050, live 25,489,200 -> 25,498,000,
+oneshot 63,723 -> 63,745). emitted_lines 13,078 -> 13,089 for the decoder and
++11 in every other program, +32 in runbench (56,807 -> 56,839), oneshot and
+livebench, where emitted calls fall by three (runbench 7,380 -> 7,377) and
+emitted branches rise by three (6,434 -> 6,437); in all, emitted_other_lines
+158,441 -> 158,647 and emitted_other_branches 16,954 -> 16,963. text sums to
+5,124,302 -> 5,165,726. The compile corpus's lines 1,412 -> 1,456 and the
+module compile's module_lines 1,135 -> 1,146 carry the same comment. In the tab,
+browser_run_instructions 34,153,178 -> 33,548,279 (-1.8%) and
+browser_compile_instructions 413,098,267 -> 412,842,483 fall, and
+browser_compile_peak_bytes rises 735,031 -> 738,682. The welfare sum rose,
+and the floor moves 91.92 -> 92.03.
+
+The micro golden `a_key_goes_out_quoted_with_its_colon` decodes and encodes
+keys at the edges twice, so the second pass reads shared tokens: empty, one
+byte, seven and eight bytes, a two-byte character, an escaped `\u00e9`, and
+tokens with a quote, a backslash or a tab. With the inline path's length
+short by one, the clean keys lost their colons; with the C's colon replaced
+by a quote, the other keys did. Two ratchet rows:
+`a_key_claimed_one_byte_at_a_time` sends every key to the C and turns the
+emitted gate red, and
+`a_token_measured_at_its_native_size_on_wasm32` gives the tab the native
+numbers back and turns the translator's micro corpus red. The two byte-pair
+rows went blind: the encoder no longer writes two byte appends in a row,
+since the brace or comma before a key is one append now. The micro fixture
+`two_bytes_appended_at_once` appends a backslash and a letter itself, and
+`a_byte_pair_appended_one_at_a_time` is gated by a perf_ratchet spec,
+`two_byte_appends_are_one_call`, that reads the merged call in the emitted
+code; each mutation turns its witness red. The room-test spec
+counts ten frontier branches now. The mem rows move because a clean key no
+longer passes through `escape_onto`: `find2_calls` falls to 0 in three
+programs, and `perm_allocs` falls by one, the closing pair's literal.
+
+Measured and dropped on the way, recorded so they stay declined:
+
+- A fused `builtin_append_key acc lead k` that also wrote the brace or comma,
+  as a C entry. The run program read 1,068,720,545 -> 1,181,687,667: the C
+  cost 135 instructions a call against the inline path's check and copy,
+  and `k_region_pop` grew 32.4M because `encode_map` then handed its value
+  to `encode_onto` directly.
+- Passing the key's tail into `escape_onto` (+18.5M) and a copy of the key
+  arms (+19M).
+
+Open: `encode_map` still copies a map's keys and values into two columns per
+map, 25M on the run program with the region around it.
