@@ -2186,3 +2186,16 @@ about; treating the end of the text as a line's end turned that spec red on
 went red with the marking taken out. The ratchet row `one_scan` scans each
 piece a second time and reads 225,543,228; `strings_in_scan` scans the body
 for strings again and reads 224,854,630.
+
+## 2026-10-24 — a pair of leaves held in place
+
+The tab's translator asks a type for its scalar leaves, with their byte
+offsets, at every load, store, call and return of an aggregate. A scalar
+answered in place, and every struct built a vector, so each `%KValue`, two
+`i64`s, cost an allocation and a free. `Ty::leaves` now answers a struct of
+two scalars in place too. The tab's compile of its corpus fell from
+223,778,736 to 222,368,963 instructions (-0.63%) in this container, and the
+wasm it wrote is byte-identical. A spec holds `leaves` to the list `scalars`
+writes for scalars, pairs, a nested pair, a triple and arrays; giving the
+second leaf a fixed offset of 8 turned it red on `{i1, i16}`. The ratchet row
+`pair_leaves` lists pairs in a vector again and reads 223,694,975.

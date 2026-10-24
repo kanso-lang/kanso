@@ -3295,4 +3295,17 @@ strings_in_scan = row
 
 rows_cq51 = list/concat rows_cq50 [strings_in_scan]
 
-rows_c = list/concat rows_cq51 [itself]
+# The translator answers a pair of scalar leaves, every %KValue, without a
+# vector (2026-10-24). The mutation lists them in one again, and the browser
+# compile row reads heavier.
+pair_leaves = row
+  "a pair of leaves listed in a vector"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pair_of_leaves_listed_in_a_vector")
+  release
+
+rows_cq52 = list/concat rows_cq51 [pair_leaves]
+
+rows_c = list/concat rows_cq52 [itself]
