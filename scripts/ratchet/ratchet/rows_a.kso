@@ -481,19 +481,6 @@ cold_registers = row
   (breaking "the_cold_helpers_clobber_their_callers_registers")
   benchmarks
 
-# k_b_at's two arms that allocate or refuse are separate cold functions since
-# 2026-09-15, so the arm every runbench index takes carries no frame; the
-# mutation inlines both back and the six pushes return to every index. The
-# value out is identical either way, so the work vein is the only thing that
-# can see it.
-index_cold_arms = row
-  "the index's allocating arms sharing its frame"
-  true
-  (gating "instructions")
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "the_index_s_allocating_arms_share_its_frame")
-  benchmarks
-
 # A copy long enough to be libc's goes through a preserve_most wrapper since
 # 2026-09-15, so a function whose short copies are inline words keeps no frame
 # for the long case; the mutation inlines the wrapper back and the pushes

@@ -31,3 +31,14 @@ if cat src/runtime/*.c | grep -q "preserve_most))"; then
   echo "a preserve_most survived the mutation" >&2
   exit 1
 fi
+# The release build's hot unit declares two of the six, the index's wide miss
+# and the int parser's tail, and calls them from code the program inlines. A
+# declaration left on preserve_most would call a definition that no longer
+# saves what it promises, and the row would go red on wrong output rather
+# than on the work.
+sed -i -e 's/"__attribute__((preserve_most)) KValue k_b_at_wide_miss(/"KValue k_b_at_wide_miss(/' \
+       -e 's/"__attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(/"__attribute__((noinline, cold)) KValue k_b_to_int_slow(/' src/main.rs
+if grep -q "preserve_most)) KValue" src/main.rs; then
+  echo "a hot declaration kept preserve_most" >&2
+  exit 1
+fi
