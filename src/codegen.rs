@@ -1277,7 +1277,8 @@ struct FnEmit {
     raw_byte: crate::hash::Map<String, String>,
     /// Whether the hot predicates are called in their two-word forms, which
     /// the dev tier's instruction selector can lower where it cannot lower a
-    /// call passing a `%KValue`.
+    /// call passing a `%KValue`. It also marks a body no optimizer reads (see
+    /// `FnEmit::assumes`).
     words: bool,
     /// Values whose two words are already in hand, tag then payload. An
     /// unboxed parameter crosses as a raw i64 and is boxed on entry, and every
@@ -1356,6 +1357,15 @@ pub fn is_a_stack_slot(text: &str) -> bool {
 }
 
 impl FnEmit {
+    /// Whether to write `llvm.assume` and the compare that feeds it. Only a
+    /// release module is optimized: the dev tier compiles at -O0, where an
+    /// assume is dropped unread, and the tab's translator skips the call but
+    /// still translates and runs the compare. Both build their bodies with
+    /// `words`.
+    fn assumes(&self) -> bool {
+        !self.words
+    }
+
     fn new(words: bool) -> Self {
         FnEmit {
             out: String::new(),
@@ -2509,6 +2519,9 @@ fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &st
 /// an `i` a guard has kept at or under it can be stepped by one without an
 /// overflow test: `return acc if length xs < i` before `i + 1`.
 fn assume_length(f: &mut FnEmit, len: &str) {
+    if !f.assumes() {
+        return;
+    }
     let ok = f.tmp();
     f.line_fmt(format_args!("{ok} = icmp ult i64 {len}, {}", 1i64 << 62));
     f.line_fmt(format_args!("call void @llvm.assume(i1 {ok})"));
@@ -2543,11 +2556,13 @@ fn pack_words(f: &mut FnEmit, pos: &str, value: &str) -> (String, String, String
 fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str, w2: &str) -> (String, String, String, String) {
     let ptag = f.tmp();
     f.line_fmt(format_args!("{ptag} = lshr i64 {w0}, 8"));
-    let stray = f.tmp();
-    f.line_fmt(format_args!("{stray} = and i64 {ptag}, {}", !K_BIG));
-    let int = f.tmp();
-    f.line_fmt(format_args!("{int} = icmp eq i64 {stray}, 0"));
-    f.line_fmt(format_args!("call void @llvm.assume(i1 {int})"));
+    if f.assumes() {
+        let stray = f.tmp();
+        f.line_fmt(format_args!("{stray} = and i64 {ptag}, {}", !K_BIG));
+        let int = f.tmp();
+        f.line_fmt(format_args!("{int} = icmp eq i64 {stray}, 0"));
+        f.line_fmt(format_args!("call void @llvm.assume(i1 {int})"));
+    }
     let vtag = f.tmp();
     f.line_fmt(format_args!("{vtag} = and i64 {w0}, 255"));
     (ptag.to_string(), w2.to_string(), vtag.to_string(), w1.to_string())
@@ -3082,6 +3097,9 @@ impl<'a> Backend<'a> {
             infer::BYTES => 13,
             _ => return,
         };
+        if !f.assumes() {
+            return;
+        }
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = extractvalue %KValue {value}, 0"));
         let is = f.tmp();

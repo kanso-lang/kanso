@@ -21,56 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — the link directory lists in one order
-
-The dev codegen row read 116,000,241, then 116,000,233, then 116,000,241 on
-three commits of #2014 that changed no code. The profiles put all 8
-instructions in `ld.gold`; kanso and clang read the same each time. A second
-reading in the same job always agreed with the first, so whatever moved was
-fixed for a job and differed between jobs.
-
-It is the order gold reads the link directory in. gold reads every `-L`
-directory whole, and the codegen box stages one holding the five libraries the
-link resolves. ext4 lists a directory by a hash of each name, seeded per
-filesystem, so each fresh runner can list those five its own way. Linking the
-same inputs on this container with the five listed three ways read
-22,443,938, 22,443,953 and 22,443,989.
-
-`scripts/gates/codegen_box.sh` now keeps the entries on tmpfs, which lists
-them in the order they were made, and makes them in a fixed order; on Linux
-`$box/link` is a link to `/dev/shm/kanso-codegen-link`, so the path the build
-is given does not change. Two readings here agree, and making the entries in
-the reverse order moves gold by 17, so the order is now the script's. The
-staging refuses to run when `/dev/shm` is not a tmpfs. Under the new order CI
-reads codegen_instructions_dev 115,822,000 -> 115,822,620 on main's tree, and
-the floor is re-based by that cost under kanso#2017's gavel: a fix that
-normalizes a measurement re-bases the floor without a ruling.
-
-The prune's entry put an earlier move of this row down to kanso's layout. The
-row leaves out kanso's process, so that cannot be the reason, and the entry
-says so now.
-
-## 2026-10-20 — gavel: a fix that normalizes a measurement re-bases the floor without a ruling
-
-Clay ruled #2017. The dev codegen row counts `ld.gold`, which reads its `-L`
-directory in readdir order. On ext4 that order is a hash seeded per
-filesystem, so each CI runner drew its own, and the row moved by a few
-instructions between commits that changed no code. #2016 puts the directory
-on tmpfs, which lists in creation order, and the row now reads the same on
-every run: 620 instructions above main's golden. Welfare reads 91.29 either
-way, but the floor is compared exactly.
-
-**The ruling.** The floor comes down by exactly what CI measures under the
-fixed order, with the reason in its history. It is also the standing rule: a
-change that only normalizes what a row reads re-bases the floor by what CI
-measures after it, with no ruling. The banked value was a draw. Picking among
-fixed orders by which reads lowest would choose the measurement by its
-result, so the order is fixed by what is natural (creation order) and the
-floor follows. CLAUDE.md's welfare section carries the rule.
-
-Owes, on #2017: the floor re-based in #2016 by CI's measured cost, recorded
-with this entry as the reason; #2014 and #2018 merging main after it.
-
 ## 2026-10-20 — directive: a required feature's cost is never asked about
 
 Clay, after #2017: "it should never need to ask to lower the welfare for a
@@ -2153,3 +2103,52 @@ emit_instructions 5,919,265 -> 5,918,172 and browser_compile_instructions
 ratchet mutations `a_call_into_a_loop_left_unbracketed` and
 `a_proven_result_left_unsaid` follow their de-indented lines, and every
 mutation that edits `emit.rs` applies and builds.
+
+## 2026-10-24 — dev and tab bodies write no llvm.assume
+
+The emitter told LLVM what it had proved with `llvm.assume`: a parameter's
+tag where inference pins one kind, a length that is never negative, an int's
+tag after a `%parsed` is unpacked, and the range of a byte position in a
+dispatcher. Each one costs a compare and a call, and the tag ones an
+`extractvalue` too. Only a release module is optimized. The dev tier compiles
+at -O0, which drops the call without reading it, and the tab's translator in
+`src/ir_wasm.rs` skips the call but still translates the compare and runs it.
+The dev tier emits with the settings the tab does, and for
+`bench/interp_corpus` it held 271 assumes, which with their feeding lines
+came to 729 of its 9,964 lines; runbench's fell from 36,674 to 35,082. The
+two assumes left are in the fixed helpers `DECLARES` carries.
+
+`FnEmit::assumes` now answers false for a body built with `words`, which is
+every dev and tab body, and the five sites that write an assume ask it first.
+A dispatcher still records a byte position as an int, which the emitter reads
+itself; only the lines for LLVM go. The release IR of all nineteen
+benchmarks built from their directories is byte-identical before and after.
+
+In this container, at the golden's rustc, the tab's compile of the corpus fell
+from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from 598,093
+to 532,354 bytes (-11%), and the run fell from 34,963,054 to 33,372,898
+(-4.5%), the compares it no longer executes. On CI the dev build's two rows
+fell with the emitted text: emit_instructions 5,918,172 -> 5,863,976 and
+codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
+IR lost ten of its twelve assumes. Every other compile row reads what main
+left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
+every body again.
+
+## 2026-10-24 — the tab leaves its tail calls as written
+
+`Written::finish_pieces`, which hands the tab its module, ran the same
+tail-call narrowing as `finish`, which writes a native one. The narrowing
+keeps `tailcc` only on the functions a `musttail` reaches and sends a call to
+a function that spills its arguments through a trampoline. Both work around
+an arm64 miscompile. The tab's translator skips `tailcc` and `ccc` as words,
+so the pass searched the module for nothing it lowers. `finish_pieces` now
+stops before it, and `finish` narrows what `assembled` gives it.
+
+On `bench/interp_corpus`, in this container at the golden's rustc, the tab's
+compile fell from 235,063,784 to 227,562,045 instructions (-3.2%). Its peak
+and the run did not move, since the corpus's module holds no trampoline.
+Native IR is unchanged. The ratchet row `the_tab_narrowing_its_tail_calls`
+narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
+against the 5,863,976 the assume change left it, a move of 178; the dev
+build that row counts still narrows its module, and writes the same text.
+CI's browser rows matched this container's.

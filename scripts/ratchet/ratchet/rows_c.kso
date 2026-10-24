@@ -3228,4 +3228,31 @@ one_share = row
 
 rows_cq46 = list/concat rows_cq45 [one_share]
 
-rows_c = list/concat rows_cq46 [itself]
+# A body built for the dev tier or the tab writes no `llvm.assume` and no
+# compare feeding one, since neither build is optimized (2026-10-24). The
+# mutation writes them for every body, and the browser compile row reads
+# heavier.
+no_optimizer = row
+  "an assume written for no optimizer"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_assume_written_for_no_optimizer")
+  release
+
+rows_cq47 = list/concat rows_cq46 [no_optimizer]
+
+# The tab's module keeps its tail calls as written, since its translator
+# reads no calling convention (2026-10-24). The mutation narrows them as a
+# native module is narrowed, and the browser compile row reads heavier.
+tab_narrowing = row
+  "the tab narrowing its tail calls"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tab_narrowing_its_tail_calls")
+  release
+
+rows_cq48 = list/concat rows_cq47 [tab_narrowing]
+
+rows_c = list/concat rows_cq48 [itself]

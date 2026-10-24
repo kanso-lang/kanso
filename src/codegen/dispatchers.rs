@@ -577,7 +577,15 @@ impl<'a> Backend<'a> {
                 continue;
             }
             let at = format!("%x{}", link.pos);
-            let word = match self.own_unboxed(name, arity, link.pos) {
+            let unboxed = self.own_unboxed(name, arity, link.pos);
+            if !unboxed {
+                restore.push((at.clone(), f.set_of(&at)));
+                f.record(&at, crate::infer::INT);
+            }
+            if !f.assumes() {
+                continue;
+            }
+            let word = match unboxed {
                 true => format!("{at}r"),
                 false => {
                     let tag = f.tmp();
@@ -587,8 +595,6 @@ impl<'a> Backend<'a> {
                     f.line_fmt(format_args!("call void @llvm.assume(i1 {is})"));
                     let w = f.tmp();
                     f.line_fmt(format_args!("{w} = extractvalue %KValue {at}, 1"));
-                    restore.push((at.clone(), f.set_of(&at)));
-                    f.record(&at, crate::infer::INT);
                     w.to_string()
                 }
             };
