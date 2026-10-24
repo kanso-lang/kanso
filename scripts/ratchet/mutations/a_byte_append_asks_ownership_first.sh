@@ -8,7 +8,7 @@
 set -e
 f=src/codegen/declares.rs
 head='define internal %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x, ptr %site) alwaysinline {'
-[ "$(grep -cxF "$head" "$f")" -eq 1 ] || {
+[ "$(grep -cxF "$head" src/codegen/declares.rs)" -eq 1 ] || {
   echo "the int append twin moved; this mutation needs rewriting" >&2
   exit 1
 }

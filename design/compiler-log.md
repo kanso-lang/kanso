@@ -1774,6 +1774,27 @@ Inlined, the record constructor made `json/obj_value` too large to inline
 into `obj_key_start`, so `obj_value` became a call of its own and cost
 58,253,679 where `obj_key_start` gave back 37,835,883.
 
+CI's rows for this branch against the string index's, all taken into the
+goldens:
+
+- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
+  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
+  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
+  work rows fell by 20 to 5,610.
+- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
+  the two bodies the link now inlines at every empty list and map.
+- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
+  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
+  from the rewrap lines `call_pair` writes at each site.
+- The tab's rows rose for the same lines: `browser_compile_instructions`
+  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
+  (+28,146).
+- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
+- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
+  every program that builds an empty list or map.
+- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
+  second decimal, banked.
+
 ## 2026-10-24 — a builder append asks for room first
 
 The emitter's in-place append twins tested whether the builder owned its
@@ -1798,6 +1819,22 @@ the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
 back in front of the room test in `k_b_append_mut_int`, the twin the
 encoder's separators go through, and reads runbench 811,580,683 and
 encodebench 2,346,183,576.
+
+CI's rows for this branch against the empty collections', all taken into
+the goldens:
+
+- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
+  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
+  and oneshot 10,114,082 -> 10,051,248.
+- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
+  not isolated.
+- The twins' text grew by a few lines where a block moved: the compile
+  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
+  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
+  `codegen_instructions_dev` 116,426,119 (+5,840) and
+  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
+- `emit_instructions`, both tab rows and `text` fell.
+- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
 
 ## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
 

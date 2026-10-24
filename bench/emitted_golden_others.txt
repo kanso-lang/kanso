@@ -11,16 +11,16 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move, and
 # regenerate.
-encodebench defines=142 calls=1236 branches=919 lines=10516
-oneshot defines=176 calls=1644 branches=1396 lines=15066
-basket defines=128 calls=1117 branches=1032 lines=9207
-widebench defines=158 calls=1393 branches=1037 lines=11607
-deepbench defines=50 calls=242 branches=250 lines=2356
-escapebench defines=20 calls=88 branches=92 lines=1016
-pendbench defines=72 calls=491 branches=414 lines=3681
-scanbench defines=323 calls=3054 branches=2947 lines=25140
-indexbench defines=22 calls=70 branches=42 lines=772
-digestbench defines=117 calls=872 branches=919 lines=7897
-readbench defines=22 calls=70 branches=44 lines=770
-livebench defines=177 calls=1683 branches=1439 lines=15389
-runbench defines=741 calls=7393 branches=6411 lines=56872
+encodebench defines=142 calls=1236 branches=917 lines=10556
+oneshot defines=176 calls=1644 branches=1392 lines=15124
+basket defines=128 calls=1117 branches=1032 lines=9273
+widebench defines=158 calls=1393 branches=1035 lines=11647
+deepbench defines=50 calls=242 branches=250 lines=2378
+escapebench defines=20 calls=88 branches=92 lines=1026
+pendbench defines=72 calls=491 branches=414 lines=3703
+scanbench defines=323 calls=3054 branches=2947 lines=25214
+indexbench defines=22 calls=70 branches=42 lines=778
+digestbench defines=117 calls=872 branches=919 lines=7915
+readbench defines=22 calls=70 branches=44 lines=776
+livebench defines=177 calls=1683 branches=1435 lines=15447
+runbench defines=741 calls=7393 branches=6407 lines=57058
