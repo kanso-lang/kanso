@@ -1668,6 +1668,19 @@ fn qualify(
         .map(|f| f.file.clone())
         .collect();
     let is_twin = |f: &ast::FnDecl| f.synthetic && !own_files.contains(&f.file);
+    // A constant an import enrols gives way to a name the module declares,
+    // as it does in a play file (`resolve` in eval.rs). A constant has no
+    // arity to dispatch on, so in the shared bare space it answered any
+    // mention of the name read as a value: kv's `fn read_line acc x`, handed
+    // to `list/fold` beside std/io's `read_line`, was std/io's description on
+    // every engine.
+    let declared_here: crate::hash::Set<String> = dep
+        .fns
+        .iter()
+        .filter(|f| !is_twin(f) && !ast::has_slash(&f.name))
+        .map(|f| f.name.clone())
+        .collect();
+    dep.fns.retain(|f| !(is_twin(f) && f.params.is_empty() && declared_here.contains(&f.name)));
     let mut own_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     let mut twin_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     for f in &dep.fns {
