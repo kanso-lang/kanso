@@ -1925,3 +1925,11 @@ arms back into it is retired. The program's index is now the hot unit's
 copy, which holds only a declaration of the wide miss, so nothing in the
 runtime can put that arm back in the walk's frame. Inlining both arms in the
 runtime read 797,121,834, below the branch's 797,155,085.
+
+The ratchet's shards found one more row the move left with nothing to
+watch: the list test put back in front of `k_b_at`'s string arm. No
+benchmark calls `k_b_at` any more, because the emitter sends every proven
+string index to `k_b_at_str`. With the mutation the function's code
+changes, and all fourteen work rows read the same as without it. The row
+is retired; `a proven string index through the tag tests` still guards
+the routing that moved those calls.
