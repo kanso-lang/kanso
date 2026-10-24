@@ -21,17 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — directive: all development is cloud's
-
-Clay: "all development is for you. the chat session is only for me to talk
-with and make decisions with." Cloud now writes the log, the design notes,
-the page's prose and CLAUDE.md as well as the compiler, and keeps the page
-within `page_drift`'s three entries of the log itself. The chat files, labels
-and closes issues and writes rulings onto them, and logs a ruling's `— gavel:`
-entry itself or leaves it to cloud's next pull request. CLAUDE.md's "Two sessions"
-section states the split. The first page section written under it is §219,
-which covers the four entries from the prune's move to the string builtins.
-
 ## 2026-10-20 — the link directory lists in one order
 
 The dev codegen row read 116,000,241, then 116,000,233, then 116,000,241 on
@@ -2145,3 +2134,22 @@ runtime. On the tree after #2068, emit_instructions, compile_instructions,
 entry_instructions and library_instructions read what #2068 left them. A run
 of this branch before that merge had them moving by 3,000 to 87,000, which
 the merge took away, so neither change here moves them.
+
+## 2026-10-24 — emit_call_rest gives up its fused builtins and its declared call
+
+`emit_call_rest` in `src/codegen/emit.rs` ran from line 3169 to the end of the
+file, about 1,020 lines (#2071). Its fused builtin calls (`utf8` of a slice,
+`length`, the three shapes of `append`, the one-argument doors and `bytes`)
+are now `emit_fused_builtin`, and the call to a declared group is
+`emit_declared_call`. The lines moved verbatim apart from the fused block's
+returns, which answer `Some`, and the declared call's body, which lost one
+level of indent and was formatted again.
+
+The emitted IR of the thirteen benchmarks built from their directories is
+byte-identical before and after. Two rows moved, and I read both as the
+binary's layout, since the emitter writes the same text:
+emit_instructions 5,919,265 -> 5,918,172 and browser_compile_instructions
+243,046,113 -> 243,034,646. Every other row reads what main left it. The
+ratchet mutations `a_call_into_a_loop_left_unbracketed` and
+`a_proven_result_left_unsaid` follow their de-indented lines, and every
+mutation that edits `emit.rs` applies and builds.
