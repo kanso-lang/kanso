@@ -1,0 +1,13 @@
+import "std/list"
+
+# A chain built by folding `.>` onto an effect nests to the left, and each link
+# the native engine runs enters the one inside it. Past the sixty-fourth link
+# that wrote past the end of the runtime's per-depth state and crashed, where
+# the interpreter printed the sum. rg's walk over a directory of a hundred files
+# folds its effects this way.
+fn added chain x
+  chain .> (acc -> effect (acc + x))
+
+steps = list/to_list (list/take (list/iterate 1 (n -> n + 1)) 1000)
+
+pub play = list/fold steps (effect 0) added .> (n -> print "total {n}")

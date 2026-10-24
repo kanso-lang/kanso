@@ -107234,3 +107234,53 @@ site and no output moves. The emitted counts do not move either: each twin
 loses a store at its call and gains one in its slow block. The ratchet row
 `a_sited_call_stamped_anyway` stamps every sited call as well; the run
 program then reads 1,012,744,021, and the instructions gate goes red.
+
+## 2026-10-22 — a short key is found in the token cache without a call
+
+The decoder reads an object's key through `k_b_plain_string_fast`, which finds
+the closing quote and, when no backslash came first, calls
+`k_b_utf8_slice_raw` for the string. A key of four to seven bytes is almost
+always in the token cache, a direct-mapped table of strings keyed by the
+token's bytes and length, so the call usually did a bounds test, a hash and
+two loads. The helper's IR now does the hash and the compare itself and loads
+the cached string when the slot's key matches; anything else, including a key
+that went to the slot beside its own, still takes the call. `k_token_key` and
+`k_token_cache` lose `static` so the emitted code can read them.
+
+The run program's calls into the slice from the key path fall from 784,179 to
+17,501, and it read 997,774,087 -> 977,794,290 here (-2.0%) with the same
+output.
+
+Lifting `k_b_utf8_slice_raw` into the hot unit beside `k_b_find2_raw`, so the
+LTO link could inline it, was tried first and read 997,020,816, because the
+link kept the call. The emitted IR spells the return type `%KValue` and
+clang's unit a literal `{ i64, i64 }`, which may be what stopped it; that was
+not isolated.
+
+CI's rows: work_runbench 997,775,288 -> 977,795,537 (-2.00%), work_jsonbench
+731,748,677 -> 699,198,721 (-4.45%), work_oneshot 11,424,128 -> 11,233,739
+(-1.67%) and work_livebench 1,033,729,698 -> 1,033,539,043. The four
+programs that decode objects carry the inline path and grow: text jsonbench
+373,113 -> 374,057, oneshot 379,641 -> 380,585, livebench 383,177 ->
+384,121 and runbench 722,249 -> 723,129, text 5,238,942 -> 5,242,654 over
+all the binaries. Every program declares the two tables: emitted_lines
+13,104 -> 13,134 and emitted_branches 1,305 -> 1,307 for the decoder,
+emitted_other_lines 158,210 -> 158,320 and emitted_other_branches 16,888 ->
+16,894, module_lines 1,161 -> 1,163, and each compile sample two lines more
+(recursion 451 -> 453, dispatch 350 -> 352, guards 307 -> 309, records 408
+-> 410; lines 1,516 -> 1,524 in all). emit_instructions 6,426,328 -> 6,435,278 and
+codegen_instructions_release 422,367,718 -> 422,642,173 rise, and
+codegen_instructions_dev 116,068,279 -> 116,064,144 falls. In the tab, browser_run_instructions
+31,602,327 -> 31,449,729 falls, and browser_compile_instructions 402,017,479
+-> 402,486,449 and browser_compile_peak_bytes 733,103 -> 735,005 rise. The
+welfare sum rose, and the floor moves 92.28 -> 92.36.
+
+The micro golden `a_short_key_is_found_in_the_cache_in_place` decodes two
+objects with the same fifteen keys, the second reading what the first filled.
+Two of its keys, `aaaz` and `abae`, hash to one slot, so the second goes to
+the slot beside it. Reading the string from the neighbouring slot, or taking
+a slot as a hit without comparing its key, answers one of the two for the
+other, and the golden goes red under both; the first is the ratchet row
+`a_short_key_read_from_the_slot_beside_it`. The row
+`a_short_key_left_to_the_call` sends every key to the call again and turns
+the instructions gate red.
