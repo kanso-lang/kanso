@@ -60,7 +60,7 @@ fn every_float_literal_parses_like_strtod() {
     // runtime declares them
     let el = cut(
         &src,
-        "static const struct { unsigned long long hi, lo; int e2; } k_el_pow10[] = {",
+        "const struct { unsigned long long hi, lo; int e2; } k_el_pow10[] = {",
         "    __builtin_memcpy(&d, &bits, 8);\n    *out = d;\n    return 1;\n}",
     )
     .replace("k_stat_el_parses++;", "");
