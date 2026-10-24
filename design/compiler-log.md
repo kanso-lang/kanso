@@ -1889,3 +1889,24 @@ instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
 Inlined, the record constructor made `json/obj_value` too large to inline
 into `obj_key_start`, so `obj_value` became a call of its own and cost
 58,253,679 where `obj_key_start` gave back 37,835,883.
+
+CI's rows for this branch against the string index's, all taken into the
+goldens:
+
+- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
+  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
+  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
+  work rows fell by 20 to 5,610.
+- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
+  the two bodies the link now inlines at every empty list and map.
+- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
+  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
+  from the rewrap lines `call_pair` writes at each site.
+- The tab's rows rose for the same lines: `browser_compile_instructions`
+  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
+  (+28,146).
+- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
+- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
+  every program that builds an empty list or map.
+- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
+  second decimal, banked.
