@@ -1912,3 +1912,16 @@ as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
 the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
 `__floor_sse41`, three instructions a call on this host, and the cast pair
 cost one more per float.
+
+Three ratchet mutations needed rewriting after the move. The door list is
+five names now, and its mutation reads the length from the source instead of
+writing it down. The cold helpers' mutation strips `preserve_most` from the
+runtime's definitions, and the hot unit declares two of them, the index's
+wide miss and the int parser's tail, with the attribute. Left alone, the
+program would call a definition that no longer saves what its declaration
+promises; the mutation now strips both declarations too, and runbench reads
+801,182,221 with identical output. The row that inlined the index's two cold
+arms back into it is retired. The program's index is now the hot unit's
+copy, which holds only a declaration of the wide miss, so nothing in the
+runtime can put that arm back in the walk's frame. Inlining both arms in the
+runtime read 797,121,834, below the branch's 797,155,085.
