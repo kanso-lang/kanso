@@ -106963,3 +106963,110 @@ and book_quotes refused it once the encoder stopped naming `keys` and `values`;
 it now shows the map going in whole with its count. The ratchet row
 `a_map_entry_read_through_the_c` sends `key_at` to the C and turns the emitted
 gate red.
+
+## 2026-10-22 — a JSON string value goes out in one claim
+
+The encoder wrote a string value as an opening quote, `escape_onto` and a
+closing quote. `escape_onto` scanned the string for a byte that needs escaping
+and either appended it as it stands or handed it to `append_escaped`, which
+scanned it again as it escaped it. On the run program's document 1,773 of every
+2,114 string values need escaping. They average 16 bytes with 2.6 escapes each,
+so most values paid for both scans. `builtin_append_string acc s` now writes the
+quotes and the escaped bytes in one call. Where the builder is at its frontier
+with room for the worst case, the C writes the quote, escapes straight into the
+builder and writes the closing quote. A value the decoder shared as a clean
+token takes the same inline path as a key, with a closing quote where a key has
+`":`. The interpreter's arm writes the same bytes.
+
+Measured here, on top of the map read, the run program read 1,039,464,472 ->
+1,028,684,506 (-1.04%) with the same output, and the interpreted corpus read
+401,548,849 -> 384,232,761 instructions and 420,781 -> 400,588 allocations.
+
+CI's rows: work_runbench 1,039,465,659 -> 1,028,685,693 (-1.04%), work_livebench
+1,219,792,784 -> 1,172,094,931 (-3.9%) and work_oneshot 11,902,783 -> 11,785,186
+(-0.99%); work_encodebench 2,456,797,749 -> 2,456,797,637. The counters:
+find2_calls falls in run (1,667,049 -> 1,488,669), live (807,837 -> 15,037) and
+oneshot (17,019 -> 15,037), since a value no longer passes through escape_onto's
+scan, and append_fast falls in the same three, the quote appends no longer made
+one at a time: run_append_fast 5,737,050 -> 5,328,270, live_append_fast
+25,498,000 -> 23,681,200 and oneshot_append_fast 63,745 -> 59,203.
+interp_instructions 401,548,849 -> 384,232,761, interp_allocs 420,781 -> 400,588
+and interp_peak_bytes 616,944 -> 608,798. The library is smaller to compile:
+compile_instructions 24,218,897 -> 23,713,618, entry_instructions 75,050,737 ->
+74,424,236, library_instructions 74,724,744 -> 74,085,135, compile_allocs 13,427
+-> 13,179, front_end_visits 7,010 -> 6,914 and compile_peak_bytes 575,175 ->
+565,175, and codegen_instructions_release 422,550,641 -> 422,357,890. The
+runtime's C entry adds about 5,000 bytes of text to every program (text
+jsonbench 367,721 -> 372,777, runbench 720,681 -> 721,209), and
+codegen_instructions_dev 116,025,482 -> 116,064,263 and emit_instructions
+6,341,758 -> 6,364,404 rise with the path. Emitted code: the decoder's
+emitted_lines 13,098 -> 13,102; runbench, oneshot and livebench lose
+escape_onto's steps (runbench defines 782 -> 778, calls 7,376 -> 7,357, lines
+56,741 -> 56,666) and gain 5 branches (6,410 -> 6,415); the compile corpus's
+lines 1,492 -> 1,508 and module_lines 1,155 -> 1,159; in all,
+emitted_other_branches 16,882 -> 16,897 and text 5,179,630 -> 5,236,430. In the
+tab, browser_run_instructions 32,722,014 -> 32,241,456 (-1.5%),
+browser_compile_instructions 412,895,911 -> 406,640,369 (-1.5%) and
+browser_compile_peak_bytes 735,564 -> 732,776 fall. The welfare sum rose, and
+the floor moves 92.07 -> 92.13.
+
+The micro golden `a_string_value_goes_out_between_its_quotes` decodes and
+encodes string values at the edges twice: empty, one byte, seven and eight
+bytes, `été`, an escaped `\u00e9`, and tokens with a quote, a backslash or a
+tab. With the inline path's length short by one, the clean tokens lost their
+closing quotes; with the C's closing quote replaced, the values it wrote showed
+the replacement. The ratchet row `a_string_value_claimed_three_times` writes
+values the old way and turns the emitted gate red. The book's chapter 08 panel
+showed the string arm as `_escape_onto` and called its sample the library's
+escape functions verbatim, which stopped being true when escaping moved to the
+runtime; it now shows the one call and says what the runtime does.
+
+The ratchet row `a_clean_token_scanned_anyway` went blind with this change.
+It turns off the clean-token skip in `find2_below`, which served
+`escape_onto`, and the run program's values no longer reach `escape_onto`.
+encodebench's own copy of lib/json still sends every string through it, so the
+row now gates on the encode vein, where the mutation moves `find2_calls`
+803,275 -> 4,200,475.
+
+## 2026-10-22 — a map entry's key and value are read with one test
+
+`entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
+(builtin_value_at m i)`, and each read tested the map's view on its own: the
+tags, the view pointer and its mark, and the bounds. Where one call's
+arguments read a key and then a value of the same local map at the same local
+position, the emitter now calls `k_b_entry_pair_fast` once. It tests the view,
+returns the key and stores the value into a slot in the caller's frame, which
+the call's next argument loads. A view that is missing or marked goes to the
+C for both reads, as each read did alone. The pair is found in both places the
+emitter writes a call's arguments, the plain call and the tail call, and
+`entry_onto`'s call is a tail call.
+
+Measured here, the run program read 1,028,684,506 -> 1,018,405,282 (-1.0%)
+with the same output.
+
+CI's rows: work_runbench 1,028,685,693 -> 1,018,406,469 (-1.0%),
+work_livebench 1,172,094,931 -> 1,126,408,749 (-3.9%) and work_oneshot
+11,785,186 -> 11,669,620 (-1.0%). The three programs that encode objects lose
+one define, two calls and three branches each and are smaller (text runbench
+721,209 -> 720,921, oneshot 380,633 -> 380,393, livebench 384,409 ->
+384,169; emitted runbench lines 56,666 -> 56,634, oneshot 13,898 -> 13,866,
+livebench 14,221 -> 14,189). Every other program carries the helper's two
+lines (emitted_lines 13,102 -> 13,104 for the decoder, and +2 in the others),
+the compile corpus's lines move by two each (recursion 449 -> 451, dispatch
+348 -> 350, guards 305 -> 307, records 406 -> 408; lines 1,508 -> 1,516) and
+module_lines 1,159 -> 1,161.
+codegen_instructions_dev 116,064,263 -> 116,067,612,
+codegen_instructions_release 422,357,890 -> 422,361,029 and
+emit_instructions 6,364,404 -> 6,377,706 rise with them. In the tab,
+browser_run_instructions 32,241,456 -> 31,991,504 and
+browser_compile_instructions 406,640,369 -> 406,222,752 fall, and
+browser_compile_peak_bytes rises 732,776 -> 733,266. The welfare sum rose, and
+the floor moves 92.13 -> 92.17.
+
+The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
+witness for its bytes: with the value loaded from the key's slot, every value
+printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
+and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
+`key_at_fast` and read BLIND once the pair took every key the encoder reads;
+it now sends the pair to the C, which reads the run program 935,900,947 ->
+967,870,853, and it gates the instructions vein.

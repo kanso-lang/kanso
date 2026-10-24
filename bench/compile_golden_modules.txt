@@ -8,4 +8,4 @@
 #
 # Regenerate with KANSO_REGEN_COMPILE_GOLDEN=1, which keeps this header, and
 # say in design/compiler-log.md which way each row went and why.
-module lines=1171 calls=111 branches=82 defines=30 rounds=4 visits=1368
+module lines=1181 calls=111 branches=82 defines=30 rounds=4 visits=1368

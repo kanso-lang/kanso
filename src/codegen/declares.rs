@@ -36,6 +36,12 @@ done:
 @k_token_key = external global i64
 @k_token_cache = external global %KValue
 
+; A claim on a builder asks for room before it reads the buffer's header. A
+; borrowed view has cap 0, so its room (cap & -2) is 0 and the room test fails
+; before the header, which only an owned buffer has, is read. A separate test
+; for cap 0 ahead of it was two instructions an append. A claim whose room
+; test adds only a length, which may be zero, keeps that test: an empty append
+; to an empty view would pass the room test alone.
 define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x, ptr %site) alwaysinline {
   %atag = extractvalue %KValue %acc, 0
   %isb = icmp eq i64 %atag, 13
@@ -57,17 +63,14 @@ fast:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %capa
+  br i1 %fits, label %fr, label %slow
 fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %roomat, label %slow
-roomat:
-  %len1 = add i64 %len, 1
-  %fits = icmp sle i64 %len1, %capa
-  br i1 %fits, label %claim, label %slow
+  br i1 %atfront, label %claim, label %slow
 claim:
   %left = load i64, ptr @k_arena_left
   %has = icmp uge i64 %left, 32
@@ -273,17 +276,14 @@ bfast:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %bfr, label %slow
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %capa
+  br i1 %fits, label %bfr, label %slow
 bfr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %roomat, label %slow
-roomat:
-  %len1 = add i64 %len, 1
-  %fits = icmp sle i64 %len1, %capa
-  br i1 %fits, label %bwrite, label %slow
+  br i1 %atfront, label %bwrite, label %slow
 bwrite:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -316,17 +316,14 @@ fast:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
+  %len2 = add i64 %len, 2
+  %fits = icmp sle i64 %len2, %capa
+  br i1 %fits, label %fr, label %slow
 fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %roomat, label %slow
-roomat:
-  %len2 = add i64 %len, 2
-  %fits = icmp sle i64 %len2, %capa
-  br i1 %fits, label %write, label %slow
+  br i1 %atfront, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -399,17 +396,14 @@ claim:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
+  %len11 = add i64 %len, 11
+  %fits = icmp sle i64 %len11, %capa
+  br i1 %fits, label %fr, label %slow
 fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %room, label %slow
-room:
-  %len11 = add i64 %len, 11
-  %fits = icmp sle i64 %len11, %capa
-  br i1 %fits, label %write, label %slow
+  br i1 %atfront, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   store i8 34, ptr %dst
@@ -470,17 +464,14 @@ claim:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
+  %len11 = add i64 %len, 11
+  %fits = icmp sle i64 %len11, %capa
+  br i1 %fits, label %fr, label %slow
 fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %room, label %slow
-room:
-  %len11 = add i64 %len, 11
-  %fits = icmp sle i64 %len11, %capa
-  br i1 %fits, label %write, label %slow
+  br i1 %atfront, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   store i8 34, ptr %dst
@@ -668,17 +659,14 @@ fast:
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
+  %len8 = add i64 %len, 8
+  %fits = icmp sle i64 %len8, %capa
+  br i1 %fits, label %fr, label %slow
 fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  br i1 %atfront, label %roomat, label %slow
-roomat:
-  %len8 = add i64 %len, 8
-  %fits = icmp sle i64 %len8, %capa
-  br i1 %fits, label %write, label %slow
+  br i1 %atfront, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   store i64 %word, ptr %dst, align 1
@@ -1789,8 +1777,8 @@ declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
-declare %KValue @k_list_empty()
-declare %KValue @k_map_empty()
+declare { i64, i64 } @k_list_empty()
+declare { i64, i64 } @k_map_empty()
 declare %KValue @k_closure(ptr, i64, i64, ptr, ptr)
 declare %KValue @k_closure_lit(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
