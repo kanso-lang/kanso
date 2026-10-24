@@ -163,7 +163,11 @@ fn prune_shipped(
     let mut decls: Vec<Decl> = Vec::new();
     for (f, (_, source)) in sources.iter().enumerate() {
         let mut at = 0;
-        for line in source.split_inclusive('\n') {
+        // Lines a word at a time, as `codegen::ir_defines` reads IR:
+        // `split_inclusive` called memchr once a line.
+        while at < source.len() {
+            let end = crate::compare::byte_from(source.as_bytes(), at, b'\n');
+            let line = &source[at..(end + 1).min(source.len())];
             let here = at;
             at += line.len();
             let first = line.as_bytes().first().copied().unwrap_or(b'\n');

@@ -1967,6 +1967,9 @@ fn hot_source_of(runtime: &str) -> String {
         "KValue k_b_slice_raw(const unsigned char* data, long long len, long long from, long long to);\n",
         "extern long long k_stat_el_parses;\n",
         "extern const struct { unsigned long long hi, lo; int e2; } k_el_pow10[];\n",
+        "extern int k_stats_on;\n",
+        "__attribute__((noinline, cold)) KValue k_list_empty_slow(void);\n",
+        "__attribute__((noinline, cold)) KValue k_map_empty_slow(void);\n",
     ));
     // Each definition is found by its name and taken from the start of the
     // line that names it, attribute and all. The two scanners are matched on
@@ -2022,6 +2025,28 @@ fn hot_source_of(runtime: &str) -> String {
         "static inline __attribute__((always_inline)) KValue\nk_to_float_text(const char* data, long long len, long long room, const char* origin) {",
         "\n}\n",
     ));
+    // The empty list and map, which the decoder makes at every array and
+    // object it opens: the headers, the seed sizes and the two layouts.
+    for (start, end) in [
+        ("typedef struct { long long capw; long long used; } KBuf;", "\n"),
+        ("typedef struct { long long len; KValue* items; } KList;", "\n"),
+        ("typedef struct {\n    long long len;        /* raw appended", "} KMap;\n"),
+        ("static long long k_ptr(void* p) {", "\n"),
+        ("#define K_LIST_SEED 6", "~(size_t)15))\n"),
+        ("#define K_MAP_SEED 10", "~(size_t)15))\n"),
+    ] {
+        out.push_str(hot_text(runtime, start, end));
+    }
+    for start in [
+        "static inline void k_buf_set_cap(KBuf* b, long long cap, int malloced) {",
+        "static inline __attribute__((always_inline)) KValue k_list_seed(unsigned char* whole) {",
+        "static inline __attribute__((always_inline)) KValue k_map_seed(unsigned char* whole) {",
+        "KValue k_list_empty(void) {",
+        "KValue k_map_empty(void) {",
+    ] {
+        out.push_str(inline_only(start));
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
+    }
     for start in [
         "KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
         "KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
@@ -2044,7 +2069,7 @@ fn hot_source_of(runtime: &str) -> String {
     out
 }
 
-const INLINE_ONLY: [&str; 8] = [
+const INLINE_ONLY: [&str; 10] = [
     "k_beat_iter(",
     "k_beat_push(",
     "k_b_find2_raw(",
@@ -2053,6 +2078,8 @@ const INLINE_ONLY: [&str; 8] = [
     "k_b_number_span_raw(",
     "k_b_to_int_slice_raw(",
     "k_b_to_float_slice_raw(",
+    "k_list_empty(",
+    "k_map_empty(",
 ];
 
 /// `inline ` for the definitions runtime.c also compiles as machine code, so
@@ -2622,6 +2649,8 @@ mod the_hot_unit_is_taken_from_the_runtime {
             "k_b_number_span_raw",
             "k_b_to_int_slice_raw",
             "k_b_to_float_slice_raw",
+            "k_list_empty",
+            "k_map_empty",
         ] {
             assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
         }
