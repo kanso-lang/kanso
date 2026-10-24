@@ -21,94 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-21 — a map is written from its entries in place
-
-`encode_map` took a map's two columns, `keys m` and `values m`, which
-`k_b_columns` built as two lists in one allocation per map, and indexed both.
-Three library builtins now read a map where it stands: `entry_count m`, `key_at
-m i` and `value_at m i`. A map's sorted view is `[k v k v ...]`, so where the
-view is built the count is a field and each read is a bounds test and one load,
-written inline; a missing or marked view goes to the C, which builds the view
-first. The encoder takes the map and its count and reads each pair by position,
-and no list is made.
-
-The count stays an argument at the call in `encode_onto`, `encode_map acc m
-(builtin_entry_count m)`, where the columns were. The beat analysis treats
-`entry_count` as allocating, since it may build the view, so the region around a
-map's encoding stays one per map. Two other shapes were measured on the way.
-With the count bound inside `encode_map`, the pair loop became a beat loop and
-`k_beat_pop` cost 17.9M more. With `entry_count` treated as pure, the regions
-went (-10.7M) but the output builder grew by an arena copy at each doubling
-instead of `realloc` (+24.7M memcpy): inside the region its header sits below
-the innermost mark and stays in the malloc regime, and without it the header is
-above the encode loop's mark.
-
-A map past eight entries is a B-tree in the interpreter, where reaching the i-th
-entry walks i of them. The interpreter keeps the entries in order for the last
-such map `key_at` or `value_at` read, holding the map weakly, so the count `put`
-asks before writing in place is unchanged, and a `put` that writes in place at a
-site linearity proved empties the cache first. No fixture reaches that write
-after a read: linearity refuses the `put` that follows a read of the same map,
-natively and in the interpreter. The native side-view test is in the same
-position: a side forms only when an in-place `put` lands in the middle of a
-built view of 64 entries or more, and three loop shapes tried here did not write
-in place.
-
-Measured here, on top of the key builtin, the run program read 1,049,790,947 ->
-1,039,464,472 (-0.98%) with the same output: `k_b_columns` (25.0M) is gone and
-`encode_map` rose 14.3M with the reads.
-
-CI's rows: work_runbench 1,049,792,134 -> 1,039,465,659 (-0.98%), work_livebench
-1,272,755,954 -> 1,219,792,784 (-4.2%) and work_oneshot 11,997,046 -> 11,902,783
-(-0.79%). work_encodebench rises 2,456,796,902 -> 2,456,797,749, by 847, with
-the runtime's layout; it carries its own copy of lib/json. The allocation
-counters fall where objects are encoded: run allocs 1,696,484 -> 1,447,994,
-alloc_bytes 289,219,396 -> 249,236,356 and sh_buf 119,198,704 -> 87,167,344;
-live allocs 1,118,314 -> 13,914, alloc_bytes 413,053,904 -> 235,351,504 and
-sh_buf 143,161,328 -> 799,728; oneshot allocs 10,292 -> 7,531, alloc_bytes
-2,234,774 -> 1,790,518 and sh_buf 1,155,632 -> 799,728. interp_instructions
-402,108,616 -> 401,548,849 and interp_allocs 423,390 -> 420,781 fall, and
-interp_peak_bytes rises 616,817 -> 616,944, the cached entries of a large map.
-The three inline paths add 320 bytes of text to every program and about 3,400 to
-the three that encode objects (text runbench 717,129 -> 720,681), and
-codegen_instructions_dev 115,971,597 -> 116,025,482,
-codegen_instructions_release 422,279,602 -> 422,550,641, emit_instructions
-6,307,623 -> 6,341,758, entry_instructions 75,007,797 -> 75,050,737 and
-library_instructions 74,686,591 -> 74,724,744 rise with them.
-compile_instructions 24,227,124 -> 24,218,897, compile_allocs 13,434 -> 13,427
-and front_end_visits 7,047 -> 7,010 fall, and compile_peak_bytes rises 575,051
--> 575,175. Emitted code: the decoder's emitted_lines 13,089 -> 13,098;
-runbench, oneshot and livebench gain 5 defines and lose 27 branches (runbench
-56,839 -> 56,741 lines, 6,437 -> 6,410 branches); the compile corpus's lines
-1,456 -> 1,492 and module_lines 1,146 -> 1,155; in all, emitted_other_defines
-2,154 -> 2,169 and text 5,165,726 -> 5,179,630. In the tab,
-browser_run_instructions 33,548,279 -> 32,722,014 (-2.5%) and
-browser_compile_peak_bytes 738,682 -> 735,564 fall, and
-browser_compile_instructions rises 412,842,483 -> 412,895,911. The welfare sum
-rose, and the floor moves 92.03 -> 92.07.
-
-The micro golden `a_map_is_encoded_from_its_entries_in_place` covers an empty
-map, two maps past eight entries read one after the other, and a small and a
-large map read, extended by a `put` and read again; with the interpreter's cache
-keyed by nothing, the second large map printed the first's entries. The mem
-fixture that pinned the fused columns through the encoder is renamed
-`a_written_map_allocates_no_columns` (3,022 -> 2,022 allocations), and
-`a_maps_two_columns_are_one_allocation` now calls `keys` and `values` itself, so
-the fusion keeps a witness; `the_two_columns_asked_apart` still turns the mem
-vein red. Its rows are re-based, since the name now holds a different program:
-a_maps_two_columns_are_one_allocation_allocs 3,022 -> 4,005, a thousand pairs of
-lists and the maps they come from; and
-a_maps_two_columns_are_one_allocation_append_fast 12,007 -> 0,
-a_maps_two_columns_are_one_allocation_append_rendered 2,000 -> 0,
-a_maps_two_columns_are_one_allocation_push_mut_fast 995 -> 0,
-a_maps_two_columns_are_one_allocation_bytes_freed 8 -> 0 and
-a_maps_two_columns_are_one_allocation_utf8_zerocopy 1 -> 0, since it encodes
-nothing. The book's chapter 08 panel showed the map going in as its two columns,
-and book_quotes refused it once the encoder stopped naming `keys` and `values`;
-it now shows the map going in whole with its count. The ratchet row
-`a_map_entry_read_through_the_c` sends `key_at` to the C and turns the emitted
-gate red.
-
 ## 2026-10-22 — a JSON string value goes out in one claim
 
 The encoder wrote a string value as an opening quote, `escape_onto` and a
@@ -1930,3 +1842,48 @@ In this container runbench fell from 804,149,817 to 797,455,326 instructions
 (-0.83%), with byte-identical output, and neither parser is called anywhere
 in the program. The ratchet row `slice_parsers_inline` takes both
 `always_inline`s away and reads 805,258,746.
+
+## 2026-10-24 — the hot unit's copies made inline-only
+
+CI's first reading of this branch put the release codegen row at 468,610,053
+against main's 425,508,082, +10.1%. All of it was in `ld.lld`. The corpus
+program calls none of the new helpers, so none of it was inlining. The hot
+unit defined each helper as an ordinary function, so every release link
+optimized it and compiled it to machine code whether the program called it
+or not. Main paid the same for the four helpers the unit already held.
+
+Each helper is now compiled into the cached runtime as machine code, and the
+hot unit's copy is a C99 inline definition, which clang emits as
+`available_externally`. The link inlines it where the program calls it and
+drops it everywhere else. Clang emits an inline definition only where its
+unit refers to it, so the unit ends with a table that refers to all eight.
+The table has external linkage, which keeps it through the unit's own
+compile, and nothing reads it, so the link removes it. With `used` on the
+table, the link kept all the bodies and optimized them. `K_HOT_ELSEWHERE`
+has no users left and is gone.
+
+Linking the codegen corpus alone, `ld.lld` read 252,430,133 on main,
+295,287,065 with the eight helpers defined outright, and 187,756,033 with
+the eight inline, 25.6% under main. runbench reads 797,155,085, 300,195
+below the eight defined outright, with byte-identical output, and the program
+calls none of the eight.
+
+Two fixes came with it. The hot object's cache key was the runtime's digest
+alone, so a change to `hot_source_of` reused an object the old recipe made;
+the key now also carries a digest of `src/main.rs`. And the hot source was
+built on every release build to be handed to a cache that nearly always had
+it. It is built now only on a miss, and kanso's own process on the corpus
+build fell from 74,931,992 to 30,665,523 instructions.
+
+The four ratchet rows that took an `always_inline` away now put `noinline` in
+its place, since an inline copy without the attribute can still be inlined at
+the link's threshold of 2000. Dry-run on a copy against 797,155,085, with the
+same output each time: `index_inline` reads 800,950,764,
+`number_span_inline` 804,913,953, `slice_parsers_inline` 804,964,001, and
+the byte scanners' row 822,443,871.
+
+Measured and set aside: the renderer's whole-float test without `floor`,
+as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
+the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
+`__floor_sse41`, three instructions a call on this host, and the cast pair
+cost one more per float.
