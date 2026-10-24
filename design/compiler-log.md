@@ -2148,4 +2148,7 @@ On `bench/interp_corpus`, in this container at the golden's rustc, the tab's
 compile fell from 235,063,784 to 227,562,045 instructions (-3.2%). Its peak
 and the run did not move, since the corpus's module holds no trampoline.
 Native IR is unchanged. The ratchet row `the_tab_narrowing_its_tail_calls`
-narrows the tab's pieces again.
+narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
+against the 5,863,976 the assume change left it, a move of 178; the dev
+build that row counts still narrows its module, and writes the same text.
+CI's browser rows matched this container's.
