@@ -42,8 +42,9 @@ impl Written {
             ]);
         }
         let queries: crate::hash::Set<&str> = symbols.iter().map(|s| s.as_str()).collect();
+        let leads = leads_of(&queries);
         !queries.is_empty()
-            && self.pieces.iter().any(|piece| !queries_named(piece, &queries).is_empty())
+            && self.pieces.iter().any(|piece| !queries_named(piece, &queries, &leads).is_empty())
     }
 
     /// The module as one text, for clang: the pieces `finish_pieces` gives,

@@ -21,56 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — the ratchet in four files
-
-`scripts/ratchet/ratchet.kso` was 6,316 lines, the largest source file in the
-tree (#2021). It is now a directory module, `scripts/ratchet/ratchet/`: the
-types, helpers and runner in `ratchet.kso`, and the three chains of rows,
-`rows_a`, `rows_b` and `rows_c`, in files of their own. Every line is where it
-was, in the same order, with one import of std/list added to each new file.
-The tests that read the rows now read every file of the module through
-`tests/support/ratchet.rs`, and the one that stages the ratchet copies the
-whole directory. `every_ratchet_row_is_run` went red when `rows_c` stopped
-joining its last row, so it reads the new files.
-
-## 2026-10-20 — an interpolated int counts its digits once
-
-`"{i}"` on an int goes through `k_b_render_value`, which sized the string
-with `ryu_declen` and then called `k_itoa`, which ran the same ladder of
-comparisons again before writing the digits. The run program's pend phase
-renders 200,000 ints this way. The digit writer is now `k_digits_into`,
-which takes the end its caller worked out, and `k_itoa` is a short wrapper
-over it. The other kinds of value move to an out-of-line function, so the
-int path no longer saves six registers for paths it never takes. Here the
-run program read 1,104,506,031 -> 1,100,103,349 instructions (-0.40%), and
-`k_b_render_value` 18,309,116 -> 13,884,015. CI's rows: work_runbench
-1,104,507,218 -> 1,100,104,536 (-0.40%) and work_pendbench 194,089,023 ->
-176,534,752 (-9.04%), the benchmark the run program's pend phase is drawn
-from; the rest move by layout alone, work_oneshot 12,450,839 -> 12,451,007,
-work_livebench 1,370,616,792 -> 1,370,617,002, work_encodebench
-2,464,678,011 -> 2,464,677,731, work_basket 31,162,888 -> 31,162,668,
-work_widebench 28,740,098 -> 28,740,070 and work_deepbench 406,819,866 ->
-406,819,829. Machine code shrinks: text 5,287,022 -> 5,281,870.
-codegen_instructions_dev 116,001,189 -> 116,002,877 and
-codegen_instructions_release 453,686,073 -> 453,797,745 count the runtime
-object's new shape. In the tab browser_run_instructions reads 34,316,072 ->
-34,136,382.
-
-The micro golden `an_interpolated_int_renders_at_every_width` renders each
-width where the digit count changes, signs, and both ends of the word, and
-reads `+1` where it wants `-1` when the sign is written wrong.
-
-Replacing the `floor()` in the float renderer's integral test with a round
-trip through int64 was measured and dropped: glibc picks its SSE4.1 `floor`
-at load time, which costs about three instructions, and the round trip made
-`k_b_append_rendered` 755,725 instructions dearer.
-
-Writing an int straight into the builder in `k_b_append_rendered`, with the
-float path moved out of line the same way, was measured and dropped too: it
-read the run program 1,100,103,349 -> 1,104,459,315 and encodebench
-2,464,678,011 -> 2,484,039,482, because every float paid the extra call
-level and floats are half of what the encoder renders.
-
 ## 2026-10-21 — a carried record returns in three words
 
 A two-field record whose first field is an int, like the decoder's
@@ -2117,3 +2067,50 @@ tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
 per-function count of `docs/kanso.wasm` built with its names: the tokenizer
 was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
 2.2%.
+
+## 2026-10-24 — the tab's bcmp answers equality alone
+
+The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
+`kanso::compare::bytes`. A per-function count of `docs/kanso.wasm` built
+with its names showed the result of one body under two names: every compare
+in the tab's compile of its corpus called `memcmp`, and `memcmp` called
+`bcmp`, 154,063 times, together 4.2% of the compile. `bcmp` now has a body of
+its own, `compare::differ`, which answers equality alone. In the wasm built
+from this tree nothing on that path calls `bcmp`; `memcmp` runs the compare
+itself, and the call through to the second function is gone.
+
+The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
+this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
+`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
+on every position of every length up to 24; skipping the last word of a run
+longer than eight turned both red. The ratchet row `equal_bcmp` gives `bcmp`
+the ordering body again, and the compile reads 222,368,963.
+
+The calls come from `==` on strings, which reaches `memcmp` even against a
+short literal: the type names in `P::ty` and the attribute words in
+`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
+keys built from their bytes cost more than it saved, 222,368,963 ->
+222,475,311 on the tree before this change, and was set aside.
+
+## 2026-10-24 — a name no query starts like is passed over
+
+`queries_named` reads every `@name` in a text, measures it and looks it up in
+a set of names the caller asks about. It runs over every definition block in
+the prune and over every piece when the tab checks whether its emit named a
+group it left out. Most of a module's ats are runtime calls, string cells and
+intrinsics, `@k_`, `@s`, `@llvm.`, and the names asked about are the
+program's own groups, so the callers now build a table of the bytes their
+names start with, once per set, and the scan passes over a name whose first
+byte is not in it before measuring or hashing it.
+
+The tab's compile of its corpus fell from 221,598,648 to 220,923,375
+instructions (-0.30%) in this container, and the tab's IR and the native IR
+of the benchmarks in both tiers are byte-identical. Removing the check
+outright would have saved 1,751,745, the ceiling for this scan in the tab's
+miss check. Building the table inside `queries_named` instead, once per
+block, cost 680,432 more than it saved. The ratchet row `query_leads` admits
+every byte and reads 221,611,521.
+
+On CI the dev build's emit fell with the prune's scan, emit_instructions
+5,690,029 -> 5,651,244, and the browser rows of both changes matched this
+container's. Every other row reads what main left it.

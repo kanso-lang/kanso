@@ -71,7 +71,7 @@ pub unsafe extern "C" fn memcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
 #[cfg(target_arch = "wasm32")]
 #[no_mangle]
 pub unsafe extern "C" fn bcmp(a: *const u8, b: *const u8, n: usize) -> i32 {
-    unsafe { kanso::compare::bytes(a, b, n) }
+    unsafe { kanso::compare::differ(a, b, n) }
 }
 
 /// mimalloc's `mi_option_arena_eager_commit`, by its position in the

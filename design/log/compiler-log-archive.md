@@ -106577,3 +106577,53 @@ work_oneshot 12,450,839, work_livebench 1,370,616,792 and work_encodebench
 changes' 32 bytes a program on top of the key's; and
 codegen_instructions_dev reads 116,001,189 under the fixed order, the three
 changes' cost over main's 115,822,620.
+
+## 2026-10-20 — the ratchet in four files
+
+`scripts/ratchet/ratchet.kso` was 6,316 lines, the largest source file in the
+tree (#2021). It is now a directory module, `scripts/ratchet/ratchet/`: the
+types, helpers and runner in `ratchet.kso`, and the three chains of rows,
+`rows_a`, `rows_b` and `rows_c`, in files of their own. Every line is where it
+was, in the same order, with one import of std/list added to each new file.
+The tests that read the rows now read every file of the module through
+`tests/support/ratchet.rs`, and the one that stages the ratchet copies the
+whole directory. `every_ratchet_row_is_run` went red when `rows_c` stopped
+joining its last row, so it reads the new files.
+
+## 2026-10-20 — an interpolated int counts its digits once
+
+`"{i}"` on an int goes through `k_b_render_value`, which sized the string
+with `ryu_declen` and then called `k_itoa`, which ran the same ladder of
+comparisons again before writing the digits. The run program's pend phase
+renders 200,000 ints this way. The digit writer is now `k_digits_into`,
+which takes the end its caller worked out, and `k_itoa` is a short wrapper
+over it. The other kinds of value move to an out-of-line function, so the
+int path no longer saves six registers for paths it never takes. Here the
+run program read 1,104,506,031 -> 1,100,103,349 instructions (-0.40%), and
+`k_b_render_value` 18,309,116 -> 13,884,015. CI's rows: work_runbench
+1,104,507,218 -> 1,100,104,536 (-0.40%) and work_pendbench 194,089,023 ->
+176,534,752 (-9.04%), the benchmark the run program's pend phase is drawn
+from; the rest move by layout alone, work_oneshot 12,450,839 -> 12,451,007,
+work_livebench 1,370,616,792 -> 1,370,617,002, work_encodebench
+2,464,678,011 -> 2,464,677,731, work_basket 31,162,888 -> 31,162,668,
+work_widebench 28,740,098 -> 28,740,070 and work_deepbench 406,819,866 ->
+406,819,829. Machine code shrinks: text 5,287,022 -> 5,281,870.
+codegen_instructions_dev 116,001,189 -> 116,002,877 and
+codegen_instructions_release 453,686,073 -> 453,797,745 count the runtime
+object's new shape. In the tab browser_run_instructions reads 34,316,072 ->
+34,136,382.
+
+The micro golden `an_interpolated_int_renders_at_every_width` renders each
+width where the digit count changes, signs, and both ends of the word, and
+reads `+1` where it wants `-1` when the sign is written wrong.
+
+Replacing the `floor()` in the float renderer's integral test with a round
+trip through int64 was measured and dropped: glibc picks its SSE4.1 `floor`
+at load time, which costs about three instructions, and the round trip made
+`k_b_append_rendered` 755,725 instructions dearer.
+
+Writing an int straight into the builder in `k_b_append_rendered`, with the
+float path moved out of line the same way, was measured and dropped too: it
+read the run program 1,100,103,349 -> 1,104,459,315 and encodebench
+2,464,678,011 -> 2,484,039,482, because every float paid the extra call
+level and floats are half of what the encoder renders.
