@@ -63,8 +63,8 @@ pub unsafe fn bytes(a: *const u8, b: *const u8, n: usize) -> i32 {
 
 /// `bcmp`: zero when the first `n` bytes at `a` and `b` agree, and one when
 /// they do not. `==` on two slices asks only that, so no byte's order is
-/// found. When `bcmp` was `bytes` too, every compare in the tab's compile went
-/// through `memcmp` into `bcmp`, 4.2% of the compile on its corpus.
+/// found. While `bcmp` was `bytes` too, the two shared one body, and every
+/// compare in the tab's compile called `memcmp`, which called `bcmp`.
 ///
 /// # Safety
 /// `a` and `b` must each be valid for reads of `n` bytes.

@@ -1,7 +1,8 @@
 #!/bin/sh
 # The tab's bcmp answers equality alone, from a body of its own. This
-# mutation makes it the ordering compare again, which the linker folds into
-# memcmp. Same answers, and the browser compile row reads heavier.
+# mutation gives it memcmp's ordering body again, and with one body under two
+# names every compare went through memcmp into bcmp. Same answers, and the
+# browser compile row reads heavier.
 set -e
 t='    unsafe { kanso::compare::differ(a, b, n) }'
 [ "$(grep -cxF "$t" src/main.rs)" -eq 1 ] || {
