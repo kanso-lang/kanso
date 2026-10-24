@@ -107027,3 +107027,46 @@ It turns off the clean-token skip in `find2_below`, which served
 encodebench's own copy of lib/json still sends every string through it, so the
 row now gates on the encode vein, where the mutation moves `find2_calls`
 803,275 -> 4,200,475.
+
+## 2026-10-22 — a map entry's key and value are read with one test
+
+`entry_onto` reads a pair as `pair_onto acc (builtin_key_at m i)
+(builtin_value_at m i)`, and each read tested the map's view on its own: the
+tags, the view pointer and its mark, and the bounds. Where one call's
+arguments read a key and then a value of the same local map at the same local
+position, the emitter now calls `k_b_entry_pair_fast` once. It tests the view,
+returns the key and stores the value into a slot in the caller's frame, which
+the call's next argument loads. A view that is missing or marked goes to the
+C for both reads, as each read did alone. The pair is found in both places the
+emitter writes a call's arguments, the plain call and the tail call, and
+`entry_onto`'s call is a tail call.
+
+Measured here, the run program read 1,028,684,506 -> 1,018,405,282 (-1.0%)
+with the same output.
+
+CI's rows: work_runbench 1,028,685,693 -> 1,018,406,469 (-1.0%),
+work_livebench 1,172,094,931 -> 1,126,408,749 (-3.9%) and work_oneshot
+11,785,186 -> 11,669,620 (-1.0%). The three programs that encode objects lose
+one define, two calls and three branches each and are smaller (text runbench
+721,209 -> 720,921, oneshot 380,633 -> 380,393, livebench 384,409 ->
+384,169; emitted runbench lines 56,666 -> 56,634, oneshot 13,898 -> 13,866,
+livebench 14,221 -> 14,189). Every other program carries the helper's two
+lines (emitted_lines 13,102 -> 13,104 for the decoder, and +2 in the others),
+the compile corpus's lines move by two each (recursion 449 -> 451, dispatch
+348 -> 350, guards 305 -> 307, records 406 -> 408; lines 1,508 -> 1,516) and
+module_lines 1,159 -> 1,161.
+codegen_instructions_dev 116,064,263 -> 116,067,612,
+codegen_instructions_release 422,357,890 -> 422,361,029 and
+emit_instructions 6,364,404 -> 6,377,706 rise with them. In the tab,
+browser_run_instructions 32,241,456 -> 31,991,504 and
+browser_compile_instructions 406,640,369 -> 406,222,752 fall, and
+browser_compile_peak_bytes rises 732,776 -> 733,266. The welfare sum rose, and
+the floor moves 92.13 -> 92.17.
+
+The map golden `a_map_is_encoded_from_its_entries_in_place` is the pair's
+witness for its bytes: with the value loaded from the key's slot, every value
+printed as its key. The ratchet row `an_entry_read_twice` never sees the pair
+and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
+`key_at_fast` and read BLIND once the pair took every key the encoder reads;
+it now sends the pair to the C, which reads the run program 935,900,947 ->
+967,870,853, and it gates the instructions vein.
