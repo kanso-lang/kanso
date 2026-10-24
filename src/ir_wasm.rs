@@ -463,24 +463,27 @@ struct Global {
 }
 
 #[derive(Default)]
-struct Ir<'a> {
+struct Ir {
     types: HashMap<String, Ty>,
     globals: Vec<Global>,
     externs: Vec<String>,
     aliases: HashMap<String, String>,
     declares: Vec<(String, Sig)>,
-    funcs: Vec<Head<'a>>,
+    funcs: Vec<Head>,
 }
 
 /// A function as the module's first pass leaves it: its name and signature,
 /// which every other function's lowering may need, and its text from the
 /// `define` line to the closing brace, which only its own lowering reads.
 /// `body` parses that text when the function's turn comes, so one function's
-/// instructions are held at a time rather than the whole module's.
-struct Head<'a> {
+/// instructions are held at a time rather than the whole module's. The text
+/// is named by its piece and its place there, so a piece whose functions are
+/// all lowered can be let go.
+struct Head {
     name: String,
     sig: Sig,
-    text: &'a str,
+    piece: usize,
+    span: std::ops::Range<usize>,
 }
 
 /// A function's local names, numbered in the order they are first read.
@@ -1040,26 +1043,9 @@ fn parse_inst(p: &mut P, types: &mut Vec<Option<Ty>>) -> Result<Inst, String> {
 }
 
 /// Where the line starting at `from` ends: the next newline, or the end of
-/// the text. Eight bytes are read per pass, and the lowest byte of the word
-/// that equals a newline is found from the classic has-zero test. `find('\n')`
-/// costs a searcher's setup, a call into memchr and a one-byte compare for
-/// every line, and the translator asks it of every line in the module.
-fn line_end(s: &[u8], mut i: usize) -> usize {
-    const LO: u64 = 0x0101_0101_0101_0101;
-    const HI: u64 = 0x8080_8080_8080_8080;
-    const NL: u64 = 0x0a0a_0a0a_0a0a_0a0a;
-    while i + 8 <= s.len() {
-        let w = u64::from_le_bytes(s[i..i + 8].try_into().expect("eight bytes")) ^ NL;
-        let z = w.wrapping_sub(LO) & !w & HI;
-        if z != 0 {
-            return i + (z.trailing_zeros() / 8) as usize;
-        }
-        i += 8;
-    }
-    while i < s.len() && s[i] != b'\n' {
-        i += 1;
-    }
-    i
+/// the text (`crate::compare::byte_from`).
+fn line_end(s: &[u8], from: usize) -> usize {
+    crate::compare::byte_from(s, from, b'\n')
 }
 
 /// `str::lines` for text with no carriage returns, which emitted IR never
@@ -1083,8 +1069,8 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
-fn parse(ir: &str) -> Result<Ir<'_>, String> {
-    let mut m = Ir::default();
+/// The module's first pass over one of its pieces, `piece`, into `m`.
+fn parse_into(m: &mut Ir, ir: &str, piece: usize) -> Result<(), String> {
     let mut at = 0;
     while at < ir.len() {
         let end = line_end(ir.as_bytes(), at);
@@ -1171,12 +1157,12 @@ fn parse(ir: &str) -> Result<Ir<'_>, String> {
                 }
                 look = close;
             };
-            m.funcs.push(Head { name, sig, text: &ir[from..to] });
+            m.funcs.push(Head { name, sig, piece, span: from..to });
             continue;
         }
         return Err(format!("unsupported line `{line}`"));
     }
-    Ok(m)
+    Ok(())
 }
 
 /// A function's instructions, parsed from the text its head kept. The
@@ -1501,29 +1487,28 @@ pub struct Side {
 /// It takes the native text or the text `codegen::retarget_wasm32` made from
 /// it, and the two give the same module.
 pub fn translate(ir: &str) -> Result<Side, String> {
-    translate_given(Text::Lent(ir))
+    translate_given(vec![Cow::Borrowed(ir)])
 }
 
-/// `translate` for a caller done with the IR. The text is let go once every
-/// function is lowered, before the module is put together; the tab's compile
-/// peaks in that assembly, and the IR is the largest thing it would otherwise
-/// still hold.
+/// `translate` for a caller done with the IR, which is let go as it is read.
 pub fn translate_owned(ir: String) -> Result<Side, String> {
-    translate_given(Text::Owned(ir))
+    translate_given(vec![Cow::Owned(ir)])
 }
 
-/// The IR handed to the translator: lent, or given to it to let go.
-enum Text<'a> {
-    Lent(&'a str),
-    Owned(String),
+/// `translate_owned` for a module in pieces, as `codegen::emit_ir_tab_pieces`
+/// writes it: no definition is split between two pieces. Each piece is let go
+/// once its functions are lowered, so the tab holds the module once and less
+/// of it as the translation goes.
+pub fn translate_pieces(pieces: Vec<String>) -> Result<Side, String> {
+    translate_given(pieces.into_iter().map(Cow::Owned).collect())
 }
 
-fn translate_given(text: Text<'_>) -> Result<Side, String> {
-    let src = match &text {
-        Text::Lent(s) => *s,
-        Text::Owned(s) => s.as_str(),
-    };
-    let ir = parse(src)?;
+fn translate_given(mut texts: Vec<Cow<'_, str>>) -> Result<Side, String> {
+    let mut ir = Ir::default();
+    for (k, text) in texts.iter().enumerate() {
+        parse_into(&mut ir, text, k)?;
+    }
+    let ir = ir;
     let mut mx = Mx {
         types: Vec::new(),
         func_idx: HashMap::default(),
@@ -1596,8 +1581,14 @@ fn translate_given(text: Text<'_>) -> Result<Side, String> {
     }
 
     let mut codes = Vec::new();
+    let mut held = 0;
     for h in &ir.funcs {
-        let f = body(h.text, &ir.types)?;
+        // the pieces before this function's are read through, and let go
+        while held < h.piece {
+            texts[held] = Cow::Borrowed("");
+            held += 1;
+        }
+        let f = body(&texts[h.piece][h.span.clone()], &ir.types)?;
         codes.push(lower(&mut mx, &f).map_err(|e| format!("{}: {e}", f.name))?);
     }
 
@@ -1624,7 +1615,7 @@ fn translate_given(text: Text<'_>) -> Result<Side, String> {
     // Nothing below reads the IR or what was parsed out of it.
     drop(defined);
     drop(ir);
-    drop(text);
+    drop(texts);
 
     // ---- assemble
     let mut out = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
@@ -2508,34 +2499,7 @@ impl Fx<'_> {
 
 #[cfg(test)]
 mod a_line_ends_where_the_first_newline_is {
-    use super::{line_end, Lines};
-
-    /// xorshift64*, seeded, so a failure names a case that can be replayed.
-    fn next(s: &mut u64) -> u64 {
-        *s ^= *s >> 12;
-        *s ^= *s << 25;
-        *s ^= *s >> 27;
-        s.wrapping_mul(0x2545_f491_4f6c_dd1d)
-    }
-
-    /// Against `position` over the same bytes: texts up to 40 bytes with
-    /// newlines at random places, bytes that differ from a newline in one bit
-    /// (0x0b, 0x08, 0x8a) to try the has-zero test's carries, and every
-    /// starting point in each text.
-    #[test]
-    fn line_end_agrees_with_position() {
-        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
-        let pool = [b'\n', 0x0b, 0x08, 0x8a, 0x09, b'a', b' ', 0xff, 0x00, 0x0a ^ 0x80];
-        for case in 0..400_000 {
-            let len = (next(&mut seed) % 41) as usize;
-            let text: Vec<u8> =
-                (0..len).map(|_| pool[(next(&mut seed) % pool.len() as u64) as usize]).collect();
-            for from in 0..=len {
-                let want = text[from..].iter().position(|&b| b == b'\n').map_or(len, |n| from + n);
-                assert_eq!(line_end(&text, from), want, "case {case}: {text:?} from {from}");
-            }
-        }
-    }
+    use super::Lines;
 
     #[test]
     fn lines_are_str_lines() {

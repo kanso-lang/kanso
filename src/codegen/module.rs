@@ -31,10 +31,9 @@ struct Written {
 impl Written {
     /// Whether the body names a symbol of one of `decls`: its dispatcher,
     /// word twin, value wrapper or wrapper record.
-    fn names_any<'d>(&self, decls: impl Iterator<Item = &'d FnDecl>) -> bool {
+    fn names_any<'d>(&self, groups: impl Iterator<Item = (&'d str, usize)>) -> bool {
         let mut symbols: Vec<String> = Vec::new();
-        for decl in decls {
-            let (name, arity) = (decl.name.as_str(), decl.params.len());
+        for (name, arity) in groups {
             symbols.extend([
                 dsym(name, arity),
                 tsym(name, arity),
@@ -47,9 +46,27 @@ impl Written {
             && self.pieces.iter().any(|piece| !queries_named(piece, &queries).is_empty())
     }
 
-    /// The module: the body pruned, the declarations and globals it names
-    /// written in front of it, and the tail calls narrowed.
+    /// The module as one text, for clang: the pieces `finish_pieces` gives,
+    /// joined at their summed size, each let go as it is copied.
     fn finish(self) -> String {
+        let convention = self.convention;
+        let pieces = self.finish_pieces();
+        let mut module = String::with_capacity(pieces.iter().map(String::len).sum());
+        for piece in pieces {
+            module.push_str(&piece);
+        }
+        through_doors(module, convention)
+    }
+
+    /// The module as the emitter wrote it, in pieces, with the body pruned,
+    /// the declarations and globals it names written in front of it, and the
+    /// tail calls narrowed: first the declarations,
+    /// the globals and the site table, then the body's pieces, none of which
+    /// splits a definition. The tab translates the pieces as they are, so
+    /// the module is never held twice; joining them while every piece was
+    /// still live was the tab's compile peak, 352,805 bytes of module on top
+    /// of the same bytes in pieces.
+    fn finish_pieces(self) -> Vec<String> {
         let pruned = match self.has_entry {
             true => prune_unnamed(self.pieces, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => self.pieces,
@@ -152,28 +169,24 @@ impl Written {
                 let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
             }
         }
-        // THE MODULE IS WRITTEN ONCE, at its own size. The declarations and
-        // everything above go in first and the body's pieces follow, each let
-        // go as soon as it is copied, and the narrowing rewrites the lines
-        // where they stand. The body used to be copied behind the globals and
-        // the narrowing wrote that again into a buffer of its own, so two
-        // copies of the module were held at once.
+        // The declarations and everything above make the first piece, and the
+        // body's pieces follow; the narrowing rewrites the lines where they
+        // stand.
         out.push_str(&self.globals);
         out.push('\n');
         let declared = declares.len() + 1;
         let mut table = Count(0);
         site_table(&mut table, &self.sites, &self.strings);
-        let size = declared + out.len() + table.0 + pieces.iter().map(String::len).sum::<usize>();
-        let mut module = String::with_capacity(size);
-        module.push_str(&declares);
-        module.push('\n');
-        module.push_str(&out);
-        site_table(&mut module, &self.sites, &self.strings);
+        let mut head = String::with_capacity(declared + out.len() + table.0);
+        head.push_str(&declares);
+        head.push('\n');
+        head.push_str(&out);
+        site_table(&mut head, &self.sites, &self.strings);
         drop((declares, out));
-        for piece in pieces {
-            module.push_str(&piece);
-        }
-        through_doors(narrowed_in_place(module, declared), self.convention)
+        let mut all = Vec::with_capacity(pieces.len() + 1);
+        all.push(head);
+        all.extend(pieces);
+        narrowed_pieces(all, declared)
     }
 }
 
@@ -495,7 +508,12 @@ fn paired_appends(body: String) -> String {
     let len = bytes.len();
     bytes.copy_within(kept..len, to);
     bytes.truncate(to + len - kept);
-    String::from_utf8(bytes).expect("each edit replaces whole lines")
+    // SAFETY: the body was a `String`, every run copied starts and ends at a
+    // line break or the body's ends, and every line written in is a `&str`,
+    // so the bytes are UTF-8. Checking the whole body again cost the tab's
+    // compile a pass over the module; a debug build still checks.
+    debug_assert!(std::str::from_utf8(&bytes).is_ok(), "each edit replaces whole lines");
+    unsafe { String::from_utf8_unchecked(bytes) }
 }
 
 fn ir_bytes(bytes: &[u8]) -> String {

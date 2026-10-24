@@ -21,106 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — a JSON string is read and written in one call
-
-The decoder read a string through a span to the first quote or backslash, a
-dispatch on the byte the span stopped at, and a second door for the utf8, and
-a string with escapes then went a run and an escape at a time through kanso.
-The writer escaped a string the same way. Three internal builtins replace
-that for every string that needs nothing unusual (#2014).
-
-`builtin_plain_string cs p` scans from the body's first byte. With no
-backslash before the closing quote it answers the text in front of the quote;
-with escapes it carries on to the closing quote and answers its position; a
-string that runs out, or bytes that are not utf-8, answer none.
-`builtin_unescape cs p e` undoes the eight one-letter escapes over that range
-and answers none for a `\u` escape or any other. On none the decoder reads the
-string the long way from its start, so `\u` escapes, surrogates, bad escapes
-and unterminated strings are undone or named by the code that did it before.
-The native twin loops around the inlined scan, and the unescape copies runs
-eight bytes at a time and, like `built_text`, does not validate again what
-came from a string. `length (bytes s)` now reads a string's byte length from
-its header instead of building a view in the arena to measure.
-
-`builtin_append_escaped acc s` appends a string the writer's scan found
-something to escape in, in the forms lib/json has always written. Linearity
-and the beat analysis knew `append` by name, and they now know this builtin by
-the same rules, so a site proved unique writes into the builder in place. The
-escape is written straight into the builder when it has room, and through a
-stack buffer otherwise, so nothing lands in the arena that `append` would not
-put there.
-
-Over 100,000 fuzzed documents decoded and re-encoded byte for byte alike
-natively, interpreted, and on #2012's build, and the harness went red when the
-escaped path was handed a closing position one byte early, when the unescape's
-word offset was halved, and when the writer's table mapped a tab to `n`.
-
-CI's rows. The work vein: runbench 1,215,752,133 -> 1,137,672,504,
-jsonbench 871,505,027 -> 812,108,477, livebench 1,498,512,457 ->
-1,370,942,122, oneshot 13,543,502 -> 12,776,869, encodebench 2,464,678,410
--> 2,464,678,221. The interpreter reads its corpus's JSON through the same
-builtins: interp_instructions 578,503,674 -> 484,702,222, interp_allocs
-652,272 -> 539,460, interp_peak_bytes 633,881 -> 614,115; in the tab,
-browser_run_instructions 37,747,192 -> 35,361,799. The compile corpus imports
-std/json, so the front end's rows fall with the escaper's functions gone:
-compile_instructions 25,066,066 -> 24,089,825, entry_instructions 76,561,037
--> 75,139,973, library_instructions 76,265,989 -> 74,835,835, compile_allocs
-13,741 -> 13,382, compile_peak_bytes 591,860 -> 572,289,
-browser_compile_instructions 424,273,317 -> 408,301,693,
-browser_compile_peak_bytes 758,624 -> 749,207, front_end_visits 7,309 ->
-6,938, and front_end_rounds 17 -> 19.
-
-The counters show the paths that left. A decoded string with escapes was a
-builder handed to `built_text` without a copy; it is now a string `unescape`
-allocated, so the zero-copy count falls (run_utf8_zerocopy 175,617 -> 90,
-utf8_zerocopy 265,950 -> 0 on decode, oneshot_utf8_zerocopy 1,774 -> 1,
-live_utf8_zerocopy 2,173 -> 400), and the appends with it (run_append_fast
-8,256,960 -> 5,735,070, append_fast 1,900,500 -> 0 on decode,
-oneshot_append_fast 90,477 -> 63,723, live_append_fast 31,135,470 ->
-25,489,200), and the string headers counted rise where the byte ones fall
-(run_sh_str 17,048,976 -> 24,593,568 against run_sh_bytes 4,217,520 ->
-4,872; decode sh_str 1,319,216 -> 12,750,416; oneshot_sh_str 196,368 ->
-272,576; live_sh_str 196,320 -> 272,528). The writer's stack buffer and its
-straight writes leave run_held_peak_bytes, oneshot_held_peak_bytes and
-live_held_peak_bytes at 197,704 -> 200,978, and live_alloc_bytes 409,411,040 -> 413,053,904.
-On the run program run_sh_buf reads 119,176,736 -> 119,198,704, run_buf_reuse
-139 -> 134 and run_survive_slots 4,854 -> 4,856. run_perm_live_bytes 15,825 ->
-146,913 and run_bytes_freed 9,010 -> 9,009 are one list buffer of 8,192 slots,
-the bag phase's, grown outside the arena as it was before and now still held
-at exit; the peak does not move, and why it is no longer handed back is not
-isolated (#2015).
-
-The compile goldens read lines 1,396 -> 1,412 and module_lines 1,137 ->
-1,141 for the twins defined in every module, and the decoder's own code
-emitted_defines 130 -> 134, emitted_calls 1,222 -> 1,249, emitted_branches
-1,303 -> 1,336 and emitted_lines 12,368 -> 12,690, while the other programs
-lose the escaper (emitted_other_lines 157,286 -> 156,673). Machine code: text
-5,201,182 -> 5,283,518. codegen_instructions_dev 115,822,000 -> 116,000,233,
-codegen_instructions_release 453,660,707 -> 453,685,379 and
-emit_instructions 6,202,944 -> 6,233,826 rise with the declarations.
-The dev row first read 116,000,241 and then 116,000,233 on the commit that
-added only page prose and this log; the 8 instructions are not isolated.
-
-The mem fixture `append_of_a_slice_boxes_nothing` pins the fused append of a
-slice, which std/json made for the run before each escape. Its `\n` escapes
-are now undone in one call, so it uses `\u0041` to keep reaching the pair, and
-reads append_of_a_slice_boxes_nothing_allocs 12 -> 14,
-append_of_a_slice_boxes_nothing_alloc_bytes 1,307 -> 2,396,
-append_of_a_slice_boxes_nothing_bytes_malloc 3 -> 4,
-append_of_a_slice_boxes_nothing_perm_allocs 5 -> 6,
-append_of_a_slice_boxes_nothing_find2_calls 42 -> 83,
-append_of_a_slice_boxes_nothing_str_scan_bytes 165 -> 169 and
-append_of_a_slice_boxes_nothing_sh_str 272 -> 816 for the `\u` path's own
-work; its append_fast stays at 80.
-
-Two shapes of the writer were measured worse first and declined. A builtin
-answering an escaped copy read the run program at 1,221,510,922 against
-1,166,052,728 without it: the copy cost 415 instructions a string, and with
-the escaper's loop gone the encoder's map call lost its region and its fused
-`keys` and `values`. The append-like builtin read 1,416,821,993 before the
-analyses knew its name, because every append in the encoder stopped writing in
-place.
-
 ## 2026-10-20 — directive: all development is cloud's
 
 Clay: "all development is for you. the chat session is only for me to talk
@@ -2090,6 +1990,108 @@ the anchor byte. Anchoring each word on its rarest byte in the module, `f` in
 `define `, `m` in `musttail call` and `c` in `tailcc `, read 267,916,152
 against 266,884,355: the searches took 8.3M where the two-way searcher took
 6.8M.
+
+## 2026-10-23 — the tab holds its module once
+
+Five more changes to the tab's compile of `bench/interp_corpus`, three for its
+instructions and two for the most it holds.
+
+**Three more costs.** `Numbered`, the emitter's `%tN` and `LN` names, checked
+its bytes were UTF-8 on every read, and it is built in one place from a `&str`
+prefix and ASCII digits, so the read now skips the check, as `Name::as_str`
+does: 256,933,580 -> 255,076,345. `paired_appends`, the narrowing and the prune
+each compact a module's bytes around whole lines and then validated the whole
+buffer again; a release build no longer does, and a debug build still checks:
+-> 253,497,498. `line_end` became `kanso::compare::byte_from`, which finds any
+byte eight at a time, and the emitter's three scans for `@` use it:
+-> 250,608,006. Its fuzzer moved beside the word compare's and now tries five
+target bytes, each with neighbours one bit away.
+
+**Where the peak was.** A marker set at the start of each phase and read by the
+allocator when a new peak was reached put the peak in `Written::finish`: it
+allocated the module at its final size, 352,805 bytes, while every piece of the
+body was still live, so the module was held twice. The emitter never splits a
+definition between two pieces, so the tab now takes the pieces as they are.
+`Written::finish_pieces` hands them over, `finish` joins them for clang, the
+narrowing walks them in order and rewrites each where it stands, and
+`ir_wasm::translate_pieces` reads every piece's heads and then lowers the
+bodies a piece at a time, letting each piece go when its functions are done.
+
+    browser_compile_peak_bytes     769,408 -> 724,714
+    browser_compile_instructions  250,608,006 -> 251,137,543
+
+Rewriting six pieces and slicing them costs 529,537 more instructions than one
+join. Welfare read 93.05 against 93.04 without it, so the peak pays for them.
+
+**What the walk left out.** With the join gone the peak moved into emission.
+A census of the native route at its peak, every live allocation grouped by its
+caller, held 330 KB of body text and about 300 KB of syntax. Part of the syntax
+was the groups the entry cannot reach, kept so that a miss can put them back
+and emit again. The tab now lets them go before it emits. A miss answers
+`None`, and the tab compiles the source again and emits with them
+(`emit_ir_tab_pieces_whole`), so a miss costs a second compile and never changes
+the module. None of the 348 programs in the micro corpus misses.
+
+    browser_compile_peak_bytes     724,714 -> 664,061
+    browser_compile_instructions  251,137,543 -> 251,140,915
+
+**Room the parser doubled into.** The same census showed statement and pattern
+lists grown by `push` and `extend`, which keep the room they doubled into. The
+tab's emit now gives that room back for every kept function's body and
+parameters, and for the function list, before it emits. A native build skips
+the copies, since nothing prices its holdings at that moment.
+
+    browser_compile_peak_bytes     664,061 -> 598,093
+    browser_compile_instructions  251,140,915 -> 251,201,816
+
+Shrinking where the parser builds a body instead read 615,869 and cost 116K
+instructions, because it also shrinks the groups the walk leaves out and every
+native build pays for it.
+
+**The narrowing's searches by one byte.** With `byte_from` inline, the
+narrowing's three whole-module searches find `define `, `musttail call` and
+`tailcc ` by their `f`, `m` and `c` and compare the word where one lands. The
+same anchors read through `str::find` lost to the two-way searcher earlier
+today, because each hit paid for a searcher and a call into memchr; inline,
+the three cost less than the 7.1M the searcher took.
+
+    browser_compile_instructions  251,201,816 -> 248,961,764
+
+A spec builds 20,000 random texts from the three words, their anchors and near
+misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
+the anchor rather than from the word's start, or reporting a line once per
+anchor in it, each fail it.
+
+**Two bytes at a time.** `symbols_before_newline` walks the whole module for
+each line's last `@`, a byte a pass, and that walk was 5.5M. It now asks
+`compare::either_from` for whichever of `@` and a newline comes next, testing
+each eight-byte word for both.
+
+    browser_compile_instructions  248,961,764 -> 244,730,101
+
+`called_symbols`, which reads from each `@` to its `(` or the line's end, uses
+it too: -> 244,413,637.
+
+`either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
+target bytes, and dropping the second test's `& !` fails it.
+
+**Specs.** The interp corpus cut into pieces every seventh definition translates
+to the same module as the whole text, and letting a piece go before its
+functions are lowered fails it. The lean emit writes the pieces the whole emit
+writes. Ratchet rows undo each change; the browser rows are the witness for
+six of them.
+
+**CI's rows.** The emitter's own count falls with its scans:
+emit_instructions 6,249,687 -> 5,919,265 (-5.3%). interp_instructions moves
+385,504,156 -> 385,492,276; no change here touches the interpreter's code.
+compile_instructions, entry_instructions, library_instructions and both
+codegen rows read what #2065 left them.
+
+**Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
+at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
+`paired_appends`'s long needle saved 172,616 instructions and for
+`branches_to`'s `label %` probe 286,197, too little to give either a helper of
+its own.
 
 ## 2026-10-23 — a short float walks down by its zeros
 

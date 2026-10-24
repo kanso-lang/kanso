@@ -1,3 +1,6 @@
+//! `kanso::compare::bytes` is the tab's `memcmp`, and `byte_from` its search
+//! for one byte; the second is held to `position` at the end of this file.
+//!
 //! `kanso::compare::bytes` is the tab's `memcmp`. This fuzzer holds it to an
 //! independent reference, the standard library's ordering of two byte slices,
 //! on runs of every length up to 48 at every pair of offsets into a buffer up
@@ -7,7 +10,7 @@
 //! the other way. Only the sign of the answer is compared, which is all
 //! `memcmp` promises.
 
-use kanso::compare::bytes;
+use kanso::compare::{byte_from, bytes, either_from};
 use std::cmp::Ordering;
 
 /// xorshift64*, seeded, so a failure names a case that can be replayed.
@@ -78,6 +81,54 @@ fn the_word_compare_orders_every_position_of_every_short_length() {
             let above = unsafe { bytes(hi.as_ptr(), lo.as_ptr(), n) };
             assert_eq!(below.cmp(&0), Ordering::Less, "n {n}, at {at}");
             assert_eq!(above.cmp(&0), Ordering::Greater, "n {n}, at {at}");
+        }
+    }
+}
+
+/// `byte_from` against `position` over the same bytes, for a newline, an `@`,
+/// zero and two high bytes: texts up to 40 bytes drawn from bytes one bit away
+/// from each target, so the has-zero test's borrows and its `!w` are tried, at
+/// every starting point in each text.
+#[test]
+fn byte_from_agrees_with_position() {
+    let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+    for target in [b'\n', b'@', 0x00, 0x80, 0xff] {
+        let pool = [target, target ^ 1, target ^ 2, target ^ 0x80, target ^ 0x7f, b'a', 0x01, 0xfe];
+        for case in 0..100_000 {
+            let len = rng.below(41);
+            let text: Vec<u8> = (0..len).map(|_| pool[rng.below(pool.len() as u64)]).collect();
+            for from in 0..=len {
+                let want = text[from..].iter().position(|&b| b == target).map_or(len, |n| from + n);
+                assert_eq!(
+                    byte_from(&text, from, target),
+                    want,
+                    "target {target:#04x}, case {case}: {text:?} from {from}"
+                );
+            }
+        }
+    }
+}
+
+/// `either_from` against `position` for either of two bytes, over the pairs
+/// the emitter asks about and two high bytes, the texts drawn from both
+/// targets and their one-bit neighbours.
+#[test]
+fn either_from_agrees_with_position() {
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    for (a, b) in [(b'@', b'\n'), (0x00, 0xff), (0x80, 0x7f)] {
+        let pool = [a, b, a ^ 1, b ^ 1, a ^ 0x80, b ^ 0x80, b' ', 0x01];
+        for case in 0..100_000 {
+            let len = rng.below(41);
+            let text: Vec<u8> = (0..len).map(|_| pool[rng.below(pool.len() as u64)]).collect();
+            for from in 0..=len {
+                let want =
+                    text[from..].iter().position(|&c| c == a || c == b).map_or(len, |n| from + n);
+                assert_eq!(
+                    either_from(&text, from, a, b),
+                    want,
+                    "{a:#04x} or {b:#04x}, case {case}: {text:?} from {from}"
+                );
+            }
         }
     }
 }

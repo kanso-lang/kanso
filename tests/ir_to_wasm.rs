@@ -171,6 +171,21 @@ fn the_interp_corpus_answers_through_the_translator() {
     // assembles the module; that must change nothing about the module.
     let owned = kanso::ir_wasm::translate_owned(ir.clone()).expect("the owned IR translates");
     assert!(owned.wasm == direct.wasm, "the owned IR translated to a different module");
+    // The tab hands the module over in the pieces the emitter wrote, which
+    // split it between definitions. Cut there every seventh definition, it is
+    // the same module.
+    let mut pieces = Vec::new();
+    let mut from = 0;
+    for (k, (at, _)) in ir.match_indices("\ndefine ").enumerate() {
+        if k % 7 == 6 {
+            pieces.push(ir[from..at + 1].to_string());
+            from = at + 1;
+        }
+    }
+    pieces.push(ir[from..].to_string());
+    assert!(pieces.len() > 3, "the corpus cut into {} pieces", pieces.len());
+    let cut = kanso::ir_wasm::translate_pieces(pieces).expect("the pieces translate");
+    assert!(cut.wasm == direct.wasm, "the pieces translated to a different module");
     let ran = execute(&rt, &side.wasm, side.data, side.table, &[]).expect("it runs");
     let _ = std::fs::remove_dir_all(&work);
     assert_eq!(ran.out, String::from_utf8_lossy(&native.stdout), "the corpus's answer");

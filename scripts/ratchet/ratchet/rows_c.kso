@@ -3036,8 +3036,8 @@ rows_cq40 = list/concat rows_cq39 [twin_search lambda_narrowed]
 
 # The tab's compiler finds `@sN` by memchr on `@` and ends each IR line eight
 # bytes a pass (2026-10-23); each mutation brings a searcher back, and the
-# browser compile row is the witness. The word compare and the line search each
-# have a fuzzer, and a mutation each that the fuzzer catches.
+# browser compile row is the witness. The word compare and the byte search
+# share a fuzzer, and each has a mutation that the fuzzer catches.
 string_names = row
   "a string name found by a two-byte searcher"
   true
@@ -3064,14 +3064,12 @@ wrong_end = row
   (breaking "a_word_compare_that_reads_the_wrong_end")
   no_setup
 
-line_fuzz = "a_line_ends_where_the_first_newline_is"
-
 borrow = row
-  "a line end that trusts a borrow"
+  "a byte search that trusts a borrow"
   true
-  "cargo test --release --lib {line_fuzz}"
+  "cargo test --release --test {compare_fuzz}"
   "specs (unit, golden, differential)"
-  (breaking "a_line_end_that_trusts_a_borrow")
+  (breaking "a_byte_search_that_trusts_a_borrow")
   no_setup
 
 rows_cq41a = list/concat rows_cq40 [string_names line_search]
@@ -3103,6 +3101,105 @@ tab_tally = row
 
 rows_cq43 = list/concat rows_cq42 [tab_tally]
 
+# The tab's compile, second round (2026-10-23): a numbered name read without
+# checking it, a rewritten body not validated again, each `@` found eight bytes
+# a pass, the module handed over in pieces and what the walk left out let go
+# before emitting. Each mutation undoes one, and the browser compile rows are
+# the witness.
+checked_name = row
+  "a numbered name checked on every read"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_numbered_name_checked_on_every_read")
+  release
+
+validated_body = row
+  "a rewritten body validated again"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rewritten_body_validated_again")
+  release
+
+at_searcher = row
+  "an at sign found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_at_sign_found_by_a_searcher")
+  release
+
+joined_module = row
+  "a module joined for the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_module_joined_for_the_tab")
+  release
+
+held_left_out = row
+  "what the tab left out held while it emits"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "what_the_tab_left_out_held_while_it_emits")
+  release
+
+pieces_test = "the_interp_corpus_answers_through_the_translator"
+
+early_piece = row
+  "a piece let go before its functions"
+  true
+  "cargo test --release --test ir_to_wasm {pieces_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_piece_let_go_before_its_functions")
+  no_setup
+
+rows_cq44a = list/concat rows_cq43 [checked_name validated_body at_searcher]
+
+rows_cq44b = list/concat rows_cq44a [joined_module held_left_out]
+
+kept_room = row
+  "the tab's syntax kept with its room"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tabs_syntax_kept_with_its_room")
+  release
+
+narrowing_word = row
+  "a narrowing that searches by the word"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_narrowing_that_searches_by_the_word")
+  release
+
+anchored_test = "a_line_found_by_one_byte_is_a_line_found_by_the_word"
+
+late_line = row
+  "a line found one byte late"
+  true
+  "cargo test --release --lib {anchored_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_line_found_one_byte_late")
+  no_setup
+
+rows_cq44c = list/concat rows_cq44b [early_piece kept_room]
+
+two_byte_borrow = row
+  "a two-byte search that trusts a borrow"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_two_byte_search_that_trusts_a_borrow")
+  no_setup
+
+rows_cq44d = list/concat rows_cq44c [narrowing_word late_line]
+
+rows_cq44 = list/concat rows_cq44d [two_byte_borrow]
+
 # A float that passes at the guessed place count takes the zeros off its scaled
 # decimal to reach the fewest places, instead of trying each place below. The
 # mutation puts the tries back, and the work vein reads runbench heavier.
@@ -3114,6 +3211,6 @@ float_walk = row
   (breaking "a_float_walked_down_by_tries")
   benches
 
-rows_cq44 = list/concat rows_cq43 [float_walk]
+rows_cq45 = list/concat rows_cq44 [float_walk]
 
-rows_c = list/concat rows_cq44 [itself]
+rows_c = list/concat rows_cq45 [itself]
