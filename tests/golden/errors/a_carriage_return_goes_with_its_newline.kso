@@ -1,0 +1,2 @@
+x = 1
+pub play = print "x"
