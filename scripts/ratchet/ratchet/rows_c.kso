@@ -3385,4 +3385,17 @@ empty_inline = row
 
 rows_cq58 = list/concat rows_cq57 [empty_inline]
 
-rows_c = list/concat rows_cq58 [itself]
+# The in-place byte append asks for room before it reads the buffer's header,
+# and the separate test for a borrowed view is gone (2026-10-24). The mutation
+# puts that test back in the twin the json encoder's separators go through.
+room_first = row
+  "a byte append that asks ownership first"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_append_asks_ownership_first")
+  benches
+
+rows_cq59 = list/concat rows_cq58 [room_first]
+
+rows_c = list/concat rows_cq59 [itself]
