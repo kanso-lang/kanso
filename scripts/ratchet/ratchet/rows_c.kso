@@ -3255,4 +3255,57 @@ tab_narrowing = row
 
 rows_cq48 = list/concat rows_cq47 [tab_narrowing]
 
-rows_c = list/concat rows_cq48 [itself]
+# A short float's text is written right to left in one pass over its scaled
+# decimal, the point placed on the way (2026-10-24). The mutation splits the
+# whole part off by a division again, and the work vein reads runbench
+# heavier.
+float_one_pass = row
+  "a short float written in two parts"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_float_written_in_two_parts")
+  benches
+
+rows_cq49 = list/concat rows_cq48 [float_one_pass]
+
+# The module writer reads every piece's calls and line-ending symbols in one
+# pass over its ats (2026-10-24). The mutation scans each piece again for the
+# endings, and the browser compile row reads heavier.
+one_scan = row
+  "the module scanned twice for its symbols"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_module_scanned_twice_for_its_symbols")
+  release
+
+rows_cq50 = list/concat rows_cq49 [one_scan]
+
+# The strings the body names are marked in the same pass, and only the type
+# tables are scanned for them after (2026-10-24). The mutation scans the body
+# for them again, and the browser compile row reads heavier.
+strings_in_scan = row
+  "the strings found by a scan of their own"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_strings_found_by_a_scan_of_their_own")
+  release
+
+rows_cq51 = list/concat rows_cq50 [strings_in_scan]
+
+# The translator answers a pair of scalar leaves, every %KValue, without a
+# vector (2026-10-24). The mutation lists them in one again, and the browser
+# compile row reads heavier.
+pair_leaves = row
+  "a pair of leaves listed in a vector"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pair_of_leaves_listed_in_a_vector")
+  release
+
+rows_cq52 = list/concat rows_cq51 [pair_leaves]
+
+rows_c = list/concat rows_cq52 [itself]

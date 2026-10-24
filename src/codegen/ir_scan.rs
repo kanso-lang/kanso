@@ -27,7 +27,6 @@ fn branches_to(text: &str, label: &str) -> bool {
 /// of `kanso play`'s start-up on a one-line program, most of it hashing names
 /// nothing would ask about.
 fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
-    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
     let mut named = vec![[false; 2]; count];
     for text in texts {
         let bytes = text.as_bytes();
@@ -35,30 +34,36 @@ fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
         // `find("@s")` builds a two-way searcher, which a needle this short
         // lets skip almost nothing; `@` is found by memchr and the `s` checked.
         while let Some(at_sign) = crate::compare::find(&bytes[at..], b'@') {
-            let from = at + at_sign + 1;
-            at = from;
-            if bytes.get(from) != Some(&b's') {
-                continue;
-            }
-            let from = from + 1;
-            let mut to = from;
-            let mut n = 0usize;
-            while to < bytes.len() && bytes[to].is_ascii_digit() {
-                n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
-                to += 1;
-            }
-            if to == from || n >= count {
-                continue;
-            }
-            let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
-            if ends(to) {
-                named[n][0] = true;
-            } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
-                named[n][1] = true;
-            }
+            at += at_sign + 1;
+            string_named(bytes, at, &mut named);
         }
     }
     named
+}
+
+/// Marks the string an at names in `named`, when the at's name starts at
+/// `from` and is `sN` or `sN_lit` for an N below its length.
+fn string_named(bytes: &[u8], from: usize, named: &mut [[bool; 2]]) {
+    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
+    if bytes.get(from) != Some(&b's') {
+        return;
+    }
+    let from = from + 1;
+    let mut to = from;
+    let mut n = 0usize;
+    while to < bytes.len() && bytes[to].is_ascii_digit() {
+        n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
+        to += 1;
+    }
+    if to == from || n >= named.len() {
+        return;
+    }
+    let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
+    if ends(to) {
+        named[n][0] = true;
+    } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
+        named[n][1] = true;
+    }
 }
 
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
@@ -84,40 +89,50 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
     found
 }
 
-/// Every `sym` for which `text` writes `@sym\n`, collected in one pass.
+/// Every `sym` the text calls, written `@sym(`, into `calls`, and every
+/// `sym` that ends a line, written `@sym\n`, into `ending`, in one pass over
+/// the ats.
 ///
-/// A line can only end in `@sym`, so only the LAST `@` on each line can start
-/// a match and the whole text is read once. That makes the answer exact for a
-/// `sym` holding no `@` and no newline, which every symbol the emitter asks
-/// about is: `@a @b\n` would have to be found under the name `a @b`, and
-/// reading each line's last at alone cannot see it.
+/// From each `@` the scan runs to the first `(` or newline, as
+/// `called_symbols` does. A `(` makes a call. A newline makes an ending when
+/// no other `@` comes before it, since only a line's last at can start one.
+/// That answers `@sym\n` exactly for a `sym` holding no `@`, no `(` and no
+/// newline, which every symbol the module writer asks about is: they are
+/// generated identifiers.
 ///
-/// The forward scan this replaced ran from every `@` to the end of its line,
-/// which on a big emitted body is the text times the number of ats: it cost
-/// `kanso build bench/runbench` 209 million instructions, turning a fall into
-/// a rise.
-fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
-    // One walk over the bytes, holding the last `@` since the line began. A
-    // search for each newline and then for the `@` before it was two calls a
-    // line, 42,784 lines in the tab's compile of its corpus. The walk reads
-    // eight bytes a pass for whichever of the two comes next; a byte at a
-    // time it was 5.5M of the tab's 249M compile instructions.
-    let mut found = crate::hash::Set::default();
-    let mut last_at = None;
+/// The same pass marks in `named` the interned strings the text names, as
+/// `named_strings` would.
+///
+/// These were three scans of every piece, one for each answer, and the second
+/// stopped at every newline as well as every at. Merged, the tab's compile of
+/// its corpus fell by 3,783,309 instructions, 1.7%.
+fn called_and_ending<'t>(
+    text: &'t str,
+    calls: &mut crate::hash::Set<&'t str>,
+    ending: &mut crate::hash::Set<&'t str>,
+    named: &mut [[bool; 2]],
+) {
     let bytes = text.as_bytes();
-    let mut i = crate::compare::either_from(bytes, 0, b'@', b'\n');
-    while i < bytes.len() {
-        match bytes[i] {
-            b'@' => last_at = Some(i),
+    let mut next = crate::compare::find(bytes, b'@');
+    while let Some(at) = next {
+        let from = at + 1;
+        string_named(bytes, from, named);
+        let to = crate::compare::either_from(bytes, from, b'(', b'\n');
+        next = crate::compare::find(&bytes[from..], b'@').map(|n| from + n);
+        if to >= bytes.len() {
+            continue;
+        }
+        match bytes[to] {
+            b'(' => {
+                calls.insert(&text[from..to]);
+            }
             _ => {
-                if let Some(at) = last_at.take() {
-                    found.insert(&text[at + 1..i]);
+                if next.is_none_or(|n| n > to) {
+                    ending.insert(&text[from..to]);
                 }
             }
         }
-        i = crate::compare::either_from(bytes, i + 1, b'@', b'\n');
     }
-    found
 }
 
 /// The symbols DECLARES calls from its own inline definitions, which is every
@@ -339,6 +354,9 @@ mod called_symbols_agrees {
     /// stored anything looser than the run up to the paren.
     fn agrees_over(text: &str) {
         let index = called_symbols(text);
+        let mut merged = crate::hash::Set::default();
+        called_and_ending(text, &mut merged, &mut crate::hash::Set::default(), &mut []);
+        assert!(merged == index, "the merged scan found other calls than called_symbols");
         let mut asked = 0;
         for line in DECLARES.lines() {
             let Some(rest) = line.strip_prefix("declare ") else { continue };
@@ -382,17 +400,38 @@ mod called_symbols_agrees {
             "",
             "@a\n@a\n",
         ] {
-            let index = symbols_before_newline(text);
-            // Every symbol the emitter asks about is a generated identifier,
-            // so the queries here hold no at and no newline -- see the note on
-            // symbols_before_newline for the one shape outside that.
-            for sym in ["a", "b", "", "a("] {
+            let mut calls = crate::hash::Set::default();
+            let mut index = crate::hash::Set::default();
+            called_and_ending(text, &mut calls, &mut index, &mut []);
+            // Every symbol the module writer asks about is a generated
+            // identifier, so the queries here hold no at, no paren and no
+            // newline -- see the note on called_and_ending.
+            for sym in ["a", "b", ""] {
                 assert_eq!(
                     index.contains(sym),
                     text.contains(&format!("@{sym}\n")),
                     "index and search disagree on `@{sym}\\n` in {text:?}"
                 );
             }
+        }
+    }
+
+    /// The strings the merged pass marks are the ones `named_strings` marks,
+    /// over the shapes a name can end in.
+    #[test]
+    fn the_merged_pass_names_the_strings_named_strings_does() {
+        for text in [
+            "  %v = load %KValue, ptr @s1_lit\n  call void @k(ptr @s0)\n",
+            "@s12 @s1 @s120",
+            "@s2_lit @s2_litx @s3.x @s @sx @s4(",
+            "call @f(ptr @s1, ptr @s5)\n@s0\n",
+            "",
+        ] {
+            let mut named = vec![[false; 2]; 13];
+            let mut calls = crate::hash::Set::default();
+            let mut ending = crate::hash::Set::default();
+            called_and_ending(text, &mut calls, &mut ending, &mut named);
+            assert_eq!(named, named_strings(&[text], 13), "the marks differ on {text:?}");
         }
     }
 
@@ -411,6 +450,9 @@ mod called_symbols_agrees {
             "@",                // an at and nothing after it
         ] {
             let index = called_symbols(text);
+            let mut merged = crate::hash::Set::default();
+            called_and_ending(text, &mut merged, &mut crate::hash::Set::default(), &mut []);
+            assert!(merged == index, "the merged scan disagrees on calls in {text:?}");
             for sym in ["a", "b", "c", "@a", "a@b", "", "ab"] {
                 assert_eq!(
                     index.contains(sym),

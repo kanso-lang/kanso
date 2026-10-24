@@ -47,6 +47,7 @@ enum Ty {
 /// A type's scalar leaves: one held in place, or a list.
 enum Leaves {
     One([(Ty, u32); 1]),
+    Two([(Ty, u32); 2]),
     Many(Vec<(Ty, u32)>),
 }
 
@@ -55,6 +56,7 @@ impl std::ops::Deref for Leaves {
     fn deref(&self) -> &[(Ty, u32)] {
         match self {
             Leaves::One(one) => one,
+            Leaves::Two(two) => two,
             Leaves::Many(many) => many,
         }
     }
@@ -130,6 +132,9 @@ impl Ty {
     /// asks about are scalars.
     fn leaves(&self) -> Leaves {
         match self {
+            Ty::Struct(fs) if fs.len() == 2 && fs.iter().all(Ty::is_scalar) => {
+                Leaves::Two([(fs[0].clone(), 0), (fs[1].clone(), Ty::field_offset(fs, 1))])
+            }
             Ty::Struct(_) | Ty::Array(..) => {
                 let mut out = Vec::with_capacity(self.width() as usize);
                 self.scalars(0, &mut out);
@@ -164,6 +169,10 @@ impl Ty {
             Ty::Void => None,
             t => (k == 0).then(|| t.clone()),
         }
+    }
+
+    fn is_scalar(&self) -> bool {
+        !matches!(self, Ty::Struct(_) | Ty::Array(..) | Ty::Void)
     }
 
     fn width(&self) -> u32 {
@@ -2506,6 +2515,38 @@ mod a_line_ends_where_the_first_newline_is {
         for text in ["", "\n", "a", "a\n", "a\nb", "a\n\nb\n", "\n\n", "abcdefghijklmnop\nq"] {
             let got: Vec<&str> = Lines { text, at: 0 }.collect();
             assert_eq!(got, text.lines().collect::<Vec<_>>(), "{text:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod a_types_leaves_are_its_scalars {
+    use super::Ty;
+    use std::rc::Rc;
+
+    /// `leaves` answers a scalar and a pair of scalars without a vector, and
+    /// each answer is the list `scalars` writes, offsets included.
+    #[test]
+    fn whatever_shape_holds_them() {
+        let pair = |a: Ty, b: Ty| Ty::Struct(Rc::from(vec![a, b]));
+        let types = [
+            Ty::I64,
+            Ty::Ptr,
+            Ty::Void,
+            pair(Ty::I64, Ty::I64),
+            pair(Ty::I8, Ty::I64),
+            pair(Ty::I32, Ty::F64),
+            pair(Ty::I1, Ty::I16),
+            pair(pair(Ty::I64, Ty::I64), Ty::I32),
+            Ty::Struct(Rc::from(vec![Ty::I64, Ty::I64, Ty::I64])),
+            Ty::Array(2, Rc::new(Ty::I32)),
+            pair(Ty::Array(1, Rc::new(Ty::I8)), Ty::I64),
+        ];
+        for t in types {
+            let mut want = Vec::new();
+            t.scalars(0, &mut want);
+            let got: Vec<(Ty, u32)> = t.leaves().to_vec();
+            assert!(got == want, "{t:?} leaves as {got:?}, but its scalars are {want:?}");
         }
     }
 }

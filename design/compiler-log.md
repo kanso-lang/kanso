@@ -21,123 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — directive: a required feature's cost is never asked about
-
-Clay, after #2017: "it should never need to ask to lower the welfare for a
-feature implementation that's required." The language exception already let
-a ruled feature lower the floor by what it costs. #1987 still came to him
-because the build measured several times its estimate. CLAUDE.md now says
-that a cost above the estimate changes nothing: the floor moves by what CI
-measures, and only a choice about the language itself, such as narrowing the
-ruling when the full build is impossible or contradicts another ruling, goes
-to Clay.
-
-## 2026-10-20 — a carried list keeps its buffer outside the arena
-
-#2014 left the run program holding one list buffer of 8,192 slots at exit,
-the bag phase's: run_perm_live_bytes 15,825 -> 146,913 (#2015). The buffer is
-registered with beat 0, whose rewind would free it, and that rewind reaches
-the registration. By then, though, the list's items field points at an arena
-copy of exactly 4,300 slots. A watchpoint on the field under gdb caught the
-write: the pop of the bag's own beat deep-copies its carried record, and
-`k_repair_interior` copied the list's items into the arena because they were
-not under the beat's mark. A malloc'd buffer never is. The copy dropped the
-only pointer to the buffer, and the registration found an arena buffer in the
-field and passed over it. The string and bytes arms of the same function
-already leave malloc'd storage where it is. The list arm now does the same
-and walks only the slots.
-
-`k_interior_survives` has the same blind spot: it reports a list with
-malloc'd items as not surviving, which is what sends the list to the repair.
-Changing it as well moved no fixture and no benchmark counter, so it stays as
-it is.
-
-The mem fixture `a_carried_list_frees_its_buffer` fills a bag record inside
-a loop's beat four times. Without the fix it reads perm_live_bytes 8,208 and
-perm_peak_bytes 16,416, one lap's buffer kept to exit and held beside the
-next; with it 0 and 8,208. `a_list_held_in_a_record_grows_where_it_stands` no
-longer copies its 20,000-element list: evac_bytes 384,848 -> 560 and
-alloc_bytes 1,642,720 -> 1,258,448, with perm_live_bytes 655,552 -> 655,408;
-with nothing copied there is no outgrown buffer to reuse or shelve,
-so a_list_held_in_a_record_grows_where_it_stands_buf_reuse reads 1 -> 0 and
-a_list_held_in_a_record_grows_where_it_stands_sh_buf 624 -> 704.
-On the run program run_perm_live_bytes 146,913 -> 15,825, run_bytes_freed
-9,009 -> 9,010, run_evac_bytes 9,340,096 -> 9,271,280 and run_alloc_bytes
-289,288,212 -> 289,219,396. Why #2014's unescape changed whether that pop
-copies is not traced; the copy was wrong whichever change exposed it.
-
-The test costs a list the repair is about to copy two loads and a branch.
-Asked before the survival test it ran on every list the repair visited, and
-deepbench, which repairs a captured list of lists on every bind, read 192,014
-instructions more; asked after it, only a list that does not survive pays.
-CI's rows: work_runbench 1,137,672,504 -> 1,137,617,275 and
-work_deepbench 406,723,866 -> 406,819,866, with work_pendbench 194,088,527 ->
-194,089,023, work_widebench 28,740,070 -> 28,740,098, work_oneshot 12,776,869
--> 12,776,876, work_encodebench 2,464,678,221 -> 2,464,678,011 and
-work_livebench 1,370,942,122 -> 1,370,942,108. Every program's machine code
-grows 16 bytes (runbench text=741,081 -> 741,097), and the corpus's text
-5,283,518 -> 5,283,966.
-codegen_instructions_release 453,685,379 -> 453,686,073 counts the larger
-runtime object; codegen_instructions_dev 116,000,233 -> 116,000,561 is that
-and the link directory's order, which #2016 fixes.
-
-A rewrite of the unescape loop was measured and dropped on the way. Reading
-a string's last few bytes as a masked word, and looking escapes up in a table
-instead of a switch, saved the run program 394,787 instructions (0.035%).
-About 65 of the 217 instructions an escaped string costs are the call's fixed
-work, and with a backslash every four or five bytes the loop does about the
-same work per run whatever its width.
-
-## 2026-10-20 — a plain JSON key goes straight to its colon
-
-An object key used to go through `parse_string`: `builtin_plain_string`, a
-dispatch on what it answered, a `parsed` record holding the position after the
-key and the key itself, and then `obj_key` taking that record apart to look
-for the colon. A key almost never has an escape in it, so `obj_key_start` now
-calls `builtin_plain_string` itself, and `key_at`'s string arm works out the
-position after the closing quote and goes straight to `obj_key_end`. Anything
-else goes through `plain_at` and `obj_key` as before, so an escaped key, a
-`\u` escape, an unterminated key and bad utf-8 are read and reported by the
-code that read them before.
-
-The same shape for a string value after a colon read the run program 14.8M
-instructions higher than keys alone, because the extra byte dispatch in front
-of every value cost the numbers more than it saved the strings, and was
-dropped.
-
-Over 100,000 fuzzed documents decoded byte for byte alike on native, the
-interpreter and #2014's build, and the harness went red when the key's end
-was put one byte early.
-
-CI's rows. The work vein: work_runbench 1,137,672,504 -> 1,104,562,811
-(-2.91%), work_jsonbench 812,108,477 -> 763,196,627 (-6.02%), work_oneshot
-12,776,869 -> 12,450,454 and work_livebench 1,370,942,122 -> 1,370,617,065.
-The interpreter reads its corpus's keys the same way: interp_instructions
-484,702,222 -> 463,217,423 and interp_allocs 539,460 -> 502,624, with
-interp_peak_bytes 614,115 -> 617,367. The library grows by the two arms of
-`key_at`, and every program that imports std/json compiles them: compile_instructions
-24,089,825 -> 24,321,293, entry_instructions 75,139,973 -> 75,148,170,
-library_instructions 74,835,835 -> 74,843,912, compile_allocs 13,382 ->
-13,465, compile_peak_bytes 572,289 -> 575,715 and front_end_visits 6,938 ->
-7,063. The decoder's emitted code reads
-emitted_defines 134 -> 136, emitted_calls 1,249 -> 1,282, emitted_branches
-1,336 -> 1,374 and emitted_lines 12,690 -> 13,010, and the other programs
-that decode emitted_other_defines 2,148 -> 2,154, emitted_other_calls 18,298
--> 18,397, emitted_other_branches 17,145 -> 17,259 and emitted_other_lines
-156,673 -> 157,633. Machine code: text 5,283,518 -> 5,286,574, 880 bytes on
-each program that decodes JSON and 416 on runbench. In the tab the run falls
-and the compile rises with the library: browser_run_instructions 35,361,799
--> 34,316,072, browser_compile_instructions 408,301,693 -> 413,585,272 and
-browser_compile_peak_bytes 749,207 -> 757,553.
-
-On one branch with #2014 and #2018, and on main with #2016's fixed link order,
-CI reads work_runbench 1,104,507,218, work_jsonbench 763,196,627,
-work_oneshot 12,450,839, work_livebench 1,370,616,792 and work_encodebench
-2,464,678,011; the corpus's machine code is text 5,287,022, the two runtime
-changes' 32 bytes a program on top of the key's; and
-codegen_instructions_dev reads 116,001,189 under the fixed order, the three
-changes' cost over main's 115,822,620.
-
 ## 2026-10-20 — the ratchet in four files
 
 `scripts/ratchet/ratchet.kso` was 6,316 lines, the largest source file in the
@@ -2152,3 +2035,85 @@ narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
 against the 5,863,976 the assume change left it, a move of 178; the dev
 build that row counts still narrows its module, and writes the same text.
 CI's browser rows matched this container's.
+
+## 2026-10-24 — a short float written in one pass
+
+`render_ryu`'s short path wrote a float from its scaled decimal m and place
+count p by dividing m by 10^p, writing the whole part forward after counting
+its digits, and then writing the fraction behind the point. It now writes m
+right to left in one pass, two digits at a time: the p fraction digits, the
+point, then what is left of m. The text goes into the top of a scratch buffer
+and moves out as three words. On runbench 191,070 floats take this path, and
+in this container the run program fell from 815,624,421 to 813,607,261
+instructions (-0.25%), with byte-identical output.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` now checks the text as
+well: the digits ryu chose, placed by the rule the interpreter's
+`render_float` follows. Its other checks pass `.5` for `0.5`, which reads
+back. With the whole part's zero dropped, it reported 141,779 text failures
+and none of the other kinds. At ten times its size it read 50,807,850
+doubles with no failure. The ratchet row `float_one_pass` puts the division
+back.
+
+## 2026-10-24 — the module's symbols read in one scan
+
+The module writer asks two questions of every piece of the body: which
+symbols it calls, written `@sym(`, to choose the declarations and call twins
+it keeps, and which symbols end a line, written `@sym\n`, to choose the
+closure cells. `called_symbols` and `symbols_before_newline` answered them
+with two scans of each piece, and the second stopped at every newline as
+well as every at. `called_and_ending` answers both in one pass over the ats:
+from each at to the first `(` or newline, a `(` making a call and a newline
+an ending when no other at comes first.
+
+The same pass now marks the interned strings the body names, `@sN` and
+`@sN_lit`, which `named_strings` found with a third scan of every piece; it
+still reads the type tables on their own. The tab's compile of its corpus fell
+from 227,562,045 to 224,770,876 instructions with the two scans merged and to
+223,778,736 with the third folded in, -1.66% in all, in this container. Its
+peak and the run did not move, and the tab's IR and the native IR of the
+nineteen benchmarks in both tiers are byte-identical. The specs that held each
+scan to a plain search now hold the merged one to it, with the ending side
+asked only about symbols without a `(`, which is every symbol the writer asks
+about; treating the end of the text as a line's end turned that spec red on
+`"@a"`. A new spec holds the pass's string marks to `named_strings`'s, and
+went red with the marking taken out. The ratchet row `one_scan` scans each
+piece a second time and reads 225,543,228; `strings_in_scan` scans the body
+for strings again and reads 224,854,630.
+
+## 2026-10-24 — a pair of leaves held in place
+
+The tab's translator asks a type for its scalar leaves, with their byte
+offsets, at every load, store, call and return of an aggregate. A scalar
+answered in place, and every struct built a vector, so each `%KValue`, two
+`i64`s, cost an allocation and a free. `Ty::leaves` now answers a struct of
+two scalars in place too. The tab's compile of its corpus fell from
+223,778,736 to 222,368,963 instructions (-0.63%) in this container, and the
+wasm it wrote is byte-identical. A spec holds `leaves` to the list `scalars`
+writes for scalars, pairs, a nested pair, a triple and arrays; giving the
+second leaf a fixed offset of 8 turned it red on `{i1, i16}`. The ratchet row
+`pair_leaves` lists pairs in a vector again and reads 223,694,975.
+
+**CI's rows for the three.** The run program fell from 815,624,816 to
+813,606,641, and the other benchmarks that render floats with it:
+encodebench 2,362,394,628 -> 2,353,427,661, livebench 970,491,700 ->
+961,524,285, widebench 28,539,533 -> 28,476,897 and oneshot 10,278,879 ->
+10,256,694. Every binary's text is 688 bytes smaller, the renderer's. The
+browser rows matched this container's. emit_instructions fell from 5,864,154
+to 5,690,029 (-3.0%), since `finish` runs `assembled` on every build and
+reads the module once where it read it three times. compile_instructions
+25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
+library_instructions 74,183,641 -> 74,096,953 count `kanso check`, which
+reaches none of the three changes, so I read them as the binary's layout.
+codegen_instructions_dev moved 116,219,760 -> 116,218,430 and
+codegen_instructions_release 425,504,448 -> 425,508,082; I have not isolated
+either. Welfare rose from 93.12 to 93.14 and is banked.
+
+Measured and set aside while looking: stripping the comment lines DECLARES
+carries from dev and tab modules, 11,317 of the corpus module's 327,126
+bytes, saved 85,914 instructions of the tab's compile (0.04%); and summing
+short integer literals in an `i64` rather than an `i128` in the translator's
+tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
+per-function count of `docs/kanso.wasm` built with its names: the tokenizer
+was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
+2.2%.

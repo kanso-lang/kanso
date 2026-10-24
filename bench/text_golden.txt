@@ -20,17 +20,17 @@
 # upstream version is pinned and the package revision is not: the release
 # selects codegen, and nothing here shows a revision moving a byte.
 # measured-on clang=19.1.1
-jsonbench text=401593
-encodebench text=344281
-oneshot text=408233
-basket text=336409
-widebench text=356121
-deepbench text=308009
-escapebench text=298457
-pendbench text=317545
-indexbench text=297161
-scanbench text=494473
-digestbench text=329017
-readbench text=298809
-livebench text=411785
-runbench text=730057
+jsonbench text=400905
+encodebench text=343593
+oneshot text=407545
+basket text=335721
+widebench text=355433
+deepbench text=307321
+escapebench text=297769
+pendbench text=316857
+indexbench text=296473
+scanbench text=493785
+digestbench text=328329
+readbench text=298121
+livebench text=411097
+runbench text=729369
