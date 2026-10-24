@@ -64,6 +64,18 @@ fn a_test_file_reading_a_private_name_is_refused() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+/// A helper in the test file calls the module's private `hidden`, and is
+/// refused at check like the same call in a test constant. Watched red as a
+/// run-time failure naming `~hidden`, a spelling the author never wrote.
+#[test]
+fn a_test_helper_reaching_a_private_name_is_refused() {
+    let output = in_fixtures(&["test", "reaches"]);
+    let expected = std::fs::read_to_string(fixture_dir().join("reaches.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(output.status.code(), Some(2));
+}
+
 /// The test's helper and the module's private function share the name
 /// `label`, and each file keeps its own. Watched red as an overlapping
 /// overload of `label`.
