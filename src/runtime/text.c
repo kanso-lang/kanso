@@ -927,11 +927,10 @@ __attribute__((noinline)) KValue k_b_at_str_seek(KStr* s, long long want) {
    hits are answered here, and the seek and both misses in functions of their
    own, so the path the walk takes 690,000 times on the run program holds
    only its own tests. */
-/* Defined in the release build's hot unit when the runtime is compiled
-   -DK_HOT_ELSEWHERE, so the LTO link can inline it into the program's
-   string walks (`hot_source` in src/main.rs). */
-KValue k_b_at_str(KStr* s, long long want);
-#ifndef K_HOT_ELSEWHERE
+/* The release build's hot unit holds a copy of this as an inline
+   definition, so the LTO link can inline it into the program's string walks
+   and never compiles it as a function of its own (`hot_source` in
+   src/main.rs). */
 __attribute__((always_inline)) KValue k_b_at_str(KStr* s, long long want) {
     /* The step. A walk by index asks for the character after the one it
        just read, and the cursor stands on that one: the answer is the
@@ -950,7 +949,6 @@ __attribute__((always_inline)) KValue k_b_at_str(KStr* s, long long want) {
     k_seek_byte = at;
     return k_at_char(s, at);
 }
-#endif
 
 KValue k_b_at(KValue container, KValue index) {
     if (__builtin_expect(!k_not_failure(container) || !k_not_failure(index), 0)) return k_failed2(container, index);
@@ -1470,7 +1468,6 @@ static inline int k_tail_window(const unsigned char* p) {
    bytes 99.99% of the time, so the setup was half the call. The scalar tail
    and the loop are small enough that eight copies cost the .text vein less
    than the calls cost the work vein. */
-#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
     if (K_COUNTING) k_stat_find2_calls++;
@@ -1517,10 +1514,6 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
     }
     return len + 1;
 }
-#else
-long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
-                        long long a, long long b);
-#endif
 
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
@@ -1653,10 +1646,9 @@ __attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
    what they say skips the failure and tag ladder below; on the run program
    that is 417,483 calls. `k_b_number_span` is the same scan for anything the
    twin turns away. The counter is here so both doors count a call once. */
-/* Defined in the release build's hot unit when the runtime is compiled
-   -DK_HOT_ELSEWHERE, so the LTO link can inline it into the decoder. */
-long long k_b_number_span_raw(const unsigned char* d, long long len, long long from);
-#ifndef K_HOT_ELSEWHERE
+/* The release build's hot unit holds a copy of this as an inline
+   definition, so the LTO link can inline it into the decoder (`hot_source`
+   in src/main.rs). */
 __attribute__((always_inline)) long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
     if (K_COUNTING) k_stat_number_spans++;
     if (from < 1 || from > len) return from;
@@ -1681,7 +1673,6 @@ __attribute__((always_inline)) long long k_b_number_span_raw(const unsigned char
     }
     return k_number_span_scan(d, len, from);
 }
-#endif
 
 KValue k_b_number_span(KValue cs, KValue fromv) {
     if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) {
@@ -2106,7 +2097,6 @@ K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 
    always_inline for the reason k_b_find2_raw gives: the byte pair and the
    limit are literals at every emitted site, and the broadcasts fold. */
-#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
@@ -2172,11 +2162,6 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
     }
     return (len + 1);
 }
-#else
-long long k_b_find2_below_raw(const unsigned char* d, long long len,
-                              long long from, long long a, long long b,
-                              long long floor_v);
-#endif
 
 KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }

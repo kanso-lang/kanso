@@ -1420,13 +1420,12 @@ void k_beat_push_deep(void);
    a test for the seek cursor, the run program paid 13,453,975 instructions
    for it, five an iteration; taking the call away gives back 7,298,706 of
    them. */
-/* K_HOT_ELSEWHERE: a release build compiles this file as machine code and
-   defines this function and the two byte scans in a small bitcode unit of
-   their own, which the LTO link inlines into the program. `hot_source` in
-   src/main.rs builds that unit from this file's own text, so these three and
-   everything they touch stay here, with the globals they read given external
-   linkage for its sake. */
-#ifndef K_HOT_ELSEWHERE
+/* A release build compiles this file as machine code, and the LTO link can
+   inline only bitcode, so it takes a copy of this function, the scans and
+   the parsers beside it from a small unit of their own. `hot_source` in
+   src/main.rs builds that unit from this file's own text, so everything they
+   touch stays here, with the globals they read given external linkage for its
+   sake. */
 __attribute__((always_inline)) void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     KMark* m = k_beat_top;
@@ -1436,9 +1435,6 @@ __attribute__((always_inline)) void k_beat_iter(void) {
     }
     k_beat_rewind(m);
 }
-#else
-void k_beat_iter(void);
-#endif
 
 static long long k_ptr(void* p);
 
@@ -1537,10 +1533,9 @@ void k_beat_push_deep(void) {
    loop entry instead of once per iteration, and a mark broken before the push
    is now reported at the push.
 
-   K_HOT_ELSEWHERE: a release build defines this in the hot unit, beside
-   k_beat_iter, so the encoder's loops take their mark without a call. The
-   over-deep case stays here as a call of its own. */
-#ifndef K_HOT_ELSEWHERE
+   The release build's hot unit holds a copy, beside k_beat_iter, so the
+   encoder's loops take their mark without a call. The over-deep case stays
+   here as a call of its own. */
 __attribute__((always_inline)) void k_beat_push(void) {
     if (k_beat_depth < K_BEAT_MAX) {
         KMark* m = &k_beat_stack[k_beat_depth];
@@ -1563,9 +1558,6 @@ __attribute__((always_inline)) void k_beat_push(void) {
     }
     k_beat_push_deep();
 }
-#else
-void k_beat_push(void);
-#endif
 
 static KValue k_carry_slots[K_CARRY_MAX];
 /* Slots the compiler proved hold a string builder this cycle owns. The copy

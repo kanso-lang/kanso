@@ -1414,11 +1414,10 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     // the runtime. On runbench the ladder read 1,811,839,413 at 225,
     // 1,809,106,361 at 1000, 1,806,069,074 at 2000 and 1,805,972,054 at 4000.
     // The object is compiled once and cached, so the build pays it once.
-    let runtime_obj = cached_runtime_object(
-        "release",
-        &["-O3", "-mllvm", "-inline-threshold=2000", "-DK_HOT_ELSEWHERE"],
-    )?;
-    let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
+    let runtime_obj =
+        cached_runtime_object("release", &["-O3", "-mllvm", "-inline-threshold=2000"])?;
+    let hot_obj =
+        cached_object("release_hot", Some(HOT_RECIPE), &|| hot_source().into(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         // THE PROGRAM IS OPTIMIZED ONCE, AT THE LINK. `-O3` here ran the full
         // pipeline on the program's IR as clang -cc1 turned it into bitcode,
@@ -1874,16 +1873,23 @@ fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u
 }
 
 fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
-    cached_object(profile, kanso::RUNTIME_C, opt)
+    cached_object(profile, None, &|| kanso::RUNTIME_C.into(), opt)
 }
+
+/// What the hot unit's text is made by, beside the runtime it is cut from:
+/// `hot_source_of` is in this file, so a change to it names a new object. The
+/// runtime's digest alone left a build reusing a unit the old recipe made.
+const HOT_RECIPE: (u64, u64) = kanso::hash::digest_of(include_bytes!("main.rs"));
 
 /// The helpers a release build keeps in its LTO link, as a translation unit
 /// of their own. The runtime itself is machine code there, and the link can
 /// only inline what it holds as bitcode: `k_b_find2_raw`,
 /// `k_b_find2_below_raw` and `k_beat_iter` were 161,703,385 instructions of
-/// the run program's calls when the whole runtime went native. So the runtime
-/// is compiled `-DK_HOT_ELSEWHERE`, which leaves those three out, and this unit
-/// defines them.
+/// the run program's calls when the whole runtime went native. So this unit
+/// holds a copy of each such helper as a C99 inline definition, which the
+/// link inlines where the program calls it and never compiles on its own;
+/// the runtime defines them too, as machine code, for its own callers and for
+/// any call the link leaves. See `inline_only`.
 ///
 /// The text is taken from `runtime.c` itself rather than kept in a second
 /// file, because a dozen specs read these functions out of that file and a
@@ -1902,6 +1908,9 @@ fn hot_source_of(runtime: &str) -> String {
         "#if defined(__aarch64__)\n#include <arm_neon.h>\n",
         "#elif defined(__x86_64__)\n#include <tmmintrin.h>\n#endif\n",
         "#ifdef KANSO_COUNTERS_BUILD\n#define K_COUNTING 1\n#else\n#define K_COUNTING 0\n#endif\n",
+        // An inline definition reaches the unit's static helpers, which C
+        // warns about and which is safe here: the definition is never emitted.
+        "#pragma clang diagnostic ignored \"-Wstatic-in-inline\"\n",
     ));
     for (start, end) in [
         ("typedef struct { long long tag; long long payload; } KValue;", "\n"),
@@ -1981,6 +1990,7 @@ fn hot_source_of(runtime: &str) -> String {
         "static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,",
         "long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {",
     ] {
+        out.push_str(inline_only(start));
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }
     // The decoder's two slice parsers, with what they inline. `k_int` and
@@ -2016,9 +2026,48 @@ fn hot_source_of(runtime: &str) -> String {
         "KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
         "KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
     ] {
+        out.push_str(inline_only(start));
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }
+    // Clang emits an inline definition only where the unit refers to it, and
+    // nothing here calls these, so a table refers to each. The table has
+    // external linkage, so the unit's own compile keeps it, and nothing reads
+    // it, so the link drops it and then every body the program does not call.
+    // With `used` on it the link kept and optimized all four in every build.
+    out.push_str("const void* const k_hot_inline_bodies[] = {");
+    for name in INLINE_ONLY {
+        out.push_str("(const void*)");
+        out.push_str(name.trim_end_matches('('));
+        out.push_str(", ");
+    }
+    out.push_str("};\n");
     out
+}
+
+const INLINE_ONLY: [&str; 8] = [
+    "k_beat_iter(",
+    "k_beat_push(",
+    "k_b_find2_raw(",
+    "k_b_find2_below_raw(",
+    "k_b_at_str(",
+    "k_b_number_span_raw(",
+    "k_b_to_int_slice_raw(",
+    "k_b_to_float_slice_raw(",
+];
+
+/// `inline ` for the definitions runtime.c also compiles as machine code, so
+/// the unit's copy is a C99 inline definition: the link inlines it where the
+/// program calls it and drops it everywhere else. Defined outright in this
+/// unit, each was optimized and compiled again by every release link, called
+/// or not. Linking the codegen corpus, `ld.lld` read 252,430,133 with four
+/// helpers defined outright, 295,287,065 with eight, and 187,756,033 with the
+/// eight inline.
+fn inline_only(start: &str) -> &'static str {
+    if INLINE_ONLY.iter().any(|n| start.contains(n)) {
+        "inline "
+    } else {
+        ""
+    }
 }
 
 /// `hot_text` from the start of the line holding `start`.
@@ -2039,10 +2088,27 @@ fn hot_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[from..to]
 }
 
-fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
+/// The object clang makes of `source`, from the temp directory when a build
+/// already made it. The source is asked for only when it did not: the hot
+/// unit's text is cut out of the runtime by some forty searches. Building it
+/// on every release build of the codegen corpus, kanso's own process read
+/// 74,931,992 instructions, and asking for it only on a miss, 30,665,523.
+fn cached_object(
+    profile: &str,
+    recipe: Option<(u64, u64)>,
+    source: &dyn Fn() -> std::borrow::Cow<'static, str>,
+    opt: &[&str],
+) -> std::io::Result<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
     let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let counting = kanso::codegen::counters_wanted();
-    let key = hex16(runtime_key(profile, opt, preserve, counting));
+    let mut named = runtime_key(profile, opt, preserve, counting);
+    if let Some(recipe) = recipe {
+        let mut hasher = std::hash::DefaultHasher::new();
+        (named, recipe).hash(&mut hasher);
+        named = hasher.finish();
+    }
+    let key = hex16(named);
     let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.o"));
     if object.exists() {
         return Ok(object);
@@ -2056,7 +2122,7 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
     let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.c"));
     let c_staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.c", pid_tag()));
-    std::fs::write(&c_staging, source)?;
+    std::fs::write(&c_staging, source().as_bytes())?;
     std::fs::rename(&c_staging, &c_path)?;
     let staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
