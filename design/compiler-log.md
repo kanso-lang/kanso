@@ -1868,3 +1868,15 @@ in the tree. With the floor under that check the count is still 130. Most of
 them read behind a bound passed through a boolean, `applied dir list at acc
 (at > length list)` with the read in the `false` arm, where the fact lives in
 the caller and no floor on the counter covers it.
+
+CI's rows. Every compile asks the call graph where each counter starts, and
+the tab compiles with the same front end: compile_instructions 24,230,258 ->
+24,488,495, entry_instructions 71,606,414 -> 72,335,545,
+library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,362
+-> 5,637,632, compile_allocs 13,789 -> 13,815 and
+browser_compile_instructions 216,735,094 -> 218,080,643. The interpreter's
+corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
+401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
+native moved. Welfare fell by less than a hundredth, and the floor follows
+under the language exception: the ruling asks for index reads to be proven,
+and this proves more of them.
