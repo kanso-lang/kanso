@@ -21,96 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — five JSON decoder states skip a blank run out of line
-
-Each state of the JSON decoder read whitespace with an arm that called the
-state again on the next byte, so every state was a loop. Five of them
-(`array_delim`, `array_open`, `obj_delim`, `obj_key_end`, `obj_open`) now skip
-the run with `skip_ws` and read the byte after it with a second group of the
-same arms and no blank one, so they no longer loop. `obj_key_start` keeps the
-arm that calls itself.
-
-The lead came from the per-instruction profile of the stacked tree. Each
-decoder frame loaded three constants in its prologue that its hot path never
-used: a `movabs` and two `lea`s, about four instructions a call. Turning off
-LLVM's machine LICM at the LTO link removed them and read the run program
-935,901,767 -> 927,399,704 (-0.91%), but as a global flag it was a trade:
-jsonbench -1.98% and encodebench -2.27%, against escapebench +3.20% and
-widebench +1.35%, whose real loops lost their hoisting. It was declined. The
-narrower LICM switches (`-disable-postra-machine-licm`,
-`-sink-insts-to-avoid-spills`, `-disable-hoisting-to-hotter-blocks=all`) moved
-the run program by less than half a million instructions either way.
-
-Taking the loops out of the states moved far more than the hoisted constants.
-LLVM folds the decoder's states into one another differently once they stop
-looping, and the run program fell 39.4M with all six states out of line. The
-effect of each state was measured by looping it alone against all six out:
-`array_delim` +13.8M, `array_open` +26.6M, `obj_open` +1.9M, `obj_delim` +1.2M,
-`obj_key_end` -4.6M and `obj_key_start` -18.1M. The effects do not add: the
-two key states looped together read +13.6M, and with `obj_delim` as well
-+22.4M. The shape taken is the best one measured. A cycle-free `value_for`
-(its eight arms copied into a second group) moved the run program by 1,239
-instructions and added 14 KB of machine code; it was dropped.
-
-Measured here, every benchmark in the instructions gate: the run program
-935,901,781 -> 878,353,218 (-6.15%), jsonbench 682,003,932 -> 599,977,782
-(-12.03%), oneshot 11,118,560 -> 10,571,976 (-4.92%) and livebench
-1,033,423,752 -> 1,032,876,960 (-0.05%); the other ten move by fourteen
-instructions or less. The output is the same.
-
-The decoder's emitted code rises by the five second groups and their twins:
-emitted_defines 136 -> 157, emitted_calls 1,394 -> 1,557, emitted_branches
-1,307 -> 1,346 and emitted_lines 13,134 -> 14,330. oneshot, livebench and
-runbench rise by the same 21 defines and 163 calls, so over the other
-benchmarks emitted_other_defines 2,154 -> 2,217, emitted_other_calls 19,088
--> 19,577, emitted_other_branches 16,894 -> 17,011 and emitted_other_lines
-158,320 -> 161,908. No allocation counter moves.
-
-CI's rows: work_runbench 935,902,128 -> 878,353,565 (-6.15%), work_jsonbench
-682,004,279 -> 599,978,129 (-12.03%), work_oneshot 11,118,893 -> 10,572,323
-(-4.92%) and work_livebench 1,033,424,099 -> 1,032,877,307 (-0.05%). The
-machine code grows where the decoder is linked in: text 5,223,614 ->
-5,340,654 over every binary, runbench 721,769 -> 750,713, jsonbench 372,697
--> 402,057, oneshot 379,225 -> 408,601 and livebench 382,761 -> 412,121.
-
-The compiler pays for the new groups in every program that imports
-`std/json`: compile_instructions 23,736,301 -> 25,221,632 (+6.26%),
-entry_instructions 74,485,199 -> 74,568,239, library_instructions 74,147,760
--> 74,230,433, compile_allocs 13,179 -> 13,789, compile_peak_bytes 565,175 ->
-598,984 and front_end_visits 6,914 -> 7,251. The interpreter's corpus
-reads interp_instructions 384,228,496 -> 385,357,985, interp_allocs 400,588
--> 401,539 and interp_peak_bytes 608,798 -> 637,429. codegen_instructions_dev,
-codegen_instructions_release and emit_instructions do not move.
-In the tab, browser_compile_instructions 402,486,449 -> 428,211,402 (+6.39%)
-and browser_compile_peak_bytes 735,005 -> 768,853 rise with the compiler's
-share, and browser_run_instructions 31,370,376 -> 30,540,337 falls. The
-welfare sum rose, and the floor moves 92.53 -> 92.73.
-
-The micro golden `a_blank_run_in_json_is_read_by_each_state` puts a run of
-blanks before every byte each state can meet, refusals included, and prints
-each refusal's position. Main's decoder prints the same 23 lines. The ratchet
-row `a_blank_run_looped_at_the_comma` gives `array_delim` its looping arm back,
-which reads the run program 13.8M higher, and turns the instructions vein red.
-
-The benchmark documents hold almost no blanks outside their strings, so the
-run program's document was indented two spaces a level (458,223 bytes,
-271,763 of them blanks) and decoded once: 16,561,895 -> 16,456,195 (-0.64%).
-
-Also measured and declined: `k_render_number` tests whether a double is
-integral with `floor`, a PLT call; a cast round trip in its place read the run
-program +181,613. The `floor` it calls here is glibc's `__floor_sse41`,
-which the profile counts at 1.5 instructions a call.
-
-Also measured and declined, closing #2011: the span's fast path worked out the
-value of the number it found and kept it, keyed by the sixteen bytes from the
-number's first, its length and which conversion it answers, and the
-conversion doors answered from it. Every number hit. `k_b_to_float_slice_raw`
-fell 26,482,302 -> 5,504,994 and `k_b_to_int_slice_raw` 13,492,972 ->
-6,464,568, but `k_b_number_span_raw` rose 24,644,367 -> 36,078,570 and the
-float fill cost 16,259,562, and the run program read 935,901,781 ->
-935,589,998. With the int fill out of line it read 939,328,415. The
-conversion's arithmetic costs about the same in the span as in the door.
-
 ## 2026-10-22 — an escaped JSON string is read in one walk
 
 A JSON string with an escape in it was read twice. `plain_string`'s emitted
@@ -1857,3 +1767,29 @@ emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
 emits the same way, takes browser_compile_instructions from 216,735,094 to
 216,735,256. No benchmark builds a pipe of that shape, and nothing at run
 time moved.
+
+## 2026-10-24 — a field read is asked the none question the same way on every route
+
+`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
+inflate's port has the shape: `fn go (req none)` answers a request whose
+path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
+test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
+split, and toml's had it between `check lib` and `check main.kso`.
+
+The none question in `after_infer.rs` asks whether an argument can be a none.
+It answers no for a field read, so a none carried in a field stays the
+runtime's sentence. But the module and play routes run the check before
+field reads are rewritten into getter calls, and the entry and test routes
+run it after. On those two the argument was a call to `Get_path`, whose
+return set is every value the field was built from, and the first arm's
+claim on the none never reaches that set. The question now answers no for a
+getter call too, so all four routes give a field read the same answer.
+
+`tests/golden/test_verb/claims_a_field` is inflate's shape, and
+`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
+it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
+in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
+what `check lib` passed.
+
+Whether a none carried in a field should be refused at check is #2088's
+question, for every route at once.
