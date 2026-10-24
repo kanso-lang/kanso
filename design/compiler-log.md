@@ -1839,9 +1839,7 @@ F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
 its counter at one and only adds to it, and its author writes the guard on
 the far end alone: `return acc if length xs < at`. The checker read that as
 a bound above and none below, so `xs[at]` could be a none, and the read had
-to be resolved where it could not miss. #2088's check of a none carried
-through a name made the gap wider: the tree has about 130 such reads, most
-of them a counter's.
+to be resolved where it could not miss.
 
 Inference now gives a parameter a floor when every value it can hold is in
 sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
@@ -1864,3 +1862,9 @@ A proven read carries no none in inference's sets, so inference settles
 sooner where std/text reads one: compiling `text/uppercase` alone now takes
 223 expression visits, one fewer, and
 `tests/an_import_reads_what_the_program_names.rs` says so.
+
+What it does not reach: the about 130 reads #2088's named-none check refuses
+in the tree. With the floor under that check the count is still 130. Most of
+them read behind a bound passed through a boolean, `applied dir list at acc
+(at > length list)` with the read in the `false` arm, where the fact lives in
+the caller and no floor on the counter covers it.
