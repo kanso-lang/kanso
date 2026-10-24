@@ -705,12 +705,20 @@ fn ir_defines(body: &str) -> Vec<(&str, &str)> {
     // Every block is a run of whole lines, so it is a slice of the body
     // rather than a copy: the prune that reads these runs at the emitter's
     // high-water mark, beside the body it splits.
+    //
+    // Lines are found a word at a time, and only a line that opens with `}`
+    // is trimmed. `split_inclusive('\n')` called memchr once a line, which
+    // on wasm32 reads four bytes a step: the tab's compile of its corpus fell
+    // 1,443,097 instructions, 0.65%, when this stopped.
     let mut out: Vec<(&str, &str)> = Vec::new();
     let mut sym = "";
     let mut from = 0;
     let mut at = 0;
     let mut inside = false;
-    for line in body.split_inclusive('\n') {
+    let bytes = body.as_bytes();
+    while at < bytes.len() {
+        let end = crate::compare::byte_from(bytes, at, b'\n');
+        let line = &body[at..(end + 1).min(bytes.len())];
         if !inside && line.starts_with("define ") {
             if at > from {
                 out.push(("", &body[from..at]));
@@ -723,7 +731,7 @@ fn ir_defines(body: &str) -> Vec<(&str, &str)> {
                 .unwrap_or_default();
         }
         at += line.len();
-        if inside && line.trim_end() == "}" {
+        if inside && line.starts_with('}') && line.trim_end() == "}" {
             out.push((std::mem::take(&mut sym), &body[from..at]));
             from = at;
             inside = false;
