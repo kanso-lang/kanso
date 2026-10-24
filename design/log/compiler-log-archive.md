@@ -107070,3 +107070,76 @@ and turns the emitted gate red. The row `a_map_entry_read_through_the_c` patched
 `key_at_fast` and read BLIND once the pair took every key the encoder reads;
 it now sends the pair to the C, which reads the run program 935,900,947 ->
 967,870,853, and it gates the instructions vein.
+
+## 2026-10-22 — a builder at the arena's frontier grows where it stands
+
+A builder that outgrew its buffer took a new one and copied, in the arena or
+from malloc depending on where its header sat against the innermost mark. When
+the header lies above that mark, the buffer is arena storage, and when the
+buffer is also the last thing the arena handed out, it now grows by moving
+the frontier past it: no new buffer and no copy. A header above the innermost
+mark was allocated after it, and a buffer at the frontier after the header, so
+the extension dies with the header at the same rewind. The grow also requires
+the header to own the buffer's frontier, since a grow is how an append reaches
+a buffer another header has written past. The extension's bytes count in
+`alloc_bytes`.
+
+That made a second change pay. On 2026-10-21 `entry_count` was left
+allocating to the beat analysis, which kept a region around each map the
+encoder descends into: inside the region the builder's header sat below the
+mark and grew by realloc, and without it the builder grew in the arena by
+doubling and copying (+24.7M memcpy). `entry_count` is now pure, as `key_at`
+and `value_at` are. The view it may build comes from malloc, and only a sort's
+scratch index lands in the arena, where the enclosing loop's rewind takes it.
+The region is gone, and the builder now grows in place.
+
+Measured here, the run program read 1,018,405,282 -> 999,948,734 (-1.81%)
+with the same output: `k_region_pop`'s 10.7M is gone, and `encode_list` and
+`encode_map` fall 3.5M and 3.8M.
+
+CI's rows: work_runbench 1,018,406,469 -> 999,949,921 (-1.81%),
+work_livebench 1,126,408,749 -> 1,043,615,776 (-7.3%), work_oneshot
+11,669,620 -> 11,443,335 (-1.9%) and work_encodebench 2,456,797,637 ->
+2,456,796,655. work_widebench rises 28,571,443 -> 28,619,441 (+0.17%); it
+carries its own copy of lib/json and grows its builders in the arena too. The
+run program's held_peak_bytes falls 200,978 -> 111,920, and run allocs
+1,447,994 -> 1,446,734, alloc_bytes 249,236,356 -> 221,966,536, append_grow
+1,260 -> 1,080, append_fast 5,328,270 -> 5,328,540, bytes_malloc 9,140 ->
+7,880 and bytes_freed 9,010 -> 7,750. The one-shot and live programs'
+builders never leave the arena: held_peak_bytes 200,978 -> 0 in both,
+bytes_malloc and bytes_freed 14 -> 0 and 5,600 -> 0, oneshot allocs 7,531 ->
+7,517, alloc_bytes 1,790,518 -> 1,487,520, append_grow 14 -> 12, append_fast
+59,203 -> 59,206; live allocs 13,914 -> 8,314, alloc_bytes 235,351,504 ->
+114,152,304, append_grow 5,600 -> 4,800, append_fast 23,681,200 ->
+23,682,400. Without the region runbench, oneshot and livebench make three
+fewer calls (runbench calls 7,355 -> 7,352, lines 56,634 -> 56,636; oneshot
+calls 1,484 -> 1,481, lines 13,866 -> 13,868; livebench calls 1,523 -> 1,520,
+lines 14,189 -> 14,191). The runtime's text grows 336 bytes in every program
+(text jsonbench 372,777 -> 373,113) and shrinks where the region went (text
+runbench 720,921 -> 719,977, oneshot 380,393 -> 379,641, livebench 384,169 ->
+383,177). codegen_instructions_dev 116,067,612 -> 116,068,279 and
+codegen_instructions_release 422,361,029 -> 422,367,718 rise, and
+emit_instructions 6,377,706 -> 6,377,307 falls. In the tab,
+browser_run_instructions 31,991,504 -> 31,623,429,
+browser_run_peak_bytes 1,441,792 -> 1,376,256, browser_compile_instructions
+406,222,752 -> 406,034,117 and browser_compile_peak_bytes 733,266 -> 732,887
+fall. The welfare sum rose, and the floor moves 92.17 -> 92.25.
+
+The frees fall with the mallocs they answered: run_bytes_freed 9,010 -> 7,750,
+oneshot_bytes_freed 14 -> 0, live_bytes_freed 5,600 -> 0 and
+a_literal_appended_across_a_rewind_bytes_freed 40 -> 0. Over all programs,
+emitted_other_lines 158,180 -> 158,186 and text 5,235,662 -> 5,236,670.
+
+The mem corpus moves where builders grow in the arena:
+`a_literal_appended_across_a_rewind` allocs 136 -> 96, alloc_bytes 11,920 ->
+9,040, bytes_malloc and bytes_freed 40 -> 0, held_peak_bytes 152 -> 0;
+`three_storage_regimes_share_one_append` allocs 1,640 -> 1,040, alloc_bytes
+186,274 -> 114,274; `append_of_a_slice_boxes_nothing` allocs 14 -> 12,
+alloc_bytes 2,396 -> 2,156. The micro golden
+`a_builder_grows_where_it_stands_until_something_follows_it` grows a builder
+in place, appends a string made after the buffer, and grows again by copying,
+300 rounds inside a loop against one built outside any; with the in-place
+write one byte early it printed `0 of 300 rounds agree`. Two ratchet rows:
+`a_builder_copied_at_the_frontier` turns the mem corpus red, and
+`a_maps_count_held_as_allocating` puts the region back and turns the run
+counters red.
