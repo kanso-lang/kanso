@@ -1,0 +1,6 @@
+import "std/io"
+
+fn read_line at s
+  "{at}:{s}"
+
+io/write "{read_line 1 "x"}\n"

@@ -7,3 +7,4 @@ fn counting a b
   a + b
 
 print "{list/sum [(apply counting)]}"
+print "{counting 3 4}"
