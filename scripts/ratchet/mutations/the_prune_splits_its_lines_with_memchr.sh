@@ -6,7 +6,7 @@
 set -e
 f=src/codegen/ir_scan.rs
 t="        let end = crate::compare::byte_from(bytes, at, b'\\\\n');"
-grep -qF "let end = crate::compare::byte_from(bytes, at, b'\\n');" "$f" || {
+grep -qF "let end = crate::compare::byte_from(bytes, at, b'\\n');" src/codegen/ir_scan.rs || {
   echo "the prune's line step moved; this mutation needs rewriting" >&2
   exit 1
 }

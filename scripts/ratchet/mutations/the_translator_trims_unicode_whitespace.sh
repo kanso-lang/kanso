@@ -5,7 +5,7 @@
 # tab's compile reads heavier.
 set -e
 f=src/ir_wasm.rs
-[ "$(grep -c '        let line = raw.trim_ascii();' "$f")" -eq 2 ] || {
+[ "$(grep -c '        let line = raw.trim_ascii();' src/ir_wasm.rs)" -eq 2 ] || {
   echo "the translator's trims moved; this mutation needs rewriting" >&2
   exit 1
 }
