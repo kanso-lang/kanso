@@ -1845,3 +1845,9 @@ attribute stays and the flag was set aside.
 runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
 function in the binary calls either. The ratchet row `empty_inline` puts
 `noinline` in place of both `always_inline`s and reads 797,156,333.
+
+Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
+instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
+Inlined, the record constructor made `json/obj_value` too large to inline
+into `obj_key_start`, so `obj_value` became a call of its own and cost
+58,253,679 where `obj_key_start` gave back 37,835,883.
