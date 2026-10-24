@@ -166,6 +166,27 @@ pub fn apply_wrappers(program: &mut Program, alias: &HashMap<String, HashMap<usi
     if alias.is_empty() {
         return;
     }
+    // A type the program declares is the author's own name, and a call to it
+    // builds the record: mustache's `type env` beside std/os's `env` wrapper
+    // was rewritten to `builtin_env`, and the interpreter read the environment.
+    let owned: Vec<&str> = program
+        .types
+        .iter()
+        .filter(|t| t.origin.is_none() && alias.contains_key(t.name.as_str()))
+        .map(|t| t.name.as_str())
+        .collect();
+    let narrowed;
+    let alias = match owned.is_empty() {
+        true => alias,
+        false => {
+            let mut kept = alias.clone();
+            for name in owned {
+                kept.remove(name);
+            }
+            narrowed = kept;
+            &narrowed
+        }
+    };
     for decl in &mut program.fns {
         // A shaded call keeps its name until the root of the program decides
         // whether an owner's arm joins its group.

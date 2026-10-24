@@ -1,0 +1,6 @@
+import "std/os"
+
+type env
+  name
+
+os/args .> (xs -> print "{env "x"} {length xs}")
