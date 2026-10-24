@@ -17,7 +17,7 @@ static KValue k_not_a_number(const char* data, long long len, const char* tail,
    and origin in callee-saved registers and paid five pushes and five pops on
    every call, for a path no call in either benchmark takes. preserve_most
    takes the last push with it, for the reason k_alloc_refill gives. */
-static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin) {
+__attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin) {
     char* end = NULL;
     errno = 0;
     /* strtoll reads until a byte stops it, and a range read out of the
@@ -146,15 +146,16 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
    of the six integer registers the abi has, so the last one spilled at every
    number the decoder read. The twin tests the three tags inline and hands
    these a pointer, a length, two positions and the origin. A range outside
-   the bytes takes the long way, as the doors above do. */
-KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to,
-                            const char* origin) {
+   the bytes takes the long way, as the doors above do. The release build's
+   hot unit holds a copy of each as an inline definition, so the LTO link
+   inlines them into the twins. */
+__attribute__((always_inline)) KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {
     if (k_span_in(from, to, len))
         return k_to_int_text((const char*)d + (from - 1), to - from + 1, to, origin);
     return k_b_to_int(k_b_slice_raw(d, len, from, to), origin);
 }
 
-K_DOORCC KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {
+__attribute__((always_inline)) KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {
     if (k_span_in(from, to, len))
         return k_to_float_text((const char*)d + (from - 1), to - from + 1, to, origin);
     return k_b_to_float(k_b_slice_raw(d, len, from, to), origin);
@@ -440,7 +441,7 @@ KValue k_b_round(KValue v) {
 /* Generated: 10^q = (hi.lo / 2^128) * 2^e2 for q in [-342, 308], the
    128-bit significand MSB-normalized; negative powers rounded up per
    the eisel-lemire convention. Regeneration: compiler log 2026-07-23. */
-static const struct { unsigned long long hi, lo; int e2; } k_el_pow10[] = {
+const struct { unsigned long long hi, lo; int e2; } k_el_pow10[] = {
     {0xeef453d6923bd65aULL, 0x113faa2906a13b40ULL, -1136},
     {0x9558b4661b6565f8ULL, 0x4ac7ca59a424c508ULL, -1132},
     {0xbaaee17fa23ebf76ULL, 0x5d79bcf00d2df64aULL, -1129},
@@ -1216,8 +1217,8 @@ k_to_float_scan(const char* data, long long len, const char* origin);
 /* The scan out of line, for the slice doors: its fallback's buffer and the
    registers its loops want made every call build a frame, and a slice of a
    document nearly always has the room the `[-]I.F` shape needs. */
-static __attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len,
-                                                            const char* origin) {
+__attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len,
+                                                     const char* origin) {
     return k_to_float_scan(data, len, origin);
 }
 

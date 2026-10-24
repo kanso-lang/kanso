@@ -157,7 +157,7 @@ static long long k_stat_thunk_forces = 0;
 static long long k_stat_thunk_evals = 0;
 static long long k_stat_thunk_frees = 0;
 static long long k_stat_thunk_escaped = 0;
-static long long k_stat_el_parses = 0;
+long long k_stat_el_parses = 0;
 static long long k_stat_ryu_renders = 0;
 /* renders whose digits the short path found, without ryu's multiplies; a
    merge that loses the path takes this to zero */
@@ -200,11 +200,11 @@ static long long k_stat_str_scan_bytes = 0;
    of from the front of the string. A scan that rewinds between positions
    loses the cursor if the rewind forgets it, and the walk then starts from
    the front at every position: nothing else moves, and this reads nought. */
-static long long k_stat_seek_resumes = 0;
+long long k_stat_seek_resumes = 0;
 /* Indexes answered by stepping the cursor one character on, without the
    general seek: a walk by index takes this path at every character after its
    first. A merge that loses the step reads zero here. */
-static long long k_stat_seek_steps = 0;
+long long k_stat_seek_steps = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -530,10 +530,10 @@ typedef struct {
    -4,571,478, `utf8` -2,157,799 and `to_float_slice` -1,113,156. The same
    trial made `at` dearer by 9,209,935 and `utf8_slice_raw` by 4,306,698,
    because their callers keep more live across the call than the callee used
-   to save, so they stay on the C convention. Two joined later, measured the
-   same way on the run program: `append_string_mut` -2,228,335 and
-   `to_float_slice_raw`, the door the decoder's number twin calls now,
-   -1,113,877; `to_int_slice_raw` read +472,341 and stays. The emitter writes
+   to save, so they stay on the C convention. `append_string_mut` joined
+   later, measured the same way on the run program: -2,228,335. The two slice
+   parsers the decoder's number twins call are inlined into them in a release
+   build, so their convention is the C one. The emitter writes
    the keyword on the declares and calls of exactly these, in
    `PRESERVE_NONE_DOORS`, and `tests/the_doors_the_program_calls_agree.rs`
    holds the two lists equal. */
@@ -689,8 +689,8 @@ static long long k_stat_cohort_kept = 0;
    the one thread — and it would need to move into the fibre if that ever
    stopped being true. */
 KStr* k_seek_str = NULL;
-static long long k_seek_char = 0;
-static long k_seek_byte = 0;
+long long k_seek_char = 0;
+long k_seek_byte = 0;
 
 char* k_arena = NULL;
 /* The emitted IR reads and writes this as an i64, which is size_t on a 64-bit
@@ -1420,13 +1420,12 @@ void k_beat_push_deep(void);
    a test for the seek cursor, the run program paid 13,453,975 instructions
    for it, five an iteration; taking the call away gives back 7,298,706 of
    them. */
-/* K_HOT_ELSEWHERE: a release build compiles this file as machine code and
-   defines this function and the two byte scans in a small bitcode unit of
-   their own, which the LTO link inlines into the program. `hot_source` in
-   src/main.rs builds that unit from this file's own text, so these three and
-   everything they touch stay here, with the globals they read given external
-   linkage for its sake. */
-#ifndef K_HOT_ELSEWHERE
+/* A release build compiles this file as machine code, and the LTO link can
+   inline only bitcode, so it takes a copy of this function, the scans and
+   the parsers beside it from a small unit of their own. `hot_source` in
+   src/main.rs builds that unit from this file's own text, so everything they
+   touch stays here, with the globals they read given external linkage for its
+   sake. */
 __attribute__((always_inline)) void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     KMark* m = k_beat_top;
@@ -1436,9 +1435,6 @@ __attribute__((always_inline)) void k_beat_iter(void) {
     }
     k_beat_rewind(m);
 }
-#else
-void k_beat_iter(void);
-#endif
 
 static long long k_ptr(void* p);
 
@@ -1537,10 +1533,9 @@ void k_beat_push_deep(void) {
    loop entry instead of once per iteration, and a mark broken before the push
    is now reported at the push.
 
-   K_HOT_ELSEWHERE: a release build defines this in the hot unit, beside
-   k_beat_iter, so the encoder's loops take their mark without a call. The
-   over-deep case stays here as a call of its own. */
-#ifndef K_HOT_ELSEWHERE
+   The release build's hot unit holds a copy, beside k_beat_iter, so the
+   encoder's loops take their mark without a call. The over-deep case stays
+   here as a call of its own. */
 __attribute__((always_inline)) void k_beat_push(void) {
     if (k_beat_depth < K_BEAT_MAX) {
         KMark* m = &k_beat_stack[k_beat_depth];
@@ -1563,9 +1558,6 @@ __attribute__((always_inline)) void k_beat_push(void) {
     }
     k_beat_push_deep();
 }
-#else
-void k_beat_push(void);
-#endif
 
 static KValue k_carry_slots[K_CARRY_MAX];
 /* Slots the compiler proved hold a string builder this cycle owns. The copy

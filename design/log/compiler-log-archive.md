@@ -106627,3 +106627,339 @@ float path moved out of line the same way, was measured and dropped too: it
 read the run program 1,100,103,349 -> 1,104,459,315 and encodebench
 2,464,678,011 -> 2,484,039,482, because every float paid the extra call
 level and floats are half of what the encoder renders.
+
+## 2026-10-21 — a carried record returns in three words
+
+A two-field record whose first field is an int, like the decoder's
+`parsed`, goes back to its caller in registers. It used to take two words:
+the int shifted above the value's tag in the first, the value's payload in
+the second. Every pack checked that the int survived the shift, and every
+unpack branched on a marker for the record built on the heap when it did
+not. On the run program that was 725,703 checked packs and 1,791,207
+unpacks (#2024). The record now takes three words. Both tags share the
+first, the value's payload is the second and the int's word is the third,
+so every int fits, a bignum crosses as its pointer, and nothing spills.
+`k_parsed_spill` and the two readers of a spilled record are gone. A
+failure still travels in the first two words, which read as a `%KValue`.
+
+The first build read the run program 1,100,103,349 -> 1,093,152,335.
+`obj_key_end` grew by 3,136,716: with the int's tag read out of a word,
+LLVM no longer knew it was an int's, and tested it for a thunk on every
+record. An `llvm.assume` that the tag is K_INT or K_BIG gives that back.
+Here the run program read 1,100,103,349 -> 1,085,159,551 (-1.36%), and
+every decoder function in the profile fell.
+
+CI's rows: work_runbench 1,100,104,536 -> 1,085,160,738 (-1.36%),
+work_jsonbench 763,196,627 -> 749,951,027 (-1.74%), work_oneshot
+12,451,007 -> 12,362,488, work_widebench 28,740,070 -> 28,580,079,
+work_livebench 1,370,617,002 -> 1,370,528,510 and work_encodebench
+2,464,677,731 -> 2,464,443,931. Machine code shrinks in every benchmark:
+text runbench 741,161 -> 737,929 and jsonbench 382,825 -> 379,049, the
+rest by 240 to 3,840 bytes. The decoder's emitted code reads calls 1,282 ->
+1,261, branches 1,374 -> 1,332 and lines 13,010 -> 12,909, and the other
+programs that decode JSON fall the same way. codegen_instructions_dev
+116,002,877 -> 115,990,552, codegen_instructions_release 453,797,745 ->
+453,689,156 and emit_instructions 6,233,826 -> 6,232,336. In the tab,
+browser_compile_instructions 413,585,272 -> 412,332,402 and
+browser_compile_peak_bytes 757,553 -> 752,985 fall, and
+browser_run_instructions 34,136,382 -> 34,370,238 rises by 0.69%. The
+tab runs the emitter's IR through its own translator, which drops the
+assume's call but computes the test that feeds it, and returns a struct
+through memory, now three words of it. How the rise divides between those
+has not been measured. The welfare sum rose, and the floor moves 91.78 ->
+91.84.
+
+The x86 rewrite to `preserve_nonecc` flattens a struct parameter into
+words, and it assumed every struct was two. A `%parsed` parameter lost its
+third word, the decoder's tail calls stopped matching, and the run program
+ran out of stack. `flat_words` now gives each type's width, and the other
+counts read from it.
+
+A constant is built once into a cell that holds a `%KValue`, and its
+symbol returns what the cell holds. A constant whose body built a carried
+record still had a builder returning `%parsed`, and callers that asked for
+one: the cell kept the two words as if they were a value, and it read back
+because the shapes matched. Three words do not, and
+`a_constant_naming_a_record_constant` printed 14, the thunk tag, where it
+prints 1. A constant now always returns a `%KValue`, which costs nothing,
+since the cell boxed it anyway, and the sample leaves `ir_verifier`'s list
+of carried samples.
+
+The micro golden `an_int_of_any_width_crosses_in_its_own_word` sends ints
+either side of the old 56-bit line, both ends of the word, a bignum and a
+word that overflows into one through four groups that return the record by
+value. It joins the samples `ir_verifier` requires to stay carried. The
+ratchet's two mutations for the old shape, an unsigned shift back and a
+wide int packed anyway, went with the code they broke. Two new ones drop
+the bignum tag on the way in and on the way back, and the new golden reads
+a pointer as a number under each.
+
+Passing the key's closing `":` down into `escape_onto`, so that each arm
+of its test could append its own tail, was measured and dropped. The run
+program read 1,103,713,022 against 1,085,159,551. The tail arrived as a
+string value, and the emitter's one-word store for a short literal no
+longer applied. Bound to a name instead of written in the arms, the plain
+arm read `acc` twice, the append stopped writing in place, and the run
+program read 1,365,286,224.
+
+## 2026-10-21 — a position read beside its byte is in range, and a length
+
+The decoder hands a byte on together with the position it was read at:
+`array_delim cs cs[p + 1] (p + 1) acc`. In an arm that takes the byte as a
+byte, either through a literal or after an arm that took `none`, the read
+succeeded, so the position indexes `cs`. Adding one to it cannot leave the
+machine word, but each `p + 1` carried an overflow test and a way to the
+bignum body. `src/read_at.rs` finds the groups where every call passes a
+collection, a read out of it and the read's position, the collection and
+the index written alike in both places. A partial, a piped call or a bare
+mention of the name refuses the group. In each arm that took the byte as a
+byte, the emitter tells LLVM the position is an int whose word lies between
+-2^62 and 2^62, and LLVM drops the tests. A read or a position that may
+arrive deferred is left alone, because a thunk passes the `none` arm's tag
+test and may still force to `none`.
+
+Six decoder groups qualify: `array_delim`, `array_open`, `obj_delim`,
+`obj_key_start`, `obj_key_end` and `obj_open`. On the run program
+15,265,858 `jo`/`jno` executed before and 8,754,624 after, and here it read
+1,085,159,551 -> 1,073,408,863 (-1.08%). LLVM inlined differently with the
+tests gone: `parse_value` fell 42.3M and `array_delim` rose 20.8M, and
+`parse_number` left `parse_value` as a call of its own.
+
+`assume_length` said a length is never negative. It now says a length is
+below 2^62, and the inline `length` load uses it, so a guard like
+`return acc if i < 1 or length xs < i` lets LLVM step `i + 1` without a
+test. Here the run program read 1,073,408,863 -> 1,068,720,545 more, with
+`sha256/digested` and json's encode loops the gainers.
+
+CI's rows: work_runbench 1,085,160,738 -> 1,068,721,732 (-1.51%),
+work_jsonbench 749,951,027 -> 731,748,677 (-2.43%), work_digestbench
+5,992,543 -> 5,241,183 (-12.5%), work_livebench 1,370,528,510 ->
+1,356,883,942, work_encodebench 2,464,443,931 -> 2,456,797,406,
+work_oneshot 12,362,488 -> 12,207,627, work_widebench 28,580,079 ->
+28,571,443 and work_basket 31,162,668 -> 31,152,439. work_scanbench rises
+274,236 -> 274,277, by 41. Machine code shrinks in every benchmark: text
+runbench 737,929 -> 715,289 and jsonbench 379,049 -> 364,137, the rest by
+256 to 24,576 bytes. codegen_instructions_release 453,689,156 ->
+422,291,078 (-6.9%) and codegen_instructions_dev 115,990,552 ->
+115,922,261 fall with the code LLVM no longer keeps. emit_instructions
+6,232,336 -> 6,283,165 rises by the analysis and the assumes it writes.
+compile_instructions 24,321,293 -> 24,286,340, entry_instructions
+75,148,170 -> 75,053,355, library_instructions 74,843,912 -> 74,749,069 and
+interp_instructions 463,217,423 -> 463,213,463. In the tab,
+browser_run_instructions 34,370,238 -> 34,153,178 and
+browser_compile_peak_bytes 752,985 -> 735,031 fall, and
+browser_compile_instructions 412,332,402 -> 413,098,267 rises by 765,865.
+The assumes are calls in the emitted IR, so the counts that read them rise:
+emitted_calls 1,261 -> 1,394 and emitted_lines 12,909 -> 13,078 for the
+decoder, emitted_other_calls 18,298 -> 19,150 and emitted_other_lines
+157,080 -> 158,441 for the other programs, and the module compile's
+module_calls 109 -> 111 and module_lines 1,131 -> 1,135. Emitted branches
+fall in every program that decodes JSON. The welfare sum rose, and the
+floor moves 91.84 -> 91.92.
+
+The micro golden `a_position_read_beside_its_byte_stays_exact` runs one
+group linked at every call, from positions at both ends of the word, past
+it and below zero, and one group whose second call passes a literal byte
+beside the largest word. With the call sites' intersection taken out, that
+second group is linked anyway and a release build's `p + 1` wraps to
+-9223372036854775808 where the interpreter prints 9223372036854775808. The
+dev tier never acts on the assume, so the ratchet's row reads the
+release-built corpus. The ratchet carries that as
+`a_read_position_assumed_past_a_literal`, and `a_read_position_left_unbounded`
+drops every link, which the emitted goldens read.
+
+A dead-value pass in `src/ir_wasm.rs`, which drops pure instructions nothing
+reads and counts an `llvm.assume` as reading nothing, was measured and
+dropped. It took browser_run_instructions 34,370,238 -> 33,477,523 (-2.60%)
+against browser_compile_instructions 412,332,402 -> 414,726,069 (+0.58%),
+and welfare fell below the floor: the browser run term is saturated, with a
+baseline of 2,331,914,518, so the compile cost outweighs the run's gain.
+
+TBAA tags on the IR append helpers, for the header, the buffer's frontier
+word, its bytes and the `k_site` stores, were measured and dropped: the run
+program's binary came out byte-identical. The three appends `encode_map`
+makes for each pair cannot share their header loads because each append's
+slow path may hand back a different builder, so the next append's header
+pointer is a merge of the two paths. Aliasing was not what kept them apart.
+
+## 2026-10-21 — a JSON key goes out in one claim
+
+lib/json wrote an object's key as three appends around a call: the opening
+quote after the brace or comma, `escape_onto` for the key, and the closing
+quote and colon as one word. Each append made its own ownership and room
+tests on the builder. `builtin_append_key acc k` now writes `"k":` in one
+call. The decoder shares every string of four to seven bytes as a token, and
+each token records whether its bytes need escaping, so for a clean token the
+emitter's inline path claims the builder once and writes three stores: the
+quote, the token's whole eight-byte word, and `":` over the bytes past the
+key. Any other key, and any build that counts, goes to the C, which writes
+the same bytes the long way. The interpreter writes the same bytes.
+
+The inline path finds a token's clean flag from where its bytes sit in the
+token store, dividing by the size of a token. A token is a `KStr` and eight
+bytes, which is 24 bytes natively and 20 on wasm32, where a pointer is four.
+The first version used 24 everywhere. Two `WASM32_LINES` rows now give the
+tab its own bound and divisor. `retarget_wasm32` searched only
+`getelementptr` lines for rows to rewrite, so the clang-built wasm32 harness
+kept the native numbers while the playground's translator, which matches
+every line, took the new ones; it now searches for each row by its own text.
+The micro golden `a_dirty_key_beside_a_clean_one_is_escaped` places `ke"y`
+in the slot whose 24-byte reading on wasm32 is `ammo`'s. Before the rows,
+the wasm32 build printed the quote unescaped.
+
+Measured here, the run program read 1,068,720,545 -> 1,049,790,947
+(-1.77%) with the same output, all of it in `encode_map`; the C path ran
+82,800 instructions. The interpreted corpus read 463,213,463 -> 402,112,576
+instructions and 502,624 -> 423,390 allocations, because the interpreter's
+builtin writes into the builder where `escape_onto` and three appends ran as
+kanso.
+
+CI's rows: work_runbench 1,068,721,732 -> 1,049,792,134 (-1.77%),
+work_livebench 1,356,883,942 -> 1,272,755,954 (-6.2%), work_oneshot
+12,207,627 -> 11,997,046 (-1.7%) and work_encodebench 2,456,797,406 ->
+2,456,796,902; jsonbench and widebench carry their own copy of lib/json and
+hold. interp_instructions 463,213,463 -> 402,108,616 (-13.2%),
+interp_allocs 502,624 -> 423,390 and interp_peak_bytes 617,367 -> 616,817.
+The C path adds 3,264 bytes of text to every program (text runbench 715,289
+-> 717,129, jsonbench 364,137 -> 367,401), and codegen_instructions_dev
+115,922,261 -> 115,971,597 and emit_instructions 6,283,165 -> 6,307,623 rise
+with the helper. codegen_instructions_release 422,291,078 -> 422,279,602,
+compile_instructions 24,286,340 -> 24,227,124, entry_instructions
+75,053,355 -> 75,007,797, library_instructions 74,749,069 -> 74,686,591,
+compile_allocs 13,465 -> 13,434, compile_peak_bytes 575,715 -> 575,051 and
+front_end_visits 7,063 -> 7,047 fall. The
+counters: perm_allocs falls by one in run (101 -> 100), live (8 -> 7) and
+oneshot (9 -> 8), the closing pair's literal, and append_fast rises in the
+same three (run 5,735,070 -> 5,737,050, live 25,489,200 -> 25,498,000,
+oneshot 63,723 -> 63,745). emitted_lines 13,078 -> 13,089 for the decoder and
++11 in every other program, +32 in runbench (56,807 -> 56,839), oneshot and
+livebench, where emitted calls fall by three (runbench 7,380 -> 7,377) and
+emitted branches rise by three (6,434 -> 6,437); in all, emitted_other_lines
+158,441 -> 158,647 and emitted_other_branches 16,954 -> 16,963. text sums to
+5,124,302 -> 5,165,726. The compile corpus's lines 1,412 -> 1,456 and the
+module compile's module_lines 1,135 -> 1,146 carry the same comment. In the tab,
+browser_run_instructions 34,153,178 -> 33,548,279 (-1.8%) and
+browser_compile_instructions 413,098,267 -> 412,842,483 fall, and
+browser_compile_peak_bytes rises 735,031 -> 738,682. The welfare sum rose,
+and the floor moves 91.92 -> 92.03.
+
+The micro golden `a_key_goes_out_quoted_with_its_colon` decodes and encodes
+keys at the edges twice, so the second pass reads shared tokens: empty, one
+byte, seven and eight bytes, a two-byte character, an escaped `\u00e9`, and
+tokens with a quote, a backslash or a tab. With the inline path's length
+short by one, the clean keys lost their colons; with the C's colon replaced
+by a quote, the other keys did. Two ratchet rows:
+`a_key_claimed_one_byte_at_a_time` sends every key to the C and turns the
+emitted gate red, and
+`a_token_measured_at_its_native_size_on_wasm32` gives the tab the native
+numbers back and turns the translator's micro corpus red. The two byte-pair
+rows went blind: the encoder no longer writes two byte appends in a row,
+since the brace or comma before a key is one append now. The micro fixture
+`two_bytes_appended_at_once` appends a backslash and a letter itself, and
+`a_byte_pair_appended_one_at_a_time` is gated by a perf_ratchet spec,
+`two_byte_appends_are_one_call`, that reads the merged call in the emitted
+code; each mutation turns its witness red. The room-test spec
+counts ten frontier branches now. The mem rows move because a clean key no
+longer passes through `escape_onto`: `find2_calls` falls to 0 in three
+programs, and `perm_allocs` falls by one, the closing pair's literal.
+
+Measured and dropped on the way, recorded so they stay declined:
+
+- A fused `builtin_append_key acc lead k` that also wrote the brace or comma,
+  as a C entry. The run program read 1,068,720,545 -> 1,181,687,667: the C
+  cost 135 instructions a call against the inline path's check and copy,
+  and `k_region_pop` grew 32.4M because `encode_map` then handed its value
+  to `encode_onto` directly.
+- Passing the key's tail into `escape_onto` (+18.5M) and a copy of the key
+  arms (+19M).
+
+Open: `encode_map` still copies a map's keys and values into two columns per
+map, 25M on the run program with the region around it.
+
+## 2026-10-21 — a map is written from its entries in place
+
+`encode_map` took a map's two columns, `keys m` and `values m`, which
+`k_b_columns` built as two lists in one allocation per map, and indexed both.
+Three library builtins now read a map where it stands: `entry_count m`, `key_at
+m i` and `value_at m i`. A map's sorted view is `[k v k v ...]`, so where the
+view is built the count is a field and each read is a bounds test and one load,
+written inline; a missing or marked view goes to the C, which builds the view
+first. The encoder takes the map and its count and reads each pair by position,
+and no list is made.
+
+The count stays an argument at the call in `encode_onto`, `encode_map acc m
+(builtin_entry_count m)`, where the columns were. The beat analysis treats
+`entry_count` as allocating, since it may build the view, so the region around a
+map's encoding stays one per map. Two other shapes were measured on the way.
+With the count bound inside `encode_map`, the pair loop became a beat loop and
+`k_beat_pop` cost 17.9M more. With `entry_count` treated as pure, the regions
+went (-10.7M) but the output builder grew by an arena copy at each doubling
+instead of `realloc` (+24.7M memcpy): inside the region its header sits below
+the innermost mark and stays in the malloc regime, and without it the header is
+above the encode loop's mark.
+
+A map past eight entries is a B-tree in the interpreter, where reaching the i-th
+entry walks i of them. The interpreter keeps the entries in order for the last
+such map `key_at` or `value_at` read, holding the map weakly, so the count `put`
+asks before writing in place is unchanged, and a `put` that writes in place at a
+site linearity proved empties the cache first. No fixture reaches that write
+after a read: linearity refuses the `put` that follows a read of the same map,
+natively and in the interpreter. The native side-view test is in the same
+position: a side forms only when an in-place `put` lands in the middle of a
+built view of 64 entries or more, and three loop shapes tried here did not write
+in place.
+
+Measured here, on top of the key builtin, the run program read 1,049,790,947 ->
+1,039,464,472 (-0.98%) with the same output: `k_b_columns` (25.0M) is gone and
+`encode_map` rose 14.3M with the reads.
+
+CI's rows: work_runbench 1,049,792,134 -> 1,039,465,659 (-0.98%), work_livebench
+1,272,755,954 -> 1,219,792,784 (-4.2%) and work_oneshot 11,997,046 -> 11,902,783
+(-0.79%). work_encodebench rises 2,456,796,902 -> 2,456,797,749, by 847, with
+the runtime's layout; it carries its own copy of lib/json. The allocation
+counters fall where objects are encoded: run allocs 1,696,484 -> 1,447,994,
+alloc_bytes 289,219,396 -> 249,236,356 and sh_buf 119,198,704 -> 87,167,344;
+live allocs 1,118,314 -> 13,914, alloc_bytes 413,053,904 -> 235,351,504 and
+sh_buf 143,161,328 -> 799,728; oneshot allocs 10,292 -> 7,531, alloc_bytes
+2,234,774 -> 1,790,518 and sh_buf 1,155,632 -> 799,728. interp_instructions
+402,108,616 -> 401,548,849 and interp_allocs 423,390 -> 420,781 fall, and
+interp_peak_bytes rises 616,817 -> 616,944, the cached entries of a large map.
+The three inline paths add 320 bytes of text to every program and about 3,400 to
+the three that encode objects (text runbench 717,129 -> 720,681), and
+codegen_instructions_dev 115,971,597 -> 116,025,482,
+codegen_instructions_release 422,279,602 -> 422,550,641, emit_instructions
+6,307,623 -> 6,341,758, entry_instructions 75,007,797 -> 75,050,737 and
+library_instructions 74,686,591 -> 74,724,744 rise with them.
+compile_instructions 24,227,124 -> 24,218,897, compile_allocs 13,434 -> 13,427
+and front_end_visits 7,047 -> 7,010 fall, and compile_peak_bytes rises 575,051
+-> 575,175. Emitted code: the decoder's emitted_lines 13,089 -> 13,098;
+runbench, oneshot and livebench gain 5 defines and lose 27 branches (runbench
+56,839 -> 56,741 lines, 6,437 -> 6,410 branches); the compile corpus's lines
+1,456 -> 1,492 and module_lines 1,146 -> 1,155; in all, emitted_other_defines
+2,154 -> 2,169 and text 5,165,726 -> 5,179,630. In the tab,
+browser_run_instructions 33,548,279 -> 32,722,014 (-2.5%) and
+browser_compile_peak_bytes 738,682 -> 735,564 fall, and
+browser_compile_instructions rises 412,842,483 -> 412,895,911. The welfare sum
+rose, and the floor moves 92.03 -> 92.07.
+
+The micro golden `a_map_is_encoded_from_its_entries_in_place` covers an empty
+map, two maps past eight entries read one after the other, and a small and a
+large map read, extended by a `put` and read again; with the interpreter's cache
+keyed by nothing, the second large map printed the first's entries. The mem
+fixture that pinned the fused columns through the encoder is renamed
+`a_written_map_allocates_no_columns` (3,022 -> 2,022 allocations), and
+`a_maps_two_columns_are_one_allocation` now calls `keys` and `values` itself, so
+the fusion keeps a witness; `the_two_columns_asked_apart` still turns the mem
+vein red. Its rows are re-based, since the name now holds a different program:
+a_maps_two_columns_are_one_allocation_allocs 3,022 -> 4,005, a thousand pairs of
+lists and the maps they come from; and
+a_maps_two_columns_are_one_allocation_append_fast 12,007 -> 0,
+a_maps_two_columns_are_one_allocation_append_rendered 2,000 -> 0,
+a_maps_two_columns_are_one_allocation_push_mut_fast 995 -> 0,
+a_maps_two_columns_are_one_allocation_bytes_freed 8 -> 0 and
+a_maps_two_columns_are_one_allocation_utf8_zerocopy 1 -> 0, since it encodes
+nothing. The book's chapter 08 panel showed the map going in as its two columns,
+and book_quotes refused it once the encoder stopped naming `keys` and `values`;
+it now shows the map going in whole with its count. The ratchet row
+`a_map_entry_read_through_the_c` sends `key_at` to the C and turns the emitted
+gate red.

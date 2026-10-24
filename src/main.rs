@@ -1414,11 +1414,10 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     // the runtime. On runbench the ladder read 1,811,839,413 at 225,
     // 1,809,106,361 at 1000, 1,806,069,074 at 2000 and 1,805,972,054 at 4000.
     // The object is compiled once and cached, so the build pays it once.
-    let runtime_obj = cached_runtime_object(
-        "release",
-        &["-O3", "-mllvm", "-inline-threshold=2000", "-DK_HOT_ELSEWHERE"],
-    )?;
-    let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
+    let runtime_obj =
+        cached_runtime_object("release", &["-O3", "-mllvm", "-inline-threshold=2000"])?;
+    let hot_obj =
+        cached_object("release_hot", Some(HOT_RECIPE), &|| hot_source().into(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         // THE PROGRAM IS OPTIMIZED ONCE, AT THE LINK. `-O3` here ran the full
         // pipeline on the program's IR as clang -cc1 turned it into bitcode,
@@ -1874,16 +1873,23 @@ fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u
 }
 
 fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
-    cached_object(profile, kanso::RUNTIME_C, opt)
+    cached_object(profile, None, &|| kanso::RUNTIME_C.into(), opt)
 }
+
+/// What the hot unit's text is made by, beside the runtime it is cut from:
+/// `hot_source_of` is in this file, so a change to it names a new object. The
+/// runtime's digest alone left a build reusing a unit the old recipe made.
+const HOT_RECIPE: (u64, u64) = kanso::hash::digest_of(include_bytes!("main.rs"));
 
 /// The helpers a release build keeps in its LTO link, as a translation unit
 /// of their own. The runtime itself is machine code there, and the link can
 /// only inline what it holds as bitcode: `k_b_find2_raw`,
 /// `k_b_find2_below_raw` and `k_beat_iter` were 161,703,385 instructions of
-/// the run program's calls when the whole runtime went native. So the runtime
-/// is compiled `-DK_HOT_ELSEWHERE`, which leaves those three out, and this unit
-/// defines them.
+/// the run program's calls when the whole runtime went native. So this unit
+/// holds a copy of each such helper as a C99 inline definition, which the
+/// link inlines where the program calls it and never compiles on its own;
+/// the runtime defines them too, as machine code, for its own callers and for
+/// any call the link leaves. See `inline_only`.
 ///
 /// The text is taken from `runtime.c` itself rather than kept in a second
 /// file, because a dozen specs read these functions out of that file and a
@@ -1898,11 +1904,17 @@ fn hot_source_of(runtime: &str) -> String {
     let mut out = String::from(concat!(
         "#include <stdint.h>\n",
         "#include <stddef.h>\n",
+        "#include <string.h>\n",
         "#if defined(__aarch64__)\n#include <arm_neon.h>\n",
         "#elif defined(__x86_64__)\n#include <tmmintrin.h>\n#endif\n",
         "#ifdef KANSO_COUNTERS_BUILD\n#define K_COUNTING 1\n#else\n#define K_COUNTING 0\n#endif\n",
+        // An inline definition reaches the unit's static helpers, which C
+        // warns about and which is safe here: the definition is never emitted.
+        "#pragma clang diagnostic ignored \"-Wstatic-in-inline\"\n",
     ));
     for (start, end) in [
+        ("typedef struct { long long tag; long long payload; } KValue;", "\n"),
+        ("enum { K_INT, K_FLOAT, ", "\n"),
         ("typedef struct { char* data; int len; int cap; } KStr;", "\n"),
         ("typedef struct KBlock {", "\n"),
         ("typedef struct { KBlock* block;", " KMark;\n"),
@@ -1933,6 +1945,28 @@ fn hot_source_of(runtime: &str) -> String {
         "void k_beat_push_deep(void);\n",
         "void k_beat_rewind_slow(KMark* m);\n",
         "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
+        "extern long long k_seek_char;\n",
+        "extern long k_seek_byte;\n",
+        "extern long long k_stat_seek_resumes;\n",
+        "extern long long k_stat_seek_steps;\n",
+        "extern KValue k_ascii_cache[128];\n",
+        "extern char k_ascii_ready[128];\n",
+        "extern KValue k_wide_cache[256];\n",
+        "extern uint32_t k_wide_key[256];\n",
+        "extern unsigned char k_wide_ready[256];\n",
+        "KValue k_none(void);\n",
+        "KValue k_b_at_str_seek(KStr* s, long long want);\n",
+        "KValue k_at_ascii_miss(KStr* s, long at);\n",
+        "__attribute__((preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w);\n",
+        "extern long long k_stat_number_spans;\n",
+        "long long k_number_span_scan(const unsigned char* d, long long len, long long from);\n",
+        "__attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin);\n",
+        "__attribute__((noinline)) KValue k_to_float_scan_out(const char* data, long long len, const char* origin);\n",
+        "KValue k_b_to_int(KValue sv, const char* origin);\n",
+        "KValue k_b_to_float(KValue v, const char* origin);\n",
+        "KValue k_b_slice_raw(const unsigned char* data, long long len, long long from, long long to);\n",
+        "extern long long k_stat_el_parses;\n",
+        "extern const struct { unsigned long long hi, lo; int e2; } k_el_pow10[];\n",
     ));
     // Each definition is found by its name and taken from the start of the
     // line that names it, attribute and all. The two scanners are matched on
@@ -1940,6 +1974,8 @@ fn hot_source_of(runtime: &str) -> String {
     // that puts them out of line removes that attribute, and a lift keyed on
     // it found nothing and the tree stopped building: the row read UNBUILT
     // on kanso#1585.
+    out.push_str(hot_text(runtime, "static KStr* k_as_str(KValue v) {", "\n"));
+    out.push_str(hot_text(runtime, "static const unsigned char k_number_bytes[256] = {", "};\n"));
     for start in [
         "static inline int k_tail_window(",
         "static inline void k_beat_rewind(KMark* m) {",
@@ -1947,10 +1983,91 @@ fn hot_source_of(runtime: &str) -> String {
         "__attribute__((always_inline)) void k_beat_push(void) {",
         "long long k_b_find2_raw(const unsigned char* d,",
         "long long k_b_find2_below_raw(const unsigned char* d,",
+        "static long k_cp_len(unsigned char b) {",
+        "static inline __attribute__((always_inline)) KValue k_at_char(KStr* s, long at) {",
+        "KValue k_b_at_str(KStr* s, long long want) {",
+        "static inline uint64_t k_nondigits8(uint64_t x) {",
+        "static inline __attribute__((always_inline)) long long k_digits_end(const unsigned char* d,",
+        "long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {",
+    ] {
+        out.push_str(inline_only(start));
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
+    }
+    // The decoder's two slice parsers, with what they inline. `k_int` and
+    // `k_float` are plain functions in runtime.c, so the unit takes its own
+    // static copy of each rather than calling them.
+    for start in ["KValue k_int(long long i) {", "KValue k_float(double d) {"] {
+        out.push_str("static inline ");
+        out.push_str(hot_line_text(runtime, start, "}\n"));
+    }
+    out.push_str(hot_text(runtime, "#define K_EL_POW10_MIN ", "\n"));
+    out.push_str(hot_text(runtime, "#define K_EL_POW10_MAX ", "\n"));
+    out.push_str(hot_text(runtime, "static const unsigned long long k_pow10_small[8] = {", "};\n"));
+    for start in [
+        "static inline __attribute__((always_inline)) int k_span_in(long long from, long long to,",
+        "static inline long long k_digits8_value(uint64_t w, long long n) {",
+        "static inline int k_digits_back8(const char* end, long long n, long long* out) {",
+        "static int k_el_parse(unsigned long long w, long long q, double* out) {",
+        "static inline int k_float_shape8(const char* data, long long len, long long room,",
     ] {
         out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }
+    out.push_str(hot_text(
+        runtime,
+        "static KValue k_to_int_text(const char* data, long long len, long long room,\n                            const char* origin) {",
+        "\n}\n",
+    ));
+    out.push_str(hot_text(
+        runtime,
+        "static inline __attribute__((always_inline)) KValue\nk_to_float_text(const char* data, long long len, long long room, const char* origin) {",
+        "\n}\n",
+    ));
+    for start in [
+        "KValue k_b_to_int_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
+        "KValue k_b_to_float_slice_raw(const unsigned char* d, long long len, long long from, long long to, const char* origin) {",
+    ] {
+        out.push_str(inline_only(start));
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
+    }
+    // Clang emits an inline definition only where the unit refers to it, and
+    // nothing here calls these, so a table refers to each. The table has
+    // external linkage, so the unit's own compile keeps it, and nothing reads
+    // it, so the link drops it and then every body the program does not call.
+    // With `used` on it the link kept and optimized all four in every build.
+    out.push_str("const void* const k_hot_inline_bodies[] = {");
+    for name in INLINE_ONLY {
+        out.push_str("(const void*)");
+        out.push_str(name.trim_end_matches('('));
+        out.push_str(", ");
+    }
+    out.push_str("};\n");
     out
+}
+
+const INLINE_ONLY: [&str; 8] = [
+    "k_beat_iter(",
+    "k_beat_push(",
+    "k_b_find2_raw(",
+    "k_b_find2_below_raw(",
+    "k_b_at_str(",
+    "k_b_number_span_raw(",
+    "k_b_to_int_slice_raw(",
+    "k_b_to_float_slice_raw(",
+];
+
+/// `inline ` for the definitions runtime.c also compiles as machine code, so
+/// the unit's copy is a C99 inline definition: the link inlines it where the
+/// program calls it and drops it everywhere else. Defined outright in this
+/// unit, each was optimized and compiled again by every release link, called
+/// or not. Linking the codegen corpus, `ld.lld` read 252,430,133 with four
+/// helpers defined outright, 295,287,065 with eight, and 187,756,033 with the
+/// eight inline.
+fn inline_only(start: &str) -> &'static str {
+    if INLINE_ONLY.iter().any(|n| start.contains(n)) {
+        "inline "
+    } else {
+        ""
+    }
 }
 
 /// `hot_text` from the start of the line holding `start`.
@@ -1971,10 +2088,27 @@ fn hot_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[from..to]
 }
 
-fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
+/// The object clang makes of `source`, from the temp directory when a build
+/// already made it. The source is asked for only when it did not: the hot
+/// unit's text is cut out of the runtime by some forty searches. Building it
+/// on every release build of the codegen corpus, kanso's own process read
+/// 74,931,992 instructions, and asking for it only on a miss, 30,665,523.
+fn cached_object(
+    profile: &str,
+    recipe: Option<(u64, u64)>,
+    source: &dyn Fn() -> std::borrow::Cow<'static, str>,
+    opt: &[&str],
+) -> std::io::Result<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
     let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let counting = kanso::codegen::counters_wanted();
-    let key = hex16(runtime_key(profile, opt, preserve, counting));
+    let mut named = runtime_key(profile, opt, preserve, counting);
+    if let Some(recipe) = recipe {
+        let mut hasher = std::hash::DefaultHasher::new();
+        (named, recipe).hash(&mut hasher);
+        named = hasher.finish();
+    }
+    let key = hex16(named);
     let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.o"));
     if object.exists() {
         return Ok(object);
@@ -1988,7 +2122,7 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
     let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.c"));
     let c_staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.c", pid_tag()));
-    std::fs::write(&c_staging, source)?;
+    std::fs::write(&c_staging, source().as_bytes())?;
     std::fs::rename(&c_staging, &c_path)?;
     let staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
@@ -2484,26 +2618,32 @@ mod the_hot_unit_is_taken_from_the_runtime {
             "k_beat_push",
             "k_b_find2_raw",
             "k_b_find2_below_raw",
+            "k_b_at_str",
+            "k_b_number_span_raw",
+            "k_b_to_int_slice_raw",
+            "k_b_to_float_slice_raw",
         ] {
             assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
         }
     }
 
-    /// The ratchet row for the two scanners removes their `always_inline`,
-    /// and the release build must still find them: a lift keyed on the
-    /// attribute stopped the mutated tree building, and the row read UNBUILT
-    /// on kanso#1585. Watched red with the scanners' start strings keyed on
-    /// the attribute again.
+    /// The ratchet row for the two scanners puts `noinline` where their
+    /// `always_inline` was, and the release build must still find them: a
+    /// lift keyed on the attribute stopped the mutated tree building, and the
+    /// row read UNBUILT on kanso#1585. Watched red with the scanners' start
+    /// strings keyed on the attribute again.
     #[test]
     fn the_scanners_are_found_without_their_attribute() {
-        let bare = kanso::RUNTIME_C
-            .replace("__attribute__((always_inline)) long long k_b_find2", "long long k_b_find2");
-        assert_ne!(bare, kanso::RUNTIME_C, "the attribute is no longer there to remove");
+        let bare = kanso::RUNTIME_C.replace(
+            "__attribute__((always_inline)) long long k_b_find2",
+            "__attribute__((noinline)) long long k_b_find2",
+        );
+        assert_ne!(bare, kanso::RUNTIME_C, "the attribute is no longer there to replace");
         let unit = super::hot_source_of(&bare);
         for name in ["k_b_find2_raw", "k_b_find2_below_raw"] {
             assert!(
-                unit.contains(&format!("\nlong long {name}(")),
-                "the bare {name} was not lifted"
+                unit.contains(&format!("\ninline __attribute__((noinline)) long long {name}(")),
+                "the mutated {name} was not lifted as an inline copy"
             );
         }
     }

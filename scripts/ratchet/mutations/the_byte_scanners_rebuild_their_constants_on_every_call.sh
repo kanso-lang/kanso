@@ -4,8 +4,10 @@
 # the two broadcasts fold to constant vectors. Before, each of 3,109,759
 # calls a run rebuilt the vectors from registers, half the call's cost when
 # the hit is in the first sixteen bytes. This puts the out-of-line doors
-# back. Every scan answers the same position either way, so nothing but the
-# work vein can see it, which is what the row asserts.
+# back: noinline where always_inline was, so the release link, which holds
+# an inline copy of each in the hot unit, calls the runtime's own instead.
+# Every scan answers the same position either way, so nothing but the work
+# vein can see it, which is what the row asserts.
 set -e
 grep -q "^__attribute__((always_inline)) long long k_b_find2_raw(" src/runtime/text.c || {
   echo "the find2 door changed shape; this mutation needs rewriting" >&2
@@ -15,9 +17,9 @@ grep -q "^__attribute__((always_inline)) long long k_b_find2_below_raw(" src/run
   echo "the find2_below door changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-sed -e "s/^__attribute__((always_inline)) long long k_b_find2_raw(/long long k_b_find2_raw(/" \
-    -e "s/^__attribute__((always_inline)) long long k_b_find2_below_raw(/long long k_b_find2_below_raw(/" \
+sed -e "s/^__attribute__((always_inline)) long long k_b_find2_raw(/__attribute__((noinline)) long long k_b_find2_raw(/" \
+    -e "s/^__attribute__((always_inline)) long long k_b_find2_below_raw(/__attribute__((noinline)) long long k_b_find2_below_raw(/" \
     src/runtime/text.c > src/runtime/text.c.mut
 mv src/runtime/text.c.mut src/runtime/text.c
-grep -q "^long long k_b_find2_raw(" src/runtime/text.c
-grep -q "^long long k_b_find2_below_raw(" src/runtime/text.c
+grep -q "^__attribute__((noinline)) long long k_b_find2_raw(" src/runtime/text.c
+grep -q "^__attribute__((noinline)) long long k_b_find2_below_raw(" src/runtime/text.c

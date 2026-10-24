@@ -415,8 +415,8 @@ KValue k_int_of_digits(const char* s, long long len) {
 /* What a succeeded effect yields: `none` is absence and nothing else. */
 KValue k_done(void) { KValue v; v.tag = K_DONE; v.payload = 0; return v; }
 
-static KValue k_ascii_cache[128];
-static char k_ascii_ready[128];
+KValue k_ascii_cache[128];
+char k_ascii_ready[128];
 
 /* A string's header and its bytes have one lifetime and are made together,
    so they are one allocation: the payload sits immediately after the header

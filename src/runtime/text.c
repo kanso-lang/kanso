@@ -786,9 +786,9 @@ KValue k_b_is_desc(KValue v) {
     return k_bool(v.tag == K_DESC);
 }
 
-static KValue k_wide_cache[256];
-static uint32_t k_wide_key[256];
-static unsigned char k_wide_ready[256];
+KValue k_wide_cache[256];
+uint32_t k_wide_key[256];
+unsigned char k_wide_ready[256];
 
 /* `at` is what the builtin is called; indexing is what the reader wrote.
    Out of line because its message buffer is the largest thing in k_b_at's
@@ -811,7 +811,7 @@ static __attribute__((noinline, cold)) void k_die_index(KValue container) {
    the same body the compiler opened every index with six pushes and a
    forty-byte reservation for paths a run takes six times. preserve_most on
    both, for the reason k_alloc_refill gives. */
-static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w) {
+__attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w) {
     if (!k_wide_ready[slot]) {
         KStr* ps = k_alloc_const(sizeof(KStr) + 5);
         ps->len = w;
@@ -866,7 +866,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
 
 /* The character at byte `at` of `s`, from the caches when they hold it,
    and from a separate function when they do not. */
-static KValue k_at_ascii_miss(KStr* s, long at);
+KValue k_at_ascii_miss(KStr* s, long at);
 static inline __attribute__((always_inline)) KValue k_at_char(KStr* s, long at) {
     long w = k_cp_len((unsigned char)s->data[at]);
     if (w == 1) {
@@ -905,7 +905,7 @@ static inline __attribute__((always_inline)) KValue k_at_char(KStr* s, long at) 
     return k_b_at_wide_miss(q, key, slot, w);
 }
 
-static __attribute__((noinline)) KValue k_at_ascii_miss(KStr* s, long at) {
+__attribute__((noinline)) KValue k_at_ascii_miss(KStr* s, long at) {
     KValue one = k_str_n(s->data + at, 1);
     KStr* os = k_as_str(one);
     if (os->cap == 0) os->cap = -2;
@@ -913,7 +913,7 @@ static __attribute__((noinline)) KValue k_at_ascii_miss(KStr* s, long at) {
 }
 
 /* Any index the cursor cannot step to: a seek, then the character. */
-static __attribute__((noinline)) KValue k_b_at_str_seek(KStr* s, long long want) {
+__attribute__((noinline)) KValue k_b_at_str_seek(KStr* s, long long want) {
     if (want < 1) return k_none();
     long at = k_str_seek(s, want);
     if (at < 0) return k_none();
@@ -927,7 +927,11 @@ static __attribute__((noinline)) KValue k_b_at_str_seek(KStr* s, long long want)
    hits are answered here, and the seek and both misses in functions of their
    own, so the path the walk takes 690,000 times on the run program holds
    only its own tests. */
-KValue k_b_at_str(KStr* s, long long want) {
+/* The release build's hot unit holds a copy of this as an inline
+   definition, so the LTO link can inline it into the program's string walks
+   and never compiles it as a function of its own (`hot_source` in
+   src/main.rs). */
+__attribute__((always_inline)) KValue k_b_at_str(KStr* s, long long want) {
     /* The step. A walk by index asks for the character after the one it
        just read, and the cursor stands on that one: the answer is the
        cursor's byte plus its character's width, which `k_str_seek` also
@@ -1464,7 +1468,6 @@ static inline int k_tail_window(const unsigned char* p) {
    bytes 99.99% of the time, so the setup was half the call. The scalar tail
    and the loop are small enough that eight copies cost the .text vein less
    than the calls cost the work vein. */
-#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
     if (K_COUNTING) k_stat_find2_calls++;
@@ -1511,10 +1514,6 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
     }
     return len + 1;
 }
-#else
-long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
-                        long long a, long long b);
-#endif
 
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
@@ -1578,8 +1577,8 @@ static int k_number_byte(unsigned char c) {
 /* Every number the word-at-a-time path in `k_b_number_span_raw` turns
    away: the RFC's checks, then sixteen bytes a step. Out of line, because
    the registers the step wants made every call build a frame. */
-static __attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
-                                                             long long len, long long from) {
+__attribute__((noinline)) long long k_number_span_scan(const unsigned char* d,
+                                                      long long len, long long from) {
     long long i = from - 1;
     /* RFC 8259 §6 asks three things of a number that the converters do not
        (#1999): a digit first, after any minus; no digit after a leading 0;
@@ -1647,7 +1646,10 @@ static __attribute__((noinline)) long long k_number_span_scan(const unsigned cha
    what they say skips the failure and tag ladder below; on the run program
    that is 417,483 calls. `k_b_number_span` is the same scan for anything the
    twin turns away. The counter is here so both doors count a call once. */
-long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
+/* The release build's hot unit holds a copy of this as an inline
+   definition, so the LTO link can inline it into the decoder (`hot_source`
+   in src/main.rs). */
+__attribute__((always_inline)) long long k_b_number_span_raw(const unsigned char* d, long long len, long long from) {
     if (K_COUNTING) k_stat_number_spans++;
     if (from < 1 || from > len) return from;
     /* The shape nearly every number has, `-?D+` or `-?D+.D+` with no
@@ -2095,7 +2097,6 @@ K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 
    always_inline for the reason k_b_find2_raw gives: the byte pair and the
    limit are literals at every emitted site, and the broadcasts fold. */
-#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
@@ -2161,11 +2162,6 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
     }
     return (len + 1);
 }
-#else
-long long k_b_find2_below_raw(const unsigned char* d, long long len,
-                              long long from, long long a, long long b,
-                              long long floor_v);
-#endif
 
 KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }

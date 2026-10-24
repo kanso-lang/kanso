@@ -12,7 +12,7 @@ rows_b1r0 = list/concat rows_b1 [emitted_code emitted_others remainder]
 
 rows_b1r1 = list/concat rows_b1r0 [short_float leading_zeros int_cold_tail]
 
-rows_b1r2 = list/concat rows_b1r1 [cold_registers index_cold_arms]
+rows_b1r2 = list/concat rows_b1r1 [cold_registers]
 
 rows_b1r3 = list/concat rows_b1r2 [cold_copy rare_door]
 
@@ -147,7 +147,7 @@ counted_run = row
   (breaking "a_counted_run_that_ignores_its_ceiling")
   release
 
-rows_b1q = list/concat rows_b1o [list_test_first framed_view]
+rows_b1q = list/concat rows_b1o [framed_view]
 
 rows_b1p = list/concat rows_b1q [ordered_view regrow counted_run]
 
