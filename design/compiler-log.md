@@ -1856,6 +1856,14 @@ The ratchet row `lex_lines` puts `str::lines` back and reads
 `compile_instructions` 24,363,416; `lex_openers` calls no line plain and
 reads 24,561,382.
 
+CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
+71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
+(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
+`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
+the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
+whose process lexes its program before it emits. Nothing else moved.
+Welfare 93.27 -> 93.28, banked.
+
 What is left in the lexer is `lex_line` itself, about 1,150 instructions a
 code line, most of it a scanner that decodes each line into a `Vec<char>`
 before it reads a token. A scanner over bytes would touch every token
