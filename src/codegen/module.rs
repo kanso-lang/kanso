@@ -96,8 +96,7 @@ impl Written {
         let mut body_calls = crate::hash::Set::default();
         let mut body_lines = crate::hash::Set::default();
         for piece in &pieces {
-            body_calls.extend(called_symbols(piece));
-            body_lines.extend(symbols_before_newline(piece));
+            called_and_ending(piece, &mut body_calls, &mut body_lines);
         }
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))

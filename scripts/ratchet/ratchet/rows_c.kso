@@ -3269,4 +3269,17 @@ float_one_pass = row
 
 rows_cq49 = list/concat rows_cq48 [float_one_pass]
 
-rows_c = list/concat rows_cq49 [itself]
+# The module writer reads every piece's calls and line-ending symbols in one
+# pass over its ats (2026-10-24). The mutation scans each piece again for the
+# endings, and the browser compile row reads heavier.
+one_scan = row
+  "the module scanned twice for its symbols"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_module_scanned_twice_for_its_symbols")
+  release
+
+rows_cq50 = list/concat rows_cq49 [one_scan]
+
+rows_c = list/concat rows_cq50 [itself]

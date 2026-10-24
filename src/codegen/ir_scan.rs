@@ -84,40 +84,45 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
     found
 }
 
-/// Every `sym` for which `text` writes `@sym\n`, collected in one pass.
+/// Every `sym` the text calls, written `@sym(`, into `calls`, and every
+/// `sym` that ends a line, written `@sym\n`, into `ending`, in one pass over
+/// the ats.
 ///
-/// A line can only end in `@sym`, so only the LAST `@` on each line can start
-/// a match and the whole text is read once. That makes the answer exact for a
-/// `sym` holding no `@` and no newline, which every symbol the emitter asks
-/// about is: `@a @b\n` would have to be found under the name `a @b`, and
-/// reading each line's last at alone cannot see it.
+/// From each `@` the scan runs to the first `(` or newline, as
+/// `called_symbols` does. A `(` makes a call. A newline makes an ending when
+/// no other `@` comes before it, since only a line's last at can start one.
+/// That answers `@sym\n` exactly for a `sym` holding no `@`, no `(` and no
+/// newline, which every symbol the module writer asks about is: they are
+/// generated identifiers.
 ///
-/// The forward scan this replaced ran from every `@` to the end of its line,
-/// which on a big emitted body is the text times the number of ats: it cost
-/// `kanso build bench/runbench` 209 million instructions, turning a fall into
-/// a rise.
-fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
-    // One walk over the bytes, holding the last `@` since the line began. A
-    // search for each newline and then for the `@` before it was two calls a
-    // line, 42,784 lines in the tab's compile of its corpus. The walk reads
-    // eight bytes a pass for whichever of the two comes next; a byte at a
-    // time it was 5.5M of the tab's 249M compile instructions.
-    let mut found = crate::hash::Set::default();
-    let mut last_at = None;
+/// These were two scans of every piece, one for each set, and the second
+/// stopped at every newline as well as every at. Merged, the tab's compile of
+/// its corpus fell by 2,791,169 instructions, 1.2%.
+fn called_and_ending<'t>(
+    text: &'t str,
+    calls: &mut crate::hash::Set<&'t str>,
+    ending: &mut crate::hash::Set<&'t str>,
+) {
     let bytes = text.as_bytes();
-    let mut i = crate::compare::either_from(bytes, 0, b'@', b'\n');
-    while i < bytes.len() {
-        match bytes[i] {
-            b'@' => last_at = Some(i),
+    let mut next = crate::compare::find(bytes, b'@');
+    while let Some(at) = next {
+        let from = at + 1;
+        let to = crate::compare::either_from(bytes, from, b'(', b'\n');
+        next = crate::compare::find(&bytes[from..], b'@').map(|n| from + n);
+        if to >= bytes.len() {
+            continue;
+        }
+        match bytes[to] {
+            b'(' => {
+                calls.insert(&text[from..to]);
+            }
             _ => {
-                if let Some(at) = last_at.take() {
-                    found.insert(&text[at + 1..i]);
+                if next.is_none_or(|n| n > to) {
+                    ending.insert(&text[from..to]);
                 }
             }
         }
-        i = crate::compare::either_from(bytes, i + 1, b'@', b'\n');
     }
-    found
 }
 
 /// The symbols DECLARES calls from its own inline definitions, which is every
@@ -339,6 +344,9 @@ mod called_symbols_agrees {
     /// stored anything looser than the run up to the paren.
     fn agrees_over(text: &str) {
         let index = called_symbols(text);
+        let mut merged = crate::hash::Set::default();
+        called_and_ending(text, &mut merged, &mut crate::hash::Set::default());
+        assert!(merged == index, "the merged scan found other calls than called_symbols");
         let mut asked = 0;
         for line in DECLARES.lines() {
             let Some(rest) = line.strip_prefix("declare ") else { continue };
@@ -382,11 +390,13 @@ mod called_symbols_agrees {
             "",
             "@a\n@a\n",
         ] {
-            let index = symbols_before_newline(text);
-            // Every symbol the emitter asks about is a generated identifier,
-            // so the queries here hold no at and no newline -- see the note on
-            // symbols_before_newline for the one shape outside that.
-            for sym in ["a", "b", "", "a("] {
+            let mut calls = crate::hash::Set::default();
+            let mut index = crate::hash::Set::default();
+            called_and_ending(text, &mut calls, &mut index);
+            // Every symbol the module writer asks about is a generated
+            // identifier, so the queries here hold no at, no paren and no
+            // newline -- see the note on called_and_ending.
+            for sym in ["a", "b", ""] {
                 assert_eq!(
                     index.contains(sym),
                     text.contains(&format!("@{sym}\n")),
@@ -411,6 +421,9 @@ mod called_symbols_agrees {
             "@",                // an at and nothing after it
         ] {
             let index = called_symbols(text);
+            let mut merged = crate::hash::Set::default();
+            called_and_ending(text, &mut merged, &mut crate::hash::Set::default());
+            assert!(merged == index, "the merged scan disagrees on calls in {text:?}");
             for sym in ["a", "b", "c", "@a", "a@b", "", "ab"] {
                 assert_eq!(
                     index.contains(sym),
