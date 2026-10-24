@@ -1836,9 +1836,11 @@ counting build stay in the runtime as calls.
 
 Without `always_inline` the link would not inline them. Its remark was
 "conflicting attributes", which `alwaysinline` overrides; that is why the
-earlier helpers all carry the attribute. The conflict is between kanso's
-functions and clang's, and is most likely the hot unit's `+ssse3`, which the
-LTO link's target does not carry. That is a measurement still to take.
+earlier helpers all carry the attribute. The conflict is the hot unit's
+`+ssse3`, which the LTO link's target does not carry: given
+`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
+That flag moved runbench by +951 with byte-identical output, so the
+attribute stays and the flag was set aside.
 
 runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
 function in the binary calls either. The ratchet row `empty_inline` puts
