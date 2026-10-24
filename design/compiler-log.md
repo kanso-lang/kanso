@@ -21,18 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-20 — the ratchet in four files
-
-`scripts/ratchet/ratchet.kso` was 6,316 lines, the largest source file in the
-tree (#2021). It is now a directory module, `scripts/ratchet/ratchet/`: the
-types, helpers and runner in `ratchet.kso`, and the three chains of rows,
-`rows_a`, `rows_b` and `rows_c`, in files of their own. Every line is where it
-was, in the same order, with one import of std/list added to each new file.
-The tests that read the rows now read every file of the module through
-`tests/support/ratchet.rs`, and the one that stages the ratchet copies the
-whole directory. `every_ratchet_row_is_run` went red when `rows_c` stopped
-joining its last row, so it reads the new files.
-
 ## 2026-10-20 — an interpolated int counts its digits once
 
 `"{i}"` on an int goes through `k_b_render_value`, which sized the string
@@ -2117,3 +2105,21 @@ tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
 per-function count of `docs/kanso.wasm` built with its names: the tokenizer
 was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
 2.2%.
+
+## 2026-10-24 — the tab's bcmp answers equality alone
+
+The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
+`kanso::compare::bytes`, which finds the order of the first byte that
+differs. `bcmp` is what `==` on two slices calls, and it only asks whether
+they differ. In the wasm the build wrote, the compiler's 154,063 compares
+on the corpus all called `memcmp`, which called `bcmp`. `bcmp` is now
+`compare::differ`, which returns as soon as a word disagrees. A per-function count of `docs/kanso.wasm` built
+with its names put the pair at 4.2% of the tab's compile of its corpus, the
+calls coming from inference, hashing, the beat analysis and the translator.
+
+The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
+this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
+`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
+on every position of every length up to 24; skipping the last word of a run
+longer than eight turned both red. The ratchet row `equal_bcmp` makes `bcmp`
+the ordering compare again.

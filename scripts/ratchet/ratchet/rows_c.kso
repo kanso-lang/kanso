@@ -3308,4 +3308,17 @@ pair_leaves = row
 
 rows_cq52 = list/concat rows_cq51 [pair_leaves]
 
-rows_c = list/concat rows_cq52 [itself]
+# The tab's bcmp answers equality alone, from a body of its own (2026-10-24).
+# The mutation makes it the ordering compare again, and the browser compile row
+# reads heavier.
+equal_bcmp = row
+  "a bcmp that orders its bytes"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bcmp_that_orders_its_bytes")
+  release
+
+rows_cq53 = list/concat rows_cq52 [equal_bcmp]
+
+rows_c = list/concat rows_cq53 [itself]

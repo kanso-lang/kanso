@@ -61,6 +61,38 @@ pub unsafe fn bytes(a: *const u8, b: *const u8, n: usize) -> i32 {
     0
 }
 
+/// `bcmp`: zero when the first `n` bytes at `a` and `b` agree, and one when
+/// they do not. `==` on two slices asks only that, so no byte's order is
+/// found. When `bcmp` was `bytes` too, every compare in the tab's compile went
+/// through `memcmp` into `bcmp`, 4.2% of the compile on its corpus.
+///
+/// # Safety
+/// `a` and `b` must each be valid for reads of `n` bytes.
+#[inline(always)]
+pub unsafe fn differ(a: *const u8, b: *const u8, n: usize) -> i32 {
+    if n >= 8 {
+        let mut i = 0;
+        while i + 8 <= n {
+            if unsafe { word(a, b, i) } != 0 {
+                return 1;
+            }
+            i += 8;
+        }
+        return (i < n && unsafe { word(a, b, n - 8) } != 0) as i32;
+    }
+    if n >= 4 {
+        return (unsafe { half(a, b, 0) | half(a, b, n - 4) } != 0) as i32;
+    }
+    let mut i = 0;
+    while i < n {
+        if unsafe { *a.add(i) != *b.add(i) } {
+            return 1;
+        }
+        i += 1;
+    }
+    0
+}
+
 /// The difference of the eight bytes at `at`, zero where they agree.
 #[inline]
 unsafe fn word(a: *const u8, b: *const u8, at: usize) -> u64 {

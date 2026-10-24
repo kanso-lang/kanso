@@ -106577,3 +106577,15 @@ work_oneshot 12,450,839, work_livebench 1,370,616,792 and work_encodebench
 changes' 32 bytes a program on top of the key's; and
 codegen_instructions_dev reads 116,001,189 under the fixed order, the three
 changes' cost over main's 115,822,620.
+
+## 2026-10-20 — the ratchet in four files
+
+`scripts/ratchet/ratchet.kso` was 6,316 lines, the largest source file in the
+tree (#2021). It is now a directory module, `scripts/ratchet/ratchet/`: the
+types, helpers and runner in `ratchet.kso`, and the three chains of rows,
+`rows_a`, `rows_b` and `rows_c`, in files of their own. Every line is where it
+was, in the same order, with one import of std/list added to each new file.
+The tests that read the rows now read every file of the module through
+`tests/support/ratchet.rs`, and the one that stages the ratchet copies the
+whole directory. `every_ratchet_row_is_run` went red when `rows_c` stopped
+joining its last row, so it reads the new files.

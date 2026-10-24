@@ -1,5 +1,6 @@
-//! `kanso::compare::bytes` is the tab's `memcmp`, and `byte_from` its search
-//! for one byte; the second is held to `position` at the end of this file.
+//! `kanso::compare::bytes` is the tab's `memcmp`, `differ` its `bcmp`, and
+//! `byte_from` its search for one byte; the last is held to `position` at the
+//! end of this file, and `differ` to slice equality beside `bytes`.
 //!
 //! `kanso::compare::bytes` is the tab's `memcmp`. This fuzzer holds it to an
 //! independent reference, the standard library's ordering of two byte slices,
@@ -10,7 +11,7 @@
 //! the other way. Only the sign of the answer is compared, which is all
 //! `memcmp` promises.
 
-use kanso::compare::{byte_from, bytes, either_from};
+use kanso::compare::{byte_from, bytes, differ, either_from};
 use std::cmp::Ordering;
 
 /// xorshift64*, seeded, so a failure names a case that can be replayed.
@@ -62,6 +63,15 @@ fn the_word_compare_agrees_with_the_slice_order() {
             &a[oa..oa + n],
             &b[ob..ob + n]
         );
+        // `differ` is the tab's `bcmp`, held to slice equality on the same pair.
+        let differs = unsafe { differ(a.as_ptr().add(oa), b.as_ptr().add(ob), n) };
+        assert_eq!(
+            differs,
+            (want != Ordering::Equal) as i32,
+            "case {case}: bcmp, n {n}, offsets {oa} and {ob}, {:?} against {:?}",
+            &a[oa..oa + n],
+            &b[ob..ob + n]
+        );
     }
 }
 
@@ -73,6 +83,7 @@ fn the_word_compare_orders_every_position_of_every_short_length() {
     for n in 0..=24usize {
         let a: Vec<u8> = (0..n as u8).map(|i| i.wrapping_mul(37)).collect();
         assert_eq!(unsafe { bytes(a.as_ptr(), a.clone().as_ptr(), n) }, 0, "n {n} equal");
+        assert_eq!(unsafe { differ(a.as_ptr(), a.clone().as_ptr(), n) }, 0, "bcmp n {n} equal");
         for at in 0..n {
             let (mut lo, mut hi) = (a.clone(), a.clone());
             lo[at] = 0x7f;
@@ -81,6 +92,7 @@ fn the_word_compare_orders_every_position_of_every_short_length() {
             let above = unsafe { bytes(hi.as_ptr(), lo.as_ptr(), n) };
             assert_eq!(below.cmp(&0), Ordering::Less, "n {n}, at {at}");
             assert_eq!(above.cmp(&0), Ordering::Greater, "n {n}, at {at}");
+            assert_eq!(unsafe { differ(lo.as_ptr(), hi.as_ptr(), n) }, 1, "bcmp n {n}, at {at}");
         }
     }
 }
