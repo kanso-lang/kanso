@@ -1,0 +1,26 @@
+# `half` answers a two-field record or an err, and a record of that shape is
+# returned by value, as three words. `.>` hands it to `shown`, which takes it
+# apart with a pattern, and a failure passes by. The join after the two paths
+# wanted the three words boxed and was handed them bare, and the native build
+# stopped in clang. mustache's port wrote it this way.
+type pair
+  a
+  b
+
+fn half 0
+  err "zero"
+
+fn half n
+  pair n (n / 2)
+
+fn shown (pair a b)
+  "{a}/{b}"
+
+fn said e@(err _)
+  "failed: {e.reason}"
+
+fn said s
+  s
+
+pub play = print (said (half 4 .> shown))
+  .> (_ -> print (said (half 0 .> shown)))
