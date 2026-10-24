@@ -1851,3 +1851,9 @@ words, since `shown` takes them by value.
 `micro/a_record_returned_by_value_is_piped_on` runs the success and the
 failure paths. Main stops it in clang; every engine now prints `4/2` and
 `failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.
