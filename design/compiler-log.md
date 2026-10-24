@@ -2141,8 +2141,7 @@ benchmarks that render floats fall with it: encodebench 2,367,625,387 ->
 Each binary's text is 208 bytes smaller, since the float renderer is
 inlined into it. codegen_instructions_dev 116,472,553 -> 116,472,194 and
 codegen_instructions_release 425,509,866 -> 425,504,448 compile the smaller
-runtime. emit_instructions moves 6,249,687 -> 6,246,661, compile_instructions
-25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
-library_instructions 74,183,641 -> 74,096,953. Neither change is in the
-front end those three rows count, and the compiler carries the runtime's
-text inside its binary, so I read their moves as the binary's layout.
+runtime. On the tree after #2068, emit_instructions, compile_instructions,
+entry_instructions and library_instructions read what #2068 left them. A run
+of this branch before that merge had them moving by 3,000 to 87,000, which
+the merge took away, so neither change here moves them.
