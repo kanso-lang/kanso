@@ -1,0 +1,41 @@
+import "std/list"
+import "std/text"
+
+# Lists built by concatenating a short list written out on each lap. A list
+# of numbers crosses each lap's rewind where it stands; a list that holds
+# strings made on the lap is copied out before the rewind instead, so every
+# item still reads back after twenty thousand laps.
+fn numbers acc 0
+  acc
+
+fn numbers acc i
+  numbers (list/concat acc [i]) (i - 1)
+
+fn pairs acc 0
+  acc
+
+fn pairs acc i
+  pairs (list/concat acc [i (i * 2)]) (i - 1)
+
+fn sevens acc 0
+  acc
+
+fn sevens acc i
+  sevens (list/concat acc [(i % 7 == 0)]) (i - 1)
+
+fn names acc 0
+  acc
+
+fn names acc i
+  names (list/concat acc ["n{i}"]) (i - 1)
+
+pub play =
+  ns = numbers [] 20000
+  ps = pairs [] 20000
+  hs = sevens [] 20000
+  ws = names [] 20000
+  first = text/join (list/to_list (list/take ws 3)) ","
+  print "{length ns} {ns[1]} {ns[20000]} {list/sum ns}"
+  print "{length ps} {ps[1]} {ps[2]} {ps[40000]} {list/sum ps}"
+  print "{length hs} {hs[1]} {hs[20000]} {hs[19994]}"
+  print "{length ws} {ws[1]} {ws[20000]} {first}"

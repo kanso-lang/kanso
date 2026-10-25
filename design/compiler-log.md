@@ -23,96 +23,6 @@
 
 
 
-## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
-
-A per-function count of the tab's compile of `bench/interp_corpus` put
-`memchr_aligned` at 5,857,105 instructions and `trim_matches` at 1,689,320.
-Both came from walking text one line at a time with the standard library.
-
-- `ir_defines`, which splits emitted IR into definitions for the prune,
-  stepped with `split_inclusive('\n')`. That calls memchr once a line, and on
-  wasm32 memchr reads four bytes a step. It now finds each line with
-  `compare::byte_from`, eight bytes a step, and trims only a line that opens
-  with `}`.
-- `prune_shipped`, which drops the library declarations a program does not
-  reach, walked the library's source the same way and now steps the same way.
-- The tab's translator trimmed every line of IR with `str::trim`, which
-  decodes each character at both ends and asks the Unicode table. Emitted IR
-  is ASCII, so both of its per-line trims are `trim_ascii` now.
-
-Measured with the per-function count, which runs a named build and reads a
-few hundred thousand above the browser row: 221,423,495 -> 219,980,398 for
-`ir_defines`, -> 219,053,485 for the trims, and -> 218,810,755 for
-`prune_shipped`, -2,612,740 (-1.18%) in all. Natively the entry check fell
-from 75,017,916 to 74,717,928, because `prune_shipped` runs there too. CI's
-rows replace these.
-
-The ratchet row `prune_lines` puts the per-line `str::find` back in
-`ir_defines` and reads 220,266,296 on the same count; `ascii_trim` puts
-`str::trim` back on both of the translator's trims and reads 219,737,668.
-
-CI's rows for this branch against room-first appends, all taken into the
-goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
-`compile_instructions` 25,172,884 -> 25,077,347, `entry_instructions`
-74,435,723 -> 74,133,494, `library_instructions` 74,096,953 -> 73,794,737
-and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
-`prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
-Welfare rose under the second decimal, 93.27 as printed, and is banked.
-
-## 2026-10-24 — the lexer reads a line before it walks it
-
-The entry compile spent 9,277,662 instructions in the lexer, and about a
-quarter of that came before any token: the work `lex` does on each raw line
-to decide what kind of line it is. Five pieces of it are cheaper now, with
-every diagnostic unchanged.
-
-- The source is split into lines a word at a time, with
-  `compare::byte_from`, where `str::lines` called memchr once a line. A
-  `\r` before a newline still comes off, and one at the end of a file
-  without a newline still stays.
-- The tab test is `compare::find` on the bytes. `str::find('\t')` went
-  through the char searcher and a `bcmp` for every line.
-- The line is trimmed once, where it was trimmed twice.
-- The width cap counts a line's characters only when its bytes exceed the
-  cap, since a character is at least one byte.
-- The text-block opener and the span opener each walked every byte of a
-  code line, tracking quotes and stopping at `#`. A line with no quote and
-  no `#` has no text block and its span opener is its last byte, so one
-  scan for either byte, a word at a time, answers both for most lines.
-
-Measured in this container at the tip of the lines-a-word-at-a-time branch:
-`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
-`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
-
-The ratchet row `lex_lines` puts `str::lines` back and reads
-`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
-reads 24,561,382.
-
-CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
-71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
-(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
-`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
-the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
-whose process lexes its program before it emits. Nothing else moved.
-Welfare 93.27 -> 93.28, banked.
-
-What is left in the lexer is `lex_line` itself, about 1,150 instructions a
-code line, most of it a scanner that decodes each line into a `Vec<char>`
-before it reads a token. A scanner over bytes would touch every token
-method and the column arithmetic, so it is a change of its own.
-
-Measured and set aside: the scanner reading an ascii line's bytes in place
-instead of widening them into its `Vec<char>`, through accessors that test
-`ascii` at every read. The widening costs 348,608 instructions of the entry
-compile, and the test at every character cost more: `entry_instructions`
-71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
-24,224,312.
-
-Measured and set aside: an unchecked `u64` sum for the tab translator's
-integers of eighteen digits or fewer, ahead of the checked `i128` loop.
-`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
-ratchet row of its own.
-
 ## 2026-10-24 — kq under the pin to 29dafd0f
 
 kq's instruction rows rose when its pin moved to 29dafd0f, the string index
@@ -1700,6 +1610,76 @@ interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
 entry is now judged line by line. Nothing here separates the part of each
 move that is the new check from the part that is the binary's layout.
 Welfare holds the net rise at 95.15.
+
+## 2026-10-25 — a concat of numbers crosses the rewind where it stands
+
+`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
+second argument is a list literal of scalars, as it accepted an in-place
+`push` of one. Such a concat writes each item onto the accumulator's frontier,
+so the accumulator still holds no pointer into the arena, and the license
+that lets a list of numbers cross a rewind by pointer applies. The loop from
+#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
+numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
+22,454,668 and take 6,496,051. No allocation counter sees the copies the
+stage made, so the run program's work row is where this shows.
+
+The one-element list each lap is still built. Emitting such a concat as one
+push per item would remove it, but a list literal keeps an item that fails
+where `push` answers the failure, so the two would need to agree first.
+
+`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
+booleans and strings made on the lap, 20,000 laps each. Its output is main's
+interpreter. The strings must stay refused: the ratchet mutation
+`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
+run of the fixture then dies reading the reclaimed strings ("ran out of
+stack"), while the interpreter, which has no rewind, stays green.
+
+## 2026-10-25 — a read a sibling forces lets the map go
+
+`bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
+1) (push b.items i))`, now writes the map in place. #2126 discounted a read
+binding when a sibling of the write wrote into it. `forces` in
+`src/linear.rs` generalizes that to any position that reads the value and
+runs on every path before the write: a field or element read, an operand,
+an interpolation, a condition, or an argument of `put`, `push`, `delete`,
+`length` or `keys`. A binding forced once answers every later mention from
+its value, so the write cannot change what the binding read. A bare name
+handed to a function or a constructor does not count, because a lazy binding
+travels there as an unforced cell; neither do one arm of an `if` (and so
+`and` and `or`), a guard past its condition, or a lambda.
+
+On its own, 16,000 numbers in 20 buckets took 132,724,010 instructions and
+take 9,025,501. `a_map_of_records_files_in_place` pins 4,000 numbers: 8,133
+allocations and 440,064 bytes, where main made 20,457 and 5,216,096.
+`a_record_read_out_of_a_map_keeps_its_fields` keeps the record it read in a
+carried list, in a lambda and under one arm of an `if`; its output is main's
+interpreter, and both engines agree with it.
+
+The read context is conservative and no program here shows it necessary. A
+binding is lazy only when every use hands it bare to a function that may
+discard it, and with the context dropped the probe that tried that shape
+still printed main's answer, because its binding stayed strict. No ratchet
+mutation is pinned for the context for that reason.
+
+CI's rows for both fixes, against main at #2146. The run program reads
+work_runbench 847,302,475 → 828,232,672 (−2.3%), run_allocs 1,585,686 →
+1,579,529, run_alloc_bytes 224,179,080 → 221,800,088, run_sh_map 76,160 →
+12,160, run_sh_buf 89,503,776 → 89,333,968, run_held_peak_bytes 1,863,712 →
+248,688, run_arena_blocks 5 → 4, run_arena_peak_bytes 5,767,184 → 4,718,608
+and run_spare_peak_bytes 3,670,032 → 2,621,456; run_put_mut_grow rises 260 →
+264, where the bucketed map now grows in place. The interpreter reads
+interp_instructions 525,925,462 → 520,276,149 and interp_allocs 585,540 →
+578,088, and interp_peak_bytes rises 1,281,294 → 1,281,313. The tab's run
+falls browser_run_instructions 107,399,948 → 54,006,705 and
+browser_run_peak_bytes 3,866,624 → 1,507,328, its compile rises
+browser_compile_instructions 333,912,133 → 334,848,599, and
+browser_compile_peak_bytes falls 743,930 → 743,876. Native compiles read
+compile_instructions 24,657,263 → 24,735,836, entry_instructions 72,734,084 →
+72,954,229, library_instructions 72,405,561 → 72,625,200 and
+emit_instructions 5,654,777 → 5,655,925: the two analyses cost the compiler
+about 0.3%. The machine code reads text 5,652,977 → 5,653,121, all of it in
+runbench. Welfare
+rises 95.15 → 95.22 and the rise is banked.
 
 ## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
 

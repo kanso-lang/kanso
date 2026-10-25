@@ -1,0 +1,50 @@
+import "std/list"
+
+# A record read out of a map and handed back to it through its fields lets
+# the map be written in place. Each loop here also keeps the record it read
+# somewhere else: in a list it carries, in a lambda it keeps, or under one
+# arm of an `if`. Every holder sees the record its own lap read.
+type bucket
+  hits
+  items
+
+fn or_bucket none
+  bucket 0 []
+
+fn or_bucket b
+  b
+
+fn filed m _ 0
+  m
+
+fn filed m n i
+  k = i % 3
+  b = or_bucket m[k]
+  filed (put m k (bucket (b.hits + 1) (push b.items i))) n (i - 1)
+
+fn kept m acc 0
+  "{acc} {m}"
+
+fn kept m acc i
+  b = or_bucket m[0]
+  kept (put m 0 (bucket (b.hits + 1) b.items)) (push acc b.hits) (i - 1)
+
+fn held m fs 0
+  "{list/to_list (list/map fs (f -> f 0))} {m}"
+
+fn held m fs i
+  b = or_bucket m[0]
+  held (put m 0 (bucket (b.hits + i) [])) (push fs (_ -> b.hits)) (i - 1)
+
+fn armed m 0
+  m
+
+fn armed m i
+  b = or_bucket m[0]
+  armed (put m 0 (if (i % 2 == 0) (bucket (b.hits + 1) []) b)) (i - 1)
+
+pub play =
+  print (filed {} 9 9)
+  print (kept {} [] 4)
+  print (held {} [] 4)
+  print (armed {} 5)
