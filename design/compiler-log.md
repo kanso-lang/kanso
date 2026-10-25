@@ -1733,7 +1733,7 @@ native moved. Welfare fell by less than a hundredth, and the floor follows
 under the language exception: the ruling asks for index reads to be proven,
 and this proves more of them.
 
-## 2026-10-25 — the run program reads a name handed to a call, and a guarded record's list
+## 2026-10-25 — three cliffs from the ports join the run program
 
 #2089's first item, entered in the corpus before its fix under the
 2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
@@ -1760,6 +1760,14 @@ knee is at 4,096 elements and the phase costs 746,860 instructions, while
 inside the run program the knee falls between 2,000 and 3,000 and the phase
 costs 43,734,573, the whole program with it less the whole without.
 
-On this container the whole program reads 874,292,848, where main reads
-788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
-in their own pull requests and will score as rises.
+#2089's fourth item is the third phase. chip8's port kept its memory as a
+map of 16 keys in a record, read one key and overwrote another each lap, and
+8,000 laps took 2.4 seconds natively against 0.1 on the interpreter. Every
+put that cannot write in place copies the map's append log, which keeps each
+overwrite until something sorts it, so the copy grows by an entry a lap. The
+`overwrite` phase runs 380 laps, 42,238,603 instructions built alone above
+the empty program, and prints the same total on both engines.
+
+On this container the whole program reads 917,589,885, where main reads
+788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
+The fixes follow in their own pull requests and will score as rises.

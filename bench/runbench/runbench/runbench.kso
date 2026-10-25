@@ -127,14 +127,16 @@
 # slice and the box between the two steps. It adds 25 bytes to the peak, the
 # line it reads.
 #
-# Two more joined on 2026-10-25, from #2089's first two items, measured on
-# main at kanso#2092 before their fixes and shared of the whole program on
-# that compiler, 874,292,848.
+# Three more joined on 2026-10-25, from #2089's first, second and fourth
+# items, measured on main at kanso#2092 before their fixes and shared of the
+# whole program on that compiler, 917,589,885.
 #
-#   handed   380 updates through a read handed to a call  41,508,775  4.75%
-#   guarded  3,050 pushes onto a record's list, guarded   43,734,573  5.00%
+#   handed     380 updates through a read handed to a call  41,508,775  4.52%
+#   guarded    3,050 pushes onto a record's list, guarded   43,734,573  4.77%
+#   overwrite  380 laps reading and overwriting 16 keys     42,238,603  4.60%
 #
-# `handed`'s column is built alone, less the empty program's 329,467.
+# `handed`'s and `overwrite`'s columns are built alone, less the empty
+# program's 329,467 and 327,245.
 # `guarded`'s is not, and cannot be: its cost is a cliff whose knee depends
 # on what the arena already holds. Built alone, 3,050 pushes sit below the
 # knee and cost 746,860; the knee there is at 4,096 elements. Inside this
@@ -150,6 +152,10 @@
 # `return st if i > n` guard. kanso#1926 moves the list out of the record
 # only when every mention of the record is a field read, and the guard's
 # early answer is a mention that is not, so every lap copies the list.
+# `overwrite` is chip8's memory: a map of 16 keys in a record, read and then
+# overwritten once a lap. Every put copies the map's whole append log, and
+# the log keeps each overwrite, so it grows by an entry a lap and the phase
+# is quadratic in its laps.
 import "./bag"
 import "./bump"
 import "./deep"
@@ -160,6 +166,7 @@ import "./handed"
 import "./index"
 import "./insist"
 import "./machine"
+import "./overwrite"
 import "./pend"
 import "./restate"
 import "./rewind"
@@ -207,6 +214,8 @@ handed_steps = 380
 
 guarded_pushes = 3050
 
+overwrite_laps = 380
+
 insist_laps = 5000
 
 fn decoded _ 0 sofar
@@ -249,8 +258,9 @@ fn tally raw doc a b
   ported4 = rewind/total rewind_laps + stack/total stack_laps
   ported5 = ported3 + ported4 + bag/total bag_items + handed/total handed_steps
   ported6 = ported5 + guarded/total guarded_pushes
+  ported7 = ported6 + overwrite/total overwrite_laps
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported6 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported7 + rest))
   bulk .> on
 
 fn shaped raw doc a
