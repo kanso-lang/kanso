@@ -11,7 +11,7 @@ lesson, consistent with run/check/test/build/repl/play.
    server, no namespace authority beyond GitHub's, no accounts. (Go's
    import-path lesson, adopted whole.)
 2. **Imports are the manifest.** `import "kanso-lang/vse/methods"` in source
-   IS the dependency declaration. No hako.toml, no Gemfile. `hako install`
+   IS the dependency declaration. No hako.toml, no Gemfile. `kanso install`
    scans imports, resolves, fetches. Knowledge lives where it is used.
 3. **The lockfile owns versions.** Source never names a version; `hako.lock`
    records name, tag, commit sha and protocol per hako, one line each —
@@ -50,8 +50,8 @@ Locals and GitHub owners cannot contain a dot in first position, so
 domain-shaped names can never collide with either.
 
 Cycles are compile errors at every layer. The compiler never talks to the
-network; `hako install` populates the cache, `kanso build` reads it, and a
-missing hako is a build error naming the `hako install` fix.
+network; `kanso install` populates the cache, `kanso build` reads it, and a
+missing hako is a build error naming the `kanso install` fix.
 
 ## Version selection
 
@@ -141,7 +141,8 @@ fetched?" in exactly one place per shape:
   `hako.lock` beside the sha, so builds never re-ask and stay
   byte-reproducible offline.
 - Lock overrides (`--from`) carry their protocol in their own
-  spelling: a path is a path, `@branch=x` is git.
+  spelling. Only `owner/repo@branch` is built, and it is git; a local
+  path and `@branch=name` are not built.
 
 **An import never names a protocol — asking how it would is a
 layering violation.** The binding is resolved *from* the name, in
@@ -162,10 +163,10 @@ someone actually publishes a hako off GitHub.
 **Three homes, and the import is never one of them.** Identity lives
 in the name (its shape picks the convention — GitHub-named or
 domain-named). Per-project overrides live in the lock: `kanso install
---from ../checkout` or `--from owner/repo@branch=name` writes an
-interim pin that `kanso list` flags, `kanso update` refuses to walk,
-and release CI can reject — trying a local branch of a dependency is
-a lock entry, never an import edit. Transport preference lives in
+--from owner/repo@branch` writes an interim pin that `kanso list`
+flags, `kanso update` refuses to walk, and release CI can reject (a local
+path and `@branch=name` are designed and not built). Trying a local branch
+of a dependency is a lock entry, never an import edit. Transport preference lives in
 user and CI configuration (registry-then-git, the GOPROXY layer),
 with the lock's sha making every fetcher produce the same bytes.
 
