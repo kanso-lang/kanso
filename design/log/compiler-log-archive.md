@@ -107919,3 +107919,68 @@ which this entry does not account for. Machine code falls, text 5,338,222 ->
 5,321,422. Building compiles the runtime, and both codegen rows fall a
 little: codegen_instructions_dev 116,444,792 -> 116,430,160 and
 codegen_instructions_release 425,503,297 -> 425,484,869.
+
+## 2026-10-23 — an escaped block is classified once
+
+The decoder's undo walk and the encoder's escape writer both copy a string
+sixteen bytes at a time and stop at the next byte that needs work. After each
+escape they loaded the next sixteen bytes and classified them again, though
+most of those bytes had been classified a moment before. The run program
+undoes 451,638 escapes and writes 407,520, about two and a half a string.
+Both walks now keep the block's mask and answer every escape in the block
+from it. After an escape the rest of the block is stored again behind what
+the escape wrote, moved down by a shuffle through a 32-byte table: `pshufb`
+on x86-64, `tbl` on arm64. The wasm32 runtime takes neither path, and
+`docs/kanso.wasm` and `docs/kanso-runtime.wasm` rebuild byte-identical.
+
+The undo walk also answers an escape inside its block loop instead of leaving
+through `stop` for the loop that handles backslashes. When a block has
+nothing left in it, the walk goes back to that loop at the byte after the
+escape, where the loop's room test decides as it did before. So the walk keeps
+its unescaped string in exactly the cases it did; the fuzzer's record counts
+match main's on three seeds. With the mask loop mutated back to one block load
+per escape, the run program reads 830,838,268 in the container, so the mask
+is worth 0.70M of the undo walk's fall and handling the escape inside the
+block loop is worth the other 2.44M. The writer's share is 0.98M.
+
+The writer got a differential fuzzer of its own before the change: a
+byte-at-a-time reference escaper, with each string ending a random distance
+before an unmapped page and the bytes past the promised bound checked
+untouched. Each walk ran fifty million cases on x86-64 and 300,000 on arm64
+under qemu, with no failures. Two ratchet rows put back a block load at every
+escape, one per walk.
+
+CI's rows. run_instructions 834,336,454 -> 830,143,044 (-0.50%),
+work_jsonbench 583,476,695 -> 578,721,695 (-0.81%), work_livebench
+980,635,460 -> 975,722,811 (-0.50%) and work_oneshot 10,335,619 ->
+10,291,652. work_encodebench fell 371; its frozen copy of the library escapes
+strings in kanso, and this entry does not account for the 371. Building
+compiles the runtime, so codegen_instructions_dev 116,430,160 -> 116,461,460
+and codegen_instructions_release 425,484,869 -> 425,504,615, and every
+benchmark binary's machine code grows 2,592 bytes: text 5,321,422 ->
+5,357,710 summed over the fourteen.
+
+## 2026-10-23 — a literal constant is its value at every mention
+
+A top-level constant is built on first demand behind a cell with a ready flag,
+and every mention called its accessor: test the flag, load the cell, check the
+tag. A constant whose one arm is an integer literal that fits a word does no
+work to build, so a mention of it is now that literal, the same
+`{ i64 0, i64 N }` an integer literal emits. Anything else, a wider literal
+included, still goes through the cell.
+
+The run program's digest phase is where it shows. sha256's `whole` is read
+about a dozen times a round, and a round fell from 295 instructions to 182 in
+the container. The digest loop shrank enough to be inlined into the driver.
+The escape phase went the other way: `span` is a literal constant too, and
+once LLVM could see `filled`'s loop bound it reshaped the loop and spent one
+more instruction a push, 1,552,672 over the run.
+
+CI's rows. run_instructions 830,143,044 -> 828,053,655 (-0.25%),
+work_digestbench 5,210,951 -> 4,150,769 (-20.3%) and work_deepbench
+201,739,409 -> 201,098,912; work_escapebench rose 39,058,532 -> 40,308,322
+(+3.2%) for the reshaped loop. The emitted code falls where constants were
+read: runbench 799 -> 741 defines and 7,539 -> 7,393 calls, digestbench 135 ->
+117 and 935 -> 872. emit_instructions 6,449,595 -> 6,449,884, and
+browser_compile_instructions 427,904,481 -> 427,933,127. A ratchet row sends every mention back
+through the cell; mutated, the run program reads main's count again.
