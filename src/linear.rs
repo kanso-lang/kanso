@@ -42,33 +42,16 @@ pub fn for_the_emitter(program: &Program) -> EmitterFacts {
     )
 }
 
-/// One `Analysis` for the interpreter, built the first time a run asks either
-/// of its two questions: where a push writes in place, and where a template
-/// joins onto a string. Building one per question cost a run that asked both
-/// about 35 million instructions twice over on the interpreted corpus.
-pub struct ForTheInterpreter<'a> {
-    program: &'a Program,
-    analysis: std::cell::OnceCell<Analysis<'a>>,
-}
-
-impl<'a> ForTheInterpreter<'a> {
-    pub fn new(program: &'a Program) -> Self {
-        ForTheInterpreter { program, analysis: std::cell::OnceCell::new() }
-    }
-
-    fn analysis(&self) -> &Analysis<'a> {
-        self.analysis.get_or_init(|| Analysis::new(self.program))
-    }
-
-    /// `in_place_pushes`, from the shared analysis.
-    pub fn in_place_pushes(&self) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
-        in_place_pushes_with(self.analysis(), self.program)
-    }
-
-    /// The join sites of `string_builders`, from the shared analysis.
-    pub fn string_joins(&self) -> Sites {
-        string_builders_with(self.analysis(), self.program).0
-    }
+/// Both of the interpreter's questions from one `Analysis`: where a push
+/// writes in place, and where a template joins onto a string. Building one per
+/// question cost a run that asked both about 35 million instructions twice
+/// over on the interpreted corpus, and keeping the analysis for the run's
+/// second question held it in memory for the whole run.
+pub fn for_the_interpreter(
+    program: &Program,
+) -> (HashSet<(std::sync::Arc<str>, usize, usize)>, Sites) {
+    let analysis = Analysis::new(program);
+    (in_place_pushes_with(&analysis, program), string_builders_with(&analysis, program).0)
 }
 
 pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
