@@ -609,6 +609,12 @@ static KValue k_partial_run(KClosure* p) {
 }
 
 static int k_key_cmp(KValue a, KValue b) {
+    /* Two machine ints are most keys a map holds, and every probe of a
+       search and every step of a merge asks this. Unwrapping subtypes and
+       testing for a bignum first cost a scrambled count of 2,340 int keys a
+       fifth of its instructions. */
+    if (__builtin_expect(a.tag == K_INT && b.tag == K_INT, 1))
+        return (a.payload > b.payload) - (a.payload < b.payload);
     a = k_sub_base(a);
     b = k_sub_base(b);
     /* every int ranks with the ints, a bignum among them */
@@ -1053,9 +1059,14 @@ static void k_map_view_insert_built(KMap* m, KValue key, KValue val) {
     side[at * 2 + 1] = val;
     sl++;
     *k_view_word(side) = sl;
-    /* past the square root of the view, a side costs more to insert into
-       and to search than one merge of the two costs spread over its keys */
-    if (sl * sl > n) k_map_view_merge(m);
+    /* Past four times the square root of the view, a side costs more to
+       insert into and to search than one merge of the two costs spread over
+       its keys. An insert into the side is one memmove, and a merge compares
+       and copies every pair of both runs, so the side may grow well past the
+       square root before folding it in pays: 2,340 scrambled keys cost
+       6,039,707 instructions with the merge at the square root, 4,575,844 at
+       four times it and 4,631,595 at eight times it. */
+    if (sl * sl > 16 * n) k_map_view_merge(m);
 }
 
 /* A map with no view has nothing to insert into, and that is every map a
