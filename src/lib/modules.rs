@@ -836,20 +836,17 @@ fn compile_module_loaded(
         // pointed at the innocent local and nowhere else (#2085). Name the
         // declaration it collides with.
         for d in &mut diags {
-            let Some(name) = d
-                .message
-                .strip_prefix('`')
-                .and_then(|rest| rest.strip_suffix("` is already a declaration; rename the binding"))
-            else {
+            let Some(name) = d.message.strip_prefix('`').and_then(|rest| {
+                rest.strip_suffix("` is already a declaration; rename the binding")
+            }) else {
                 continue;
             };
-            let elsewhere = parsed.iter().filter(|(other, _, _)| other != file).find_map(
-                |(other, _, p)| {
+            let elsewhere =
+                parsed.iter().filter(|(other, _, _)| other != file).find_map(|(other, _, p)| {
                     let at = p.fns.iter().find(|f| f.name == name).map(|f| f.span);
                     let at = at.or_else(|| p.types.iter().find(|t| t.name == name).map(|t| t.span));
                     at.map(|span| (other, span.line))
-                },
-            );
+                });
             if let Some((other, line)) = elsewhere {
                 d.message = format!(
                     "`{name}` is already a declaration, in {other} at line {line}; rename the \
