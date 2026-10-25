@@ -1,0 +1,47 @@
+import "std/list"
+
+# A map drained in place keeps each deleted pair's slot, marked dead, until
+# something other than a delete or a lookup reads it. Every reader here meets
+# the map in that state: a lookup, a length, the keys, a put that writes in
+# place after the drain, a put that answers a new map, a delete of a key
+# already gone, a drain to empty followed by a put, and two puts that answer
+# new maps beside a drained map still held.
+fn filled m 0
+  m
+
+fn filled m i
+  filled (put m i (i * 10)) (i - 1)
+
+fn drained m _ 0
+  m
+
+fn drained m n i
+  drained (delete m (i * 7 % n + 1)) n (i - 1)
+
+fn twice m _ 0
+  m
+
+fn twice m n i
+  twice (delete (delete m (i * 3 % n + 1)) (i * 3 % n + 1)) n (i - 1)
+
+fn refilled m 0
+  m
+
+fn refilled m i
+  refilled (put m (i * 2) i) (i - 1)
+
+pub play =
+  a = drained (filled {} 30) 30 12
+  b = refilled (drained (filled {} 30) 30 12) 20
+  c = drained (refilled (drained (filled {} 30) 30 12) 20) 30 25
+  d = twice (filled {} 20) 20 15
+  e = drained (filled {} 8) 8 8
+  f = put a 99 1
+  g = put e 4 4
+  h = drained (filled {} 30) 30 12
+  print "{h[8]} {h[1]} {h[23]} {h[30]} {h[31]} {length h}"
+  print "{length a} {a[1]} {a[8]} {a[30]} {list/to_list (list/take (keys a) 8)}"
+  print "{length b} {b[8]} {b[40]} {length c} {c[2]} {c[40]}"
+  print "{length d} {keys d} {length e} {e} {length g} {g}"
+  print "{length f} {f[99]} {f[8]} {list/to_list (list/take (keys f) 8)}"
+  print "{length a} {a[99]} {a[1]} {f == a} {length e}"

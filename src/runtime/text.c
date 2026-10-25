@@ -856,7 +856,15 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
             return k_none();
         }
         KMap* m = k_as_map(container);
-        if (!m->sorted) k_map_sort_build(m);
+        if (!m->sorted) {
+            /* a lookup between two deletes searches past the dead pairs
+               rather than closing them up */
+            if (k_map_gone_sorted(m)) {
+                KValue* at = k_gone_search(m->pairs, m->len, index);
+                return at ? at[1] : k_none();
+            }
+            k_map_sort_build(m);
+        }
         KValue* hit = k_map_find(m, index);
         return hit ? *hit : k_none();
     }
