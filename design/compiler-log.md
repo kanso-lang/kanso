@@ -21,26 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — the region row has a witness again
-
-The ratchet row `a region that keeps what it made` went blind when std/json
-began writing a map from its entries in place (c2b48e57). Its mutation makes
-`k_region_pop` keep everything the region allocated, and its witness was the
-mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
-under it. Once the encoder stopped building `keys` and `values` for each map,
-its calls had no allocating argument, so the emitter made no region at all:
-no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
-and with the mutation applied the whole mem corpus stayed green on main. The
-row came up on #2047, whose diff touches `core.c`, and read BLIND.
-
-The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
-encoder's old shape: a walk that builds a map's keys as the argument of its
-call into the map and answers bytes. The emitter makes that call a region.
-It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
-12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
-total and the oracle's counters agree. The old fixture's comment, which still
-described the region it no longer has, says what it pins now.
-
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
 The encoder writes a string with an escape in it through
@@ -1763,3 +1743,23 @@ costs 43,734,573, the whole program with it less the whole without.
 On this container the whole program reads 874,292,848, where main reads
 788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
 in their own pull requests and will score as rises.
+
+## 2026-10-25 — a guarded loop grows its record's list in place
+
+The fix for the `guarded` phase (#2089, second item). kanso#1926 lets a push
+through `st.events` write in place when the record is handed over and every
+mention of it in the arm reads a field. markdown's loop answered
+`return st if i > n` above the push, and that early `st` is a mention that
+reads no field, so the move was refused and every lap copied the list. The
+guard's early answer runs instead of the lines below it, never beside them.
+`FieldTally` now walks a guard's early answer apart from its rest, and when
+the early answer reads no field of the record it does not count against the
+move below. One that does read the field is counted as before.
+
+`tests/golden/mem/a_list_in_a_record_grows_under_a_guard` pushes 20,000
+times under such a guard: 14 allocations and 1,045,008 bytes, where main
+makes 51,816 and 9,160,000,672. markdown's reduction at 64,000 pushes runs in
+0.005 seconds natively, where main took 8.9.
+On this container the run program with the `guarded` phase falls from
+874,292,848 instructions to 831,115,619 and prints the same total; CI's rows
+follow.
