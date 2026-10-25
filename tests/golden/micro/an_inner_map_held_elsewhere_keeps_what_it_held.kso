@@ -1,0 +1,97 @@
+import "std/list"
+
+# Counts kept in a map of maps write into an inner map in place when nothing
+# but the outer map holds it. Each case below hands an inner map to somebody
+# else first: the same map at two keys, a name read again afterwards, a
+# second outer map, a list the loop carries, a list stored in the outer map,
+# and the outer map itself at another key. Each case has loops of its own,
+# because a parameter is proven for every caller or for none. Every holder
+# sees what its own history wrote.
+fn or_map none
+  {}
+
+fn or_map m
+  m
+
+fn or_zero none
+  0
+
+fn or_zero c
+  c
+
+fn bump m a b
+  inner = or_map m[a]
+  put m a (put inner b (or_zero inner[b] + 1))
+
+fn counted m _ 0
+  m
+
+fn counted m n i
+  counted (bump m (i % 5) (i * 7 % n)) n (i - 1)
+
+fn twice m _ 0
+  m
+
+fn twice m n i
+  a = i % 2
+  inner = or_map m[a]
+  twice (put m a (put inner i 1)) n (i - 1)
+
+fn named m _ 0
+  m
+
+fn named m n i
+  inner = or_map m[0]
+  named (put m 0 (put inner i 1)) n (i - 1)
+
+fn other m _ 0
+  m
+
+fn other m n i
+  inner = or_map m[0]
+  other (put m 0 (put inner i 1)) n (i - 1)
+
+fn moved m _ 0
+  m
+
+fn moved m n i
+  a = i % 2
+  b = (i + 1) % 2
+  inner = or_map m[a]
+  moved (put m b (put inner i 1)) n (i - 1)
+
+fn seen m acc 0
+  "{acc} {m}"
+
+fn seen m acc i
+  inner = or_map m[0]
+  seen (put m 0 (put inner i i)) (push acc m[0]) (i - 1)
+
+fn bumped m a b
+  inner = or_map m[a]
+  put m a (put inner b b)
+
+fn stash m i
+  put m (i + 100) (push [] m[0])
+
+fn stashed m 0
+  m
+
+fn stashed m i
+  stashed (if (i % 2 == 0) (bumped m 0 i) (stash m i)) (i - 1)
+
+pub play =
+  shared = { 0:5 }
+  two = twice { 0:shared 1:shared } 6 6
+  x = { 7:7 }
+  held = named (put {} 0 x) 3 3
+  base = { 0:{} }
+  copy = other (put {} 0 base[0]) 3 3
+  tally = counted {} 40 40
+  sizes = list/to_list (list/map (keys tally) (k -> length tally[k]))
+  print "{shared} {two}"
+  print "{x} {held} {base} {copy}"
+  print (seen {} [] 4)
+  print (stashed { 0:{} } 4)
+  print (moved {} 5 5)
+  print "{sizes} {tally[2]}"

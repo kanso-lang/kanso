@@ -1,0 +1,28 @@
+# A count kept per pair of keys in a map of 20 inner maps, 2,000 counts. The
+# outer write copied the outer map and the inner write copied the inner one,
+# so every count allocated two maps and the pairs of both. Where nothing but
+# the outer map holds an inner map, both writes are made in place.
+fn or_map none
+  {}
+
+fn or_map m
+  m
+
+fn or_zero none
+  0
+
+fn or_zero c
+  c
+
+fn counted m _ 0
+  m
+
+fn counted m n i
+  a = i % 20
+  b = i * 7919 % n
+  inner = or_map m[a]
+  counted (put m a (put inner b (or_zero inner[b] + 1))) n (i - 1)
+
+pub play =
+  tally = counted {} 2000 2000
+  print "{length tally} {length tally[0]} {tally[3][3 * 7919 % 2000]}"
