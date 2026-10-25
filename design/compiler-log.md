@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-24 — the string index inlined into the walk
-
-The run program's index phase calls `k_b_at_str` 690,000 times from
-`tally_4`, about 48 instructions a call. The release link inlines only what it
-holds as bitcode, and the runtime is machine code there apart from the hot
-unit `hot_source` builds. Linking runbench against the whole runtime as
-bitcode, with the link's own flags, read 811,029,731 against the shipped
-813,607,261, and the index was still a call: the emitted IR called it
-returning `%KValue`, clang gives a C function returning `KValue` the type
-`{ i64, i64 }`, and the inliner does not cross the two. With the call's type
-matched and the definition `always_inline`, the same link read 807,234,717.
-
-The change makes that hold without putting the runtime back in the link.
-`k_b_at_str` is defined in the hot unit, guarded by `K_HOT_ELSEWHERE` in
-`runtime.c` as the scanners are, with `k_at_char`, `k_cp_len` and
-`k_as_str` cut from `runtime.c` beside it. The cursor, the two character
-caches, the two seek counters and the three out-of-line arms it calls now
-have external linkage. The emitter calls it returning `{ i64, i64 }` and
-puts the two words back into a `%KValue`. The translator reads the two types
-as one, and the tab's rows did not move apart from 59 instructions of its
-compile.
-
-In this container runbench fell from 813,607,261 to 809,811,674 instructions
-(-0.47%), with byte-identical output, and `tally_4` no longer calls the
-index. The ratchet row `index_inline` takes the `always_inline` away and
-reads 813,606,898.
-
 ## 2026-10-24 — the number span inlined into the decoder
 
 The same move for `k_b_number_span_raw`, the word-at-a-time scan the
@@ -1795,3 +1768,59 @@ emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
 17,724, emitted_other_calls 20,164 → 20,219 and emitted_other_defines 2,209 →
 2,214. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.01.
+
+## 2026-10-25 — a map of maps is written in place
+
+The count per pair of keys from #2125, `inner = or_map m[a]` then
+`put m a (put inner b (or_zero inner[b] + 1))`, now writes both maps in
+place natively (#2122). Four changes in `src/linear.rs` do it.
+
+- **The outer write.** `fed_to_consumer` discounted a read binding only when
+  every later mention reached the write as an arithmetic or comparison
+  operand. A sibling that writes into the binding, `put inner b …`, forces it
+  before the outer write runs, and a binding forced once answers every later
+  mention from its value, so the binding's read of `m` is discounted there
+  too. This alone took the probe at 5,000 counts from 189 million
+  instructions to 101 million.
+- **Values alone.** `elems_params` is a greatest fixpoint over map
+  parameters: every caller hands in a map literal of unique values, a write
+  of a unique value into a map nobody else holds, or a parameter or binding
+  that is one, and no arm keeps an element. An element read may be compared,
+  interpolated or read further; any other read drops the parameter. A
+  parameter may also be written into, counted with `length` or `keys`,
+  answered whole, or handed to another parameter that keeps the promise.
+  `returns_elems` carries the promise through a helper's answer, so a loop
+  that calls `bump m a b` gets it from the helper.
+- **The take.** `m[k]` read into a name that is written into and goes back
+  into `m` at the same key, with nothing else mentioning the name but reads,
+  moves the element out (`element_moves`). The map is linear, so the arm
+  uses it once and the outer write is in place, and its values are alone, so
+  the map's slot is the element's only other holder until the write replaces
+  it.
+- **Pass-through.** A function whose every arm answers one parameter,
+  mentioned nowhere else, or a fresh literal answers a unique value wherever
+  that argument is unique. `or_map` is one. It is asked per call, so one
+  caller handing it a shared map refuses only that call; the first version
+  needed `or_map`'s parameter linear for every caller, and a fixture that
+  shared `or_map` across six loops proved none of them.
+
+The seeding is gated on a take existing anywhere in the program, so a
+program without the shape builds no map facts. The probe at 20,000 counts
+took 2,275,554,111 instructions and takes 35,953,409, and 5,000 to 20,000 is
+a ratio of 4.7. A mem fixture of 2,000 counts over 20 inner maps allocates
+325 times and 401,472 bytes, where main allocated 12,202 times and 6,618,224
+bytes, and at 1,000 counts 220 and 164,752 against 6,089 and 2,300,544.
+
+`an_inner_map_held_elsewhere_keeps_what_it_held` gives each refusal a loop
+of its own, because a parameter is proven for every caller or none and a
+shared loop let one refusal hide another. Its output came from main's
+interpreter. Three ratchet mutations each turn it red on both engines: a map
+literal's values taken as alone whatever they are, an arm allowed to keep an
+element, and a take put back at another key. A check that the take arm uses
+the map once was removed rather than pinned: a written map parameter is
+linear only if every arm uses it once, so the check could not fail.
+
+A loop whose arms are spelled with `return m if i == 0` is proven the same
+way. The interpreter writes in place at these sites on the analysis' word,
+so a wrong proof would be wrong identically on both engines; the fixture's
+expected output is main's interpreter for that reason.
