@@ -1756,6 +1756,6 @@ is refused at check with the same `unknown name` error the constant gets.
 `a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
 pins its stderr. On main it prints the run-time error above.
 
-CI's rows: library_instructions 71,254,677 -> 71,254,670, which is the
+CI's rows: library_instructions 72,011,050 -> 72,011,043, which is the
 binary's layout. A library compile takes the path it took before, and the
 test verb has no row.
