@@ -23,29 +23,6 @@
 
 
 
-## 2026-10-24 — a name no query starts like is passed over
-
-`queries_named` reads every `@name` in a text, measures it and looks it up in
-a set of names the caller asks about. It runs over every definition block in
-the prune and over every piece when the tab checks whether its emit named a
-group it left out. Most of a module's ats are runtime calls, string cells and
-intrinsics, `@k_`, `@s`, `@llvm.`, and the names asked about are the
-program's own groups, so the callers now build a table of the bytes their
-names start with, once per set, and the scan passes over a name whose first
-byte is not in it before measuring or hashing it.
-
-The tab's compile of its corpus fell from 221,598,648 to 220,923,375
-instructions (-0.30%) in this container, and the tab's IR and the native IR
-of the benchmarks in both tiers are byte-identical. Removing the check
-outright would have saved 1,751,745, the ceiling for this scan in the tab's
-miss check. Building the table inside `queries_named` instead, once per
-block, cost 680,432 more than it saved. The ratchet row `query_leads` admits
-every byte and reads 221,611,521.
-
-On CI the dev build's emit fell with the prune's scan, emit_instructions
-5,690,029 -> 5,651,244, and the browser rows of both changes matched this
-container's. Every other row reads what main left it.
-
 ## 2026-10-24 — the string index inlined into the walk
 
 The run program's index phase calls `k_b_at_str` 690,000 times from
@@ -1780,3 +1757,24 @@ compile_instructions 24,695,561 -> 24,731,131 (+0.14%), entry_instructions
 emit_instructions 5,636,850 -> 5,641,862, and the tab's compile
 browser_compile_instructions 303,782,324 -> 308,823,716 against #2120.
 Welfare rises 94.83 -> 95.01 and the rise is banked.
+
+## 2026-10-25 — a map of maps joins the corpus
+
+A count kept per pair of keys as a map of maps, `inner = or_map m[a]` then
+`put m a (put inner b (or_zero inner[b] + 1))`, is quadratic natively (#2122).
+The outer put is made in place. The inner map was read out of the outer one,
+which still holds it, so the inner put copies it, and the copy sorts itself
+again on its next read. 5,000 counts over 50 inner maps took 189 million
+instructions and 20,000 took 2.28 billion. The interpreter counts holders at
+run time and takes the inner map when only the outer slot and the binding
+hold it, so it stays near linear.
+
+Under the 2026-09-05 corpus-first gavel `nested` joins the corpus here,
+measured on main at kanso#2121 before its fix. It keeps 1,700 counts. At
+that size the inner maps hold about 34 keys each and the phase grows about
+linearly, at some 24,000 instructions a count, most of it the copy. On this
+container the run program reads 851,889,184 with it and 810,763,317 without
+it, a column of 41,125,867 (4.83%). The interpreted corpus keeps 1,000
+counts, 497,655,907 → 520,126,043, and the tab runs the same corpus on the
+native runtime. CI's rows and the re-based welfare baselines follow in this
+pull request.

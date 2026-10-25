@@ -231,6 +231,19 @@
 # words it admits. The read of the set in the condition, and the arm that
 # hands the record back unchanged, each counted as another holder of the
 # record, so the set and the list were both copied for every word.
+#
+# One more joined on 2026-10-25 from the same probe, measured on main at
+# kanso#2121 before its fix. Its column is the whole program with it,
+# 851,889,184, less the whole without, 810,763,317, and its share is of the
+# former.
+#
+#   nested    1,700 counts kept in a map of maps          41,125,867  4.83%
+#
+# `nested` counts pairs of keys in a map of 50 inner maps. The outer put is
+# made in place, but the inner map was read out of the outer one, which
+# still holds it, so natively every count copied its inner map. Here the
+# inner maps stay small and the phase grows about linearly; at 20,000 counts
+# the probe took 2.28 billion instructions.
 import "./admitted"
 import "./bag"
 import "./branched"
@@ -246,6 +259,7 @@ import "./handed"
 import "./index"
 import "./insist"
 import "./machine"
+import "./nested"
 import "./overwrite"
 import "./padded"
 import "./pend"
@@ -314,6 +328,8 @@ admitted_keys = 430
 
 deduped_words = 850
 
+nested_counts = 1700
+
 fn decoded _ 0 sofar
   sofar
 
@@ -362,8 +378,9 @@ fn tally raw doc a b
   ported12 = ported11 + drained/total drained_keys
   ported13 = ported12 + admitted/total admitted_keys
   ported14 = ported13 + deduped/total deduped_words
+  ported15 = ported14 + nested/total nested_counts
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported14 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported15 + rest))
   bulk .> on
 
 fn shaped raw doc a

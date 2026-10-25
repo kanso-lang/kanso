@@ -1,0 +1,29 @@
+# A count kept per pair of keys, as a map of maps: the outer key picks an
+# inner map and the inner key's count goes up by one. The outer put is made
+# in place, but the inner map came out of the outer one, which still holds it,
+# so natively every count copied the inner map and the copy sorted itself
+# again on its next read. 20,000 counts over 50 inner maps took 2.28 billion
+# instructions natively.
+fn or_zero none
+  0
+
+fn or_zero c
+  c
+
+fn or_map none
+  {}
+
+fn or_map m
+  m
+
+fn count m _ 0
+  m
+
+fn count m n i
+  a = i % 50
+  b = i * 7919 % n
+  inner = or_map m[a]
+  count (put m a (put inner b (or_zero inner[b] + 1))) n (i - 1)
+
+pub fn total n
+  length (count {} n n)
