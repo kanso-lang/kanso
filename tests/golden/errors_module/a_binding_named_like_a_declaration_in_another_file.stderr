@@ -1,0 +1,4 @@
+error[name]: `escaped` is already a declaration, in tests/golden/errors_module/a_binding_named_like_a_declaration_in_another_file/m/b.kso at line 1; rename the binding
+  --> tests/golden/errors_module/a_binding_named_like_a_declaration_in_another_file/m/a.kso:1:14
+   1 | pub fn twice escaped
+                    ^

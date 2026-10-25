@@ -1,0 +1,5 @@
+pub type hit
+  end
+  start
+
+pub found = hit 5 2

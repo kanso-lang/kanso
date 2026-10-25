@@ -27,9 +27,11 @@ struct Declared<'a> {
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
     fn_arities: &'a Arities<'a>,
-    /// The functions the module's other files declare. With this file's own
-    /// they are the arms a traveling call of the same name is offered beside.
-    sibling_fns: &'a HashSet<&'a str>,
+    /// The functions the module's files declare, each with the first file
+    /// that declares it and whether another file declares arms of it too.
+    /// With this file's own they are the arms a traveling call of the same
+    /// name is offered beside.
+    sibling_fns: &'a crate::hash::Map<&'a str, (u32, bool)>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, (usize, Option<&'a str>)>,
@@ -396,7 +398,15 @@ impl<'a> Resolver<'a> {
                                 self.diags.push(Diagnostic::new("arity", message, *span));
                             }
                         }
-                        if let Some(arities) = self.declared.fn_arities.get(name) {
+                        // A name whose arms are split across the module's
+                        // files is counted whole by the merged check, which
+                        // sees them all. toml's 2-argument `lookup` in one
+                        // file calling its 3-argument arm in another was
+                        // refused here with "arms take 2".
+                        let split =
+                            self.declared.sibling_fns.get(name.as_str()).is_some_and(|s| s.1);
+                        if let Some(arities) = self.declared.fn_arities.get(name).filter(|_| !split)
+                        {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =
                                     arities.iter().map(|a| a.to_string()).collect();
@@ -493,7 +503,7 @@ impl<'a> Resolver<'a> {
     /// still reaches the module's own arms, and the arms the value's owner
     /// wrote join them unless one of the module's has the same shape.
     fn shades(&self, name: &str) -> bool {
-        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains(name))
+        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains_key(name))
             && !self.locals.iter().any(|l| l.name == name)
     }
 
