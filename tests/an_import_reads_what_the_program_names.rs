@@ -13,5 +13,7 @@ fn an_import_reads_only_the_declarations_the_program_names() {
     let names: Vec<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
     assert!(names.iter().any(|n| n.ends_with("uppercase")), "{names:?}");
     assert!(!names.iter().any(|n| n.ends_with("pad_start")), "{names:?}");
-    assert_eq!(visits, 224, "expression visits");
+    // 223 since a loop counter's floor proves std/text's reads: a read that
+    // cannot miss carries no none, and inference settles a visit sooner.
+    assert_eq!(visits, 223, "expression visits");
 }
