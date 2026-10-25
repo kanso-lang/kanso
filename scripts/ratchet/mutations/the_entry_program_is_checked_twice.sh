@@ -29,7 +29,7 @@ grep -q 'fn compile_parsed_entry' src/lib.rs
 # mutation inserts therefore calls the plain form, which builds its own map --
 # a costlier defect than before, and the same shape: the entry's whole-program
 # check asked twice.
-anchor='let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);'
+anchor='check::check_merged_after_aliases_with(&merged, true, true, &rewritten, builtins);'
 before=$(grep -cF "$anchor" "$file" || true)
 if [ "$before" -ne 1 ]; then
   echo "expected one entry-path check_merged call in $file, found $before;" >&2
@@ -38,8 +38,8 @@ if [ "$before" -ne 1 ]; then
 fi
 awk -v anchor="$anchor" '
   index($0, anchor) {
-    print "    let _ = check::check_merged_after_aliases(&merged, true, &rewritten);"
     print
+    print "    let _ = check::check_merged_after_aliases(&merged, true, true, &rewritten);"
     next
   }
   { print }
@@ -47,7 +47,7 @@ awk -v anchor="$anchor" '
 mv "$file.mutated" "$file"
 # The real call keeps the `_with` spelling; the inserted one is the plain form,
 # which appears nowhere on this path until the mutation puts it there.
-after=$(grep -cF 'check::check_merged_after_aliases(&merged, true, &rewritten)' "$file" || true)
+after=$(grep -cF 'check::check_merged_after_aliases(&merged, true, true, &rewritten)' "$file" || true)
 if [ "$after" -ne 1 ]; then
   echo "wanted one inserted entry check beside the real one, and the file holds $after" >&2
   exit 1
