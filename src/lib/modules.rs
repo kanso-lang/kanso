@@ -666,6 +666,20 @@ fn compile_module_loaded(
                 .map_err(|d| diag::render(&[d], file, source))?;
         }
     }
+    // An import reaches only the file that writes it (2026-10-12). Its bare
+    // twin of a name the module also declares joins the module's own arms in
+    // one overload group, which is what a file that imports it and writes the
+    // name asks for. When no such file writes the name, the twin can only
+    // reach files that never imported it: xsv's private `matches` in one file
+    // took std/regexp's arms because another file imported std/regexp.
+    if parsed.len() > 1 {
+        let away = twins_no_importer_names(&parsed, &surfaced);
+        if !away.is_empty() {
+            dep_program
+                .fns
+                .retain(|f| !(f.synthetic && !ast::has_slash(&f.name) && away.contains(&f.name)));
+        }
+    }
     // Each file names what it uses. Declarations merge across a module's
     // files; imports do not, so a file that leans on a sibling's import is
     // a file whose dependencies are invisible in it.
@@ -992,6 +1006,47 @@ fn compile_module_loaded(
 /// imports that would bring it: a name that only a sibling's import surfaces,
 /// and that no file of the module declares. A rename's spelling counts the
 /// same way. std/render is ambient, so its names are seen everywhere.
+/// The names the module declares that an import also enrols bare, where no
+/// file importing that module writes the bare name.
+fn twins_no_importer_names(
+    parsed: &[(String, String, ast::Program)],
+    surfaced: &Surfaced,
+) -> Vec<String> {
+    let qual_of =
+        |i: &ast::Import| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string());
+    let declared = |name: &str| parsed.iter().any(|(_, _, p)| p.fns.iter().any(|f| f.name == name));
+    let mut away = Vec::new();
+    for (name, by) in surfaced {
+        if !declared(name) {
+            continue;
+        }
+        let written_where_seen = parsed.iter().any(|(_, _, p)| {
+            p.imports.iter().any(|i| by.contains_key(&qual_of(i))) && writes_bare(p, name)
+        });
+        if !written_where_seen {
+            away.push(name.clone());
+        }
+    }
+    away
+}
+
+/// Whether any declaration in `program` mentions `name` bare.
+fn writes_bare(program: &ast::Program, name: &str) -> bool {
+    fn in_expr(e: &ast::Expr, name: &str) -> bool {
+        if let ast::Expr::Ident(n, _, _) | ast::Expr::Partial(n, _) = e {
+            if n == name {
+                return true;
+            }
+        }
+        crate::any_child(e, |c| in_expr(c, name))
+    }
+    program.fns.iter().any(|f| {
+        f.body.iter().any(|st| match st {
+            ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => in_expr(expr, name),
+        })
+    })
+}
+
 fn hidden_from<'a>(
     program: &ast::Program,
     parsed: &'a [(String, String, ast::Program)],

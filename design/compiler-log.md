@@ -2058,3 +2058,24 @@ readers, so the root now asks a reader's call the same question.
 file and line, now said by the root. The root quotes no line from another
 file, as it does for every diagnostic about one, and the dependency's
 `(module deep)` suffix goes with the dependency's check.
+
+## 2026-10-25 — an import stays in the file that writes it
+
+From #2090, xsv's port. A module's file `join.kso` declared a private
+`matches` and imported nothing; its sibling `search.kso` imported std/regexp,
+which exports `matches` too. The module's merged program held std/regexp's
+bare twin of `matches` beside the private arms, so the call in `join.kso`
+dispatched over both, and the check refused `matches index k != []` because
+one of std/regexp's arms can answer an err. The 2026-10-12 gavel says a file
+names only what it can see, and `join.kso` never imported std/regexp.
+
+The 2026-08-29 ruling keeps the mixed group where it is asked for: a file
+that imports the module and writes the bare name dispatches over both the
+module's arms and the import's. So the module path now drops an import's bare
+twin of a name the module declares only when no file importing that module
+writes the bare name. The import's function stays reachable by its qualified
+spelling, `regexp/matches`. A module whose importing file does write the bare
+name keeps the mixed group, and a module of one file is unchanged.
+
+`tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
+beside it, on both engines; main refuses it.
