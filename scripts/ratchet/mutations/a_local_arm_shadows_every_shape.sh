@@ -4,7 +4,7 @@
 # the traveling path, so a module that writes `area` for a square is handed a
 # circle and finds no arm for it.
 set -e
-line="        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains(name))"
+line="        (self.declared.fn_arities.declares(name) || self.declared.sibling_fns.contains_key(name))"
 [ "$(grep -cxF "$line" src/check/shadow.rs)" -eq 1 ] || {
   echo "the shading test moved; this mutation needs rewriting" >&2
   exit 1

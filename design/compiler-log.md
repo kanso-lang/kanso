@@ -1345,6 +1345,15 @@ file is an outside consumer, the 2026-08-29 ruling that the author's own
 name wins, and the 2026-08-03 ruling that a module's files share their
 declarations.
 
+Four ratchet mutations anchored on lines these fixes rewrote and no longer
+applied: `the_library_program_is_checked_twice` (the library body moved into
+`compile_library_beside`), `the_entry_program_is_checked_twice` and
+`an_entry_program_rewritten_twice_before_it_is_checked` (the entry check took
+a `root` argument and a line of its own), and
+`a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
+re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
+other mutation still applies to this tree.
+
 ## 2026-10-25 — four cliffs from the ports join the run program
 
 #2089's first item, entered in the corpus before its fix under the
