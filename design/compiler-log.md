@@ -1526,3 +1526,48 @@ held_peak_bytes 273,328 where it read 206,448.
 On this container the run program goes from 880,945,062 with the two new
 phases to 799,175,414 with the three fixes, and the interpreted corpus from
 425,717,899 to 399,112,446.
+
+CI's rows, against #2111's tree with #2107 and #2108 under it. The run
+program falls 9.3%, work_runbench 880,946,052 -> 799,174,946, and the two
+phases cost what their neighbours do. The interpreted corpus falls 6.2%,
+interp_instructions 425,717,899 -> 399,115,104, interp_allocs 445,515 ->
+420,622 and interp_peak_bytes 735,045 -> 734,933, and the tab running it
+11.2%, browser_run_instructions 38,837,644 -> 34,483,426. Of the other run
+rows work_basket falls 31,039,077 -> 30,619,856 on the int compare, and
+work_oneshot 10,050,755 -> 10,098,604, work_livebench 936,030,663 ->
+936,077,833 and work_encodebench 2,327,445,961 -> 2,327,451,296 rise by
+layout. Over every benchmark the emitted code lands on
+emitted_other_calls 19,914, emitted_other_branches 17,407 and
+emitted_other_lines 164,739, the two phases' code less what the arm rule
+lets the emitter drop. Three map fixtures keep a longer side and allocate
+for it: growing_map_allocs 1,615 -> 1,617, growing_map_alloc_bytes 189,312
+-> 200,608, growing_map_held_peak_bytes 55,408 -> 63,536,
+a_tally_of_scattered_keys_merges_its_view_allocs 29 -> 31,
+a_tally_of_scattered_keys_merges_its_view_alloc_bytes 536,368 -> 620,752,
+a_tally_of_scattered_keys_merges_its_view_held_peak_bytes 206,448 ->
+273,328, fused_tally_allocs 66 -> 68, fused_tally_alloc_bytes 33,872 ->
+36,192 and fused_tally_held_peak_bytes 7,648 -> 8,464. #2106's
+`a_read_handed_to_a_call_stays_in_place` does the same, allocs 15 -> 17,
+alloc_bytes 16,800 -> 19,904 and held_peak_bytes 6,112 -> 7,184.
+
+The run program's allocation vein: run_allocs 1,541,511 -> 1,445,901,
+run_alloc_bytes 290,828,216 -> 215,212,648, run_arena_blocks 5 -> 4,
+run_arena_peak_bytes 5,767,200 -> 4,718,608, run_spare_peak_bytes 3,670,048
+-> 2,621,456, run_cohort_frees 68 -> 5, run_evac_allocs 8,970 -> 8,626,
+run_evac_bytes 13,592,736 -> 4,822,160, run_str_scans 53,763 -> 1,885,
+run_str_scan_bytes 67,106,410 -> 18,352,322, run_sh_str 66,689,376 ->
+16,642,592, run_sh_rec 5,268,656 -> 3,906,672 and run_sh_buf 111,082,496 ->
+86,615,200. run_push_mut_slow rises 1,557,480 -> 1,579,785, by exactly the
+22,305 pushes `branched` now makes in place, and run_bytes_malloc 7,885 ->
+7,893 and run_bytes_freed 7,755 -> 7,763 with them. The list it grows lives
+in a permanent buffer, so run_perm_peak_bytes rises 212,465 -> 736,769, and
+the longer side run holds more, run_held_peak_bytes 233,760 -> 254,240 and
+run_view_allocs and run_view_frees 399 -> 403. The run program's peak still
+falls, from 6,213,425 bytes to 5,709,617.
+
+The front end reads the doubled padding in the library it includes and the
+new arm rule: compile_instructions lands on 24,695,561, entry_instructions
+72,875,969, library_instructions 72,547,701 and browser_compile_instructions
+239,691,017, with browser_compile_peak_bytes 610,760, and
+codegen_instructions_dev on 116,456,086 and codegen_instructions_release on
+370,239,646. Welfare rises 0.32, which this pull request banks.
