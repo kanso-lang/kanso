@@ -2255,7 +2255,11 @@ static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
     }
 }
 
-KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
+/* Out of line. The four fused doors fall back to it for a range they cannot
+   read in place, and once its start test became one compare LLVM inlined it
+   into each of them: every binary grew 7,216 bytes for fallbacks that run
+   only on a bad range. */
+__attribute__((noinline)) KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (__builtin_expect(!k_not_failure(container) || !k_not_failure(fromv) || !k_not_failure(tov), 0)) return k_failed3(container, fromv, tov);
     if (!K_IS_INT(fromv) || !K_IS_INT(tov)) k_die("slice takes 1-based inclusive positions");
     /* A bound past a word reads as zero, which no slice starts or ends at,

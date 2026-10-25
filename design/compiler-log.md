@@ -1449,6 +1449,11 @@ before 1, so a span and a slice now agree on where a range may sit.
 The native test is one unsigned compare, `from - 1 > len`, which a start
 below 1 fails by wrapping to the top of the range. It replaces `from > len +
 1` in `k_b_slice` and `k_b_slice_raw`, so the hot path gains no instruction.
+The cheaper test made LLVM inline `k_b_slice` into the four fused doors'
+fallbacks, and CI read every binary 7,216 bytes larger for code that runs
+only on a bad range, so `k_b_slice` is marked out of line. On this container
+indexbench's text is 64 bytes smaller than before the change, and the run
+program 961 instructions lighter.
 The interpreter reads a start no machine word holds as 0, as before, and 0 is
 now outside. `past?`, which the compiler asks before reading a range that
 `slice!` hands straight to a door, adds `from < 1`. std's own `slice_in`
