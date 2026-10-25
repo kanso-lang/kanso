@@ -1845,11 +1845,11 @@ instructions and 128,000 took 156 million, most of it in `k_deep_copy`, where
 `push` takes 0.9 million and 2.6 million. The interpreter is linear on it.
 
 Under the 2026-09-05 corpus-first gavel `appended` joins the corpus here,
-measured on main at kanso#2125 before its fix. It keeps 64,000 numbers. In
-the run program it grows linearly at about 224 instructions a number. On
-this container the run program reads 866,203,703 with it and 851,886,947
-without it, a column of 14,316,756 (1.65%). The interpreted corpus keeps
-6,000 numbers, 520,130,058 → 543,327,698, and the tab runs the same corpus.
+measured on main at kanso#2126 before its fix. It keeps 64,000 numbers. In
+the run program it grows linearly at about 218 instructions a number. On
+this container the run program reads 828,713,625 with it and 814,784,428
+without it, a column of 13,929,197 (1.68%). The interpreted corpus keeps
+6,000 numbers, and the tab runs the same corpus.
 
 `bucketed` joins beside it: numbers filed into a map of records, each a count
 and a list, `b = or_bucket m[k]` then `put m k (bucket (b.hits + 1) (push
@@ -1857,7 +1857,8 @@ b.items i))`. Both puts are the persistent `k_b_put`. The record reaches the
 put only through its fields, and the read discount accepts a name that
 reaches the write through arithmetic or a nested write into it, so the map is
 copied for every number. The lists are not copied: on its own the shape
-stays linear as they grow, at about 8,300 instructions a number. It keeps 2,000 numbers; the run program reads
-885,012,611 with both phases, a column of 18,808,908 (2.13%), and the
-interpreted corpus keeps 1,500, 543,327,698 → 572,349,665. CI's rows and the
-re-based welfare baselines follow in this pull request.
+stays linear as they grow, at about 8,300 instructions a number. It keeps
+2,000 numbers; the run program reads 847,407,464 with both phases, a column of 18,693,839 (2.21%), and the
+interpreted corpus keeps 1,500. With both, the interpreted corpus reads
+515,277,561 → 567,834,663 on this container. CI's rows and the re-based
+welfare baselines follow in this pull request.
