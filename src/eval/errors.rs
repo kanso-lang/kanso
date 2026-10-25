@@ -55,6 +55,9 @@ pub struct Site {
     in_place: std::cell::OnceCell<Set<(usize, usize)>>,
     /// The same for `linear::moved_writes`; see `Interp::moved_here`.
     moved: std::cell::OnceCell<Set<(usize, usize)>>,
+    /// The same for the joins `linear::string_builders` finds; see
+    /// `Interp::joins_here`.
+    joins: std::cell::OnceCell<Set<(usize, usize)>>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -66,6 +69,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
         file: decl.file.clone(),
         in_place: std::cell::OnceCell::new(),
         moved: std::cell::OnceCell::new(),
+        joins: std::cell::OnceCell::new(),
     }))
 }
 

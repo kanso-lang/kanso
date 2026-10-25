@@ -66,7 +66,7 @@ fi
 # `all_counters.sh` opens with `cargo build --release` for the same reason and
 # CLAUDE.md says why: `lib/*.kso` is `include_str!`'d into the compiler, so a
 # library edit does not reach a program until the compiler is rebuilt.
-# `build_benchmarks.sh` starts with that build and then compiles all thirteen.
+# `build_benchmarks.sh` starts with that build and then compiles the benchmarks.
 sh scripts/gates/build_benchmarks.sh > /dev/null
 moved=""
 refused=""

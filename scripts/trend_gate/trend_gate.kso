@@ -133,47 +133,10 @@ lower = [
   "browser_compile_peak_bytes"
   "browser_run_instructions"
   "browser_run_peak_bytes"
-  # The runtime work vein, per benchmark. Four of these are welfare's run-speed
-  # terms, so half the score's inputs were invisible to the gate that exists to
-  # watch the score's inputs — the same argument the two compile veins above
-  # were added on, one vein down. Named WITHOUT the file's prefix, because the
-  # direction lookup strips it: what is classified is the counter, wherever it
-  # was read from. `text` is the machine-code vein, summed over the binaries.
-  "jsonbench"
-  "encodebench"
-  "oneshot"
-  "basket"
-  "widebench"
-  "deepbench"
-  "escapebench"
-  "pendbench"
-  "indexbench"
+  # `text` is the machine-code vein, summed over the binaries. The work
+  # vein's rows are named by benchmark and take their direction from their
+  # golden's entry in `bench_goldens`, so no benchmark is listed here.
   "text"
-  # digestbench joined the work vein on 2026-08-31 and this list did not, so a
-  # rise in it read as UNCLASSIFIED drift — a 6.5x regression passed green. It
-  # is the row that matters most for staying honest here: every change that buys
-  # the digest's peak spends work, and the peak side was classified from the
-  # first day because `digest_arena_peak_bytes` strips to a name this table
-  # already held.
-  #
-  # scanbench joined the work vein on 2026-09-02 and this list at the same time,
-  # because the spec that caught digestbench's omission caught it in the pull
-  # request that added the row. Its arena and peak sides were classified from
-  # the first day for the same reason the digest's were.
-  # readbench joined on 2026-09-04, in the pull request that added the row, for
-  # the reason the two above give and one of its own: its work row is meant to
-  # stay flat. The benchmark is in the objective for its arena, and this is the
-  # entry that makes a rise in its instructions read as a regression rather than
-  # as drift the listing shrugs at.
-  # livebench joined on 2026-09-05, in the pull request that added the row, for
-  # the reason the three above give. Its own reason to be here is that it exists
-  # to make a library encode change visible at all: a benchmark added to see a
-  # fall, whose rises read as drift, would be worse than not adding it.
-  "digestbench"
-  "scanbench"
-  "readbench"
-  "livebench"
-  "runbench"
   # The runtime counters that are plainly a cost, swept in on 2026-09-01. Every
   # one of them had been unclassified since it was minted, so a change that
   # worsened it alone printed as drift and the pure-regression rule counted it
@@ -359,9 +322,12 @@ bench_goldens = [
   # belong to bench/compile_golden.txt already, and summing the decoder's IR
   # line count into a compile sample's would let a rise in one hide a fall in
   # the other. text_golden's rows share the field name `text`, so it sums to one
-  # number across the eight binaries — the same treatment compile_golden's five
+  # number across the binaries — the same treatment compile_golden's five
   # samples already get, and the per-golden diff is what says which binary.
-  ["bench/instructions_golden.txt" "work_"]
+  # Every row of the work vein is a cost, so its entry carries its direction
+  # and a benchmark that joins bench/benchmarks.txt is classified without an
+  # entry in `lower`.
+  ["bench/instructions_golden.txt" "work_" "lower"]
   ["bench/emitted_golden.txt" "emitted_"]
   # The eight programs the emitted gate did not watch until 2026-08-27. A second
   # prefix rather than a second entry under `emitted_`, so a rise in a benchmark
@@ -832,12 +798,22 @@ fn unchanged _ _ _ _ true _
 fn unchanged golden name before after false pins
   return unchanged golden name before after true pins if length golden < 2
   bare = bare_name name golden[2]
-  worse = worsened? bare before after
+  worse = worsened_in? golden bare before after
   # `name` and not `bare`: the link file names the gate's key, prefix and
   # all, where `bare` is what the direction tables look up. They differ for
   # every golden but the four with an empty prefix — which is why the compile
   # vein classified correctly under `bare` and the runtime vein did not.
-  told golden name before after worse (named? bare) (shifted? pins name)
+  told golden name before after worse (known? golden bare) (shifted? pins name)
+
+# A golden whose entry carries a third field names one direction for all its
+# rows.
+fn worsened_in? golden bare before after
+  return after > before if length golden > 2
+  worsened? bare before after
+
+fn known? golden bare
+  return true if length golden > 2
+  named? bare
 
 # Does a direction table name this counter at all? A counter neither table
 # knows has no direction, and answering `improved` for it is how a change with

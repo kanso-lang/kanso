@@ -21,7 +21,8 @@ type bucket
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500}"
-  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
+  texts = "{grown 3000} {scanned 1000}"
+  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
 
 fn rounds n
   source = document 220
@@ -168,3 +169,29 @@ fn filed m n i
 
 fn bucketed n
   length (filed {} n n)[3].items
+
+# A string built one piece at a time by a template that joins onto it.
+fn joined_onto s 0
+  s
+
+fn joined_onto s i
+  joined_onto "{s}{i}," (i - 1)
+
+fn grown n
+  length (joined_onto "" n)
+
+# A long string walked a character at a time by a loop that hands it on to
+# each step, as a scanner does.
+fn tally s i n acc
+  stepped s i n acc (i > n)
+
+fn stepped _ _ _ acc true
+  acc
+
+fn stepped s i n acc false
+  hit = text/slice s i i == "a"
+  tally s (i + 1) n (if hit (acc + 1) acc)
+
+fn scanned n
+  s = text/join (list/to_list (list/map (span n) (_ -> "ab"))) ""
+  tally s 1 (length s) 0
