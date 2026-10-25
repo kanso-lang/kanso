@@ -1,0 +1,11 @@
+import "std/io"
+import "std/list"
+
+# A function the module declares, named like a constant an import brings.
+# std/io exports `read_line`; this module's own `read_line` is handed to
+# `list/fold` as a value. The import's constant took the name in the module's
+# shared bare space, and every engine stopped with "`<io>` is not callable".
+fn read_line acc x
+  acc + x
+
+pub play = io/write "{list/fold [1 2 3] 0 read_line}\n"

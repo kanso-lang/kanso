@@ -375,6 +375,14 @@ impl<'a> Interp<'a> {
             }
             b"push" => {
                 let [list, item] = arity(args, name, span)?;
+                // `text/bytes` answers `int[]` (appendix b), so a push onto
+                // bytes answers the list of their values with the item after
+                // them, as `concat` does.
+                if let Value::Bytes(raw) = &list {
+                    let mut next: Vec<Value> = raw.iter().map(|&b| Value::int(b)).collect();
+                    next.push(item);
+                    return Ok(Value::List(Rc::new(next)));
+                }
                 if !matches!(list, Value::List(_)) {
                     return Err(RuntimeError {
                         at: None,

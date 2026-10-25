@@ -1,0 +1,24 @@
+# Updating a map in place, with the old value read into a name and handed to a
+# function inside the write: `seen = m[key]` then `put m key (counted seen)`.
+# The toml, datalog, diff, bc and inflate ports all wrote this, and natively
+# every put copied the map, because the name reaches the write through a call
+# rather than through arithmetic (kanso#2089). toml's reduction at 8,000 keys
+# took 4.2 seconds in release, against 0.012 with the read written inline.
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+fn tallied m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  seen = m[i]
+  tallied (put m i (counted seen)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+fn summed m i n acc
+  return acc if n < i
+  summed m (i + 1) n (acc + counted m[i])
+
+pub fn total steps
+  summed (tallied {} 1 steps 100) 1 100 0

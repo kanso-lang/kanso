@@ -219,7 +219,7 @@ c13b = filed "m/b.kso" """
 
 c13m = filed "main.kso" "import \"./m\"\n\nprint \"\{tries 1}\"\n"
 
-c13said = "error[name]: `taken` is already a declaration; rename the binding"
+c13said = "m/a.kso at line 1; rename the binding"
 
 c13l = "a binding shadowing a sibling's declaration"
 

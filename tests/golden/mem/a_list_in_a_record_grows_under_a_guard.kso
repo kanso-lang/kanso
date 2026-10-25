@@ -1,0 +1,14 @@
+# A list held in a record, pushed onto through the record under a
+# `return st if done` guard. The guard's early answer mentions the record
+# whole, but it runs instead of the push, never beside it, so the push still
+# owns the list. Main copied it every lap past the arena's knee: 20,000
+# pushes made 51,816 allocations and 9,160,000,672 bytes.
+type state
+  events
+  line
+
+fn loop st i n
+  return st if i > n
+  loop (state (push st.events i) i) (i + 1) n
+
+pub play = print (length (loop (state [] 0) 1 20000).events)

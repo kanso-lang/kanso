@@ -1,0 +1,9 @@
+# join.kso imports nothing and declares a private `matches` of its own.
+fn matches _ none
+  []
+
+fn matches index k
+  index[k]
+
+pub fn hits? index k
+  matches index k != []

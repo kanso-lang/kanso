@@ -1,0 +1,8 @@
+type hit
+  end
+  start
+
+fn shown h
+  "{h.strat}..{h.end}"
+
+print (shown (hit 5 2))

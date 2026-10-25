@@ -1,0 +1,5 @@
+fn escaped s
+  "!{s}"
+
+pub fn shout s
+  escaped s

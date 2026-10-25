@@ -1027,12 +1027,25 @@ __attribute__((noreturn, noinline, cold)) static void k_die_push_takes(KValue lv
 
 static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate);
 
+/* `text/bytes` answers `int[]` (appendix b), so a push onto bytes answers the
+   list of their values with the item after them, as `concat` does. Anything
+   else that is not a list is refused here. Out of line: a push onto a list
+   never comes this way. */
+__attribute__((noinline, cold)) static KValue k_push_onto_bytes(KValue lv, KValue item) {
+    if (lv.tag != K_BYTES) k_die_push_takes(lv);
+    long long n = k_seq_len(lv);
+    KValue* items = k_buf(n + 1);
+    k_seq_into(lv, items);
+    items[n] = item;
+    return k_list_own(items, n + 1);
+}
+
 static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
     /* An err item is infectious like any argument: pushing one answers it.
        Only the list was asked until 2026-09-28, so the compiled engines stored
        the err as an element where the interpreter handed it on. */
     if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(item), 0)) return k_failed2(lv, item);
-    if (lv.tag != K_LIST) k_die_push_takes(lv);
+    if (__builtin_expect(lv.tag != K_LIST, 0)) return k_push_onto_bytes(lv, item);
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
     if (mutate) item = k_big_kept(item, l);
