@@ -3,7 +3,6 @@ import "std/text"
 fn check_bad bs
   utf8_ok (text/utf8 bs)
 
-
 fn utf8_ok (err _)
   "rejected"
 
