@@ -12,6 +12,7 @@ use crate::name::Name;
 /// declaration after them would read as part of the run.
 pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
+    check_blank_policy(lexed, &mut diags, true);
     // Declarations are order-free everywhere else in kanso, and a relaxed
     // file is not the place to invent an ordering rule: the split is by
     // KIND, not position. A top-level `fn`, `type`, `import` or constant
@@ -78,23 +79,9 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             Span::at(1, 1),
         ));
     }
-    // The declaration half is interleaved with statements, so its lines are
-    // not contiguous: what the library parser needs between two of them is
-    // exactly one blank in the gap. Take an original blank when the gap has
-    // one, and otherwise mark a line the gap already holds — a statement's
-    // line is not a declaration's neighbour, so nothing is being invented
-    // about the code, only about the space between two forms.
-    let blanks: crate::hash::Set<usize> = lexed.blank_lines.iter().copied().collect();
-    let mut decl_blanks: Vec<usize> = Vec::new();
-    for pair in decl_lines.windows(2) {
-        let (a, b) = (pair[0].number, pair[1].number);
-        if b <= a + 1 {
-            continue;
-        }
-        let found = (a + 1..b).find(|n| blanks.contains(n));
-        decl_blanks.push(found.unwrap_or(a + 1));
-    }
-    let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks, header: 0, pruned: false };
+    // the whole file's blank lines were judged above, as written; the half
+    // is not contiguous, so it is not judged again
+    let decl_half = Lexed { lines: decl_lines, blank_lines: Vec::new(), header: 0, pruned: true };
     let mut program = match parse(&decl_half) {
         Ok(program) => program,
         Err(more) => {
@@ -126,6 +113,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
 
 pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
+    check_blank_policy(lexed, &mut diags, true);
     let mut imports: Vec<Import> = Vec::new();
     let mut first_stmt = None;
     for (idx, line) in lexed.lines.iter().enumerate() {
@@ -223,7 +211,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut reexports: Vec<crate::ast::Reexport> = Vec::new();
     let mut past_imports = false;
     if !lexed.pruned {
-        check_blank_policy(lexed, &mut diags);
+        check_blank_policy(lexed, &mut diags, false);
     }
     let mut i = 0;
     while i < lexed.lines.len() {
@@ -496,7 +484,11 @@ fn blanks_between(blanks: &[usize], after: usize, before: usize) -> usize {
     blanks.partition_point(|b| *b < before) - blanks.partition_point(|b| *b <= after)
 }
 
-fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
+/// The blank lines canonical form allows. `statements` is set for an entry
+/// or play file, where a top-level `x = …` is a statement of the run rather
+/// than a declaration: statements may pack, and at most one blank line
+/// separates two of them.
+fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>, statements: bool) {
     let Some(first) = lexed.lines.first() else { return };
     // A file may open with a header comment and one blank line under it
     // (2026-10-13, #1887); any other blank above the first line of code is
@@ -528,16 +520,35 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
             && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
         let decl_start =
             matches!(pair[1].tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _, _)))
-                || matches!(
-                    (pair[1].tokens.first(), pair[1].tokens.get(1)),
-                    (Some((Tok::Ident(_), _, _)), Some((Tok::Bind, _, _)))
-                );
+                || (!statements
+                    && matches!(
+                        (pair[1].tokens.first(), pair[1].tokens.get(1)),
+                        (Some((Tok::Ident(_), _, _)), Some((Tok::Bind, _, _)))
+                    ));
         // A top-level line that declares nothing is a statement, and a module
         // has no room for one. The parse names that and names the verb that
         // does; a blank-line complaint here would describe a rule the author
         // did not break.
         let imports_here = matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
+        // an import below a statement is refused for its place, and a blank
+        // above it is no separate fault
+        let after_import = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)));
+        if statements && imports_here && !after_import && pair[0].indent == 0 {
+            continue;
+        }
         if pair[1].indent == 0 && !decl_start && !imports_here {
+            if blanks > 1 {
+                let after_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)));
+                let message = match after_imports {
+                    true => "at most one blank line follows the imports",
+                    false => "at most one blank line separates two statements",
+                };
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    message.to_string(),
+                    Span::at(pair[1].number, 1),
+                ));
+            }
             continue;
         }
         let required = match pair[1].indent {
