@@ -1762,9 +1762,11 @@ Welfare rises 94.83 -> 95.01 and the rise is banked.
 
 A count kept per pair of keys as a map of maps, `inner = or_map m[a]` then
 `put m a (put inner b (or_zero inner[b] + 1))`, is quadratic natively (#2122).
-The outer put is made in place. The inner map was read out of the outer one,
-which still holds it, so the inner put copies it, and the copy sorts itself
-again on its next read. 5,000 counts over 50 inner maps took 189 million
+Both puts are emitted as the persistent `k_b_put`. The outer one is refused
+because `inner` reaches it through the nested put, and `fed_to_consumer`
+accepts only arithmetic and comparison operands. The inner one is refused
+because the outer map still holds the map it was read from. The copied inner
+map sorts itself again on its next read. 5,000 counts over 50 inner maps took 189 million
 instructions and 20,000 took 2.28 billion. The interpreter counts holders at
 run time and takes the inner map when only the outer slot and the binding
 hold it, so it stays near linear.

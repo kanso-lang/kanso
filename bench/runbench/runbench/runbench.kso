@@ -239,9 +239,8 @@
 #
 #   nested    1,700 counts kept in a map of maps          41,125,867  4.83%
 #
-# `nested` counts pairs of keys in a map of 50 inner maps. The outer put is
-# made in place, but the inner map was read out of the outer one, which
-# still holds it, so natively every count copied its inner map. Here the
+# `nested` counts pairs of keys in a map of 50 inner maps. Natively both
+# puts copy, so every count copied the outer map and its inner map. Here the
 # inner maps stay small and the phase grows about linearly; at 20,000 counts
 # the probe took 2.28 billion instructions.
 import "./admitted"

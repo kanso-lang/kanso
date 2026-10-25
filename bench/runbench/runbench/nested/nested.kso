@@ -1,9 +1,9 @@
 # A count kept per pair of keys, as a map of maps: the outer key picks an
-# inner map and the inner key's count goes up by one. The outer put is made
-# in place, but the inner map came out of the outer one, which still holds it,
-# so natively every count copied the inner map and the copy sorted itself
-# again on its next read. 20,000 counts over 50 inner maps took 2.28 billion
-# instructions natively.
+# inner map and the inner key's count goes up by one. Natively both puts
+# copy: the outer one because the inner map's binding feeds another write,
+# the inner one because the outer map still holds what it came from. The
+# copied inner map sorts itself again on its next read. 20,000 counts over
+# 50 inner maps took 2.28 billion instructions natively.
 fn or_zero none
   0
 
