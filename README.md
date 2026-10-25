@@ -4,33 +4,38 @@
 
 *kanso* (簡素): simplicity through the elimination of clutter.
 
-A language where the source file contains only decisions. Anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error or unrepresentable. Programs have a canonical form—one rendering per program—so no formatter tool exists: non-canonical whitespace is a syntax error.
+A language where the source file contains only decisions. Anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error or unrepresentable. Programs have a canonical form, one rendering per program, so there is no formatter: non-canonical whitespace is a syntax error.
 
-**Docs:** https://clayshentrup.github.io/kanso/ · **Spec:** https://clayshentrup.github.io/kanso/spec.html · **Compiler:** https://clayshentrup.github.io/kanso/compiler.html
+**Docs:** https://kanso-lang.dev/ · **Book:** https://kanso-lang.dev/book/ · **Spec:** https://kanso-lang.dev/spec.html · **Compiler:** https://kanso-lang.dev/compiler.html
 
 ```
-fn describe (err reason)
-  "failed: {reason}"
+# Division by zero answers a value you dispatch on rather than a failure you
+# catch. The specific type is `divide_by_zero`; its parent `math_failure` is
+# there for a handler that does not care which kind it was.
+fn describe f:divide_by_zero
+  "no divisor: {f}"
+
+fn describe f:math_failure
+  "some math failure: {f}"
 
 fn describe n
   "result: {n}"
 
-main =
-  good = safe_ratio 10 2
-  bad = safe_ratio 10 0
-  print (describe good) .> (_ -> print (describe bad))
-
 fn safe_ratio a b
   a / b
+
+good = safe_ratio 10 2
+bad = safe_ratio 10 0
+print (describe good) .> (_ -> print (describe bad))
 ```
 
 ```
-$ kanso run examples/errors.kso
+$ kanso play examples/errors.kso
 result: 5
-failed: division by zero
+no divisor: division by zero
 ```
 
-No exceptions were thrown: division by zero returns `err`, which propagates as a value until an overload dispatches on it. No effects ran during evaluation: `main` returns a *description* of printing, which the runtime executes.
+Nothing is thrown. `10 / 0` answers a `divide_by_zero` value, and the arms of `describe` dispatch on it like any other type. Nothing is printed while the program is evaluated either: the last line builds a description of two prints, and the runtime performs it.
 
 ## quickstart
 
@@ -39,49 +44,38 @@ git clone https://github.com/kanso-lang/kanso
 cd kanso
 cargo build --release
 ./target/release/kanso run examples/hello.kso
-./target/release/kanso run examples/effects.kso --plan   # show the effect description instead of executing it
-./target/release/kanso check examples/records.kso
+./target/release/kanso run examples/effects.kso --plan   # show the effects instead of performing them
+./target/release/kanso play examples/errors.kso
+./target/release/kanso check examples/hello.kso
 ```
+
+`run` takes a file of statements or a directory with a `main.kso`. `play` takes one file that holds definitions beside its statements. `check` reports what `run` would refuse and stops. `test` runs the `test_*` constants in each `*_test.kso` file, `build` writes a native binary, and `repl` evaluates expressions as you type them. `kanso` with no verb prints the usage, which lists the rest.
 
 ## status
 
-This began as the **phase-1 reference interpreter** ([spec](https://clayshentrup.github.io/kanso/spec.html)) and now ships three engines—the tree-walking interpreter (the semantics oracle), an LLVM-backed native compiler, and a direct-to-wasm browser backend—held byte-identical by differential CI. What runs today:
+Three engines run kanso: a tree-walking interpreter, which is the semantics oracle, a native compiler through LLVM, and a browser engine compiled to wasm. Differential goldens hold them byte-identical. The language they run:
 
-- purity and effects-as-descriptions: `print`, sequencing with `.> (_ -> ...)`, `--plan` to inspect the description, a scripted executor for transcript-based tests
-- failure as values: `err reason` and `none` propagate; division by zero and out-of-range `at` are values, not crashes
-- overload dispatch on literals, concrete types (annotation or constructor destructuring), and generics, most-specific first
-- single-constructor record types: typed fields, alphabetical order enforced, positional construction, destructuring both ways (positional patterns and keyed subset reads with rename-on-bind)
-- no commas anywhere: flat juxtaposition application (`f a b`), space-separated enumerations
-- arbitrary-precision `int`, string interpolation `"{expr}"`, lists with 1-based indexing, `.` pipe (piped value becomes the first argument), lambdas
-- canonical form as grammar: indentation, spacing, blank-line placement, snake_case, alphabetical declarations and fields—all compile errors (see [tests/golden/errors](tests/golden/errors))
-- nothing-wasted checks: unused bindings, unused expressions, and rebind-before-use are compile errors
-- one name, one meaning: a binding may not shadow a declared function, type, or builtin
-- constants: `tau = 6.28318` at top level; a value with no parameters is a constant, so `fn` always takes parameters and `main` is a constant description of the program
-- indexing: `xs[i]` and `m[k]` are strict (a miss is an `err` that reaches the endpoint report); `at xs i` opts into expected absence with `none`
-- modules: a directory is a module, split across any number of files sharing one namespace (`kanso test lib/json`); `_`-prefixed names are module-private, and an unused private declaration is a compile error
+- purity, with effects as descriptions: `print`, sequencing with `.> (_ -> ...)`, and `--plan` to read the description without performing it
+- failure as values: `err`, `none` and failure kinds such as `divide_by_zero` propagate until an arm dispatches on them
+- overload dispatch on literals, types and generics, most specific first
+- single-constructor record types, with fields in the order you declare them, positional construction, positional destructuring and keyed reads
+- typesets: a name for "one of these" that arms dispatch on
+- no commas anywhere: application is juxtaposition (`f a b`), and lists and maps are space-separated
+- integers of any size on every engine, string interpolation `"{expr}"`, lists indexed from 1, maps, lambdas
+- canonical form as grammar: indentation, spacing, blank lines, snake_case, and the order of imports, keyed reads and typeset members are all compile errors when they are wrong (see [tests/golden/errors](tests/golden/errors))
+- nothing wasted: an unused binding or expression is a compile error
+- modules: a directory is a module split across any number of files that share one namespace, `pub` marks what it exports, and `kanso install` fetches and pins what it imports
 
-The error corpus in `tests/golden` matters as much as the success corpus—half this language's value is its compile errors.
-
-### v0 interpretations and approximations
-
-Decisions the spec leaves open (or that phase 1 approximates), flagged for revisit:
-
-- **the endpoint rule is enforced at runtime**, not compile time—the real rule needs the inference fixpoint (its story: [about, part 03](https://clayshentrup.github.io/kanso/about.html#p3))
-- **generic parameters never bind `err`/`none`**; handle failure explicitly (literal `none`, `(err reason)`) or it propagates—a conservative stand-in for inferred pass-throughs
-- **canonical declaration order**: types before functions, each alphabetical, overloads adjacent and most-specific first—an interpretation of the spec's "wherever order is semantically inert" rule
-- **the pipe target parses as one application** and the piped value becomes its first argument; a non-callable target fails at runtime, not parse time
-- `if cond, then, else` as a lazy call-shaped form is provisional (spec defers multi-way conditionals)
-- **native `int` is int64**: overflow traps as a defect in compiled binaries (the interpreter's bigint never overflows; spec `int` is arbitrary precision—the trap marks the divergence loudly)
-- not yet: typesets, record update, `build` regions, processes, effect polymorphism, the LSP
+The error corpus in `tests/golden/errors` matters as much as the programs that run: much of the language is in its compile errors.
 
 ## editor support
 
-One TextMate bundle in [editors/](editors) highlights `.kso` in both JetBrains IDEs (Settings → Editor → TextMate Bundles → add `editors/kanso`) and VS Code (symlink into `~/.vscode/extensions`)—see [editors/README.md](editors/README.md).
+One TextMate bundle in [editors/](editors) highlights `.kso` in JetBrains IDEs (Settings → Editor → TextMate Bundles → add `editors/kanso`) and in VS Code (symlink it into `~/.vscode/extensions`). See [editors/README.md](editors/README.md).
 
 ## development
 
 ```
-cargo test    # unit tests + golden-file corpus (examples, error diagnostics, --plan)
+cargo test    # unit tests and the golden corpora: examples, diagnostics, engines
 ```
 
 `sh scripts/install_hooks.sh` points a clone's git at `hooks/`, whose
