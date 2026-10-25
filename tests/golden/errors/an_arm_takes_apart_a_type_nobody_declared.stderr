@@ -1,0 +1,4 @@
+error[type]: no type this file can see is called `banana`, so this arm can never match
+  --> an_arm_takes_apart_a_type_nobody_declared.kso:4:21
+   4 | pub fn area (banana w h)
+                           ^

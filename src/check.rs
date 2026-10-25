@@ -1463,7 +1463,8 @@ pub fn check_file_shadow(
     // counted, and `p:pt` with `pt` declared beside it was refused. Asked of
     // both sets in turn rather than merged, which cost an allocation per name.
     let declared_type_names = TypeNames { own: &own_type_names, siblings: sibling_types };
-    check_annotation_names(program, declared_type_names, sibling_decls, &mut diags);
+    let imported = Imported { globals: extern_globals, enrolled: shadowable };
+    check_annotation_names(program, declared_type_names, sibling_decls, imported, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
     let fn_arities = Arities::of(program);
@@ -2940,6 +2941,7 @@ fn check_annotation_names(
     program: &Program,
     declared: TypeNames,
     sibling_decls: &[&crate::ast::TypeDecl],
+    imported: Imported,
     diags: &mut Vec<Diagnostic>,
 ) {
     fn patterns(
@@ -2971,11 +2973,8 @@ fn check_annotation_names(
             // `kanso check lib/json` costs 482,913 more instructions for the
             // exact column. The log entry has the numbers.
             //
-            // `(banana w h)` with no `banana` declared still reaches dispatch.
-            // That one wants a set `declared` is not: `std/list` writes
-            // `(entry k v)`, and `entry` is a marker the compiler knows and
-            // `program.types` does not hold, so the obvious check calls a
-            // correct program wrong. Measured that way too.
+            // `(banana w h)` with no `banana` declared is `unseen_ctor`'s,
+            // which reads the import's names beside `declared`.
             Pattern::Ctor { ty, fields, .. } => {
                 if !fields.is_empty() {
                     if let Some(why) = ctor_never_matches(ty, fields.len(), types) {
@@ -3094,12 +3093,49 @@ fn check_annotation_names(
     for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {
         for param in &decl.params {
             patterns(param, declared, &types, diags);
+            unseen_ctor(param, declared, imported, diags);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
                 patterns(pattern, declared, &types, diags);
             }
         }
+    }
+}
+
+/// The names a file reaches through its imports. A type is among `globals`
+/// by its constructor, and among `enrolled` by its bare twin, which stays a
+/// type's name in a pattern when a function of the file takes the call.
+#[derive(Clone, Copy)]
+struct Imported<'a> {
+    globals: &'a HashSet<&'a str>,
+    enrolled: &'a HashSet<String>,
+}
+
+/// An arm that takes apart a record of a type the file cannot see. mal's
+/// `shown (held v)`, with `held` private to another module, passed check;
+/// the interpreter passed the arm over and native stopped with `native
+/// backend: unknown type`. A binding's pattern is `check_binding_patterns`'s
+/// to ask, on the merged program. `entry` is the map's own record, which the
+/// compiler declares and no file does.
+fn unseen_ctor(p: &Pattern, declared: TypeNames, imported: Imported, diags: &mut Vec<Diagnostic>) {
+    let Pattern::Ctor { ty, fields, .. } = p else { return };
+    let Some(first) = fields.first() else { return };
+    if !crate::ast::has_slash(ty)
+        && ty != "entry"
+        && !BUILT_IN_TYPES.contains(&ty.as_str())
+        && !declared.contains(ty)
+        && !imported.globals.contains(ty.as_str())
+        && !imported.enrolled.contains(ty.as_str())
+    {
+        diags.push(Diagnostic::new(
+            "type",
+            format!("no type this file can see is called `{ty}`, so this arm can never match"),
+            other_span(first),
+        ));
+    }
+    for f in fields {
+        unseen_ctor(f, declared, imported, diags);
     }
 }
 
