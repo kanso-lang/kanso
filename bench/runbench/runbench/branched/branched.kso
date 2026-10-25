@@ -1,0 +1,17 @@
+# A list held in a record and pushed onto, with the loop's end written as an
+# `if`: `if (k == 0) b (fill (bag (push b.items k) …) (k - 1))`. kanso#1926
+# grows such a field in place when every mention of the record is a field
+# read, and #2106 let the early answer of a `return b if` guard off that rule
+# because it runs instead of the push. The `if` arm that answers `b` runs
+# instead of the push too, but it still counted, so every lap copied the list
+# on both engines: 80,000 pushes took 14 seconds natively and 30 on the
+# interpreter, where the guard's spelling took a tenth of a second.
+type bag
+  items
+  n
+
+fn fill b k
+  if (k == 0) b (fill (bag (push b.items k) (b.n + 1)) (k - 1))
+
+pub fn total k
+  length (fill (bag [] 0) k).items
