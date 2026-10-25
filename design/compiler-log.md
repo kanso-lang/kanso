@@ -1546,9 +1546,10 @@ a_tally_of_scattered_keys_merges_its_view_allocs 29 -> 31,
 a_tally_of_scattered_keys_merges_its_view_alloc_bytes 536,368 -> 620,752,
 a_tally_of_scattered_keys_merges_its_view_held_peak_bytes 206,448 ->
 273,328, fused_tally_allocs 66 -> 68, fused_tally_alloc_bytes 33,872 ->
-36,192 and fused_tally_held_peak_bytes 7,648 -> 8,464. #2106's
-`a_read_handed_to_a_call_stays_in_place` does the same, allocs 15 -> 17,
-alloc_bytes 16,800 -> 19,904 and held_peak_bytes 6,112 -> 7,184.
+36,192 and fused_tally_held_peak_bytes 7,648 -> 8,464. #2106's fixture
+does the same: a_read_handed_to_a_call_stays_in_place_allocs 15 -> 17,
+a_read_handed_to_a_call_stays_in_place_alloc_bytes 16,800 -> 19,904 and
+a_read_handed_to_a_call_stays_in_place_held_peak_bytes 6,112 -> 7,184.
 
 The run program's allocation vein: run_allocs 1,541,511 -> 1,445,901,
 run_alloc_bytes 290,828,216 -> 215,212,648, run_arena_blocks 5 -> 4,
