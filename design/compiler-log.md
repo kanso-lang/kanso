@@ -1322,6 +1322,18 @@ gate is the mem corpus now, and the mutation's comment names the new witness.
 No program reaches the refusal on an unmutated runtime, so
 tests/golden/unpinned_diagnostics.txt lists it with that reason.
 
+A second row went blind with this change: "a character read remembering a
+position into a string a beat has freed", gated by the beat differential.
+Its probe loop ran six small laps, and it found a string reusing a freed
+address only because every fresh loop staged on its first lap, which is the
+behaviour this entry removes. Each probe lap now leaves 3,000 short strings
+in the arena by a recursion that is not a loop, so every lap passes the
+wait and rewinds. Unmutated the sweep reads 0 of 96 disagreeing; under the
+mutation, 20. The mutation itself was red for the wrong reason on main: it
+deleted the reset lines, and the inline rewind's reset is the body of an
+unbraced `if`, so the arena's own rewind became conditional and the sweep
+died on "a beat mark and the arena disagree". It now blanks each store.
+
 The bound check is one compare and a cold call per carry allocation, and CI
 reads it on that head. Every benchmark's machine code grows 112 bytes, text
 5,521,457 -> 5,523,025 over the fourteen. work_runbench 797,618,426 ->
