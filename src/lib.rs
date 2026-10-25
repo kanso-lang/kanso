@@ -455,7 +455,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
-    reaching(Some(source), || compile_library_beside(file, source, None))
+    reaching(Some(source), || compile_library_beside(file, source, None, false))
 }
 
 /// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
@@ -469,7 +469,8 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
     // the module is the test file's own directory, which an import from
     // inside it would otherwise refuse as the module importing itself
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = reaching(Some(source), || compile_library_beside(file, source, beside.clone()));
+    let built =
+        reaching(Some(source), || compile_library_beside(file, source, beside.clone(), true));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
@@ -530,10 +531,14 @@ fn module_beside(file: &str) -> Option<ast::Import> {
     })
 }
 
+/// `whole` says nothing will import the result: a test file is the whole
+/// program it runs, so its calls on handed values are settled here, where a
+/// library's wait for the program that imports it.
 fn compile_library_beside(
     file: &str,
     source: &str,
     beside: Option<ast::Import>,
+    whole: bool,
 ) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
@@ -606,7 +611,15 @@ fn compile_library_beside(
     program.types.extend(dep_program.types);
     own_types_beat_twins(&mut program);
     program.fns.extend(dep_program.fns);
-    forget_shades(&mut program.fns);
+    // A call the check sent to a traveling group is filled from every owner
+    // in the program, or refused as unknown. A library leaves both to its
+    // importer. A test file has none, and a helper's call to the module's
+    // private `hidden` reached the run as an empty group: "unknown name
+    // `~hidden`", where the same call in a test constant is refused at check.
+    match whole {
+        true => enroll_travelers(&mut program)?,
+        false => forget_shades(&mut program.fns),
+    }
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
     // shape -- kanso#1328 did it on the module path and kanso#1335 on the
     // entry path, and the reasons are the same here: the whole-program check

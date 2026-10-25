@@ -1764,3 +1764,30 @@ lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
 entry_instructions 72,335,545 -> 72,317,212, library_instructions
 72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
 218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-24 — a test file's helper is checked like its constants
+
+Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
+module beside it and nothing else. A test constant that names a private
+function is refused at check. A helper function in the test file that names
+one was not: xsv's port called the module's private `hidden` from a helper,
+`kanso check` passed it, and `kanso test` failed that test at run time with
+"error[runtime]: unknown name `~hidden`", a spelling the author never wrote.
+(#2091, item 2.)
+
+The check does refuse the name. It sends a call it cannot resolve inside a
+function to a traveling group, which the program's root fills from every
+module that writes the name for a type it owns, or refuses. A library
+compile leaves that to whatever imports it, so `compile_library_beside`
+dropped the shades and moved on. A test file is compiled on the same path,
+and nothing imports it. It now settles the groups where it is compiled, with
+`enroll_travelers`, as the entry and module paths do, and the helper's call
+is refused at check with the same `unknown name` error the constant gets.
+
+`tests/golden/test_verb/reaches` is the reduction, and
+`a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
+pins its stderr. On main it prints the run-time error above.
+
+CI's rows: library_instructions 72,011,050 -> 72,011,043, which is the
+binary's layout. A library compile takes the path it took before, and the
+test verb has no row.
