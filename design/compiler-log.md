@@ -1436,8 +1436,9 @@ work_livebench 936,030,277 -> 936,030,663, work_widebench 28,445,045 ->
 work_escapebench 40,308,398 -> 40,308,401, work_basket 31,039,074 ->
 31,039,077 and work_oneshot 10,050,789 -> 10,050,755. The codegen rows
 move with the runtime's text: codegen_instructions_dev 116,452,600 ->
-116,456,350 and codegen_instructions_release 370,226,904 -> 370,087,521. No
-allocation counter, mem golden or browser row moves.
+116,456,350 and codegen_instructions_release 370,226,904 -> 370,087,521. The
+tab runs the same runtime compiled to wasm, so browser_run_instructions
+33,345,113 -> 33,345,263. No allocation counter or mem golden moves.
 
 CI's rows for the four fixes together (#2106), against the run program that
 already holds their shapes (#2104). work_runbench 988,172,222 -> 797,618,426,
