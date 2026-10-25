@@ -1,0 +1,41 @@
+import "std/text"
+
+# A slice whose range starts before the first position answers none, as one
+# that starts past the end does: position 0 is outside the value, as `xs[0]`
+# is. The empty range at the start, 1 to 0, is inside and answers empty.
+# `slice!` refuses the same ranges.
+fn shown none
+  "none"
+
+fn shown s
+  "[{s}]"
+
+fn listed none
+  "none"
+
+fn listed xs
+  "{xs}"
+
+fn decoded none
+  "none"
+
+fn decoded b
+  "[{text/utf8 b}]"
+
+fn cut s from to
+  text/slice! s from to .> (piece -> "<{piece}>") .? (e -> e.reason)
+
+lines = [
+  "text from 0: {shown (text/slice "abc" 0 2)}"
+  "text 0 to 0: {shown (text/slice "abc" 0 0)}"
+  "text from -1: {shown (text/slice "abc" (0 - 1) 2)}"
+  "text empty at the start: {shown (text/slice "abc" 1 0)}"
+  "wide text from 0: {shown (text/slice "héllo" 0 3)}"
+  "list from 0: {listed (text/slice [1 2 3] 0 2)}"
+  "list empty at the start: {listed (text/slice [1 2 3] 1 0)}"
+  "bytes from 0: {decoded (text/slice abc 0 2)}"
+]
+
+abc = text/bytes "abc"
+
+pub play = print (text/join lines "\n") .> (_ -> cut "kanso" 0 2 .> print)

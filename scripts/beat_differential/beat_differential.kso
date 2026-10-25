@@ -50,7 +50,11 @@ readers = [
 
 # `step` is a beat: it rebuilds `shaped` every iteration and threads the
 # answer through the carry, so the arena hands each iteration the addresses
-# the last one used.
+# the last one used. A loop rewinds only once a lap has left a quarter
+# megabyte of garbage in the arena, so each lap also builds and drops 3,000
+# short strings after its read, by a recursion that is not itself a loop.
+# Without them six small laps never rewound, no string landed where the last
+# one sat, and the cursor's reset could be taken out with nothing to see.
 fn shaped a b reader
   """
     import "std/text"
@@ -64,11 +68,20 @@ fn shaped a b reader
     fn read s
       "{reader}"
 
+    fn wide k
+      "\{k}xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+    fn junk k
+      if (k == 0) 0 (length (wide k) + junk (k - 1))
+
+    fn spent n
+      if (junk (3000 + n) > 0) "" "?"
+
     fn step 0 acc
       acc
 
     fn step n acc
-      step (n - 1) "\{acc}|\{read (subject n (n % 2))}"
+      step (n - 1) "\{acc}|\{read (subject n (n % 2))}\{spent n}"
 
     print (step 6 "")
   """

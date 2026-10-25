@@ -2198,7 +2198,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
    away, and for the list and string containers, which do not come here. */
 KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
                      long long to) {
-    if (__builtin_expect(to > len || from > len + 1, 0)) return k_none();
+    if (__builtin_expect(to > len || k_starts_outside(from, len), 0)) return k_none();
     if (!k_span_in(from, to, len)) return k_bytes_view(data, 0);
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
@@ -2255,7 +2255,11 @@ static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
     }
 }
 
-KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
+/* Out of line. The four fused doors fall back to it for a range they cannot
+   read in place, and once its start test became one compare LLVM inlined it
+   into each of them: every binary grew 7,216 bytes for fallbacks that run
+   only on a bad range. */
+__attribute__((noinline)) KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (__builtin_expect(!k_not_failure(container) || !k_not_failure(fromv) || !k_not_failure(tov), 0)) return k_failed3(container, fromv, tov);
     if (!K_IS_INT(fromv) || !K_IS_INT(tov)) k_die("slice takes 1-based inclusive positions");
     /* A bound past a word reads as zero, which no slice starts or ends at,
@@ -2267,17 +2271,17 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
-        if (to > l->len || from > l->len + 1) return k_none();
+        if (to > l->len || k_starts_outside(from, l->len)) return k_none();
         if (!k_span_in(from, to, l->len)) return k_mklist(0, NULL);
         return k_mklist(to - from + 1, l->items + (from - 1));
     }
     if (container.tag == K_STR) {
         KStr* s = k_as_str(container);
-        /* A range that runs past the end, or starts past it, answers none,
-           as an index past the end does (#1890). The count is the one the
-           ascii test below asks for, cached on the string. */
+        /* A range that runs past the end, or starts outside the value,
+           answers none, as an index outside it does (#1890). The count is the
+           one the ascii test below asks for, cached on the string. */
         long long chars = k_str_chars(s);
-        if (to > chars || from > chars + 1) return k_none();
+        if (to > chars || k_starts_outside(from, chars)) return k_none();
         /* Every character one byte, so a position is an offset and the walk
            that finds it is unnecessary. This is the case for html, source and
            anything else a gate reads. */

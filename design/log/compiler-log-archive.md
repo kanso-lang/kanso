@@ -108029,3 +108029,445 @@ codegen_instructions_release 425,504,615 -> 425,509,331.
 browser_run_instructions 30,275,515 -> 30,276,840. Welfare falls by what the
 fix costs, and the floor moves down with it under the rule for the language
 doing what it says.
+
+## 2026-10-23 — a template joins onto a record field in place
+
+A template whose first piece is a field, `"{st.body}{d}"`, copied the whole
+string on every pass, even where nothing else could see it. The run program's
+restate phase does that to a 64 KiB string 128 times, and the beat carry
+copied the result again. The string-builder analysis now takes a field read as
+the builder when `field_moves` already proves the field alone: the record is
+handed over whole, every mention of it in the arm reads a field, and this
+field is read once. A template's first field joins the set of fields the field
+fixpoint asks about. `k_concat_arr_mut` then writes into the string, and since
+a builder's storage is malloc'd, the carry shares it instead of copying it.
+
+For the restate phase's seed to count as alone, a parameter an arm reads only
+into templates can now be an accumulator. `seed n acc = seed (n - 1)
+"{acc}{acc}"` reads `acc` twice, and a template keeps none of its pieces, so
+nothing is left holding it. The exemption covers only arms whose every mention
+is a template piece.
+
+CI's rows, against main with #2060's fix merged. run_instructions 828,089,940
+-> 816,801,024 (-1.36%), and work_runbench with it. The run
+program allocates 221,297,400 -> 212,891,960 bytes and evacuates 7,416,368 ->
+4,591,200, and none of its peaks move. The mem vein's new
+`a_record_field_joined_in_place` makes 10 allocations where main made 2,024,
+and `an_interpolated_state_string_is_not_kept_under_the_mark` allocates
+107,668,139 -> 2,796,683 bytes with its arena peak 3,145,984 -> 1,048,576.
+Its scans rose,
+`an_interpolated_state_string_is_not_kept_under_the_mark_str_scans` 2 -> 11,
+while the bytes they read fell 1,048,677 -> 11, which this entry does not
+account for. On
+the compiler's side compile_instructions 25,221,632 -> 25,204,865,
+entry_instructions 74,568,239 -> 74,522,559, library_instructions 74,230,433
+-> 74,182,975 and emit_instructions 6,449,884 -> 6,459,502; interp_instructions
+rose 385,357,985 -> 385,504,156, which is the interpreter's layout, since the
+analysis does not run there. browser_compile_instructions rose 427,933,127 ->
+433,668,787 (+1.34%). The same route compiled natively moves +0.10% and lowers
+to the same module, and padding the tab's heap before the compile moved the
+row by at most 6,000, so the rise is in the wasm build of the compiler and not
+in allocator layout. I have not found where. Welfare rises 92.94 -> 92.99.
+
+The same pull request moves the JSON string kernels out of `text.c` into
+`src/runtime/json.c` (#2059) and removes `k_shareable`, `k_viewreg_add` and
+`k_ten_holds`, which nothing called. On its own the move cost
+codegen_instructions_dev 1,744 and codegen_instructions_release 570 by layout,
+which put welfare under the floor, so it rides here. With both, the dev row
+reads 116,473,612 -> 116,472,553 and the release row 425,509,331 ->
+425,509,866.
+
+## 2026-10-23 — seven leads measured and declined
+
+**A number's value kept by its span.** The decoder asks `number_span` where a
+number ends and then `to_int` or `to_float` what it is worth, and both read
+the same bytes. The span's word path was made to leave the number's value,
+keyed by its bytes, for the two slice doors to answer from. The doors fell
+23.5M instructions on the run program, and the span rose 31.4M: it now built
+a frame of six registers on every call, and the value's arithmetic only moved
+from one function to the other. A second version kept only the number's
+shape and raw bytes, so the doors skipped their own shape checks and still
+did the digits. The doors fell 6.4M and the span rose 10.0M. The converters
+were already close to their floor: `k_to_int_text` reads up to eight digits
+as one word and `k_float_shape8` reaches Clinger's exact path, so the only
+work the two calls repeat is the shape test, and keeping a record across the
+calls costs more than that.
+
+**The float renderer's integral test as a cast.** `k_render_number` asks
+`d == floor(d)` before printing a float as an integer, which is a call into
+libm on each of the run program's 191,070 floats. Asking whether
+`(double)(long long)d == d` under 1e15 costs as many instructions inline as
+the call it replaces, and the run program read 182,140 more.
+
+**A digit count from the bit length.** `ryu_declen` counts a number's
+decimal digits with a ladder of nineteen compares. Estimating the count from
+the bit length and correcting it with one table compare is exact (checked at
+every power of two and of ten, either side), but the numbers the run program
+renders are short, the ladder leaves early for them, and the run program read
+327,397 more: `k_b_append_rendered` rose 607,050 and `k_b_render_value` fell
+235,522.
+
+**A decoded document trimmed to its contents.** An empty map opens with room
+for five pairs and an empty list with room for six, which is every size
+bench/large.json uses, so the decoded document carries about 280 KB of unused
+slots in its 1.0 MB. When the 1.5 MiB string the index phase builds is
+allocated, the input and the document fill one 1 MiB block and 157,568 bytes
+of a second, and the run program's counted peak is those two blocks and the
+string's. A builtin that gives a finished container's room back when nothing
+was allocated after it, with arrays opened at their first element and maps
+taking their pairs at their first put, fit the input and the document in one
+block: arena_peak_bytes 3,670,032 -> 2,621,456. The run-memory term is near
+its ceiling, though, because its baseline was 1.43 GB, so a whole block is
+worth +0.03 of welfare. The trim alone cost 37M instructions, 14M in the
+kernel and the rest in how LLVM folded the decoder's states around the new
+call. With the maps seeded late as well, the run program read 963.7M and its
+evacuations rose from 1,624 to 70,982, which I did not trace further. One
+percent of run_instructions is worth about 0.063
+of welfare, so the trade loses by a wide margin.
+
+**An object's scalar value read in the object's loop.** An array's elements
+are parsed inside its loop, because LLVM inlines `parse_value` there, while
+an object calls `parse_value` for every value, 827,739 calls a run at about
+51 instructions each. Dispatching on the value's first byte after the colon,
+and calling `parse_value` only for a nested array or object, read 890,453,082:
++62M. LLVM split the states it had folded into the object's loop into
+separate functions, `obj_value_at`, `value_for` and `parse_string` among
+them, and the calls between them cost more than the one they replaced. The
+emitter has no say in which kanso functions LLVM inlines.
+
+**Type-based alias tags on the in-place push.** The push twin reloads the
+list's length and items pointer after every slot it writes, because LLVM
+cannot tell the slot from the header. Tagging the twin's loads and stores
+with three TBAA types left the run program at 828,157,323, forty fewer than
+without them. Every loop that pushes also holds the twin's slow path, a call
+that may change the header, so the loads stay where they are.
+
+**Inlining chosen by hand.** An environment switch in the emitter marked one
+named function `alwaysinline` or `noinline`, and each of the 84 functions in
+std/json was tried both ways on the run program (baseline 828,157,901). Six
+single changes saved 2.25M to 2.93M each, all on the object path:
+`obj_colon`, `skip_ws` and `ws?` inlined, `obj_key`, `colon_bad` and
+`obj_items` kept out of line, while `array_bad` kept out cost 3.6M. They do
+not add. The best pair, `obj_colon` in and `obj_key` out, read 822,315,778
+(-0.71%); all six together read 845,054,425 (+2.0%), and `obj_colon` with
+`obj_items` read 843,779,017. These are LLVM's inliner landing on different
+shapes rather than a property of the functions, and a set picked for the
+lowest reading on today's tree is a draw the next change would reshuffle.
+
+## 2026-10-23 — the browser rows count the instructions a module executes
+
+The entry that built the browser side (2026-10-06, "the browser is a third
+side of the objective") says wasmi spends one unit of fuel per executed wasm
+instruction, so the instruction rows are a count. wasmi charges by the frame.
+Its translator puts one fuel charge at the head of each function
+body, loop body and `if` or `else` arm, sized to every instruction in that
+frame, and a `block` gets no charge of its own: the code after a block's
+`end` is billed at the head of whatever loop or function encloses it. A
+`br_table` dispatch is a nest of blocks with one arm after each `end`, so a
+loop around a dispatch pays for every arm on every pass.
+
+**How it was found.** The tab's compile cost 3.8 times the native route's
+instructions in the front end and the translation and 2.1 times in the
+emitter. Neither 128-bit token parsing (16,025 digits in the whole IR) nor
+SIMD explained it: kanso.wasm built with `+simd128`, run with wasmi's simd
+feature, read 433,668,787 -> 433,177,592. A scratch profiler then copied
+kanso.wasm with a counter per function and ran the tab's three phases
+separately. Counting each instruction where control reaches it gave 29.9M,
+52.1M and 31.0M (leaving out local moves and constants, which wasmi folds
+into its own instructions). Charging each frame's instructions at its head,
+the way wasmi does, gave 143.9M, 138.6M and 161.7M against fuel of 144.9M,
+136.8M and 151.9M, so the frame charge is the fuel. One function shows it
+most: `ir_wasm::tokenize_into`, the loop that splits the IR into tokens, was
+charged 60.7M fuel for 6.1M instructions, 14% of the compile.
+
+A change aimed at that fuel would move match arms out of their loops to suit
+wasmi's billing, and a browser's compiled code does not reward that. The
+2026-10-06 ruling leaves how a browser term is measured to the implementer, so
+the measurement changes instead.
+
+**What is counted now.** `counted` in tests/support/wasm32.rs copies a module
+and adds an exported i64 global. It splits each function body into runs that
+control can enter only at their first instruction, ending a run after any
+instruction that branches, opens or closes a block, or traps, and each run adds
+its length to the global as it begins. `tests/browser_cost.rs` loads the
+counted copy of kanso.wasm, and `execute` runs counted copies of the runtime
+and the translated module, so both instruction rows are every wasm instruction
+control reached. A loop counted by hand in
+`the_count_is_every_instruction_control_reached` reads 91; letting a run go on
+through its `br_table` reads 95, and counting each run as one instruction reads
+32. The ratchet row "a counted run that goes on
+through a br_table" keeps the first.
+
+    browser_compile_instructions  433,668,787 -> 293,067,500
+    browser_run_instructions       30,276,840 ->  34,963,054
+
+The run reads more than its fuel did because the count includes `local.get`,
+`local.set` and constants, which wasmi fuses into its register instructions and
+does not bill, and the runtime's C has few dispatch loops for the frame charge
+to inflate.
+
+**Welfare is re-based.** Each baseline is scaled by the ratio of the
+two readings on this tree, so each term's ratio and the meta are what they
+were: browser_compile_instructions 343,917,485 -> 232,414,785 and
+browser_run_instructions 2,331,914,518 -> 2,692,845,529 in
+bench/welfare_floor.json. The `--set` records the floor unchanged.
+bench/compile_epochs.txt owes a line for each counter, naming the merge
+commit's history row once perf-history carries it, so that
+scripts/welfare_rescore scores the fuel-era rows against the old baseline.
+
+Fuel stays in `execute` only as the stop for a translation that loops forever,
+raised from two billion to ten. The heaviest micro program executes 927 million
+instructions, and its counted copy spends 2.33 billion units of fuel. The
+prose that said fuel is spent per executed instruction is corrected in
+tests/browser_cost.rs, bench/browser_golden.txt, scripts/gates/browser_cost.sh,
+bench/objective_sources.txt, scripts/welfare/welfare.kso, docs/numbers.html and
+CLAUDE.md.
+
+## 2026-10-23 — digits rendered straight into the builder, declined
+
+`k_b_append_rendered` writes a number into a 64-byte stack buffer and then
+copies three words onto the accumulator's frontier. Rendering into the
+frontier itself, when 64 bytes were free there, read 818,467,737 on the run
+program against main's 816,905,427 in the container. The renderer's stores now
+went through a pointer into the arena instead of a buffer nothing else can
+alias, and `k_b_append_rendered` rose 1,523,160. The first version, which
+wrote the render call twice, also stopped `render_ryu` being inlined.
+
+## 2026-10-23 — eight costs out of the tab's compile
+
+Counted in executed instructions, the costliest function in the tab's compile
+was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
+on `bench/interp_corpus`. The `memcmp` wasm32 links by default is
+compiler-builtins' loop of one byte per pass, and the compiler compares names
+and keys constantly: hash-map probes on `&str` keys, `CharSearcher` checking a
+found byte's neighbours, the inferencer matching names.
+
+`src/compare.rs` compares eight bytes per pass and ends with the eight bytes
+that finish the run, overlapping bytes already found equal, so no length needs
+a loop of single bytes after the words. A run of four to seven bytes is read
+as two four-byte words, and the first byte that differs is found from the
+lowest set bit of the two words' difference. `src/main.rs` exports it as
+`memcmp` and `bcmp` in the wasm build only; native builds keep the C library's.
+
+    browser_compile_instructions  293,067,500 -> 274,134,296  (-6.46%)
+
+The same code written in `main.rs` read 273,195,866, and in the library with a
+plain `#[inline]` 275,072,726, because the call into `kanso::compare::bytes`
+stayed out of line. `#[inline(always)]` takes most of that back. A first version
+that finished with single bytes instead of the overlapping word read
+281,953,624, because most compares are a few bytes long.
+
+`tests/the_word_compare_agrees_with_bytes.rs` holds it to the standard
+library's slice order: 4M random cases in CI, and 50M once with no failure, at
+every length to 48 and every pair of offsets up to seven bytes out of
+alignment, half the differing bytes straddling 0x80. Turning the lowest set bit
+into the highest, dropping the overlapping word, comparing the bytes as signed
+and dropping the second four-byte word each fail it. The ratchet row "a byte
+loop compares in the tab" renames the two exports, and the browser row goes
+back to 293,067,500.
+
+**A switch found by its `=`.** The translator asks of every IR line whether
+it opens a switch, which may run over several lines, and it asked with
+`body.contains("= switch")`. `contains` builds a substring searcher before it
+reads a byte, and on the tab's corpus that setup was 5.9M of the 71.0M
+instructions the translation executed. A function body's line holds one `=`,
+the one that names its result, so the check now finds it with memchr and
+compares the words there.
+
+    browser_compile_instructions  274,134,296 -> 268,290,909  (-2.13%)
+
+Finding every `=` in the line instead of the first read 270,476,791, because
+the second search runs to the end of the line. The ratchet row "a searcher
+built for every line the tab translates" puts `contains` back and the row reads
+274,134,296 again.
+
+**The closure-jump twin read off the walk.** The narrowing searched the whole
+module for `define internal tailcc %KValue @k_tcall` before it walked the
+module's define lines, so that every lambda could keep `tailcc` where the twin
+jumps through a closure's pointer. The walk visits every define line anyway, so
+it now notes the twin and the lambdas as it passes and keeps the lambdas after.
+The search was 739,426 instructions of the tab's route natively.
+
+    browser_compile_instructions  268,290,909 -> 266,884,355  (-0.52%)
+
+Nothing pinned the lambda rule, so a spec in src/codegen/narrow.rs now does:
+beside the twin a lambda keeps `tailcc`, and without it the lambda is
+narrowed. Noting no twin, or collecting no lambdas, each fail it, and the second
+is the ratchet row "a lambda narrowed beside a closure jump". The row "the whole
+module searched for the closure jump" puts the search back, and the browser row
+reads 268,297,303.
+
+**`@sN` found by its `@`.** `named_strings` looks for every `@sN` in the
+module to decide which interned strings to write, and it searched with
+`find("@s")`. A two-way searcher with a two-byte needle can skip almost
+nothing, so it now finds each `@` by memchr and checks the byte after it.
+
+    browser_compile_instructions  266,884,355 -> 264,519,748  (-0.89%)
+
+**Line ends eight bytes at a time.** The translator ends each line of the
+module with `find('\n')` while it reads the module's heads and with
+`str::lines` while it reads a body. Compiled to wasm each of those pays a
+searcher's setup, a call into memchr and a one-byte compare per line. A function
+in src/ir_wasm.rs, `line_end`, reads eight bytes per pass and finds the newline
+with the has-zero test, and both readers use it.
+
+    browser_compile_instructions  264,519,748 -> 261,513,550  (-1.14%)
+
+A fuzzer beside it checks `line_end` against `position` at every starting point
+of 400,000 random texts built from newlines and the bytes one bit away from one,
+and `Lines` against `str::lines`. Taking the highest set bit, dropping the
+`& !w` that keeps a byte above 0x7f from passing for a zero, or dropping the
+tail loop each fail it. Ratchet rows put each searcher back, and the browser row
+reads 263,889,085 and 264,519,748 under them.
+
+**Short searches as byte loops.** Two questions asked of every line find a
+byte a few places in: the emitter's `is_a_stack_slot` looks for the space that
+ends the line's first word, and the translator's switch check for the `=` that
+names a result. `find` on a char pays a searcher's setup, a call into memchr
+and a one-byte compare before it reads a byte, which is more than the few bytes
+the loop reads.
+
+    browser_compile_instructions  261,513,550 -> 259,644,771  (stack slot)
+                                  259,644,771 -> 258,016,805  (switch)
+
+The ratchet row "a stack slot found by a searcher" puts `find` back and the row
+reads 259,885,584.
+
+**No tally the tab never reads.** The counting allocator adds every
+allocation's size and count to `compile_alloc_bytes` and `compile_allocs`,
+which only the command line prints. The tab reads the live bytes and the peak,
+so the wasm build now skips the other two.
+
+    browser_compile_instructions  258,016,805 -> 256,933,580  (-0.42%)
+
+The ratchet row "a tally the tab never reads" keeps the two counts in `alloc`
+again, and the row reads 257,851,861.
+
+Across the eight changes the tab's compile falls from 293,067,500 to
+256,933,580 executed instructions, 12.3%.
+
+**The native veins.** `is_a_stack_slot`'s byte loop runs natively too, and
+the emitter's own count falls: emit_instructions 6,459,502 -> 6,249,687. Three
+rows move by layout with the new code: compile_instructions 25,204,865 ->
+25,205,087, entry_instructions 74,522,559 -> 74,523,222 and
+library_instructions 74,182,975 -> 74,183,641. Natively the word compare and
+the byte searches are not linked in, and memchr and memcmp stay the C
+library's.
+
+**The epoch the meter change owed.** bench/compile_epochs.txt now names
+bda14b8, the first history row counted in executed instructions, with
+0.6758 for browser_compile_instructions and 1.1548 for
+browser_run_instructions. Rescored with it, the history rows for 15d6b27 and
+bda14b8, one tree measured both ways, read 92.9893 each.
+
+One idea measured and dropped: `lines_holding`, the narrowing's search for
+`define `, `musttail call` and `tailcc ` across the whole module, found each
+word by memchr on one of its bytes and compared there. It read 272,919,712
+against 268,290,909. The two-way searcher skips a needle's length at a time
+where the module's text cannot match, and memchr stops at every occurrence of
+the anchor byte. Anchoring each word on its rarest byte in the module, `f` in
+`define `, `m` in `musttail call` and `c` in `tailcc `, read 267,916,152
+against 266,884,355: the searches took 8.3M where the two-way searcher took
+6.8M.
+
+## 2026-10-23 — the tab holds its module once
+
+Five more changes to the tab's compile of `bench/interp_corpus`, three for its
+instructions and two for the most it holds.
+
+**Three more costs.** `Numbered`, the emitter's `%tN` and `LN` names, checked
+its bytes were UTF-8 on every read, and it is built in one place from a `&str`
+prefix and ASCII digits, so the read now skips the check, as `Name::as_str`
+does: 256,933,580 -> 255,076,345. `paired_appends`, the narrowing and the prune
+each compact a module's bytes around whole lines and then validated the whole
+buffer again; a release build no longer does, and a debug build still checks:
+-> 253,497,498. `line_end` became `kanso::compare::byte_from`, which finds any
+byte eight at a time, and the emitter's three scans for `@` use it:
+-> 250,608,006. Its fuzzer moved beside the word compare's and now tries five
+target bytes, each with neighbours one bit away.
+
+**Where the peak was.** A marker set at the start of each phase and read by the
+allocator when a new peak was reached put the peak in `Written::finish`: it
+allocated the module at its final size, 352,805 bytes, while every piece of the
+body was still live, so the module was held twice. The emitter never splits a
+definition between two pieces, so the tab now takes the pieces as they are.
+`Written::finish_pieces` hands them over, `finish` joins them for clang, the
+narrowing walks them in order and rewrites each where it stands, and
+`ir_wasm::translate_pieces` reads every piece's heads and then lowers the
+bodies a piece at a time, letting each piece go when its functions are done.
+
+    browser_compile_peak_bytes     769,408 -> 724,714
+    browser_compile_instructions  250,608,006 -> 251,137,543
+
+Rewriting six pieces and slicing them costs 529,537 more instructions than one
+join. Welfare read 93.05 against 93.04 without it, so the peak pays for them.
+
+**What the walk left out.** With the join gone the peak moved into emission.
+A census of the native route at its peak, every live allocation grouped by its
+caller, held 330 KB of body text and about 300 KB of syntax. Part of the syntax
+was the groups the entry cannot reach, kept so that a miss can put them back
+and emit again. The tab now lets them go before it emits. A miss answers
+`None`, and the tab compiles the source again and emits with them
+(`emit_ir_tab_pieces_whole`), so a miss costs a second compile and never changes
+the module. None of the 348 programs in the micro corpus misses.
+
+    browser_compile_peak_bytes     724,714 -> 664,061
+    browser_compile_instructions  251,137,543 -> 251,140,915
+
+**Room the parser doubled into.** The same census showed statement and pattern
+lists grown by `push` and `extend`, which keep the room they doubled into. The
+tab's emit now gives that room back for every kept function's body and
+parameters, and for the function list, before it emits. A native build skips
+the copies, since nothing prices its holdings at that moment.
+
+    browser_compile_peak_bytes     664,061 -> 598,093
+    browser_compile_instructions  251,140,915 -> 251,201,816
+
+Shrinking where the parser builds a body instead read 615,869 and cost 116K
+instructions, because it also shrinks the groups the walk leaves out and every
+native build pays for it.
+
+**The narrowing's searches by one byte.** With `byte_from` inline, the
+narrowing's three whole-module searches find `define `, `musttail call` and
+`tailcc ` by their `f`, `m` and `c` and compare the word where one lands. The
+same anchors read through `str::find` lost to the two-way searcher earlier
+today, because each hit paid for a searcher and a call into memchr; inline,
+the three cost less than the 7.1M the searcher took.
+
+    browser_compile_instructions  251,201,816 -> 248,961,764
+
+A spec builds 20,000 random texts from the three words, their anchors and near
+misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
+the anchor rather than from the word's start, or reporting a line once per
+anchor in it, each fail it.
+
+**Two bytes at a time.** `symbols_before_newline` walks the whole module for
+each line's last `@`, a byte a pass, and that walk was 5.5M. It now asks
+`compare::either_from` for whichever of `@` and a newline comes next, testing
+each eight-byte word for both.
+
+    browser_compile_instructions  248,961,764 -> 244,730,101
+
+`called_symbols`, which reads from each `@` to its `(` or the line's end, uses
+it too: -> 244,413,637.
+
+`either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
+target bytes, and dropping the second test's `& !` fails it.
+
+**Specs.** The interp corpus cut into pieces every seventh definition translates
+to the same module as the whole text, and letting a piece go before its
+functions are lowered fails it. The lean emit writes the pieces the whole emit
+writes. Ratchet rows undo each change; the browser rows are the witness for
+six of them.
+
+**CI's rows.** The emitter's own count falls with its scans:
+emit_instructions 6,249,687 -> 5,919,265 (-5.3%). interp_instructions moves
+385,504,156 -> 385,492,276; no change here touches the interpreter's code.
+compile_instructions, entry_instructions, library_instructions and both
+codegen rows read what #2065 left them.
+
+**Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
+at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
+`paired_appends`'s long needle saved 172,616 instructions and for
+`branches_to`'s `label %` probe 286,197, too little to give either a helper of
+its own.

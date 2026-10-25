@@ -437,6 +437,92 @@ fn string_where_a_list_goes(
     }
 }
 
+/// A list handed where a builtin takes a map: `put`, `delete`, `keys`,
+/// `values` or `entries`. Each stops at run time on a list, on every engine,
+/// and a list literal written in place was refused by the literal check while
+/// the same list bound to a name passed (#2091's fifth item). The argument is
+/// known to be a list when it is a name this declaration binds once to a list
+/// literal, or a call of a group whose every arm answers a list and nothing
+/// else. Anything less certain is left to the run.
+fn list_where_a_map_goes(
+    e: &Expr,
+    aliases: &HashMap<(&str, usize), &str>,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    decl: &crate::ast::FnDecl,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{FAIL, LIST};
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    // THE CHEAP TEST FIRST: the callee's last segment, compared in place.
+    // Every call in the program reaches this line, and the shadowing test
+    // and the lookups below hash the name. Splitting the name on `/` cost
+    // the front end 0.3% in a memrchr per call.
+    let ends = |w: &str| {
+        name.ends_with(w)
+            && (name.len() == w.len() || name.as_bytes()[name.len() - w.len() - 1] == b'/')
+    };
+    let named = match name.as_bytes().last() {
+        Some(b't') => ends("put"),
+        Some(b'e') => ends("delete"),
+        Some(b's') => ends("keys") || ends("values") || ends("entries"),
+        _ => false,
+    };
+    if !named || shadow(name.as_str()) {
+        return;
+    }
+    let bare = match aliases.get(&(name.as_str(), args.len())) {
+        Some(builtin) => *builtin,
+        None if returns.contains_key(&(name.as_str(), args.len())) => return,
+        None => name.as_str(),
+    };
+    let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
+    let Some(demand) = builtin_demand(bare, 0) else { return };
+    if demand.contains(&LitKind::List) || !demand.contains(&LitKind::Map) {
+        return;
+    }
+    let Some(arg) = args.first() else { return };
+    let a_list = match arg {
+        Expr::Ident(n, _, _) => list_names(decl).contains(&n.as_str()),
+        Expr::App { head: inner, args: inner_args, piped: false, .. } => match inner.as_ref() {
+            Expr::Ident(maker, _, _) => {
+                returns.get(&(maker.as_str(), inner_args.len())).is_some_and(|&s| s & !FAIL == LIST)
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+    if a_list {
+        diags.push(Diagnostic::new(
+            "type",
+            format!("`{}` takes a map here, not a list", crate::ast::spoken(name.as_str())),
+            arg.span(),
+        ));
+    }
+}
+
+/// The names one declaration binds to a list literal, for
+/// `list_where_a_map_goes`, which asks only after it has found a call of
+/// `put` or its kin. A name bound twice is left out.
+fn list_names(decl: &crate::ast::FnDecl) -> Vec<&str> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut lists: Vec<&str> = Vec::new();
+    for stmt in &decl.body {
+        if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
+            if seen.contains(&n.as_str()) {
+                lists.retain(|l| *l != n.as_str());
+                continue;
+            }
+            seen.push(n.as_str());
+            if matches!(expr, Expr::List(..)) {
+                lists.push(n.as_str());
+            }
+        }
+    }
+    lists
+}
+
 /// An arithmetic operator handed a value it is never defined for. `+`, `-`,
 /// `*`, `/` and `%` take numbers, and an operator arm routes only a record, so
 /// a string, a list or a map stops the run on every engine (ruled on #1975,
@@ -1190,6 +1276,7 @@ fn check_after_infer<'p>(
                 raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
+                list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);
                 wrong_kind_at_an_operator(cur, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));

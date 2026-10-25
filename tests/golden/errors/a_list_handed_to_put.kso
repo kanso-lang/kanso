@@ -1,0 +1,15 @@
+# `put` writes a key of a map, and stops at run time on a list. A list it is
+# handed is refused at check when the list is certain: a name bound to a list
+# literal in the same body, or a call whose every arm answers a list. A list
+# literal written in place was refused already.
+fn filled n
+  [n n n]
+
+fn set_middle n
+  xs = [1 2 3]
+  put xs 2 n
+
+fn set_made n
+  put (filled n) 2 n
+
+pub play = print "{set_middle 9} {set_made 4}"
