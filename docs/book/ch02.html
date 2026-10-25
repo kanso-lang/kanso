@@ -199,7 +199,7 @@ cups <span class="o">=</span> {
 
 <h2>records</h2>
 
-<p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>
+<p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in the order you choose, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">records.kso</div>
@@ -342,7 +342,7 @@ tau <span class="o">=</span> <span class="n">3</span>
 <h2>exercises</h2>
 <ol class="exercises">
   <li>build a map from three product names to their prices, then print the price of one product and the full list of entries. add a fourth product with <code>put</code> and print the entries again—note where it lands in the order.</li>
-  <li>declare a <code>type rectangle</code> with <code>height</code> and <code>width</code> fields. construct one, destructure it positionally, and print its area. remember the fields construct in alphabetical order.</li>
+  <li>declare a <code>type rectangle</code> with <code>height</code> and <code>width</code> fields. construct one, destructure it positionally, and print its area. remember the fields construct in the order you declared them.</li>
   <li>start from a list of five numbers. in one program, print the list sorted, the list with every element doubled (<code>list/map</code>), the elements above a threshold (<code>list/select</code>), and the total (<code>list/sum</code>).</li>
   <li>reproduce the "unused binding" error on purpose: bind a name, rebind it without reading the first value, and run <code>kanso check</code>. then fix it two ways—once by using the first value, once by deleting the first line—and confirm both check clean.</li>
 </ol>

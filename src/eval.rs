@@ -2272,8 +2272,8 @@ impl<'a> Interp<'a> {
             return Err(RuntimeError {
                 at: None,
                 message: format!(
-                    "`{}` has {} field(s), got {} (construction is positional, fields \
-                     alphabetical)",
+                    "`{}` has {} field(s), got {} (construction is positional, in the \
+                     order the fields are declared)",
                     ty.name,
                     ty.fields.len(),
                     args.len()
