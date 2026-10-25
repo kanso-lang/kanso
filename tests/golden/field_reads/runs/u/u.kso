@@ -1,0 +1,3 @@
+# u imports nothing, and reads two fields of the value it is handed.
+pub fn shown h
+  "{h.start}..{h.end}"

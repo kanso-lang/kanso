@@ -1,0 +1,2 @@
+pub fn lookup doc path
+  lookup doc path 0 1

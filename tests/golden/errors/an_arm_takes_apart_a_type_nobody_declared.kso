@@ -1,0 +1,10 @@
+# No file declares `banana`, so the first arm takes apart a record no value
+# can be, and every call falls to the second.
+
+pub fn area (banana w h)
+  w * h
+
+pub fn area _
+  0
+
+pub play = print (area 3)

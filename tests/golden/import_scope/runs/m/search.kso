@@ -1,0 +1,9 @@
+# search.kso imports std/regexp, which also exports `matches`, and reaches
+# it only by its qualified name.
+import "std/regexp"
+
+pub fn found p s
+  regexp/match? p s
+
+pub fn whole p s
+  regexp/matches p s

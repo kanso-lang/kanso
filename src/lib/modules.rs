@@ -666,6 +666,20 @@ fn compile_module_loaded(
                 .map_err(|d| diag::render(&[d], file, source))?;
         }
     }
+    // An import reaches only the file that writes it (2026-10-12). Its bare
+    // twin of a name the module also declares joins the module's own arms in
+    // one overload group, which is what a file that imports it and writes the
+    // name asks for. When no such file writes the name, the twin can only
+    // reach files that never imported it: xsv's private `matches` in one file
+    // took std/regexp's arms because another file imported std/regexp.
+    if parsed.len() > 1 {
+        let away = twins_no_importer_names(&parsed, &surfaced);
+        if !away.is_empty() {
+            dep_program
+                .fns
+                .retain(|f| !(f.synthetic && !ast::has_slash(&f.name) && away.contains(&f.name)));
+        }
+    }
     // Each file names what it uses. Declarations merge across a module's
     // files; imports do not, so a file that leans on a sibling's import is
     // a file whose dependencies are invisible in it.
@@ -782,12 +796,23 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
-    // The functions the module's other files declare: a call of one on a
-    // value a function was handed is shaded, as a call of the file's own is.
-    // A module of one file has no others.
-    let module_fns: crate::hash::Set<&str> = match parsed.len() {
-        1 => crate::hash::Set::default(),
-        _ => parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect(),
+    // The functions the module's files declare: a call of one on a value a
+    // function was handed is shaded, as a call of the file's own is. Each
+    // carries the first file that declares it and whether another file
+    // declares arms of it too, which leaves its arity to the merged check. A
+    // module of one file has no others.
+    let module_fns: crate::hash::Map<&str, (u32, bool)> = match parsed.len() {
+        1 => crate::hash::Map::default(),
+        _ => {
+            let mut seen = crate::hash::Map::default();
+            for (at, (_, _, p)) in parsed.iter().enumerate() {
+                for f in &p.fns {
+                    let slot = seen.entry(f.name.as_str()).or_insert((at as u32, false));
+                    slot.1 |= slot.0 != at as u32;
+                }
+            }
+            seen
+        }
     };
     let mut file_travels: Vec<Vec<check::Travel>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {
@@ -830,6 +855,28 @@ fn compile_module_loaded(
                     " — `{quals}` exports it and this file does not import it; an \
                      import reaches only the file that writes it"
                 ));
+            }
+        }
+        // A binding refused for a name another file of the module declares
+        // pointed at the innocent local and nowhere else (#2085). Name the
+        // declaration it collides with.
+        for d in &mut diags {
+            let Some(name) = d.message.strip_prefix('`').and_then(|rest| {
+                rest.strip_suffix("` is already a declaration; rename the binding")
+            }) else {
+                continue;
+            };
+            let elsewhere =
+                parsed.iter().filter(|(other, _, _)| other != file).find_map(|(other, _, p)| {
+                    let at = p.fns.iter().find(|f| f.name == name).map(|f| f.span);
+                    let at = at.or_else(|| p.types.iter().find(|t| t.name == name).map(|t| t.span));
+                    at.map(|span| (other, span.line))
+                });
+            if let Some((other, line)) = elsewhere {
+                d.message = format!(
+                    "`{name}` is already a declaration, in {other} at line {line}; rename the \
+                     binding"
+                );
             }
         }
         diags.sort_by_key(|d| (d.span.line, d.span.col));
@@ -895,7 +942,13 @@ fn compile_module_loaded(
     let diags = match shipped {
         true => Vec::new(),
         false => phase::watched("check_merged", || {
-            check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
+            check::check_merged_after_aliases_with(
+                &merged,
+                require_entry,
+                require_entry,
+                &rewritten,
+                builtins,
+            )
         }),
     };
     inline::apply_wrappers(&mut merged, &wrappers);
@@ -953,6 +1006,47 @@ fn compile_module_loaded(
 /// imports that would bring it: a name that only a sibling's import surfaces,
 /// and that no file of the module declares. A rename's spelling counts the
 /// same way. std/render is ambient, so its names are seen everywhere.
+/// The names the module declares that an import also enrols bare, where no
+/// file importing that module writes the bare name.
+fn twins_no_importer_names(
+    parsed: &[(String, String, ast::Program)],
+    surfaced: &Surfaced,
+) -> Vec<String> {
+    let qual_of =
+        |i: &ast::Import| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string());
+    let declared = |name: &str| parsed.iter().any(|(_, _, p)| p.fns.iter().any(|f| f.name == name));
+    let mut away = Vec::new();
+    for (name, by) in surfaced {
+        if !declared(name) {
+            continue;
+        }
+        let written_where_seen = parsed.iter().any(|(_, _, p)| {
+            p.imports.iter().any(|i| by.contains_key(&qual_of(i))) && writes_bare(p, name)
+        });
+        if !written_where_seen {
+            away.push(name.clone());
+        }
+    }
+    away
+}
+
+/// Whether any declaration in `program` mentions `name` bare.
+fn writes_bare(program: &ast::Program, name: &str) -> bool {
+    fn in_expr(e: &ast::Expr, name: &str) -> bool {
+        if let ast::Expr::Ident(n, _, _) | ast::Expr::Partial(n, _) = e {
+            if n == name {
+                return true;
+            }
+        }
+        crate::any_child(e, |c| in_expr(c, name))
+    }
+    program.fns.iter().any(|f| {
+        f.body.iter().any(|st| match st {
+            ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => in_expr(expr, name),
+        })
+    })
+}
+
 fn hidden_from<'a>(
     program: &ast::Program,
     parsed: &'a [(String, String, ast::Program)],

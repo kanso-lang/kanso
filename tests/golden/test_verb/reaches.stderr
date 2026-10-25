@@ -1,0 +1,4 @@
+error[name]: unknown name `hidden` — no module in this program writes `hidden` for a type it owns, so no value carries it
+  --> reaches/reaches_test.kso:5:3
+   5 |   hidden n
+         ^
