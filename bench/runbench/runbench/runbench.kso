@@ -156,6 +156,23 @@
 # overwritten once a lap. Every put copies the map's whole append log, and
 # the log keeps each overwrite, so it grows by an entry a lap and the phase
 # is quadratic in its laps.
+#
+# One more joined on 2026-10-25, from #2089's third item, measured on main at
+# kanso#2092 before its fix. Its column is the whole program with it,
+# 988,276,908, less the whole without, 917,694,203, and its share is of the
+# former.
+#
+#   reentered  62 writes through a loop re-entered       70,582,705  7.14%
+#
+# `reentered` is the lox port's statement loop when a Lox constructor builds
+# a tree: a loop whose lap enters the same loop again, carrying a persistent
+# trie that each lap writes one leaf into. Every fresh entry staged its carry
+# on its first lap, because the lap rule measured the arena's drift from
+# where the last loop at its depth had left it. Its cost is a knee like
+# `guarded`'s. Built alone it costs 1,236,018 with the empty program's
+# start-up, and inside this program each of those stages also walks what the
+# earlier phases left behind. Depth 3 sits below the knee and adds 1,254,367,
+# so 4 is the smallest depth that reaches it.
 import "./bag"
 import "./bump"
 import "./deep"
@@ -168,6 +185,7 @@ import "./insist"
 import "./machine"
 import "./overwrite"
 import "./pend"
+import "./reentered"
 import "./restate"
 import "./rewind"
 import "./scatter"
@@ -216,6 +234,8 @@ guarded_pushes = 3050
 
 overwrite_laps = 380
 
+reentered_depth = 4
+
 insist_laps = 5000
 
 fn decoded _ 0 sofar
@@ -259,8 +279,9 @@ fn tally raw doc a b
   ported5 = ported3 + ported4 + bag/total bag_items + handed/total handed_steps
   ported6 = ported5 + guarded/total guarded_pushes
   ported7 = ported6 + overwrite/total overwrite_laps
+  ported8 = ported7 + reentered/total reentered_depth
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported7 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported8 + rest))
   bulk .> on
 
 fn shaped raw doc a
