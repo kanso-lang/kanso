@@ -1,0 +1,5 @@
+fn hidden n
+  n + 1
+
+pub fn shown n
+  hidden n

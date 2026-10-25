@@ -1,0 +1,9 @@
+# A helper in a test file calls the module's private `hidden`. The test
+# file sees pub names only, so the call is refused at check.
+
+fn via n
+  hidden n
+
+test_through_helper = via 1 == 2
+
+test_public = shown 1 == 2

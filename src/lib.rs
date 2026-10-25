@@ -215,7 +215,8 @@ fn compile_parsed_entry(
     let counts = inline::group_sizes(&merged);
     let builtins = inline::aliases_from(&merged, &counts);
     let wrappers = inline::wrapper_table(&builtins, &counts);
-    let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);
+    let merged_diags =
+        check::check_merged_after_aliases_with(&merged, true, true, &rewritten, builtins);
     inline::apply_wrappers(&mut merged, &wrappers);
     match merged_diags.is_empty() {
         true => {
@@ -433,7 +434,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     // quotes `m/one` where the source says `one` -- the spelling kanso#1120
     // settled. `Rewrites` is how the check gets told.
     let rewritten = canonicalize_bare_aliases(&mut program);
-    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
+    let merged_diags = check::check_merged_after_aliases(&program, false, true, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -455,7 +456,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
-    reaching(Some(source), || compile_library_beside(file, source, None))
+    reaching(Some(source), || compile_library_beside(file, source, None, false))
 }
 
 /// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
@@ -469,7 +470,8 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
     // the module is the test file's own directory, which an import from
     // inside it would otherwise refuse as the module importing itself
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = reaching(Some(source), || compile_library_beside(file, source, beside.clone()));
+    let built =
+        reaching(Some(source), || compile_library_beside(file, source, beside.clone(), true));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
@@ -530,10 +532,14 @@ fn module_beside(file: &str) -> Option<ast::Import> {
     })
 }
 
+/// `whole` says nothing will import the result: a test file is the whole
+/// program it runs, so its calls on handed values are settled here, where a
+/// library's wait for the program that imports it.
 fn compile_library_beside(
     file: &str,
     source: &str,
     beside: Option<ast::Import>,
+    whole: bool,
 ) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
@@ -547,6 +553,8 @@ fn compile_library_beside(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     // the module under test is loaded with the file's own imports but never
     // joins `program.imports`, so it cannot read as an import left unused
+    // A test file is the whole program it runs; a library waits for one.
+    let root = beside.is_some();
     import_list.extend(beside);
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
@@ -606,7 +614,15 @@ fn compile_library_beside(
     program.types.extend(dep_program.types);
     own_types_beat_twins(&mut program);
     program.fns.extend(dep_program.fns);
-    forget_shades(&mut program.fns);
+    // A call the check sent to a traveling group is filled from every owner
+    // in the program, or refused as unknown. A library leaves both to its
+    // importer. A test file has none, and a helper's call to the module's
+    // private `hidden` reached the run as an empty group: "unknown name
+    // `~hidden`", where the same call in a test constant is refused at check.
+    match whole {
+        true => enroll_travelers(&mut program)?,
+        false => forget_shades(&mut program.fns),
+    }
     // AHEAD OF THE CHECK, the third and last of the three paths to take this
     // shape -- kanso#1328 did it on the module path and kanso#1335 on the
     // entry path, and the reasons are the same here: the whole-program check
@@ -624,7 +640,7 @@ fn compile_library_beside(
     // quotes `m/one` where the source says `one` -- the spelling kanso#1120
     // settled. `Rewrites` is how the check gets told.
     let rewritten = canonicalize_bare_aliases(&mut program);
-    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
+    let merged_diags = check::check_merged_after_aliases(&program, false, root, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -1502,6 +1518,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &Aliasing<'_>, wrote: &mut Rewrites) {
 /// module's constructions as foreign. The qualified spelling still reaches
 /// the import's type.
 pub fn own_types_beat_twins(program: &mut ast::Program) {
+    own_types_beat_twin_fns(program);
     // A collision is rare, so finding none allocates nothing.
     let beaten = |t: &ast::TypeDecl, types: &[ast::TypeDecl]| {
         t.synthetic
@@ -1515,6 +1532,31 @@ pub fn own_types_beat_twins(program: &mut ast::Program) {
     let keep: Vec<bool> = program.types.iter().map(|t| !beaten(t, &program.types)).collect();
     let mut keep = keep.into_iter();
     program.types.retain(|_| keep.next().unwrap_or(true));
+}
+
+/// A type the program declares is called by its name to build one, so an
+/// import's function enrolled under that bare name gives way to it, at any
+/// arity. mal declared `type tally` beside `import "std/list"`, and its
+/// constructions were refused as calls to `list/tally` with the wrong
+/// argument count. The import's function stays reachable as `list/tally`. A
+/// module cannot declare a function and a type of one name, so a synthetic
+/// bare function named like its own type is an import's twin.
+fn own_types_beat_twin_fns(program: &mut ast::Program) {
+    let twin_named = |t: &ast::TypeDecl, fns: &[ast::FnDecl]| {
+        !t.synthetic
+            && !ast::has_slash(&t.name)
+            && fns.iter().any(|f| f.synthetic && f.name == t.name)
+    };
+    if !program.types.iter().any(|t| twin_named(t, &program.fns)) {
+        return;
+    }
+    let beaten: Vec<String> = program
+        .types
+        .iter()
+        .filter(|t| twin_named(t, &program.fns))
+        .map(|t| t.name.clone())
+        .collect();
+    program.fns.retain(|f| !(f.synthetic && beaten.contains(&f.name)));
 }
 
 /// Rewrite every type reference that resolves to an enrollment clone to
@@ -1668,6 +1710,30 @@ fn qualify(
         .map(|f| f.file.clone())
         .collect();
     let is_twin = |f: &ast::FnDecl| f.synthetic && !own_files.contains(&f.file);
+    // A constant an import enrols gives way to a name the module declares,
+    // as it does in a play file (`resolve` in eval.rs). A constant has no
+    // arity to dispatch on, so in the shared bare space it answered any
+    // mention of the name read as a value: kv's `fn read_line acc x`, handed
+    // to `list/fold` beside std/io's `read_line`, was std/io's description on
+    // every engine.
+    let shadowed: Vec<String> = {
+        let declared_here: crate::hash::Set<&str> = dep
+            .fns
+            .iter()
+            .filter(|f| !is_twin(f) && !ast::has_slash(&f.name))
+            .map(|f| f.name.as_str())
+            .collect();
+        dep.fns
+            .iter()
+            .filter(|f| {
+                is_twin(f) && f.params.is_empty() && declared_here.contains(f.name.as_str())
+            })
+            .map(|f| f.name.to_string())
+            .collect()
+    };
+    if !shadowed.is_empty() {
+        dep.fns.retain(|f| !(is_twin(f) && f.params.is_empty() && shadowed.contains(&f.name)));
+    }
     let mut own_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     let mut twin_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     for f in &dep.fns {

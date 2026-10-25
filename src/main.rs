@@ -2272,6 +2272,15 @@ fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -
                         eval::render(&interp, &other, true)
                     );
                 }
+                // A failure that knows its place names it as `run` does. Its
+                // span belongs to that place's file, which need not be this
+                // one: a failure inside std/text printed std/text's line
+                // number under the test file's path.
+                Err(runtime) if runtime.at.is_some() => {
+                    failed += 1;
+                    println!("{name} ... FAILED");
+                    eprint!("error[runtime]: {}\n{}", runtime.message, runtime.place());
+                }
                 Err(runtime) => {
                     failed += 1;
                     let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);

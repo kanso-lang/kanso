@@ -1,0 +1,5 @@
+# m declares `lookup` at two arities, one per file, and the 2-argument arm
+# calls the 3-argument one.
+import "./m"
+
+print (m/lookup "d" "p")
