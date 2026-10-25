@@ -530,6 +530,12 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>, statements: bo
         // does; a blank-line complaint here would describe a rule the author
         // did not break.
         let imports_here = matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
+        // an import below a statement is refused for its place, and a blank
+        // above it is no separate fault
+        let after_import = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)));
+        if statements && imports_here && !after_import && pair[0].indent == 0 {
+            continue;
+        }
         if pair[1].indent == 0 && !decl_start && !imports_here {
             if blanks > 1 {
                 let after_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)));
