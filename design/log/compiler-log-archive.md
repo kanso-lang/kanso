@@ -108698,3 +108698,26 @@ short literal: the type names in `P::ty` and the attribute words in
 `P::skip_attrs` alone made 10,124 of them. Matching those words as integer
 keys built from their bytes cost more than it saved, 222,368,963 ->
 222,475,311 on the tree before this change, and was set aside.
+
+## 2026-10-24 — a name no query starts like is passed over
+
+`queries_named` reads every `@name` in a text, measures it and looks it up in
+a set of names the caller asks about. It runs over every definition block in
+the prune and over every piece when the tab checks whether its emit named a
+group it left out. Most of a module's ats are runtime calls, string cells and
+intrinsics, `@k_`, `@s`, `@llvm.`, and the names asked about are the
+program's own groups, so the callers now build a table of the bytes their
+names start with, once per set, and the scan passes over a name whose first
+byte is not in it before measuring or hashing it.
+
+The tab's compile of its corpus fell from 221,598,648 to 220,923,375
+instructions (-0.30%) in this container, and the tab's IR and the native IR
+of the benchmarks in both tiers are byte-identical. Removing the check
+outright would have saved 1,751,745, the ceiling for this scan in the tab's
+miss check. Building the table inside `queries_named` instead, once per
+block, cost 680,432 more than it saved. The ratchet row `query_leads` admits
+every byte and reads 221,611,521.
+
+On CI the dev build's emit fell with the prune's scan, emit_instructions
+5,690,029 -> 5,651,244, and the browser rows of both changes matched this
+container's. Every other row reads what main left it.

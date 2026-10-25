@@ -15,7 +15,8 @@ type uniq
 
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
-  print "interp {rounds 6} {branched 680} {padded 18 0} {maps}"
+  nest = "{nested 1000}"
+  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
 
 fn rounds n
   source = document 220
@@ -109,3 +110,28 @@ fn kept st n i
 
 fn deduped n
   length (kept (uniq {} []) n n).out
+
+# A count kept per pair of keys, as a map of maps.
+fn none_zero none
+  0
+
+fn none_zero c
+  c
+
+fn none_map none
+  {}
+
+fn none_map m
+  m
+
+fn counted_in m _ 0
+  m
+
+fn counted_in m n i
+  a = i % 50
+  b = i * 7919 % n
+  inner = none_map m[a]
+  counted_in (put m a (put inner b (none_zero inner[b] + 1))) n (i - 1)
+
+fn nested n
+  length (counted_in {} n n)
