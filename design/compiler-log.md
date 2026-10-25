@@ -1821,9 +1821,9 @@ the interpreted corpus here, measured before their fixes. Both engines
 print the same line for it.
 
 CI's rows for the corpus with the two phases: interp_instructions
-525,831,073 -> 636,709,702, interp_allocs 585,540 -> 651,249 and
+525,925,462 -> 636,804,390, interp_allocs 585,540 -> 651,249 and
 interp_peak_bytes 1,281,294 -> 1,298,220. The tab compiles and runs the
-same corpus: browser_compile_instructions 334,007,116 -> 343,847,622,
+same corpus: browser_compile_instructions 333,912,133 -> 343,748,020,
 browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
 107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
 3,997,696. Welfare re-bases the six terms among these it weighs, each
