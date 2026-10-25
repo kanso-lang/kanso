@@ -99,12 +99,11 @@ mkdir -p "$run_dir/bench"
 for f in large.json wide.json digest_input.txt; do
   cp "bench/$f" "$run_dir/bench/$f"
 done
-for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench livebench runbench; do
+benches=$(sh scripts/gates/benchmarks.sh)
+for b in $benches; do
   cp "./$b" "$run_dir/$b"
 done
-for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench livebench runbench; do
+for b in $benches; do
   ( cd "$run_dir" && env -i PATH=/usr/bin:/bin \
       valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
       >/dev/null 2>/tmp/ir.$b )
@@ -125,8 +124,7 @@ if command -v callgrind_annotate >/dev/null; then
   # The capped summaries above are for reading; these are for DIFFING two
   # jobs. Every benchmark, uncapped, on every run -- the row that parts is
   # never known in advance and a comparison needs the agreeing side too.
-  for b in jsonbench encodebench oneshot basket widebench deepbench escapebench \
-           pendbench indexbench scanbench digestbench readbench livebench runbench; do
+  for b in $benches; do
     sh "$(dirname "$0")/function_table.sh" /tmp/cg.$b "$b"
   done
 else
