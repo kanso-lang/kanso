@@ -1,0 +1,21 @@
+# 8,000 numbers grouped by their remainder mod 20 into a map of lists. Each
+# push copied the outer map and the group's list, so grouping allocated twice
+# per number and the bytes grew with the groups. Where nothing but the map
+# holds a group, the push extends it in place and the map is written in place.
+fn or_list none
+  []
+
+fn or_list xs
+  xs
+
+fn grouped m _ 0
+  m
+
+fn grouped m n i
+  k = i % 20
+  xs = or_list m[k]
+  grouped (put m k (push xs i)) n (i - 1)
+
+pub play =
+  g = grouped {} 8000 8000
+  print "{length g} {length g[3]} {g[3][1]} {g[19][400]}"
