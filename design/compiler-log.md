@@ -1778,13 +1778,22 @@ was refused on check, run and run --interp with "no record type has a field
 `start` (module u)": the module was checked alone before the program that
 imports it, and no type it could see declares the field.
 
-A library compile now leaves a field no visible type declares to the
-program, as it leaves a call on a handed value that only another module
-writes. The root (an entry, a play file, a test file) still refuses a field
-no type in the whole program declares, and still refuses two fields read on
-one value that no type holds together. `kanso check` on a library alone no
-longer catches a misspelt field there; the first program that imports the
-library does.
+A library compile now leaves to the program a field read on one of the
+function's parameters when no type the library can see declares the field,
+as it leaves a call on a handed value that only another module writes. The
+same holds for two fields read on one parameter when one of them is unseen.
+A read on any other value, a local built from a visible type say, is refused
+where it is written, as before, and so is a parameter read for fields that
+visible types each declare but none holds together. The root (an entry, a
+play file, a test file) refuses a field no type in the whole program
+declares.
 
 `tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
 (main refuses it) and pins the root's refusal of a misspelt field.
+
+A library's field reads reach the root already rewritten into calls on their
+readers, so the root now asks a reader's call the same question.
+`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
+file and line, now said by the root. The root quotes no line from another
+file, as it does for every diagnostic about one, and the dependency's
+`(module deep)` suffix goes with the dependency's check.
