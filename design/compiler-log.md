@@ -1772,5 +1772,18 @@ and interp_peak_bytes holds at 1,298,476. The compile rows move with the
 binary's layout: compile_instructions 24,694,028 -> 24,711,192,
 entry_instructions 72,837,734 -> 72,889,740, library_instructions 72,508,468
 -> 72,563,065, emit_instructions 5,657,388 -> 5,654,754 and
-browser_compile_instructions 343,857,683 -> 343,738,623. Welfare rises
-95.15 -> 95.17 and the rise is banked.
+browser_compile_instructions 343,857,683 -> 343,738,623. Against #2151
+welfare read 95.15 -> 95.17.
+
+Merged with main at #2141, CI reads the three together against main. The
+interpreter reads interp_instructions 520,276,149 -> 564,058,857,
+interp_allocs 578,088 -> 624,771 and interp_peak_bytes 1,281,313 ->
+1,298,495. The tab runs and compiles the two corpus phases:
+browser_run_instructions 54,006,705 -> 61,205,256, browser_run_peak_bytes
+1,507,328 -> 1,572,864, browser_compile_instructions 334,848,599 ->
+344,676,704 and browser_compile_peak_bytes 743,876 -> 751,764. The compile
+rows move by layout: compile_instructions 24,735,836 -> 24,747,458,
+entry_instructions 72,954,229 -> 72,992,046, library_instructions
+72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
+corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
+95.22 -> 95.24 and the rise is banked.
