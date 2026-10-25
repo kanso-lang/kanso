@@ -1520,7 +1520,7 @@ native moved. Welfare fell by less than a hundredth, and the floor follows
 under the language exception: the ruling asks for index reads to be proven,
 and this proves more of them.
 
-## 2026-10-25 — three cliffs from the ports join the run program
+## 2026-10-25 — four cliffs from the ports join the run program
 
 #2089's first item, entered in the corpus before its fix under the
 2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
@@ -1557,6 +1557,21 @@ the empty program, and prints the same total on both engines.
 
 On this container the whole program reads 917,589,885, where main reads
 788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
+
+#2089's third item is the fourth phase. lox's statement loop re-enters itself
+when a Lox constructor builds a tree, carrying a persistent trie that each
+lap writes one leaf into, and the reduction took 7.0 seconds natively for
+4,094 writes. The lap rule stages a carry once the arena has drifted a
+quarter megabyte, measured from where the last stage at the loop's depth
+left it. A fresh entry measured from the previous loop's position, which the
+rewind had already passed, so every entry staged on its first lap and copied
+the whole trie. The `reentered` phase writes 62 leaves. Its cost is a knee
+like `guarded`'s: 1,236,018 built alone with the empty program's start-up,
+and 70,582,705 inside the run program, where each stage also walks what the
+earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
+the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
+print 62.
+
 The fixes follow in their own pull requests and will score as rises.
 
 On this container the whole program reads 874,292,848, where main reads
