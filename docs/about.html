@@ -97,7 +97,7 @@ three</code></pre>
 
 <h2 id="p4"><span class="sec-num">part 04</span>the formatter that doesn't exist</h2>
 
-<p>every serious language eventually ships a formatter, and every formatter is a confession: the grammar admits many renderings of the same program, so a second tool exists to pick one. kanso skips the confession. canonical form <em>is</em> the grammar—one rendering per program—so there is nothing left for a formatter to do. non-canonical spacing is a syntax error. blank lines inside a body, trailing whitespace, declarations out of alphabetical order: compile errors. so are unused bindings and unused expressions, because a line that does nothing is a rendering decision too. these are real diagnostics from the interpreter's golden-file corpus:</p>
+<p>every serious language eventually ships a formatter, and every formatter is a confession: the grammar admits many renderings of the same program, so a second tool exists to pick one. kanso skips the confession. canonical form <em>is</em> the grammar—one rendering per program—so there is nothing left for a formatter to do. non-canonical spacing is a syntax error. blank lines inside a body, trailing whitespace, imports out of alphabetical order: compile errors. so are unused bindings and unused expressions, because a line that does nothing is a rendering decision too. these are real diagnostics from the interpreter's golden-file corpus:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/trailing_whitespace.stderr</div>
@@ -108,11 +108,11 @@ three</code></pre>
 </div>
 
 <div class="code-panel">
-  <div class="code-panel-title">tests/golden/errors/fn_order.stderr</div>
-  <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
-<span class="c">  --&gt; fn_order.kso:4:4</span>
-   4 | fn main
-          <span class="k">^</span></code></pre>
+  <div class="code-panel-title">tests/golden/errors/import_order.stderr</div>
+  <pre><code><span class="k">error[formatting]</span>: imports appear in alphabetical order
+<span class="c">  --&gt; import_order.kso:2:8</span>
+   2 | import "kanso-lang/vse"
+              <span class="k">^</span></code></pre>
 </div>
 
 <div class="code-panel">

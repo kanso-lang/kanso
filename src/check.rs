@@ -2142,7 +2142,7 @@ fn construction_arity(
         )),
         None if argc != fields => Some(format!(
             "`{name}` has {fields} field(s), got {argc} \
-             (construction is positional, fields alphabetical)"
+             (construction is positional, in the order the fields are declared)"
         )),
         _ => None,
     }

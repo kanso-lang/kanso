@@ -109,7 +109,8 @@ fn a_construction_across_files_counts_its_fields() {
         err.lines().next(),
         Some(
             "error[arity]: `local` has 2 field(s), got 3 (construction is positional, \
-             fields alphabetical) (module tests/golden/arity/construction/construction)"
+             in the order the fields are declared) (module \
+             tests/golden/arity/construction/construction)"
         ),
         "check did not count the fields: {err}"
     );
