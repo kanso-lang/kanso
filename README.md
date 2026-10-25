@@ -84,4 +84,8 @@ One TextMate bundle in [editors/](editors) highlights `.kso` in both JetBrains I
 cargo test    # unit tests + golden-file corpus (examples, error diagnostics, --plan)
 ```
 
+`sh scripts/install_hooks.sh` points a clone's git at `hooks/`, whose
+`post-merge` rebuilds the compiler after each pull. Git will not let a
+repository set that for itself, so it is one command per clone.
+
 MIT licensed.
