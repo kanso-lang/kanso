@@ -107984,3 +107984,48 @@ read: runbench 799 -> 741 defines and 7,539 -> 7,393 calls, digestbench 135 ->
 117 and 935 -> 872. emit_instructions 6,449,595 -> 6,449,884, and
 browser_compile_instructions 427,904,481 -> 427,933,127. A ratchet row sends every mention back
 through the cell; mutated, the run program reads main's count again.
+
+## 2026-10-23 — a repaired node keeps what it points at through a lap rewind and a scalar pop
+
+A native program could read freed memory where the interpreter printed the
+right answer. The run program shows it with one constant changed: with
+`deep_trials = 0`, main's build segfaulted in `k_copy_size` under
+`k_beat_iter_carry`. Bisecting put the first bad commit at #1830, which added
+the list of repaired nodes. A pop inside a loop can repair a node older than
+the loop's mark so that it points at a copy at the arena's frontier, and the
+frontier is in the loop's lap. #1830 put such a node on a list the loop's next
+stage revisits before it rewinds, which carries the copy below the mark. Two
+other ways out of a lap did not ask that list, and both handed the copy back
+while the node still pointed at it.
+
+A plain lap rewind, for a loop that carries nothing it has to copy, now runs
+as a stage with nothing staged when the list holds a node below the loop's
+mark. The stage revisits the node, copies what it points at into the carry,
+rewinds and settles it back; `beat_iters` is corrected so the lap counts once.
+A pop whose result is a scalar, and the region pop and the cohort with one,
+keep the lap and hand it up to the enclosing loop when the list holds a node
+below the mark, as a pop with a heap result already does. Both tests are in
+out-of-line, cold functions, because a test inlined into `k_beat_pop` cost
+encodebench 35M instructions.
+
+Two mem fixtures pin the halves, and each fails on main and with only the
+other half applied: `a_repaired_node_below_a_loop_that_copies_nothing` printed
+`cover`'s bytes where the interpreter prints `name.`, and
+`a_repaired_node_below_a_loop_that_returns_a_number` segfaulted. No other mem
+golden moves, and the run program with `deep_trials = 0` runs to the end.
+
+CI's rows. The list is empty in every program in the corpus, so what moves is
+the test and the layout around it: run_instructions 828,053,655 -> 828,089,940
+(+0.004%), and work_runbench with it. The other work rows move by under 4,000
+each, oneshot and livebench falling and the rest rising to work_jsonbench
+578,723,373, work_encodebench 2,367,625,387, work_basket 31,067,982,
+work_widebench 28,587,526, work_deepbench 201,099,671, work_escapebench
+40,308,367, work_pendbench 155,740,406, work_indexbench 1,947,279,
+work_scanbench 274,328, work_digestbench 4,152,224 and work_readbench
+4,581,904. Every benchmark's machine code grows 336 bytes: text 5,330,158 ->
+5,334,862 summed over the fourteen. Building compiles the
+runtime: codegen_instructions_dev 116,461,460 -> 116,473,612 and
+codegen_instructions_release 425,504,615 -> 425,509,331.
+browser_run_instructions 30,275,515 -> 30,276,840. Welfare falls by what the
+fix costs, and the floor moves down with it under the rule for the language
+doing what it says.

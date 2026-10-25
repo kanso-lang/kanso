@@ -22,51 +22,6 @@
 
 
 
-## 2026-10-23 — a repaired node keeps what it points at through a lap rewind and a scalar pop
-
-A native program could read freed memory where the interpreter printed the
-right answer. The run program shows it with one constant changed: with
-`deep_trials = 0`, main's build segfaulted in `k_copy_size` under
-`k_beat_iter_carry`. Bisecting put the first bad commit at #1830, which added
-the list of repaired nodes. A pop inside a loop can repair a node older than
-the loop's mark so that it points at a copy at the arena's frontier, and the
-frontier is in the loop's lap. #1830 put such a node on a list the loop's next
-stage revisits before it rewinds, which carries the copy below the mark. Two
-other ways out of a lap did not ask that list, and both handed the copy back
-while the node still pointed at it.
-
-A plain lap rewind, for a loop that carries nothing it has to copy, now runs
-as a stage with nothing staged when the list holds a node below the loop's
-mark. The stage revisits the node, copies what it points at into the carry,
-rewinds and settles it back; `beat_iters` is corrected so the lap counts once.
-A pop whose result is a scalar, and the region pop and the cohort with one,
-keep the lap and hand it up to the enclosing loop when the list holds a node
-below the mark, as a pop with a heap result already does. Both tests are in
-out-of-line, cold functions, because a test inlined into `k_beat_pop` cost
-encodebench 35M instructions.
-
-Two mem fixtures pin the halves, and each fails on main and with only the
-other half applied: `a_repaired_node_below_a_loop_that_copies_nothing` printed
-`cover`'s bytes where the interpreter prints `name.`, and
-`a_repaired_node_below_a_loop_that_returns_a_number` segfaulted. No other mem
-golden moves, and the run program with `deep_trials = 0` runs to the end.
-
-CI's rows. The list is empty in every program in the corpus, so what moves is
-the test and the layout around it: run_instructions 828,053,655 -> 828,089,940
-(+0.004%), and work_runbench with it. The other work rows move by under 4,000
-each, oneshot and livebench falling and the rest rising to work_jsonbench
-578,723,373, work_encodebench 2,367,625,387, work_basket 31,067,982,
-work_widebench 28,587,526, work_deepbench 201,099,671, work_escapebench
-40,308,367, work_pendbench 155,740,406, work_indexbench 1,947,279,
-work_scanbench 274,328, work_digestbench 4,152,224 and work_readbench
-4,581,904. Every benchmark's machine code grows 336 bytes: text 5,330,158 ->
-5,334,862 summed over the fourteen. Building compiles the
-runtime: codegen_instructions_dev 116,461,460 -> 116,473,612 and
-codegen_instructions_release 425,504,615 -> 425,509,331.
-browser_run_instructions 30,275,515 -> 30,276,840. Welfare falls by what the
-fix costs, and the floor moves down with it under the rule for the language
-doing what it says.
-
 ## 2026-10-23 — a template joins onto a record field in place
 
 A template whose first piece is a field, `"{st.body}{d}"`, copied the whole
@@ -1600,3 +1555,79 @@ a `root` argument and a line of its own), and
 `a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
 re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
 other mutation still applies to this tree.
+
+## 2026-10-25 — four cliffs from the ports join the run program
+
+#2089's first item, entered in the corpus before its fix under the
+2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
+a map entry into a name and handed the name to a function inside the write:
+`seen = m[key]` then `put m key (counted seen)`. The 2026-10-10 entry
+(kanso#1822) discounts such a name only when it reaches the write through
+arithmetic and comparison, so here `m` counts as used twice and every put
+copies the map. toml's reduction at 8,000 keys took 4.2 seconds in release
+against 0.012 with the read written inline.
+
+The run program gains a `handed` phase: 380 updates over 100 keys through
+such a name. Built alone on main it costs 41,508,775 instructions above the
+empty program. The phase prints the same total on both engines.
+
+#2089's second item joins it. markdown's port pushed onto a list held in a
+record under a guard, `return st if i > n` above `loop (state (push
+st.events i) i) (i + 1) n`, and natively 64,000 pushes took 8.9 seconds.
+kanso#1926 moves such a list out of its record only when every mention of the
+record is a field read, and the guard's `return st` is a mention that is not,
+though it runs instead of the push. The same loop written as two arms grows
+the list in place. The `guarded` phase pushes 3,050 times. Its cost is a
+cliff whose knee depends on what the arena already holds: built alone the
+knee is at 4,096 elements and the phase costs 746,860 instructions, while
+inside the run program the knee falls between 2,000 and 3,000 and the phase
+costs 43,734,573, the whole program with it less the whole without.
+
+#2089's fourth item is the third phase. chip8's port kept its memory as a
+map of 16 keys in a record, read one key and overwrote another each lap, and
+8,000 laps took 2.4 seconds natively against 0.1 on the interpreter. Every
+put that cannot write in place copies the map's append log, which keeps each
+overwrite until something sorts it, so the copy grows by an entry a lap. The
+`overwrite` phase runs 380 laps, 42,238,603 instructions built alone above
+the empty program, and prints the same total on both engines.
+
+On this container the whole program reads 917,589,885, where main reads
+788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
+
+#2089's third item is the fourth phase. lox's statement loop re-enters itself
+when a Lox constructor builds a tree, carrying a persistent trie that each
+lap writes one leaf into, and the reduction took 7.0 seconds natively for
+4,094 writes. The lap rule stages a carry once the arena has drifted a
+quarter megabyte, measured from where the last stage at the loop's depth
+left it. A fresh entry measured from the previous loop's position, which the
+rewind had already passed, so every entry staged on its first lap and copied
+the whole trie. The `reentered` phase writes 62 leaves. Its cost is a knee
+like `guarded`'s: 1,236,018 built alone with the empty program's start-up,
+and 70,582,705 inside the run program, where each stage also walks what the
+earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
+the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
+print 62.
+
+CI's rows. The run program with all four phases reads work_runbench
+788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
+20.2% of the new whole. The program is larger, so the code it emits grows:
+emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
+emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
+163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
+5,518,316 over the fourteen. No compile row and no browser row moves. Under
+the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
+stack and bag joined: the run_instructions baseline keeps its ratio to the
+run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
+the fixes in #2106 score against these rows as a rise.
+
+The run program's allocation vein moves with it, and the peak it holds is the
+run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
+re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
+baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
+on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
+run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
+run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
+run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
+run_ten_blocks 2.
+
+The fixes follow in their own pull requests and will score as rises.

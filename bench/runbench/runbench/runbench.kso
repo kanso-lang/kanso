@@ -126,15 +126,66 @@
 # for a range it has already bounded. Before the fix every read built the
 # slice and the box between the two steps. It adds 25 bytes to the peak, the
 # line it reads.
+#
+# Three more joined on 2026-10-25, from #2089's first, second and fourth
+# items, measured on main at kanso#2092 before their fixes and shared of the
+# whole program on that compiler, 917,589,885.
+#
+#   handed     380 updates through a read handed to a call  41,508,775  4.52%
+#   guarded    3,050 pushes onto a record's list, guarded   43,734,573  4.77%
+#   overwrite  380 laps reading and overwriting 16 keys     42,238,603  4.60%
+#
+# `handed`'s and `overwrite`'s columns are built alone, less the empty
+# program's 329,467 and 327,245.
+# `guarded`'s is not, and cannot be: its cost is a cliff whose knee depends
+# on what the arena already holds. Built alone, 3,050 pushes sit below the
+# knee and cost 746,860; the knee there is at 4,096 elements. Inside this
+# program the knee falls between 2,000 and 3,000, so its column is the whole
+# program with it less the whole program without it.
+#
+# `handed` is `bump` with the name passed to a function inside the put,
+# `seen = m[i]` then `put m i (counted seen)`, which toml, datalog, diff, bc
+# and inflate all wrote. kanso#1822 discounts the name only when it reaches
+# the write through arithmetic, so every put here copies the map, and the
+# phase is superlinear in its count like `bump` was.
+# `guarded` is `bag` written the way markdown's port wrote it, under a
+# `return st if i > n` guard. kanso#1926 moves the list out of the record
+# only when every mention of the record is a field read, and the guard's
+# early answer is a mention that is not, so every lap copies the list.
+# `overwrite` is chip8's memory: a map of 16 keys in a record, read and then
+# overwritten once a lap. Every put copies the map's whole append log, and
+# the log keeps each overwrite, so it grows by an entry a lap and the phase
+# is quadratic in its laps.
+#
+# One more joined on 2026-10-25, from #2089's third item, measured on main at
+# kanso#2092 before its fix. Its column is the whole program with it,
+# 988,276,908, less the whole without, 917,694,203, and its share is of the
+# former.
+#
+#   reentered  62 writes through a loop re-entered       70,582,705  7.14%
+#
+# `reentered` is the lox port's statement loop when a Lox constructor builds
+# a tree: a loop whose lap enters the same loop again, carrying a persistent
+# trie that each lap writes one leaf into. Every fresh entry staged its carry
+# on its first lap, because the lap rule measured the arena's drift from
+# where the last loop at its depth had left it. Its cost is a knee like
+# `guarded`'s. Built alone it costs 1,236,018 with the empty program's
+# start-up, and inside this program each of those stages also walks what the
+# earlier phases left behind. Depth 3 sits below the knee and adds 1,254,367,
+# so 4 is the smallest depth that reaches it.
 import "./bag"
 import "./bump"
 import "./deep"
 import "./escape"
 import "./fold"
+import "./guarded"
+import "./handed"
 import "./index"
 import "./insist"
 import "./machine"
+import "./overwrite"
 import "./pend"
+import "./reentered"
 import "./restate"
 import "./rewind"
 import "./scatter"
@@ -177,6 +228,14 @@ stack_laps = 115
 
 bag_items = 4300
 
+handed_steps = 380
+
+guarded_pushes = 3050
+
+overwrite_laps = 380
+
+reentered_depth = 4
+
 insist_laps = 5000
 
 fn decoded _ 0 sofar
@@ -217,9 +276,12 @@ fn tally raw doc a b
   ported2 = machine/total machine_passes + fold/total fold_pieces
   ported3 = ported2 + restate/total restate_passes
   ported4 = rewind/total rewind_laps + stack/total stack_laps
-  ported5 = ported3 + ported4 + bag/total bag_items
+  ported5 = ported3 + ported4 + bag/total bag_items + handed/total handed_steps
+  ported6 = ported5 + guarded/total guarded_pushes
+  ported7 = ported6 + overwrite/total overwrite_laps
+  ported8 = ported7 + reentered/total reentered_depth
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported5 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported8 + rest))
   bulk .> on
 
 fn shaped raw doc a

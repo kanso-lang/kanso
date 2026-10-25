@@ -1,0 +1,30 @@
+# A map of 16 keys held in a record, read and then overwritten once a lap:
+# chip8's memory, threaded through its fetch loop. Natively every put copied
+# the map's whole append log, overwrites included, so the log grew by one
+# entry a lap though the map never held more than 16 keys (kanso#2089,
+# fourth item): 8,000 laps took 2.4 seconds against 0.1 on the interpreter.
+import "std/list"
+
+type machine
+  memory
+  pc
+
+fn boot size
+  pairs = list/map (list/take list/naturals size) (n -> [n 0])
+  machine (list/to_h (list/to_list pairs)) 1
+
+fn run m 0
+  m.memory[1]
+
+fn run m n
+  seen = or_zero m.memory[(m.pc * 7) % 16 + 1]
+  run (machine (put m.memory m.pc (n + seen)) (m.pc % 16 + 1)) (n - 1)
+
+fn or_zero none
+  0
+
+fn or_zero x
+  x
+
+pub fn total laps
+  or_zero (run (boot 16) laps)
