@@ -8,7 +8,6 @@ type money
 fn + (money a) (money b)
   money (a + b)
 
-
 fn to_string (money cents)
   "${cents / 100}.{cents % 100}"
 

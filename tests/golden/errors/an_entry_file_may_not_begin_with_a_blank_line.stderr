@@ -1,0 +1,4 @@
+error[formatting]: the file may not begin with a blank line
+  --> an_entry_file_may_not_begin_with_a_blank_line.kso:1:1
+   1 | 
+       ^

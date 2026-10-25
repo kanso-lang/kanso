@@ -3,7 +3,6 @@ import "std/list"
 fn cheapest prices
   (list/sort prices)[1]
 
-
 fn report low total
   print "cheapest: {low} yen / total: {total} yen"
 

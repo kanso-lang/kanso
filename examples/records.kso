@@ -7,7 +7,6 @@ type user
   age
   name
 
-
 fn welcome (employee _ name _)
   "irasshaimase, {name}"
 

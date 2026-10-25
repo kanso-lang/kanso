@@ -1,6 +1,5 @@
 type num float64 int
 
-
 fn show x:num
   "a number: {x}"
 
