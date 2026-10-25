@@ -23,143 +23,6 @@
 
 
 
-## 2026-10-23 — eight costs out of the tab's compile
-
-Counted in executed instructions, the costliest function in the tab's compile
-was `memcmp`: 9.5M of the front end's 68.8M and 17.5M of the emitter's 119.2M
-on `bench/interp_corpus`. The `memcmp` wasm32 links by default is
-compiler-builtins' loop of one byte per pass, and the compiler compares names
-and keys constantly: hash-map probes on `&str` keys, `CharSearcher` checking a
-found byte's neighbours, the inferencer matching names.
-
-`src/compare.rs` compares eight bytes per pass and ends with the eight bytes
-that finish the run, overlapping bytes already found equal, so no length needs
-a loop of single bytes after the words. A run of four to seven bytes is read
-as two four-byte words, and the first byte that differs is found from the
-lowest set bit of the two words' difference. `src/main.rs` exports it as
-`memcmp` and `bcmp` in the wasm build only; native builds keep the C library's.
-
-    browser_compile_instructions  293,067,500 -> 274,134,296  (-6.46%)
-
-The same code written in `main.rs` read 273,195,866, and in the library with a
-plain `#[inline]` 275,072,726, because the call into `kanso::compare::bytes`
-stayed out of line. `#[inline(always)]` takes most of that back. A first version
-that finished with single bytes instead of the overlapping word read
-281,953,624, because most compares are a few bytes long.
-
-`tests/the_word_compare_agrees_with_bytes.rs` holds it to the standard
-library's slice order: 4M random cases in CI, and 50M once with no failure, at
-every length to 48 and every pair of offsets up to seven bytes out of
-alignment, half the differing bytes straddling 0x80. Turning the lowest set bit
-into the highest, dropping the overlapping word, comparing the bytes as signed
-and dropping the second four-byte word each fail it. The ratchet row "a byte
-loop compares in the tab" renames the two exports, and the browser row goes
-back to 293,067,500.
-
-**A switch found by its `=`.** The translator asks of every IR line whether
-it opens a switch, which may run over several lines, and it asked with
-`body.contains("= switch")`. `contains` builds a substring searcher before it
-reads a byte, and on the tab's corpus that setup was 5.9M of the 71.0M
-instructions the translation executed. A function body's line holds one `=`,
-the one that names its result, so the check now finds it with memchr and
-compares the words there.
-
-    browser_compile_instructions  274,134,296 -> 268,290,909  (-2.13%)
-
-Finding every `=` in the line instead of the first read 270,476,791, because
-the second search runs to the end of the line. The ratchet row "a searcher
-built for every line the tab translates" puts `contains` back and the row reads
-274,134,296 again.
-
-**The closure-jump twin read off the walk.** The narrowing searched the whole
-module for `define internal tailcc %KValue @k_tcall` before it walked the
-module's define lines, so that every lambda could keep `tailcc` where the twin
-jumps through a closure's pointer. The walk visits every define line anyway, so
-it now notes the twin and the lambdas as it passes and keeps the lambdas after.
-The search was 739,426 instructions of the tab's route natively.
-
-    browser_compile_instructions  268,290,909 -> 266,884,355  (-0.52%)
-
-Nothing pinned the lambda rule, so a spec in src/codegen/narrow.rs now does:
-beside the twin a lambda keeps `tailcc`, and without it the lambda is
-narrowed. Noting no twin, or collecting no lambdas, each fail it, and the second
-is the ratchet row "a lambda narrowed beside a closure jump". The row "the whole
-module searched for the closure jump" puts the search back, and the browser row
-reads 268,297,303.
-
-**`@sN` found by its `@`.** `named_strings` looks for every `@sN` in the
-module to decide which interned strings to write, and it searched with
-`find("@s")`. A two-way searcher with a two-byte needle can skip almost
-nothing, so it now finds each `@` by memchr and checks the byte after it.
-
-    browser_compile_instructions  266,884,355 -> 264,519,748  (-0.89%)
-
-**Line ends eight bytes at a time.** The translator ends each line of the
-module with `find('\n')` while it reads the module's heads and with
-`str::lines` while it reads a body. Compiled to wasm each of those pays a
-searcher's setup, a call into memchr and a one-byte compare per line. A function
-in src/ir_wasm.rs, `line_end`, reads eight bytes per pass and finds the newline
-with the has-zero test, and both readers use it.
-
-    browser_compile_instructions  264,519,748 -> 261,513,550  (-1.14%)
-
-A fuzzer beside it checks `line_end` against `position` at every starting point
-of 400,000 random texts built from newlines and the bytes one bit away from one,
-and `Lines` against `str::lines`. Taking the highest set bit, dropping the
-`& !w` that keeps a byte above 0x7f from passing for a zero, or dropping the
-tail loop each fail it. Ratchet rows put each searcher back, and the browser row
-reads 263,889,085 and 264,519,748 under them.
-
-**Short searches as byte loops.** Two questions asked of every line find a
-byte a few places in: the emitter's `is_a_stack_slot` looks for the space that
-ends the line's first word, and the translator's switch check for the `=` that
-names a result. `find` on a char pays a searcher's setup, a call into memchr
-and a one-byte compare before it reads a byte, which is more than the few bytes
-the loop reads.
-
-    browser_compile_instructions  261,513,550 -> 259,644,771  (stack slot)
-                                  259,644,771 -> 258,016,805  (switch)
-
-The ratchet row "a stack slot found by a searcher" puts `find` back and the row
-reads 259,885,584.
-
-**No tally the tab never reads.** The counting allocator adds every
-allocation's size and count to `compile_alloc_bytes` and `compile_allocs`,
-which only the command line prints. The tab reads the live bytes and the peak,
-so the wasm build now skips the other two.
-
-    browser_compile_instructions  258,016,805 -> 256,933,580  (-0.42%)
-
-The ratchet row "a tally the tab never reads" keeps the two counts in `alloc`
-again, and the row reads 257,851,861.
-
-Across the eight changes the tab's compile falls from 293,067,500 to
-256,933,580 executed instructions, 12.3%.
-
-**The native veins.** `is_a_stack_slot`'s byte loop runs natively too, and
-the emitter's own count falls: emit_instructions 6,459,502 -> 6,249,687. Three
-rows move by layout with the new code: compile_instructions 25,204,865 ->
-25,205,087, entry_instructions 74,522,559 -> 74,523,222 and
-library_instructions 74,182,975 -> 74,183,641. Natively the word compare and
-the byte searches are not linked in, and memchr and memcmp stay the C
-library's.
-
-**The epoch the meter change owed.** bench/compile_epochs.txt now names
-bda14b8, the first history row counted in executed instructions, with
-0.6758 for browser_compile_instructions and 1.1548 for
-browser_run_instructions. Rescored with it, the history rows for 15d6b27 and
-bda14b8, one tree measured both ways, read 92.9893 each.
-
-One idea measured and dropped: `lines_holding`, the narrowing's search for
-`define `, `musttail call` and `tailcc ` across the whole module, found each
-word by memchr on one of its bytes and compared there. It read 272,919,712
-against 268,290,909. The two-way searcher skips a needle's length at a time
-where the module's text cannot match, and memchr stops at every occurrence of
-the anchor byte. Anchoring each word on its rarest byte in the module, `f` in
-`define `, `m` in `musttail call` and `c` in `tailcc `, read 267,916,152
-against 266,884,355: the searches took 8.3M where the two-way searcher took
-6.8M.
-
 ## 2026-10-23 — the tab holds its module once
 
 Five more changes to the tab's compile of `bench/interp_corpus`, three for its
@@ -1642,3 +1505,32 @@ rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
 isolated here. The basket vein loses two evacuations: basket_allocs 27,270,
 basket_alloc_bytes 6,162,417, basket_evac_allocs 3, basket_evac_bytes 192 and
 basket_sh_rec 130,112.
+
+## 2026-10-25 — two cliffs join the run program and the interpreted corpus
+
+Profiling the run program after #2106 turned up two shapes no corpus held.
+Both are quadratic, and each is measured here on main before its fix, under
+the 2026-09-05 corpus-first gavel.
+
+`branched` is a list held in a record and pushed onto from one arm of an
+`if` whose other arm answers the record whole:
+`if (k == 0) b (fill (bag (push b.items k) (b.n + 1)) (k - 1))`. kanso#1926
+moves the list out of the record when every mention of the record is a
+field read, and #2106 let a guard's early answer off that rule. The `if`
+arm still counted, so every push copied the list, on both engines: 80,000
+pushes took 14 seconds natively and 30 on the interpreter, where the
+guard's spelling and the two-arm spelling took a tenth of a second.
+
+`padded` lays out a column with `text/pad_start`. The library grew the
+padding one copy of the fill at a time and counted its characters on every
+step, so a width of 40,000 allocated 801 MB natively.
+
+In the run program `branched` has a knee like `guarded`'s: linear at about
+260 instructions a push below 22,290 pushes, and about a million and a half
+a push past 22,310. The count is 22,305. `padded` pads 75 rows to widths of
+37 to 2,775 characters. Against #2106's tree with both phases,
+880,945,062, the columns are 40,556,036 (4.60%) and 42,367,338 (4.81%).
+
+The interpreted corpus runs both too, at 680 pushes and 18 rows: 392,521,332
+with the code and neither run, 425,717,899 with both. The tab runs the same
+corpus, so its run row moves with it.
