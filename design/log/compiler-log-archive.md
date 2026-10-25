@@ -107340,3 +107340,228 @@ turns the golden red; `a_number_scanned_sixteen_bytes_at_a_time_anyway` turns
 the path off and turns the instructions gate red. The row
 `a_digit_word_that_reads_a_colon_as_ten` patched `k_nondigits8` in
 numbers.c and would not apply once it moved; it patches text.c now.
+
+## 2026-10-22 — a bind chain measures its drift from where it began
+
+A bind chain stages a step's continuation (sizes it, copies it through the
+carry pair and rewinds) only when the arena has drifted a quarter megabyte
+since the chain's last stage; otherwise the continuation stays where it is.
+`k_exec` set the carry's `at_arena` to null when it pushed the chain's beat,
+because the depth's last stage, if any, was another chain's. That made every
+chain's first step size and stage its continuation however little it had
+allocated, and the run program pushes a chain 7,091 times: 7,162 stages,
+15,288,786 instructions in `k_beat_iter_carry` and 6,099,136 sizing in
+`k_copy_size`. The push now records the arena's position and block, so the
+drift is measured from where this chain began. A skipped step was already
+sound everywhere, since the 2026-09-07 drift gate made the copy-out at a
+carried pop walk deep.
+
+Measured here, the run program read 966,447,210 -> 935,900,947 (-3.16%) with
+the same output, and `k_beat_iter_carry` left the profile.
+
+CI's rows: work_runbench 966,449,322 -> 935,902,128 (-3.16%) and
+work_deepbench 406,819,829 -> 203,571,400 (-49.96%). work_pendbench
+176,534,752 -> 176,531,937, work_readbench 4,583,965 -> 4,582,072,
+work_jsonbench 682,006,171 -> 682,004,279 and work_livebench 1,033,424,160
+-> 1,033,424,099 fall a little, and work_encodebench 2,456,796,277 ->
+2,456,796,762, work_oneshot 11,118,597 -> 11,118,893, work_widebench
+28,619,441 -> 28,619,457 and work_digestbench 5,241,183 -> 5,241,199 rise
+by a few hundred instructions or less. Every binary's machine code grows 16
+bytes (text 5,223,390 -> 5,223,614 over all of them; runbench 721,753 -> 721,769).
+codegen_instructions_dev 116,068,622 -> 116,068,667 and
+codegen_instructions_release 422,580,983 -> 422,581,877 rise. In the tab, browser_run_instructions 31,370,234 ->
+31,370,376 rises. The
+welfare sum rose, and the floor moves 92.41 -> 92.53.
+
+The counter veins move where chains no longer stage their first step. The
+run program's run_evac_allocs 48,955 -> 1,624, run_evac_bytes 9,271,408 ->
+7,416,368, run_allocs 1,446,735 -> 1,438,645, run_alloc_bytes 221,966,568 ->
+221,297,400, run_beat_iters 92,018 -> 84,938, run_survive_slots 4,854 ->
+4,560, run_buf_reuse 134 -> 139 and run_sh_buf 87,167,344 -> 86,585,920; no
+peak moves. pend_allocs 805,977 -> 805,967, pend_alloc_bytes 45,563,312 ->
+45,539,584, pend_beat_iters 101 -> 99, pend_evac_allocs 2,225 -> 2,210,
+pend_evac_bytes 381,648 -> 378,048, pend_survive_slots 78,611 -> 77,616,
+pend_buf_reuse 502 -> 505 and pend_sh_buf 15,860,144 -> 15,838,096;
+read_beat_iters 201 -> 200, read_evac_allocs 19 -> 16 and read_evac_bytes
+656 -> 576; the decoder's beat_iters 151 -> 150, evac_allocs 19 -> 16 and
+evac_bytes 688 -> 576.
+The mem corpus moves in nineteen fixtures, each where a chain's first step no
+longer stages: a_carried_value_written_into_an_older_node_alloc_bytes 2,595,040 -> 2,568,080, a_carried_value_written_into_an_older_node_beat_iters 11 -> 9, a_carried_value_written_into_an_older_node_evac_allocs 1,697 -> 1,692, a_carried_value_written_into_an_older_node_evac_bytes 174,224 -> 168,896, a_carried_value_written_into_an_older_node_survive_slots 407 -> 404, a_carried_value_written_into_an_older_node_carry_dedup 446 -> 621, a_carried_value_written_into_an_older_node_buf_reuse 781 -> 783, a_carried_value_written_into_an_older_node_sh_buf 682,096 -> 657,104; a_loop_invariant_capture_is_copied_every_rewind_beat_iters 502 -> 501, a_loop_invariant_capture_is_copied_every_rewind_evac_allocs 10 -> 4, a_loop_invariant_capture_is_copied_every_rewind_evac_bytes 8,336 -> 144; a_repaired_node_below_the_mark_holds_tenure_allocs 34,047 -> 34,049, a_repaired_node_below_the_mark_holds_tenure_alloc_bytes 2,493,952 -> 2,510,528, a_repaired_node_below_the_mark_holds_tenure_beat_iters 10 -> 9, a_repaired_node_below_the_mark_holds_tenure_evac_allocs 2,469 -> 2,468, a_repaired_node_below_the_mark_holds_tenure_evac_bytes 162,960 -> 171,840, a_repaired_node_below_the_mark_holds_tenure_carry_dedup 46 -> 80, a_repaired_node_below_the_mark_holds_tenure_sh_buf 567,232 -> 579,536; a_slice_bang_chain_builds_no_slice_beat_iters 2 -> 0, a_slice_bang_chain_builds_no_slice_evac_allocs 15 -> 8, a_slice_bang_chain_builds_no_slice_evac_bytes 528 -> 288; an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 180,196 -> 179,380, an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes 14,926,832 -> 14,712,048, an_inner_beat_opens_its_tenure_in_the_block_outside_beat_iters 60 -> 54, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 48,411 -> 45,168, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 3,002,288 -> 2,788,720, an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 2,004 -> 11,204, an_inner_beat_opens_its_tenure_in_the_block_outside_carry_dedup 209 -> 459, an_inner_beat_opens_its_tenure_in_the_block_outside_buf_reuse 3,895 -> 3,907, an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf 5,070,416 -> 4,887,632; an_insisting_form_that_settled_builds_no_step_beat_iters 2 -> 0, an_insisting_form_that_settled_builds_no_step_evac_allocs 18 -> 9, an_insisting_form_that_settled_builds_no_step_evac_bytes 560 -> 288; effect_push_shape_allocs 56 -> 52, effect_push_shape_alloc_bytes 2,544 -> 2,320, effect_push_shape_beat_iters 5 -> 0, effect_push_shape_evac_allocs 50 -> 14, effect_push_shape_evac_bytes 1,696 -> 464, effect_push_shape_survive_slots 10 -> 4, effect_push_shape_sh_buf 768 -> 608; stream_write_beat_iters 1,601 -> 1,600, stream_write_evac_allocs 12 -> 6, stream_write_evac_bytes 480 -> 240, stream_write_held_peak_bytes 16,000 -> 16,160; the_same_capture_built_below_the_mark_is_shared_beat_iters 502 -> 501, the_same_capture_built_below_the_mark_is_shared_evac_allocs 10 -> 6, the_same_capture_built_below_the_mark_is_shared_evac_bytes 8,352 -> 8,192, the_same_capture_built_below_the_mark_is_shared_survive_slots 504 -> 4; tie_cycle_beat_iters 1 -> 0, tie_cycle_evac_allocs 15 -> 12, tie_cycle_evac_bytes 560 -> 464; work_ahead_forces_what_follows_a_park_beat_iters 2 -> 0, work_ahead_forces_what_follows_a_park_evac_allocs 11 -> 7, work_ahead_forces_what_follows_a_park_evac_bytes 368 -> 240; work_ahead_leaves_a_chain_never_run_beat_iters 1 -> 0, work_ahead_leaves_a_chain_never_run_evac_allocs 5 -> 4, work_ahead_leaves_a_chain_never_run_evac_bytes 192 -> 144; work_ahead_leaves_a_literal_where_it_is_beat_iters 2 -> 0, work_ahead_leaves_a_literal_where_it_is_evac_allocs 11 -> 7, work_ahead_leaves_a_literal_where_it_is_evac_bytes 368 -> 240; work_ahead_leaves_an_extending_builtin_beat_iters 4,002 -> 4,000, work_ahead_leaves_an_extending_builtin_evac_allocs 13 -> 9, work_ahead_leaves_an_extending_builtin_evac_bytes 448 -> 320; work_ahead_lifts_a_parking_lambda_beat_iters 1,001 -> 1,000, work_ahead_lifts_a_parking_lambda_evac_allocs 12 -> 4, work_ahead_lifts_a_parking_lambda_evac_bytes 384 -> 144; work_ahead_moves_a_binding_into_the_park_beat_iters 2 -> 0, work_ahead_moves_a_binding_into_the_park_evac_allocs 11 -> 7, work_ahead_moves_a_binding_into_the_park_evac_bytes 368 -> 240; work_ahead_pools_a_call_on_a_builtin_read_beat_iters 3,002 -> 3,000, work_ahead_pools_a_call_on_a_builtin_read_evac_allocs 15 -> 11, work_ahead_pools_a_call_on_a_builtin_read_evac_bytes 496 -> 368; work_ahead_pools_a_call_on_a_local_beat_iters 1,002 -> 1,000, work_ahead_pools_a_call_on_a_local_evac_allocs 13 -> 9, work_ahead_pools_a_call_on_a_local_evac_bytes 416 -> 288; work_ahead_reads_a_moved_binding_beat_iters 2 -> 0, work_ahead_reads_a_moved_binding_evac_allocs 11 -> 7, work_ahead_reads_a_moved_binding_evac_bytes 368 -> 240. The only peak among them is stream_write's held peak, 160 bytes higher. The ratchet row `a_chain_staged_on_its_first_step` puts the null back
+and turns the run counters red. `tests/a_document_read_from_a_file_keeps_its_loop.rs`
+counted one beat per iteration and one for the program; the program's own
+chain no longer stages, and its four programs read 200, 800, 200 and 200.
+
+## 2026-10-22 — five JSON decoder states skip a blank run out of line
+
+Each state of the JSON decoder read whitespace with an arm that called the
+state again on the next byte, so every state was a loop. Five of them
+(`array_delim`, `array_open`, `obj_delim`, `obj_key_end`, `obj_open`) now skip
+the run with `skip_ws` and read the byte after it with a second group of the
+same arms and no blank one, so they no longer loop. `obj_key_start` keeps the
+arm that calls itself.
+
+The lead came from the per-instruction profile of the stacked tree. Each
+decoder frame loaded three constants in its prologue that its hot path never
+used: a `movabs` and two `lea`s, about four instructions a call. Turning off
+LLVM's machine LICM at the LTO link removed them and read the run program
+935,901,767 -> 927,399,704 (-0.91%), but as a global flag it was a trade:
+jsonbench -1.98% and encodebench -2.27%, against escapebench +3.20% and
+widebench +1.35%, whose real loops lost their hoisting. It was declined. The
+narrower LICM switches (`-disable-postra-machine-licm`,
+`-sink-insts-to-avoid-spills`, `-disable-hoisting-to-hotter-blocks=all`) moved
+the run program by less than half a million instructions either way.
+
+Taking the loops out of the states moved far more than the hoisted constants.
+LLVM folds the decoder's states into one another differently once they stop
+looping, and the run program fell 39.4M with all six states out of line. The
+effect of each state was measured by looping it alone against all six out:
+`array_delim` +13.8M, `array_open` +26.6M, `obj_open` +1.9M, `obj_delim` +1.2M,
+`obj_key_end` -4.6M and `obj_key_start` -18.1M. The effects do not add: the
+two key states looped together read +13.6M, and with `obj_delim` as well
++22.4M. The shape taken is the best one measured. A cycle-free `value_for`
+(its eight arms copied into a second group) moved the run program by 1,239
+instructions and added 14 KB of machine code; it was dropped.
+
+Measured here, every benchmark in the instructions gate: the run program
+935,901,781 -> 878,353,218 (-6.15%), jsonbench 682,003,932 -> 599,977,782
+(-12.03%), oneshot 11,118,560 -> 10,571,976 (-4.92%) and livebench
+1,033,423,752 -> 1,032,876,960 (-0.05%); the other ten move by fourteen
+instructions or less. The output is the same.
+
+The decoder's emitted code rises by the five second groups and their twins:
+emitted_defines 136 -> 157, emitted_calls 1,394 -> 1,557, emitted_branches
+1,307 -> 1,346 and emitted_lines 13,134 -> 14,330. oneshot, livebench and
+runbench rise by the same 21 defines and 163 calls, so over the other
+benchmarks emitted_other_defines 2,154 -> 2,217, emitted_other_calls 19,088
+-> 19,577, emitted_other_branches 16,894 -> 17,011 and emitted_other_lines
+158,320 -> 161,908. No allocation counter moves.
+
+CI's rows: work_runbench 935,902,128 -> 878,353,565 (-6.15%), work_jsonbench
+682,004,279 -> 599,978,129 (-12.03%), work_oneshot 11,118,893 -> 10,572,323
+(-4.92%) and work_livebench 1,033,424,099 -> 1,032,877,307 (-0.05%). The
+machine code grows where the decoder is linked in: text 5,223,614 ->
+5,340,654 over every binary, runbench 721,769 -> 750,713, jsonbench 372,697
+-> 402,057, oneshot 379,225 -> 408,601 and livebench 382,761 -> 412,121.
+
+The compiler pays for the new groups in every program that imports
+`std/json`: compile_instructions 23,736,301 -> 25,221,632 (+6.26%),
+entry_instructions 74,485,199 -> 74,568,239, library_instructions 74,147,760
+-> 74,230,433, compile_allocs 13,179 -> 13,789, compile_peak_bytes 565,175 ->
+598,984 and front_end_visits 6,914 -> 7,251. The interpreter's corpus
+reads interp_instructions 384,228,496 -> 385,357,985, interp_allocs 400,588
+-> 401,539 and interp_peak_bytes 608,798 -> 637,429. codegen_instructions_dev,
+codegen_instructions_release and emit_instructions do not move.
+In the tab, browser_compile_instructions 402,486,449 -> 428,211,402 (+6.39%)
+and browser_compile_peak_bytes 735,005 -> 768,853 rise with the compiler's
+share, and browser_run_instructions 31,370,376 -> 30,540,337 falls. The
+welfare sum rose, and the floor moves 92.53 -> 92.73.
+
+The micro golden `a_blank_run_in_json_is_read_by_each_state` puts a run of
+blanks before every byte each state can meet, refusals included, and prints
+each refusal's position. Main's decoder prints the same 23 lines. The ratchet
+row `a_blank_run_looped_at_the_comma` gives `array_delim` its looping arm back,
+which reads the run program 13.8M higher, and turns the instructions vein red.
+
+The benchmark documents hold almost no blanks outside their strings, so the
+run program's document was indented two spaces a level (458,223 bytes,
+271,763 of them blanks) and decoded once: 16,561,895 -> 16,456,195 (-0.64%).
+
+Also measured and declined: `k_render_number` tests whether a double is
+integral with `floor`, a PLT call; a cast round trip in its place read the run
+program +181,613. The `floor` it calls here is glibc's `__floor_sse41`,
+which the profile counts at 1.5 instructions a call.
+
+Also measured and declined, closing #2011: the span's fast path worked out the
+value of the number it found and kept it, keyed by the sixteen bytes from the
+number's first, its length and which conversion it answers, and the
+conversion doors answered from it. Every number hit. `k_b_to_float_slice_raw`
+fell 26,482,302 -> 5,504,994 and `k_b_to_int_slice_raw` 13,492,972 ->
+6,464,568, but `k_b_number_span_raw` rose 24,644,367 -> 36,078,570 and the
+float fill cost 16,259,562, and the run program read 935,901,781 ->
+935,589,998. With the int fill out of line it read 939,328,415. The
+conversion's arithmetic costs about the same in the span as in the door.
+
+## 2026-10-22 — an escaped JSON string is read in one walk
+
+A JSON string with an escape in it was read twice. `plain_string`'s emitted
+twin found the first backslash, then walked to the closing quote with a
+`find2` from each backslash, and answered the quote's position; the decoder
+then called `unescape` on the same range, which read the bytes again to undo
+the escapes. The twin now hands the first backslash to `k_json_escaped`, which
+undoes the escapes while it looks for the quote. It writes the undone bytes at
+the arena's frontier, and at the quote it allocates the string `unescape`
+would have allocated, at the same length, which lands where the bytes already
+are; so no allocation counter moves. It keeps the string, keyed by the bytes'
+address and the range, and `unescape` answers it first when asked for that
+range, before a frame. A `u` escape, an escape JSON does not have, or a
+frontier without room leaves nothing kept, and the old walk finds the quote.
+
+The fuzzer was built first, against the joined runtime with its `main`
+renamed, so it ran the real functions. Its reference is the walk the emitter
+wrote before followed by `k_b_unescape_raw`. Half its calls cut the arena's
+frontier short, so every fallback runs. Unstressed it ran 48,354,448 escaped
+strings and found 19 failures: when the frontier ran out in the middle of a
+run, the walk handed a plain byte's position to `k_json_quote_after`, which
+takes a backslash's and skips the byte after it. The stress found the same bug
+2,952 times in 2,000,000 cases. With `k_json_quote_from` for that case, 25
+seeded runs of 2,000,000 cases each read 48,354,997 escaped strings, 8,013,430
+of them answered from the kept string, and found no failure.
+
+Measured here, the run program 878,353,521 -> 871,922,860 (-0.73%) with the
+same output. `k_b_unescape` fell 38,534,463 -> 3,335,013, and the decoder
+frames that inlined the twin lost the rescan loop (`array_items` -6,489,450,
+`parse_value` -5,370,849, `obj_key_start` +929,412), against 39,591,486 in
+`k_json_escaped`. find2_calls falls where the walk no longer calls
+`find2`: run_find2_calls 1,488,669 -> 1,037,031, the decoder's find2_calls
+2,255,550 -> 1,571,250, oneshot_find2_calls and live_find2_calls 15,037 ->
+10,475. The decoder's emitted code sheds the loop: emitted_branches 1,346 ->
+1,344 and emitted_lines 14,330 -> 14,319; every program gains the new door's
+declare line, so emitted_other_lines rises by one a program where the decoder
+is absent.
+
+CI's rows. run_instructions 878,353,565 -> 871,922,904 (-0.73%), and the
+other programs that decode an escaped string fall with it: jsonbench
+599,978,129 -> 593,998,829, oneshot 10,572,323 -> 10,531,404, livebench
+1,032,877,307 -> 1,032,837,487, encodebench 2,456,796,762 -> 2,456,796,258.
+Machine code: the programs with the decoder shrink (jsonbench text 402,057 ->
+401,417, runbench 750,713 -> 750,041, livebench 412,121 -> 411,481, oneshot
+408,601 -> 407,961) and every other program grows by 1,504 bytes
+(encodebench 342,473 -> 343,977). Building the run program:
+codegen_instructions_dev 116,068,667 -> 116,128,678,
+codegen_instructions_release 422,581,877 -> 422,378,106, and
+emit_instructions 6,435,278 -> 6,432,635. The machine-code total, text, is
+5,340,654 -> 5,353,102. The compile corpus's programs carry the declare line
+too: lines 1,524 -> 1,528 over its four, and module_lines 1,163 -> 1,164. In the tab, which carries the same
+library: browser_compile_instructions 428,211,402 -> 428,034,601,
+browser_compile_peak_bytes 768,853 -> 768,205, browser_run_instructions
+30,540,337 -> 30,427,332. The welfare floor rises 92.73 -> 92.76.
+
+The micro golden `an_escaped_string_is_undone_in_one_walk` puts escapes at
+the front, the back and each side of a word boundary, two backslashes
+together, a document that ends a byte after the string, a `u` escape, an
+unknown escape and two strings that run out. The interpreter prints the same
+26 lines, and an `\n` undone as a tab turns it red. The ratchet row
+`an_escaped_string_undone_twice` keeps nothing, so `unescape` reads every
+string again; the run program reads 910,139,124.
+
+Measured on #2043's shape and declined. Looping one more decoder state as
+well as `obj_key_start` reads higher every time: `obj_delim` 901,567,246,
+`obj_open` 882,623,604, `array_open` 889,848,391, `obj_key_end` 910,134,560,
+`array_delim` 892,170,102, against 878,353,218. Dropping the five `_past`
+helpers by binding the skipped position in each blank arm cut the corpus check
+38,158,594 -> 37,784,461 and read the run program 930,125,639. Three encoder
+shapes read higher too: the list's body written in `encode_onto`'s arm
+885,700,026, the map's 885,870,393, and the first element folded into
+`encode_items` behind a separator group 885,304,273.
+
+Also declined: an int of up to eight digits read inline by `to_int`'s slice
+twin, through a hot-unit helper LTO folds in, with the call kept for every
+other shape. `k_b_to_int_slice_raw` fell 13,492,972 -> 640,000, but the
+inlined read cost 50 instructions an int in `array_items` and `parse_value`,
+against 65 for the call, and the run program read 878,353,521 -> 876,146,778
+(-0.25%), before what inlining it at every site costs the release build.
+
+A container that restarted came up with clang 18, where the probe for
+`preserve_none` answers no and the emitter writes another convention: main
+emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
+above were taken under clang 19, as CI installs it.

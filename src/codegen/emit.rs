@@ -3007,18 +3007,31 @@ impl<'a> Backend<'a> {
             // call (no dispatch, no hop) on every engine
             if f.set_of(&piped_value) & FAIL != 0 {
                 let ok = inline_not_failure(f, &piped_value);
+                // A record returned by value is three words, and the phi
+                // below joins `%KValue`s. The call takes it as it is, since
+                // the callee may take it by value too; the failure edge
+                // carries it boxed. mustache's `half 4 .> shown` handed the
+                // three words to the phi and clang refused the module.
+                let failed = match f.is_parsed(&piped_value) {
+                    true => f.box_parsed(&piped_value),
+                    false => piped_value.clone(),
+                };
                 let docall = f.label();
                 let merge = f.label();
                 let fail_from = f.cur_label.clone();
                 f.line_fmt(format_args!("br i1 {ok}, label %{docall}, label %{merge}"));
                 f.start_block(&docall);
                 let called = self.emit_call_rest(f, head, args, Some(piped_value.clone()), span)?;
+                let called = match f.is_parsed(&called) {
+                    true => f.box_parsed(&called),
+                    false => called,
+                };
                 let call_from = f.cur_label.clone();
                 f.line_fmt(format_args!("br label %{merge}"));
                 f.start_block(&merge);
                 let t = f.tmp();
                 f.line_fmt(format_args!(
-                    "{t} = phi %KValue [ {piped_value}, %{fail_from} ], [ {called}, %{call_from} ]"
+                    "{t} = phi %KValue [ {failed}, %{fail_from} ], [ {called}, %{call_from} ]"
                 ));
                 f.record(&t, f.set_of(&called) | (f.set_of(&piped_value) & FAIL));
                 return Ok(t.to_string());

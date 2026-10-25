@@ -524,6 +524,11 @@ fn yields_none(e: &Expr, tables: &AfterInfer, named: &BoundNones<'_>) -> bool {
         Expr::Ident(name, _, _) => name == "none",
         Expr::App { head, args, piped: false, .. } => match head.as_ref() {
             Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
+            // A field read is a getter call on the routes that check after
+            // the rewrite and a field expression on the others, which this
+            // match answers no. `kanso test` refused a module `kanso check`
+            // passed over `os/read_bytes r.path`.
+            Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
             Expr::Ident(name, _, _) => tables
                 .nones
                 .get(&(name.as_str(), args.len()))
