@@ -1,0 +1,4 @@
+error[formatting]: exactly one blank line separates top-level declarations
+  --> a_play_file_puts_one_blank_line_between_declarations.kso:5:1
+   5 | fn thrice x
+       ^

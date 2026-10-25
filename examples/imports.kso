@@ -10,7 +10,6 @@ type invoice
 fn paid? (invoice total)
   0 < total
 
-
 # a local arm named like an imported export joins the same bare space:
 # dispatch picks by specificity, exactly as arms always have
 fn select (invoice _) _
