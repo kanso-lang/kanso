@@ -135,10 +135,11 @@ macro_rules! appends_bytes {
 pub(crate) use appends_bytes;
 
 /// The two-argument builtins that write into their first argument where
-/// nobody else holds it: `push` onto a list, and the byte appends.
+/// nobody else holds it: `push` onto a list, `delete` from a map, and the
+/// byte appends.
 macro_rules! grows_first {
     () => {
-        "push" | appends_bytes!()
+        "push" | "delete" | appends_bytes!()
     };
 }
 
@@ -1543,7 +1544,7 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
     // `if c a b`: the condition always runs, exactly one arm follows it
     if let Expr::App { head, args, .. } = e {
         if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
-            let cond = count_in_expr(var, &args[0]);
+            let cond = count_in_condition(var, &args[0]);
             let taken = count_in_expr(var, &args[1]).max(count_in_expr(var, &args[2]));
             return here + cond + taken;
         }
@@ -1556,9 +1557,30 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(var, expr),
             })
             .sum();
-        return here + count_in_expr(var, cond) + count_in_expr(var, early).max(after);
+        return here + count_in_condition(var, cond) + count_in_expr(var, early).max(after);
     }
     here + child_exprs(e).map(|c| count_in_expr(var, c)).sum::<usize>()
+}
+
+/// Uses of `var` in the condition of an `if` or a guard, less its strict
+/// reads. The condition is finished before either arm runs, and `m[k]` with a
+/// key that calls and compares nothing answers the element and lets the map
+/// go, as the same read bound to a name does (`read_in_block`). So
+/// `if (m[k] == none) (put m k true) m` holds `m` once, and adding a key a set
+/// did not hold no longer copies the set.
+fn count_in_condition(var: &str, cond: &Expr) -> usize {
+    fn strict_reads(var: &str, e: &Expr) -> usize {
+        if strict_read(var, e) {
+            return 1;
+        }
+        if matches!(e, Expr::Lambda { .. }) {
+            return 0;
+        }
+        let mut n = 0;
+        crate::for_each_child(e, |c| n += strict_reads(var, c));
+        n
+    }
+    count_in_expr(var, cond).saturating_sub(strict_reads(var, cond))
 }
 
 fn child_exprs(e: &Expr) -> Kids<'_> {

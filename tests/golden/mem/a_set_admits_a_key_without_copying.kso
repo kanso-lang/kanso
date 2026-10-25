@@ -1,0 +1,14 @@
+# A set kept as a map, admitting a key only when it does not hold it yet. The
+# read in the condition counted as a second holder of the map, so every key
+# admitted copied the map, and the copy sorted itself again on the next read.
+# 2,000 keys come round in no order, each admitted once.
+fn admit m _ 0
+  m
+
+fn admit m n i
+  k = i * 7919 % n
+  admit (if (m[k] == none) (put m k true) m) n (i - 1)
+
+pub play =
+  set = admit {} 2000 4000
+  print "{length set} {set[0]} {set[1999]}"

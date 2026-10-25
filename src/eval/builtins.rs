@@ -427,8 +427,9 @@ impl<'a> Interp<'a> {
                 Ok(Value::Map(Rc::new(next)))
             }
             // The map without the key, ruled 2026-10-13 (kanso#1914). A key
-            // that is not there answers an equal map. Always a fresh map, so
-            // nothing the caller still holds can see the key go.
+            // that is not there answers an equal map. A fresh map unless
+            // nothing else holds this one, so nothing the caller still holds
+            // can see the key go.
             b"delete" => {
                 let [map, key] = arity(args, name, span)?;
                 let Value::Map(entries) = map else {
@@ -439,6 +440,19 @@ impl<'a> Interp<'a> {
                     });
                 };
                 let key = map_key(key, span)?;
+                // a map nobody else holds loses the key where it stands
+                let alone = Rc::strong_count(&entries) == 2;
+                if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+                    let mut cache = self.entries_at.borrow_mut();
+                    if matches!(&*cache,
+                        Some((m, _)) if std::ptr::eq(m.as_ptr(), Rc::as_ptr(&entries)))
+                    {
+                        *cache = None;
+                    }
+                    drop(cache);
+                    Self::written_in_place(&entries).remove(&key);
+                    return Ok(Value::Map(entries));
+                }
                 let mut next = (*entries).clone();
                 next.remove(&key);
                 Ok(Value::Map(Rc::new(next)))
