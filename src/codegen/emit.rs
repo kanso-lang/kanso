@@ -3638,6 +3638,10 @@ impl<'a> Backend<'a> {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call
                 "put_mut_fast"
+            } else if name == "delete" && in_place {
+                // the key comes out of the map nobody else holds, where a
+                // shared one is copied without it
+                "delete_mut"
             } else if name == "append_escaped" && in_place {
                 // a site linearity proved unique writes into the builder it
                 // was handed, as an in-place `append` does

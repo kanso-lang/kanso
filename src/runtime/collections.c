@@ -1242,8 +1242,10 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
 
 /* The map without the key (ruled 2026-10-13, kanso#1914), built from the
    sorted, deduplicated view so a key written twice goes in one step. A key
-   that is not there answers an equal map. The answer is always a fresh map:
-   an in-place put on it must never reach the map it was made from. */
+   that is not there answers an equal map. The answer is a fresh map: an
+   in-place put on it must never reach the map it was made from. The view is
+   sorted, so the key is found by a search and the pairs either side of it go
+   across in two copies. */
 KValue k_b_delete(KValue mv, KValue key) {
     if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key), 0)) return k_failed2(mv, key);
     if (mv.tag != K_MAP) k_die("delete takes a map and a key");
@@ -1251,14 +1253,56 @@ KValue k_b_delete(KValue mv, KValue key) {
     long long n;
     KValue* s = k_map_sorted(k_as_map(mv), &n);
     KValue* kept = k_buf(n ? 2 * n : 2);
-    long long w = 0;
-    for (long long i = 0; i < n; i++) {
-        if (k_key_cmp(s[i * 2], key) == 0) continue;
-        kept[w * 2] = s[i * 2];
-        kept[w * 2 + 1] = s[i * 2 + 1];
-        w++;
+    KValue* hit = k_view_search(s, n, key);
+    long long at = hit ? (hit - s - 1) / 2 : n;
+    memcpy(kept, s, sizeof(KValue) * 2 * (size_t)at);
+    long long w = at;
+    if (hit) {
+        memcpy(kept + at * 2, s + (at + 1) * 2, sizeof(KValue) * 2 * (size_t)(n - at - 1));
+        w = n - 1;
     }
     return k_map_lit(w, kept);
+}
+
+/* `delete` where linearity proved nothing else holds the map: the key comes
+   out of it where it stands. A map whose pairs are not their own view first
+   restarts them from it, as the in-place put's growth does, so the pairs are
+   sorted with each key once; the key's pair is then closed over by the pairs
+   after it, and the view, being the pairs, shrinks with them. A loop that
+   drained a map by `delete` copied the whole map on every call: half of
+   20,000 keys took 27.9 billion instructions. */
+KValue k_b_delete_mut(KValue mv, KValue key) {
+    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key), 0)) return k_failed2(mv, key);
+    if (mv.tag != K_MAP) k_die("delete takes a map and a key");
+    k_check_map_key(key);
+    KMap* m = k_as_map(mv);
+    long long n;
+    KValue* s = k_map_sorted(m, &n);
+    KValue* hit = k_view_search(s, n, key);
+    if (!hit) return mv;
+    if (s != m->pairs || n != m->len) {
+        long long cap = 8;
+        while (cap < 2 * n) cap <<= 1;
+        int perm = k_outlives_beat(m);
+        KValue* np = perm ? k_buf_perm(cap) : k_buf(cap);
+        memcpy(np, s, sizeof(KValue) * 2 * (size_t)n);
+        hit = np + (hit - s);
+        if (s != m->pairs) k_map_view_free(m->sorted);
+        if (k_buf_malloced(k_buf_of(m->pairs))) {
+            free(k_buf_of(m->pairs));
+        } else {
+            k_buf_donate(m->pairs);
+        }
+        m->pairs = np;
+        m->sorted = np;
+        if (perm) k_permreg_add(m, &m->pairs);
+    }
+    long long at = (hit - m->pairs - 1) / 2;
+    memmove(m->pairs + at * 2, m->pairs + (at + 1) * 2, sizeof(KValue) * 2 * (size_t)(n - at - 1));
+    m->len = n - 1;
+    m->sorted_len = n - 1;
+    k_buf_of(m->pairs)->used = 2 * (n - 1);
+    return mv;
 }
 
 /* A failing field is the rare arm of `entries`, and k_rec is a plain call

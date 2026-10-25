@@ -204,11 +204,29 @@
 # round twice in no order. A put of a key the map already held walked the
 # map's append log back from its end to find that key's entry, so the second
 # sighting of each word cost the number of words counted so far.
+#
+# Two more joined on 2026-10-25 from the same probe, measured on kanso#2116's
+# tree before their fixes. Each column is the whole program with both,
+# 894,638,261, less the whole without that one, and the shares are of the
+# former.
+#
+#   drained   550 deletes from a map of 1,100 keys       46,548,701  5.20%
+#   admitted  430 keys admitted to a set once each       46,965,802  5.25%
+#
+# `drained` fills a map and takes half its keys out again with `delete`, in
+# no order. `delete` answers a fresh map, so each call copied the whole map
+# on both engines and draining a map cost the square of its size.
+# `admitted` keeps a set as a map and puts a key only when the map does not
+# hold it, testing `m[k] == none` in an `if`. The read in the condition
+# counted as a second holder, so the put copied the map, and the copy had no
+# sorted view for the next read, which sorted the whole map again.
+import "./admitted"
 import "./bag"
 import "./branched"
 import "./bump"
 import "./counted"
 import "./deep"
+import "./drained"
 import "./escape"
 import "./fold"
 import "./guarded"
@@ -278,6 +296,10 @@ padded_rows = 75
 
 counted_words = 2000
 
+drained_keys = 1100
+
+admitted_keys = 430
+
 fn decoded _ 0 sofar
   sofar
 
@@ -323,8 +345,10 @@ fn tally raw doc a b
   ported9 = ported8 + branched/total branched_pushes
   ported10 = ported9 + padded/total padded_rows
   ported11 = ported10 + counted/total counted_words
+  ported12 = ported11 + drained/total drained_keys
+  ported13 = ported12 + admitted/total admitted_keys
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported11 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported13 + rest))
   bulk .> on
 
 fn shaped raw doc a

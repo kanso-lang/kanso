@@ -1,0 +1,47 @@
+import "std/list"
+import "std/text"
+
+# A map nobody else holds loses a key in place, and a map someone still
+# holds is copied without it. The set admits a key only when it does not hold
+# it, through a read in the condition and through a guard. Every way of
+# reading each map sees what its own history wrote.
+fn filled m 0
+  m
+
+fn filled m i
+  filled (put m "k{i}" i) (i - 1)
+
+fn drained m _ 0
+  m
+
+fn drained m n i
+  drained (delete m "k{i * 7 % n + 1}") n (i - 1)
+
+fn admit m _ 0
+  m
+
+fn admit m n i
+  k = i * 7 % n
+  admit (if (m[k] == none) (put m k i) m) n (i - 1)
+
+fn guarded m k i
+  return m if m[k] != none
+  put m k i
+
+fn admit_guarded m _ 0
+  m
+
+fn admit_guarded m n i
+  admit_guarded (guarded m (i * 3 % n) i) n (i - 1)
+
+pub play =
+  full = filled {} 40
+  left = drained (filled {} 40) 40 25
+  kept = delete full "k3"
+  set = admit {} 30 90
+  other = admit_guarded {} 30 90
+  shown = list/to_list (list/take (keys left) 6)
+  print "{length full} {length left} {length kept} {full["k3"]} {kept["k3"]}"
+  print "{text/join shown ","} {left["k1"]} {left["k40"]}"
+  print "{length set} {set[0]} {set[29]} {length other} {other[1]}"
+  print "{entries set == entries (admit {} 30 90)} {list/sum (values left)}"

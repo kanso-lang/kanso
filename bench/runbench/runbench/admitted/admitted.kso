@@ -1,0 +1,15 @@
+# A set kept as a map, admitting a key only when it does not hold it yet:
+# `if (m[k] == none) (put m k true) m`. The read in the condition counted as
+# a second holder of the map, so the put copied it, and the copy had no
+# sorted view, so the next read sorted the whole map again. Admitting 20,000
+# keys took 178 billion instructions natively and 5.1 seconds on the
+# interpreter.
+fn admit m _ 0
+  m
+
+fn admit m n i
+  k = i * 7919 % n
+  admit (if (m[k] == none) (put m k true) m) n (i - 1)
+
+pub fn total n
+  length (admit {} n n)

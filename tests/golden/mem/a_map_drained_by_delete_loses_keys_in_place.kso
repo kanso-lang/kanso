@@ -1,0 +1,19 @@
+# A map filled with 2,000 keys and drained of 1,000 by `delete`, in no order.
+# `delete` answered a fresh map on every call, so draining allocated a map
+# and its pairs per key taken out. Where nothing else holds the map the key
+# now comes out in place, and the drain allocates nothing.
+fn filled m 0
+  m
+
+fn filled m i
+  filled (put m i i) (i - 1)
+
+fn drained m _ 0
+  m
+
+fn drained m n i
+  drained (delete m (i * 7919 % n + 1)) n (i - 1)
+
+pub play =
+  left = drained (filled {} 2000) 2000 1000
+  print "{length left} {left[1]} {left[2000]}"

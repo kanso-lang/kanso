@@ -23,51 +23,6 @@
 
 
 
-## 2026-10-24 — a short float written in one pass
-
-`render_ryu`'s short path wrote a float from its scaled decimal m and place
-count p by dividing m by 10^p, writing the whole part forward after counting
-its digits, and then writing the fraction behind the point. It now writes m
-right to left in one pass, two digits at a time: the p fraction digits, the
-point, then what is left of m. The text goes into the top of a scratch buffer
-and moves out as three words. On runbench 191,070 floats take this path, and
-in this container the run program fell from 815,624,421 to 813,607,261
-instructions (-0.25%), with byte-identical output.
-
-`tests/every_rendered_float_reads_back_as_itself.rs` now checks the text as
-well: the digits ryu chose, placed by the rule the interpreter's
-`render_float` follows. Its other checks pass `.5` for `0.5`, which reads
-back. With the whole part's zero dropped, it reported 141,779 text failures
-and none of the other kinds. At ten times its size it read 50,807,850
-doubles with no failure. The ratchet row `float_one_pass` puts the division
-back.
-
-## 2026-10-24 — the module's symbols read in one scan
-
-The module writer asks two questions of every piece of the body: which
-symbols it calls, written `@sym(`, to choose the declarations and call twins
-it keeps, and which symbols end a line, written `@sym\n`, to choose the
-closure cells. `called_symbols` and `symbols_before_newline` answered them
-with two scans of each piece, and the second stopped at every newline as
-well as every at. `called_and_ending` answers both in one pass over the ats:
-from each at to the first `(` or newline, a `(` making a call and a newline
-an ending when no other at comes first.
-
-The same pass now marks the interned strings the body names, `@sN` and
-`@sN_lit`, which `named_strings` found with a third scan of every piece; it
-still reads the type tables on their own. The tab's compile of its corpus fell
-from 227,562,045 to 224,770,876 instructions with the two scans merged and to
-223,778,736 with the third folded in, -1.66% in all, in this container. Its
-peak and the run did not move, and the tab's IR and the native IR of the
-nineteen benchmarks in both tiers are byte-identical. The specs that held each
-scan to a plain search now hold the merged one to it, with the ending side
-asked only about symbols without a `(`, which is every symbol the writer asks
-about; treating the end of the text as a line's end turned that spec red on
-`"@a"`. A new spec holds the pass's string marks to `named_strings`'s, and
-went red with the marking taken out. The ratchet row `one_scan` scans each
-piece a second time and reads 225,543,228; `strings_in_scan` scans the body
-for strings again and reads 224,854,630.
-
 ## 2026-10-24 — a pair of leaves held in place
 
 The tab's translator asks a type for its scalar leaves, with their byte
@@ -1643,3 +1598,127 @@ code grows by 7,728 bytes in every benchmark binary, text 5,496,337 ->
 and building that code costs codegen_instructions_dev 116,456,086 ->
 116,458,530 and codegen_instructions_release 370,239,646 -> 370,260,066.
 Welfare rises 94.33 -> 94.49 and the rise is banked.
+
+## 2026-10-25 — a drained map and an admitting set join the corpus
+
+The probe that found the word count timed six more accumulation shapes at
+two sizes: a string joined onto itself, a list concatenated onto, a map of
+maps, a record carrying a list through a fold, a map drained by `delete`,
+and a set kept as a map that admits a key only when it does not hold it.
+The first four grow linearly. The last two do not, on either engine.
+
+`delete` answers a fresh map (ruled 2026-10-13, kanso#1914), so each call
+copies the whole map, and a loop that drains a map costs the square of its
+size. Taking half the keys out of a map of 5,000 in no order took 1.26
+billion instructions natively and 0.21 s on the interpreter; of 20,000,
+27.9 billion and 3.76 s.
+
+The admitting set is `if (m[k] == none) (put m k true) m`. The linearity
+analysis counts the read in the condition as a second holder of the map, so
+the put copies it. Natively the copy has no sorted view, and the next read
+sorts the whole map again. Admitting 5,000 keys took 9.39 billion
+instructions natively and 0.30 s on the interpreter; 20,000 took 178
+billion and 5.1 s. The guard spelling, `return m if m[k] != none` above
+`put m k true`, is refused the same way.
+
+Under the 2026-09-05 corpus-first gavel both shapes join the corpus here,
+measured on #2116's tree before their fixes. `drained` deletes 550 keys
+from a map of 1,100 and `admitted` admits 430 keys. On this container the
+run program reads 894,638,261 with both. Without `drained` it reads
+848,089,560, a column of 46,548,701 (5.20%), and without `admitted`
+847,672,459, a column of 46,965,802 (5.25%). The interpreted corpus drains
+600 keys and admits 500, and reads 509,290,842 with both. The tab runs the
+same corpus.
+
+CI's rows for the corpus with both phases. work_runbench 801,847,883 ->
+894,533,250 and run_peak_bytes 5,671,457 -> 6,780,801. The interpreted
+corpus reads interp_instructions 424,511,367 -> 471,505,162,
+interp_peak_bytes 741,380 -> 767,647 and interp_allocs 457,070 -> 499,002.
+The tab compiles and runs it: browser_compile_instructions 263,967,351 ->
+272,981,946, browser_compile_peak_bytes 699,180 -> 715,283,
+browser_run_instructions 41,265,571 -> 456,882,925 and
+browser_run_peak_bytes 1,376,256 -> 2,162,688. The tab's run grows elevenfold.
+Its runtime is the native one built for wasm32, so both shapes reach it,
+and the corpus runs them at 600 and 500 keys; which of the two takes the
+most there is not measured here. The run program's emitted code grows by the two phases:
+emitted_other_defines 2,196 -> 2,204, emitted_other_calls 19,957 -> 20,078,
+emitted_other_branches 17,435 -> 17,572, emitted_other_lines 165,000 ->
+165,915 and text 5,604,529 -> 5,606,161. Its allocation vein: run_allocs
+1,446,913 -> 1,449,888, run_alloc_bytes 215,551,096 -> 248,821,464,
+run_arena_blocks 4 -> 5, run_arena_peak_bytes 4,718,608 -> 5,767,184,
+run_spare_peak_bytes 2,621,456 -> 3,670,032, run_held_peak_bytes 216,080 ->
+276,848, run_beat_iters 111,493 -> 112,473, run_evac_allocs 1,760 -> 1,978,
+run_evac_bytes 4,603,072 -> 7,175,760, run_put_mut_grow 32 -> 41, run_sh_buf
+86,829,600 -> 116,309,488 and run_sh_map 12,160 -> 25,920. Welfare re-bases
+the eight terms the phases move, each keeping its ratio to its baseline, and
+the floor stays at 94.49.
+
+## 2026-10-25 — a delete takes its key out in place, and a condition's read holds nothing
+
+Fixes for the two shapes #2117 put in the corpus.
+
+**The admitting set.** The linearity analysis counts how often a function
+uses a value on its busiest path, and a put is made in place when the map
+it writes is used once. `count_in_expr` already counted only the larger arm
+of an `if` or a guard, but it counted every mention in the condition, so
+`if (m[k] == none) (put m k true) m` used `m` twice. The condition is
+finished before either arm runs, and a read `m[k]` whose key calls and
+compares nothing answers the element and lets the map go. Those reads no
+longer count, the same discount the read bound to a name already had
+(`read_in_block`). The guard spelling, `return m if m[k] != none` above
+`put m k true`, is proven by the same change. Admitting 20,000 keys took
+177,856,097,875 instructions natively and now takes 61,905,716. The
+interpreter took 5.1 s and now takes 0.02 s.
+
+**The drained map.** `delete` joins `push` and the byte appends as a
+builtin that writes into its first argument where nothing else holds it.
+At such a site the interpreter removes the key from its tree, and the
+native engine calls `k_b_delete_mut`. That makes the map's pairs its sorted
+view, restarting them from the view as an overwrite's growth does, and then
+closes the key's slot by moving the pairs after it down one. A delete still
+answers a fresh map wherever the map has another holder, as the 2026-10-13
+ruling on #1914 requires; that copy now finds the key by a search and moves
+the pairs either side of it in two copies, where it compared every key.
+Draining half of 20,000 keys took 27.9 billion instructions natively and
+1.53 s; it now takes 2.42 billion and 0.066 s. The interpreter took 3.76 s
+and now takes 0.03 s.
+
+The native drain is still quadratic, because closing a slot in a sorted
+array moves the pairs after it: 80,000 keys drain in 0.95 s. glibc moves
+large blocks with `rep movsb`, which callgrind counts a byte at a time, so
+the instruction count overstates the time by more than the wall clock
+does. A view that marked deleted slots and skipped them would make each
+delete a search, but every reader of the view would have to skip the marks.
+That is #2118.
+
+CI's rows, against #2117's corpus: the run program 894,533,250 -> 809,823,849
+(-9.5%), the interpreted corpus 471,505,162 -> 430,978,258 (-8.6%), and the
+tab's run 456,882,925 -> 42,417,870, which puts it near where it stood
+before #2117 added the two phases. Against main, which holds neither the
+phases nor the fix: work_runbench 801,847,883 -> 809,823,849,
+interp_instructions 424,511,367 -> 430,978,258, interp_peak_bytes 741,380 ->
+765,587, interp_allocs 457,070 -> 461,292, browser_run_instructions
+41,265,571 -> 42,417,870, browser_run_peak_bytes 1,376,256 -> 1,310,720 and
+browser_compile_instructions 263,967,351 -> 273,807,879, each the two phases
+less what the fix takes back. The run program's allocation vein against
+main: run_allocs 1,446,913 -> 1,446,946, run_alloc_bytes 215,551,096 ->
+215,868,632, run_sh_buf 86,829,600 -> 86,960,912, run_put_mut_grow 32 -> 48,
+run_beat_iters 111,493 -> 112,473, run_bytes_malloc 7,893 -> 7,901,
+run_perm_live_bytes 15,825 -> 32,049 and run_perm_peak_bytes 736,769 ->
+802,321. Both restarts, the delete's and the put's, take their pairs from
+outside the arena when the map outlives the loop it changes in, and which of
+the two phases accounts for the perm rows is not isolated here. The runtime's machine code
+grows by `k_b_delete_mut` and the searching persistent delete, 2,848 bytes in
+every benchmark binary: text 5,604,529 -> 5,646,113, emitted_other_lines
+165,000 -> 165,914 with the phases' own code, and work_oneshot 10,033,444 ->
+10,034,004 from the layout that moves with it. The front end's condition
+discount and the new builtin cost entry_instructions 72,875,969 ->
+72,875,974, emit_instructions 5,628,759 -> 5,636,850 and
+codegen_instructions_dev 116,458,530 -> 116,477,304, where
+codegen_instructions_release falls 370,260,066 -> 370,206,363. Welfare rises
+94.49 -> 94.83 and the rise is banked.
+
+The interpreter's in-place delete takes a value on the holder count as push
+and put do, so the ratchet's row "a shared seed copied every lap" now finds
+five such sites in `src/eval/builtins.rs` where it found four, and disables
+the delete's with the others. Its spec still turns red under it.
