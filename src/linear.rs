@@ -242,6 +242,20 @@ struct Analysis<'a> {
     records_handed: HashSet<(String, usize, usize)>,
     /// Each record type's fields in the order its constructor takes them.
     type_fields: crate::hash::Map<String, Vec<String>>,
+    /// (function, arity, parameter): every call hands in, at that parameter,
+    /// a map whose values nothing but the map holds, and no arm keeps one.
+    /// Seeded only with the parameters some arm takes an element out of.
+    elems_params: HashSet<(String, usize, usize)>,
+    /// (function, arity): every arm answers a map whose values nothing but
+    /// the map holds, so a helper that takes an element out and puts it back
+    /// hands its loop the same promise.
+    returns_elems: HashSet<(String, usize)>,
+    /// By function, the (arity, parameter) pairs where every arm answers
+    /// that parameter, mentioned nowhere else, or a fresh literal, so the
+    /// result is unique wherever the argument is. `fn or_map none` answers
+    /// `{}` and `fn or_map m` answers `m`. Asked per call, so one caller
+    /// handing in a shared value costs only that call.
+    passes: crate::hash::Map<String, Vec<(usize, usize)>>,
 }
 
 /// Where a name occurs, gathered once, so `escapes_as_value` stops re-walking
@@ -375,6 +389,9 @@ impl<'a> Analysis<'a> {
             field_params: HashSet::default(),
             returns_field: HashSet::default(),
             records_handed: HashSet::default(),
+            elems_params: HashSet::default(),
+            returns_elems: HashSet::default(),
+            passes: passes_through(program),
             type_fields: program
                 .types
                 .iter()
@@ -402,7 +419,13 @@ impl<'a> Analysis<'a> {
                 a.linear_params.insert((name, arity, i));
             }
         }
+        a.seed_elems();
         a.fixpoint();
+        // a dropped map parameter can take back a take the fixpoint granted,
+        // and a dropped list parameter a call site the map one relied on
+        while a.drop_elems() {
+            a.fixpoint();
+        }
         a.field_fixpoint();
         a
     }
@@ -583,6 +606,221 @@ impl<'a> Analysis<'a> {
             tally.walk(p, f, e, false);
         }
         !tally.refused && tally.mentions == tally.field_reads && tally.reads_of_f == 1
+    }
+
+    /// The candidates for `elems_params` and `returns_elems`, and none in a
+    /// program where no arm takes an element out of a parameter, `v = m[k]`:
+    /// there the facts could license nothing. Otherwise every parameter used
+    /// as a map is one, read, written or handed on, so that a loop that hands
+    /// its map to a helper doing the take can carry the promise, and every
+    /// group that answers a map is one too.
+    fn seed_elems(&mut self) {
+        let takes = real_fns(self.program).any(|d| {
+            d.params.iter().any(|p| matches!(p, Pattern::Var(v, _) if takes_from(v, &d.body)))
+        });
+        if !takes {
+            return;
+        }
+        for decl in real_fns(self.program) {
+            let arity = decl.params.len();
+            if !self.called_by_name(&decl.name, arity) {
+                continue;
+            }
+            self.returns_elems.insert((decl.name.clone(), arity));
+            for (j, param) in decl.params.iter().enumerate() {
+                let Pattern::Var(p, _) = param else { continue };
+                if used_as_map(p, &decl.body) {
+                    self.elems_params.insert((decl.name.clone(), arity, j));
+                }
+            }
+        }
+    }
+
+    /// One round of the map parameters' greatest fixpoint: drop each whose
+    /// callers or arms no longer prove it. True when something was dropped.
+    fn drop_elems(&mut self) -> bool {
+        let drop: Vec<_> = self
+            .elems_params
+            .iter()
+            .filter(|(name, arity, j)| {
+                !self.group(name, *arity).all(|d| match &d.params[*j] {
+                    Pattern::Var(p, _) => d.body.iter().enumerate().all(|(n, stmt)| {
+                        let tail = n + 1 == d.body.len();
+                        match stmt {
+                            Stmt::Bind { expr, .. } => self.elems_stay(p, expr, d, Kept::Held),
+                            Stmt::Expr(e) if tail => self.elems_stay(p, e, d, Kept::Answer),
+                            Stmt::Expr(e) => self.elems_stay(p, e, d, Kept::Held),
+                        }
+                    }),
+                    _ => true,
+                }) || !self.elems_handed_over(name, *arity, *j)
+            })
+            .cloned()
+            .collect();
+        for k in &drop {
+            self.elems_params.remove(k);
+        }
+        let drop_returns: Vec<_> = self
+            .returns_elems
+            .iter()
+            .filter(|(name, arity)| {
+                !self
+                    .group(name, *arity)
+                    .all(|d| matches!(d.body.last(), Some(Stmt::Expr(e)) if self.elems_alone(e, d)))
+            })
+            .cloned()
+            .collect();
+        for k in &drop_returns {
+            self.returns_elems.remove(k);
+        }
+        !drop.is_empty() || !drop_returns.is_empty()
+    }
+
+    /// Every call to the group hands in, at `j`, a map whose values only the
+    /// map holds. A call under a lambda runs when somebody else decides.
+    fn elems_handed_over(&self, name: &str, arity: usize, j: usize) -> bool {
+        fn sites(a: &Analysis, ctx: &FnDecl, e: &Expr, q: (&str, usize, usize), lam: bool) -> bool {
+            let (name, arity, j) = q;
+            if let Expr::App { head, args, .. } = e {
+                if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
+                    && args.len() == arity
+                    && (lam || !a.elems_alone(&args[j], ctx))
+                {
+                    return false;
+                }
+            }
+            let inner = lam || matches!(e, Expr::Lambda { .. });
+            child_exprs(e).all(|c| sites(a, ctx, c, q, inner))
+        }
+        self.mentions.mentioning(name).iter().all(|&d| {
+            let caller = &self.program.fns[d];
+            caller.body.iter().all(|stmt| {
+                let e = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                };
+                sites(self, caller, e, (name, arity, j), false)
+            })
+        })
+    }
+
+    /// The map `e` evaluates to holds values nothing else holds: a literal
+    /// of unique values, a write into such a map that nobody else holds of a
+    /// value nobody else holds, or a parameter or binding that is one.
+    fn elems_alone(&self, e: &Expr, ctx: &FnDecl) -> bool {
+        match e {
+            Expr::MapLit(entries, _) => entries.iter().all(|(_, v)| self.unique_in(v, ctx, None)),
+            Expr::App { head, args, .. } => match head.as_ref() {
+                Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
+                    self.elems_alone(&args[1], ctx) && self.elems_alone(&args[2], ctx)
+                }
+                Expr::Ident(n, _, _) if n == "put" && args.len() == 3 => {
+                    self.elems_alone(&args[0], ctx)
+                        && self.unique_in(&args[0], ctx, None)
+                        && self.unique_in(&args[2], ctx, None)
+                }
+                Expr::Ident(n, _, _) if n == "delete" && args.len() == 2 => {
+                    self.elems_alone(&args[0], ctx) && self.unique_in(&args[0], ctx, None)
+                }
+                Expr::Ident(n, _, _) => self.returns_elems.contains(&(n.to_string(), args.len())),
+                _ => false,
+            },
+            Expr::Guard { early, rest, .. } => {
+                self.elems_alone(early, ctx)
+                    && matches!(rest.last(), Some(Stmt::Expr(t)) if self.elems_alone(t, ctx))
+            }
+            Expr::Ident(n, _, _) => {
+                let arity = ctx.params.len();
+                match ctx.params.iter().position(|p| matches!(p, Pattern::Var(v, _) if v == n)) {
+                    Some(j) => self.elems_params.contains(&(ctx.name.clone(), arity, j)),
+                    None => bound_in(&ctx.body, n).is_some_and(|b| self.elems_alone(b, ctx)),
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// No value of map `p` is kept by `e` beyond the map: `p` is written
+    /// into, counted, handed to a parameter that keeps the same promise or
+    /// answered whole, and an element is read only to be compared, read
+    /// further or interpolated, or taken out to go back in at its key.
+    fn elems_stay(&self, p: &str, e: &Expr, ctx: &FnDecl, kept: Kept) -> bool {
+        let named = |x: &Expr| matches!(x, Expr::Ident(n, _, _) if n == p);
+        match e {
+            Expr::Ident(n, _, _) if n == p => kept == Kept::Answer,
+            Expr::Index { base, index, .. } if named(base) => {
+                (kept == Kept::Read || take_of(p, e, &ctx.body).is_some())
+                    && self.elems_stay(p, index, ctx, Kept::Read)
+            }
+            Expr::Index { base, index, .. } => {
+                self.elems_stay(p, base, ctx, Kept::Read)
+                    && self.elems_stay(p, index, ctx, Kept::Read)
+            }
+            Expr::BinOp { op, lhs, rhs, .. } => {
+                let k = match matches!(*op, "<" | "<=" | ">" | ">=" | "==" | "!=") {
+                    true => Kept::Read,
+                    false => Kept::Held,
+                };
+                self.elems_stay(p, lhs, ctx, k) && self.elems_stay(p, rhs, ctx, k)
+            }
+            Expr::Str(parts, _) => parts.iter().all(|part| match part {
+                TemplatePart::Lit(_) => true,
+                TemplatePart::Interp(x) => self.elems_stay(p, x, ctx, Kept::Read),
+            }),
+            Expr::App { head, args, .. } => match head.as_ref() {
+                Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
+                    self.elems_stay(p, &args[0], ctx, Kept::Read)
+                        && self.elems_stay(p, &args[1], ctx, kept)
+                        && self.elems_stay(p, &args[2], ctx, kept)
+                }
+                Expr::Ident(n, _, _)
+                    if matches!(n.as_str(), "put" | "delete")
+                        && args.first().is_some_and(named) =>
+                {
+                    args[1..].iter().all(|a| self.elems_stay(p, a, ctx, Kept::Held))
+                }
+                Expr::Ident(n, _, _)
+                    if matches!(n.as_str(), "length" | "keys") && args.len() == 1 =>
+                {
+                    named(&args[0]) || self.elems_stay(p, &args[0], ctx, Kept::Held)
+                }
+                Expr::Ident(n, _, _) => args.iter().enumerate().all(|(i, a)| match named(a) {
+                    true => self.elems_params.contains(&(n.to_string(), args.len(), i)),
+                    false => self.elems_stay(p, a, ctx, Kept::Held),
+                }),
+                _ => mentions(p, e) == 0,
+            },
+            Expr::Guard { cond, early, rest, .. } => {
+                self.elems_stay(p, cond, ctx, Kept::Read)
+                    && self.elems_stay(p, early, ctx, Kept::Answer)
+                    && rest.iter().enumerate().all(|(n, stmt)| match stmt {
+                        Stmt::Expr(t) if n + 1 == rest.len() => self.elems_stay(p, t, ctx, kept),
+                        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                            self.elems_stay(p, expr, ctx, Kept::Held)
+                        }
+                    })
+            }
+            Expr::Lambda { .. } => mentions(p, e) == 0,
+            _ => child_exprs(e).all(|c| self.elems_stay(p, c, ctx, Kept::Held)),
+        }
+    }
+
+    /// A read `p[k]` that takes the element away: `p` is a map parameter
+    /// whose values only it holds, every caller hands it over and this arm
+    /// writes it in place, and the read is bound to a name that goes back
+    /// into `p` at the same key, written into there and only read besides.
+    /// Until the write puts it back, the map holds the element and nobody
+    /// reads the map.
+    fn element_moves(&self, p: &str, read: &Expr, ctx: &FnDecl) -> bool {
+        let arity = ctx.params.len();
+        let Some(j) = ctx.params.iter().position(|q| matches!(q, Pattern::Var(v, _) if v == p))
+        else {
+            return false;
+        };
+        // a linear parameter that is written is used once in every arm, so
+        // the outer write is in place too
+        self.elems_params.contains(&(ctx.name.clone(), arity, j))
+            && self.linear_params.contains(&ctx.name, arity, j)
+            && take_of(p, read, &ctx.body).is_some()
     }
 
     fn fixpoint(&mut self) {
@@ -927,6 +1165,11 @@ impl<'a> Analysis<'a> {
         if let Some((p, f)) = field_read(e) {
             return self.field_moves(p, f, ctx);
         }
+        if let Expr::Index { base, .. } = e {
+            if let Expr::Ident(p, _, _) = base.as_ref() {
+                return self.element_moves(p, e, ctx);
+            }
+        }
         match e {
             // a literal is interned or freshly written and an interpolation
             // allocates its result, so nothing else holds the value; an
@@ -990,7 +1233,15 @@ impl<'a> Analysis<'a> {
                 // was missing only because a type is not a declaration and
                 // `returns_unique` is built from declarations
                 Expr::Ident(n, _, _) if self.types.contains(n.as_str()) => true,
-                Expr::Ident(n, _, _) => self.returns_unique.contains(&(n.to_string(), args.len())),
+                Expr::Ident(n, _, _) => {
+                    self.returns_unique.contains(&(n.to_string(), args.len()))
+                        || self.passes.get(n.as_str()).is_some_and(|ps| {
+                            ps.iter().any(|&(arity, i)| {
+                                arity == args.len()
+                                    && self.unique_in_with(&args[i], ctx, scoped, exempt)
+                            })
+                        })
+                }
                 _ => false,
             },
             Expr::Ident(name, _, _) => self.is_unique_source(name, ctx, scoped, exempt),
@@ -1260,6 +1511,143 @@ fn bound_in<'a>(body: &'a [Stmt], var: &str) -> Option<&'a Expr> {
         }
     }
     None
+}
+
+/// The parameters each group hands back or replaces with a fresh literal,
+/// and does nothing else with.
+fn passes_through(program: &Program) -> crate::hash::Map<String, Vec<(usize, usize)>> {
+    let fresh = |e: &Expr| matches!(e, Expr::MapLit(..) | Expr::List(..) | Expr::Str(..));
+    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> = crate::hash::Map::default();
+    for d in real_fns(program) {
+        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+    }
+    let mut out: crate::hash::Map<String, Vec<(usize, usize)>> = crate::hash::Map::default();
+    for ((name, arity), arms) in groups {
+        for i in 0..arity {
+            let ok = arms.iter().all(|d| {
+                let Some((Stmt::Expr(tail), lead)) = d.body.split_last() else { return false };
+                match &d.params[i] {
+                    Pattern::Var(v, _) => {
+                        let handed = matches!(tail, Expr::Ident(n, _, _) if n == v);
+                        let elsewhere = count_uses(v, lead) > 0;
+                        !elsewhere && (handed || (fresh(tail) && count_in_expr(v, tail) == 0))
+                    }
+                    Pattern::Wildcard(_) | Pattern::Nullary(..) => fresh(tail),
+                    _ => false,
+                }
+            });
+            if ok {
+                out.entry(name.to_string()).or_default().push((arity, i));
+            }
+        }
+    }
+    out
+}
+
+/// Where a map element read sits in the program: a value that is kept, an
+/// operand read and let go, or the answer of the arm.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kept {
+    Held,
+    Read,
+    Answer,
+}
+
+/// Whether `body` uses `p` as a map: reads an element of it, writes into it
+/// or hands it whole to a call.
+fn used_as_map(p: &str, body: &[Stmt]) -> bool {
+    fn uses(p: &str, e: &Expr) -> bool {
+        let named = |x: &Expr| matches!(x, Expr::Ident(n, _, _) if n == p);
+        let here = match e {
+            Expr::Index { base, .. } => named(base),
+            Expr::App { args, .. } => args.iter().any(named),
+            _ => false,
+        };
+        here || crate::any_child(e, |c| uses(p, c))
+    }
+    body.iter().any(|stmt| uses(p, stmt_expr(stmt)))
+}
+
+/// Whether some binding in `body` reads an element of `p`.
+fn takes_from(p: &str, body: &[Stmt]) -> bool {
+    fn reads(p: &str, e: &Expr) -> bool {
+        matches!(e, Expr::Index { base, .. } if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == p))
+            || crate::any_child(e, |c| reads(p, c))
+    }
+    body.iter().any(|stmt| match stmt {
+        Stmt::Bind { expr, .. } => reads(p, expr),
+        Stmt::Expr(Expr::Guard { rest, .. }) => takes_from(p, rest),
+        Stmt::Expr(_) => false,
+    })
+}
+
+/// The name a take binds, when `read` is `p[k]` in `v = f p[k]` (or `v =
+/// p[k]`) and every later mention of `v` is in the one write `put p k (w v
+/// …)` that puts it back at the same key: `w` is a builtin write into `v`
+/// whose other arguments only read it. Neither `p` nor `k` is bound again in
+/// the block, and `p` is read nowhere else in the binding.
+fn take_of<'b>(p: &str, read: &Expr, body: &'b [Stmt]) -> Option<&'b str> {
+    let Expr::Index { index, .. } = read else { return None };
+    let Expr::Ident(k, _, _) = index.as_ref() else { return None };
+    for (i, stmt) in body.iter().enumerate() {
+        match stmt {
+            Stmt::Expr(Expr::Guard { rest, .. }) => {
+                if let Some(v) = take_of(p, read, rest) {
+                    return Some(v);
+                }
+            }
+            Stmt::Bind { pattern: Pattern::Var(v, _), expr } if contains(expr, read) => {
+                let wrapped = match expr {
+                    Expr::App { args, .. } => args.len() == 1 && std::ptr::eq(&args[0], read),
+                    _ => std::ptr::eq(expr, read),
+                };
+                let binds = |name: &str| {
+                    body.iter()
+                        .filter(|s| matches!(s, Stmt::Bind { pattern: Pattern::Var(n, _), .. } if n == name))
+                        .count()
+                };
+                // `p` is a parameter and `k` and `v` are each bound once
+                if !wrapped || mentions(p, expr) != 1 || binds(p) > 0 || binds(k) > 1 {
+                    return None;
+                }
+                let later = &body[i + 1..];
+                let total: usize = later.iter().map(|s| mentions(v, stmt_expr(s))).sum();
+                let back: usize = later.iter().map(|s| puts_back(p, k, v, stmt_expr(s))).sum();
+                return (total > 0 && back == total && binds(v) == 1).then_some(v.as_str());
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Mentions of `v` inside writes `put p k (w v …)` in `e`, where `w` writes
+/// into `v` and its other arguments only read `v`.
+fn puts_back(p: &str, k: &str, v: &str, e: &Expr) -> usize {
+    let is = |x: &Expr, n: &str| matches!(x, Expr::Ident(m, _, _) if m == n);
+    if let Expr::App { head, args, .. } = e {
+        if is(head, "put") && args.len() == 3 && is(&args[0], p) && is(&args[1], k) {
+            if let Expr::App { head: wh, args: wargs, .. } = &args[2] {
+                let writes = matches!(wh.as_ref(), Expr::Ident(h, _, _)
+                    if matches!(h.as_str(), "put" | grows_first!()));
+                if writes
+                    && wargs.first().is_some_and(|f| is(f, v))
+                    && wargs[1..].iter().all(|a| !holds(v, a))
+                {
+                    return mentions(v, &args[2]);
+                }
+            }
+            return 0;
+        }
+    }
+    let mut n = 0;
+    crate::for_each_child(e, |c| n += puts_back(p, k, v, c));
+    n
+}
+
+/// Whether `target` is `e` or sits somewhere inside it.
+fn contains(e: &Expr, target: &Expr) -> bool {
+    std::ptr::eq(e, target) || crate::any_child(e, |c| contains(c, target))
 }
 
 /// Collect in-place push sites in `body`: a `push` whose list argument is a
@@ -1544,6 +1932,11 @@ fn fed_to_consumer(var: &str, v: &str, e: &Expr) -> Option<usize> {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
             if matches!(h.as_str(), "put" | grows_first!()));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
+            // a sibling that writes into `v` forces it before this write, and
+            // a binding forced once answers every later mention from its cell
+            if args[1..].iter().any(|s| writes_into(v, s)) {
+                return Some(args[1..].iter().map(|s| mentions(v, s)).sum());
+            }
             for sibling in &args[1..] {
                 n += forced_operand(v, sibling)?;
             }
@@ -1567,6 +1960,22 @@ fn forced_operand(v: &str, e: &Expr) -> Option<usize> {
         Expr::BinOp { lhs, rhs, .. } => Some(forced_operand(v, lhs)? + forced_operand(v, rhs)?),
         _ if mentions(v, e) == 0 => Some(0),
         _ => None,
+    }
+}
+
+/// Whether `e` is a builtin write into `v`, `put v k x` or the like, reached
+/// from a forced argument through arithmetic and other such writes: the
+/// builtin forces `v` before it returns.
+fn writes_into(v: &str, e: &Expr) -> bool {
+    match e {
+        Expr::BinOp { lhs, rhs, .. } => writes_into(v, lhs) || writes_into(v, rhs),
+        Expr::App { head, args, .. } => {
+            matches!(head.as_ref(), Expr::Ident(h, _, _)
+                if matches!(h.as_str(), "put" | grows_first!()))
+                && (matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == v)
+                    || args.iter().any(|a| writes_into(v, a)))
+        }
+        _ => false,
     }
 }
 

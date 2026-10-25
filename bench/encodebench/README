@@ -3,7 +3,7 @@ The json library in encodebench/ is a FROZEN COPY, deliberately.
 bench/jsonbench is generated from lib/json by bench/make_jsonbench on every
 build and is gitignored, so it tracks the library by construction. This one
 does not: its five files were taken at 20ab931d (2026-08-07) and committed,
-and they now differ from lib/json by 216 lines. bench/widebench carries a
+and they drift from lib/json as the library moves. bench/widebench carries a
 comparable snapshot for the same reason.
 
 WHAT THE FREEZE BUYS. With the library held still, a move in this benchmark is
