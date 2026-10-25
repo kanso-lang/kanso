@@ -1050,7 +1050,11 @@ impl<'a> Analysis<'a> {
             return true;
         }
         let discounted: usize = less
-            + exempt.iter().filter(|e| !holds(var, e)).map(|e| count_in_expr(var, e)).sum::<usize>();
+            + exempt
+                .iter()
+                .filter(|e| !holds(var, e))
+                .map(|e| count_in_expr(var, e))
+                .sum::<usize>();
         if effective_uses(var, &ctx.body).saturating_sub(discounted) > 1 {
             return false;
         }
