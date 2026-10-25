@@ -734,11 +734,11 @@ fn filled s width false
 fn asked path
   os/read_file! path
 
-# NINE VEINS IN ONE LIST LITERAL, and the literal is the point. `veins[5]` on a
+# THE VEINS IN ONE LIST LITERAL, and the literal is the point. `veins[5]` on a
 # list built by `list/concat` is a box, because a concatenated length is not
-# known where the index is written; on a literal it is an index. Writing the
-# nine out is what lets `measured` read them by position without opening nine
-# boxes it has already had pinned for it.
+# known where the index is written; on a literal it is an index. Writing them
+# out is what lets `measured` read them by position without opening a box for
+# each one it has already had pinned for it.
 fn gauge run w ir ca held ent st ii im cd cr em br
   work = work_of w
   vir = counters ir
@@ -1191,7 +1191,7 @@ fn with_held run w ir ca held
   entry_golden = "bench/entry_instructions_golden.txt"
   asked entry_golden .> (e -> with_entry run w ir ca held e)
 
-# ELEVEN GOLDENS, where there were six. The 2026-09-16 gavel's five arrive
+# THE GOLDENS ONE BY ONE. The 2026-09-16 gavel's five arrive
 # here: start-up, the interpreted run's instructions and its peak, and the two
 # codegen tiers. Each is read whole and its one row taken by name in `added`.
 fn with_entry run w ir ca held e
