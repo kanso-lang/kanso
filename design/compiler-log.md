@@ -21,26 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — the region row has a witness again
-
-The ratchet row `a region that keeps what it made` went blind when std/json
-began writing a map from its entries in place (c2b48e57). Its mutation makes
-`k_region_pop` keep everything the region allocated, and its witness was the
-mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
-under it. Once the encoder stopped building `keys` and `values` for each map,
-its calls had no allocating argument, so the emitter made no region at all:
-no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
-and with the mutation applied the whole mem corpus stayed green on main. The
-row came up on #2047, whose diff touches `core.c`, and read BLIND.
-
-The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
-encoder's old shape: a walk that builds a map's keys as the argument of its
-call into the map and answers bytes. The emitter makes that call a region.
-It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
-12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
-total and the oracle's counters agree. The old fixture's comment, which still
-described the region it no longer has, says what it pins now.
-
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
 The encoder writes a string with an escape in it through
@@ -1764,3 +1744,24 @@ lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
 entry_instructions 72,335,545 -> 72,317,212, library_instructions
 72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
 218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-25 — an import stays in the file that writes it
+
+From #2090, xsv's port. A module's file `join.kso` declared a private
+`matches` and imported nothing; its sibling `search.kso` imported std/regexp,
+which exports `matches` too. The module's merged program held std/regexp's
+bare twin of `matches` beside the private arms, so the call in `join.kso`
+dispatched over both, and the check refused `matches index k != []` because
+one of std/regexp's arms can answer an err. The 2026-10-12 gavel says a file
+names only what it can see, and `join.kso` never imported std/regexp.
+
+The 2026-08-29 ruling keeps the mixed group where it is asked for: a file
+that imports the module and writes the bare name dispatches over both the
+module's arms and the import's. So the module path now drops an import's bare
+twin of a name the module declares only when no file importing that module
+writes the bare name. The import's function stays reachable by its qualified
+spelling, `regexp/matches`. A module whose importing file does write the bare
+name keeps the mixed group, and a module of one file is unchanged.
+
+`tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
+beside it, on both engines; main refuses it.

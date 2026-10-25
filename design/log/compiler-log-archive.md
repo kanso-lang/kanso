@@ -107565,3 +107565,23 @@ A container that restarted came up with clang 18, where the probe for
 `preserve_none` answers no and the emitter writes another convention: main
 emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
 above were taken under clang 19, as CI installs it.
+
+## 2026-10-22 — the region row has a witness again
+
+The ratchet row `a region that keeps what it made` went blind when std/json
+began writing a map from its entries in place (c2b48e57). Its mutation makes
+`k_region_pop` keep everything the region allocated, and its witness was the
+mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
+under it. Once the encoder stopped building `keys` and `values` for each map,
+its calls had no allocating argument, so the emitter made no region at all:
+no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
+and with the mutation applied the whole mem corpus stayed green on main. The
+row came up on #2047, whose diff touches `core.c`, and read BLIND.
+
+The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
+encoder's old shape: a walk that builds a map's keys as the argument of its
+call into the map and answers bytes. The emitter makes that call a region.
+It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
+12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
+total and the oracle's counters agree. The old fixture's comment, which still
+described the region it no longer has, says what it pins now.
