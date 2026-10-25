@@ -64,6 +64,26 @@ fn a_test_file_reading_a_private_name_is_refused() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+/// `go`'s first arm claims a request whose path is a none, and `kanso check`
+/// passes the module. The test file's compile reads `r.path` as a getter
+/// call, after the rewrite, and asked it the none question the field read
+/// is never asked. Watched red: "this can be a none and `os/read_bytes` has
+/// no arm for it".
+#[test]
+fn a_test_file_checks_its_module_as_check_does() {
+    let output = in_fixtures(&["test", "claims_a_field"]);
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("claims_a_field.out")).expect("golden");
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        expected,
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.status.code(), Some(0));
+}
+
 /// The test's helper and the module's private function share the name
 /// `label`, and each file keeps its own. Watched red as an overlapping
 /// overload of `label`.

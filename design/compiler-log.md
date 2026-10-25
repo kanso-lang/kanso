@@ -21,91 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — an escaped JSON string is read in one walk
-
-A JSON string with an escape in it was read twice. `plain_string`'s emitted
-twin found the first backslash, then walked to the closing quote with a
-`find2` from each backslash, and answered the quote's position; the decoder
-then called `unescape` on the same range, which read the bytes again to undo
-the escapes. The twin now hands the first backslash to `k_json_escaped`, which
-undoes the escapes while it looks for the quote. It writes the undone bytes at
-the arena's frontier, and at the quote it allocates the string `unescape`
-would have allocated, at the same length, which lands where the bytes already
-are; so no allocation counter moves. It keeps the string, keyed by the bytes'
-address and the range, and `unescape` answers it first when asked for that
-range, before a frame. A `u` escape, an escape JSON does not have, or a
-frontier without room leaves nothing kept, and the old walk finds the quote.
-
-The fuzzer was built first, against the joined runtime with its `main`
-renamed, so it ran the real functions. Its reference is the walk the emitter
-wrote before followed by `k_b_unescape_raw`. Half its calls cut the arena's
-frontier short, so every fallback runs. Unstressed it ran 48,354,448 escaped
-strings and found 19 failures: when the frontier ran out in the middle of a
-run, the walk handed a plain byte's position to `k_json_quote_after`, which
-takes a backslash's and skips the byte after it. The stress found the same bug
-2,952 times in 2,000,000 cases. With `k_json_quote_from` for that case, 25
-seeded runs of 2,000,000 cases each read 48,354,997 escaped strings, 8,013,430
-of them answered from the kept string, and found no failure.
-
-Measured here, the run program 878,353,521 -> 871,922,860 (-0.73%) with the
-same output. `k_b_unescape` fell 38,534,463 -> 3,335,013, and the decoder
-frames that inlined the twin lost the rescan loop (`array_items` -6,489,450,
-`parse_value` -5,370,849, `obj_key_start` +929,412), against 39,591,486 in
-`k_json_escaped`. find2_calls falls where the walk no longer calls
-`find2`: run_find2_calls 1,488,669 -> 1,037,031, the decoder's find2_calls
-2,255,550 -> 1,571,250, oneshot_find2_calls and live_find2_calls 15,037 ->
-10,475. The decoder's emitted code sheds the loop: emitted_branches 1,346 ->
-1,344 and emitted_lines 14,330 -> 14,319; every program gains the new door's
-declare line, so emitted_other_lines rises by one a program where the decoder
-is absent.
-
-CI's rows. run_instructions 878,353,565 -> 871,922,904 (-0.73%), and the
-other programs that decode an escaped string fall with it: jsonbench
-599,978,129 -> 593,998,829, oneshot 10,572,323 -> 10,531,404, livebench
-1,032,877,307 -> 1,032,837,487, encodebench 2,456,796,762 -> 2,456,796,258.
-Machine code: the programs with the decoder shrink (jsonbench text 402,057 ->
-401,417, runbench 750,713 -> 750,041, livebench 412,121 -> 411,481, oneshot
-408,601 -> 407,961) and every other program grows by 1,504 bytes
-(encodebench 342,473 -> 343,977). Building the run program:
-codegen_instructions_dev 116,068,667 -> 116,128,678,
-codegen_instructions_release 422,581,877 -> 422,378,106, and
-emit_instructions 6,435,278 -> 6,432,635. The machine-code total, text, is
-5,340,654 -> 5,353,102. The compile corpus's programs carry the declare line
-too: lines 1,524 -> 1,528 over its four, and module_lines 1,163 -> 1,164. In the tab, which carries the same
-library: browser_compile_instructions 428,211,402 -> 428,034,601,
-browser_compile_peak_bytes 768,853 -> 768,205, browser_run_instructions
-30,540,337 -> 30,427,332. The welfare floor rises 92.73 -> 92.76.
-
-The micro golden `an_escaped_string_is_undone_in_one_walk` puts escapes at
-the front, the back and each side of a word boundary, two backslashes
-together, a document that ends a byte after the string, a `u` escape, an
-unknown escape and two strings that run out. The interpreter prints the same
-26 lines, and an `\n` undone as a tab turns it red. The ratchet row
-`an_escaped_string_undone_twice` keeps nothing, so `unescape` reads every
-string again; the run program reads 910,139,124.
-
-Measured on #2043's shape and declined. Looping one more decoder state as
-well as `obj_key_start` reads higher every time: `obj_delim` 901,567,246,
-`obj_open` 882,623,604, `array_open` 889,848,391, `obj_key_end` 910,134,560,
-`array_delim` 892,170,102, against 878,353,218. Dropping the five `_past`
-helpers by binding the skipped position in each blank arm cut the corpus check
-38,158,594 -> 37,784,461 and read the run program 930,125,639. Three encoder
-shapes read higher too: the list's body written in `encode_onto`'s arm
-885,700,026, the map's 885,870,393, and the first element folded into
-`encode_items` behind a separator group 885,304,273.
-
-Also declined: an int of up to eight digits read inline by `to_int`'s slice
-twin, through a hot-unit helper LTO folds in, with the call kept for every
-other shape. `k_b_to_int_slice_raw` fell 13,492,972 -> 640,000, but the
-inlined read cost 50 instructions an int in `array_items` and `parse_value`,
-against 65 for the call, and the run program read 878,353,521 -> 876,146,778
-(-0.25%), before what inlining it at every site costs the release build.
-
-A container that restarted came up with clang 18, where the probe for
-`preserve_none` answers no and the emitter writes another convention: main
-emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
-above were taken under clang 19, as CI installs it.
-
 ## 2026-10-22 — the region row has a witness again
 
 The ratchet row `a region that keeps what it made` went blind when std/json
@@ -1817,3 +1732,35 @@ corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
 native moved. Welfare fell by less than a hundredth, and the floor follows
 under the language exception: the ruling asks for index reads to be proven,
 and this proves more of them.
+
+## 2026-10-24 — a field read is asked the none question the same way on every route
+
+`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
+inflate's port has the shape: `fn go (req none)` answers a request whose
+path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
+test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
+split, and toml's had it between `check lib` and `check main.kso`.
+
+The none question in `after_infer.rs` asks whether an argument can be a none.
+It answers no for a field read, so a none carried in a field stays the
+runtime's sentence. But the module and play routes run the check before
+field reads are rewritten into getter calls, and the entry and test routes
+run it after. On those two the argument was a call to `Get_path`, whose
+return set is every value the field was built from, and the first arm's
+claim on the none never reaches that set. The question now answers no for a
+getter call too, so all four routes give a field read the same answer.
+
+`tests/golden/test_verb/claims_a_field` is inflate's shape, and
+`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
+it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
+in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
+what `check lib` passed.
+
+Whether a none carried in a field should be refused at check is #2088's
+question, for every route at once.
+
+CI's rows. A getter call now answers the none question before the table
+lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
+entry_instructions 72,335,545 -> 72,317,212, library_instructions
+72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
+218,016,527. Welfare rose, and the rise is banked.
