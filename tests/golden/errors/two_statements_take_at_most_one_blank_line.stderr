@@ -1,0 +1,4 @@
+error[formatting]: at most one blank line separates two statements
+  --> two_statements_take_at_most_one_blank_line.kso:4:1
+   4 | print "two"
+       ^

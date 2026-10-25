@@ -108763,3 +108763,25 @@ In this container runbench fell from 809,811,674 to 804,150,430 instructions
 (-0.70%), with byte-identical output, and no function in the program calls
 the span any more. The ratchet row `number_span_inline` takes the
 `always_inline` away and reads 809,811,999.
+
+## 2026-10-24 — the slice parsers inlined into the decoder
+
+The decoder's number twins hand each number to `k_b_to_int_slice_raw` or
+`k_b_to_float_slice_raw`, 417,483 calls on runbench. A whole-runtime LTO link
+had shown about 6.5M instructions there once both were inlined. Both now live
+in the hot unit, with the integer reader, the float shape test, eisel-lemire
+and their small tables beside them. Eisel-lemire's table of powers stays in
+`runtime.c` and is read through an extern, and so are the two slow paths,
+`k_b_to_int_slow` and `k_to_float_scan_out`. `k_int` and `k_float` are plain
+functions in `runtime.c`, so the unit takes a static copy of each. Both
+parsers return a `KValue`, so the twins call them as returning
+`{ i64, i64 }` and rebuild the `%KValue`, as the string index does.
+
+The float parser had been a `preserve_none` door, worth 1,113,877 when it
+was a call. Inlined, its convention no longer matters, so it is back on the
+C convention and off `PRESERVE_NONE_DOORS`.
+
+In this container runbench fell from 804,149,817 to 797,455,326 instructions
+(-0.83%), with byte-identical output, and neither parser is called anywhere
+in the program. The ratchet row `slice_parsers_inline` takes both
+`always_inline`s away and reads 805,258,746.
