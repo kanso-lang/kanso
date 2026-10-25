@@ -19,7 +19,6 @@ fn label archived
 fn label pending
   "pending"
 
-
 fn title_line null
   "(untitled)"
 
