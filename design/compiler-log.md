@@ -1370,9 +1370,9 @@ is refused at check with the same `unknown name` error the constant gets.
 `a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
 pins its stderr. On main it prints the run-time error above.
 
-CI's rows: library_instructions 72,011,050 -> 72,011,043, which is the
-binary's layout. A library compile takes the path it took before, and the
-test verb has no row.
+A library compile takes the path it took before, and the test verb has no
+row. The rows this moved are counted with the batch it landed in, at the end
+of "an import stays in the file that writes it".
 
 ## 2026-10-24 — a module's own function beats an imported constant of its name
 
@@ -1395,16 +1395,10 @@ still reads std/io's bare.
 `micro/a_modules_function_named_like_an_imported_constant` prints `6` on
 every engine, and main stops it with "`<io>` is not callable".
 
-CI's rows. `qualify` asks each dependency which names its module declares,
-and the tab compiles with the same front end: compile_instructions
-24,230,258 -> 24,304,388, entry_instructions 71,606,414 -> 71,823,177,
-library_instructions 71,254,677 -> 71,474,194, emit_instructions 5,606,408
--> 5,607,046, compile_allocs 13,789 -> 13,810, interp_allocs 401,539 ->
-401,562 and browser_compile_instructions 216,735,256 -> 216,952,734. The
-first cut cloned every declared name into a set, 305 allocations; the set
-now borrows them. Nothing native moved. Welfare fell by less than a
-hundredth, and the floor follows: the 2026-10-12 ruling says the author's
-own name wins.
+`qualify` asks each dependency which names its module declares. The first
+cut cloned every declared name into a set, 305 allocations; the set now
+borrows them. The rows are counted with the batch this landed in, at the end
+of "an import stays in the file that writes it".
 
 ## 2026-10-25 — a module's own type beats an imported function of its name
 
@@ -1518,12 +1512,9 @@ said "arms take 2".
 `tests/arms_split_across_files.rs` runs toml's shape on both engines and
 pins the refusal; main fails both.
 
-CI's rows. The module path now counts, per name, which files declare it:
-compile_instructions 24,488,495 -> 24,527,482, entry_instructions
-72,335,545 -> 72,367,482, library_instructions 72,011,050 -> 72,043,033 and
-browser_compile_instructions 218,080,833 -> 218,175,578. Nothing at run time
-moved. Welfare fell by less than a hundredth, and the floor follows: a
-module's files share their declarations under the 2026-08-03 ruling.
+The module path now counts, per name, which files declare it. The rows are
+counted with the batch this landed in, at the end of "an import stays in the
+file that writes it".
 
 ## 2026-10-25 — a field is read without importing its owner, on every path
 
@@ -1575,3 +1566,25 @@ name keeps the mixed group, and a module of one file is unchanged.
 
 `tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
 beside it, on both engines; main refuses it.
+
+CI's rows, for the ten fixes that landed together (#2105). The front end
+asks more of every program: whether an arm's type is one its file can see,
+whether a module's own type or function shadows an import's twin, which
+files declare each name, which files import each exporter, and whether a
+field read stands at the root. compile_instructions 24,486,012 -> 24,681,406
+(+0.80%), entry_instructions 72,317,212 -> 72,814,555, library_instructions
+71,993,114 -> 72,478,036, compile_allocs 13,815 -> 13,836, emit_instructions
+5,637,678 -> 5,637,990, and in the tab browser_compile_instructions
+218,016,527 -> 218,660,965. The interpreter's rows, which count its run of
+the corpus front end included, move by less than a thousandth each:
+interp_instructions 385,499,694 -> 385,496,174 and interp_allocs 401,591 ->
+401,614. The runtime gains `k_push_onto_bytes`, so
+every benchmark's machine code grows 320 bytes, text 5,498,444 -> 5,502,924
+over the fourteen, and building compiles it: codegen_instructions_dev
+116,447,795 -> 116,453,133 and codegen_instructions_release 370,219,514 ->
+370,245,362. No run row moved. Welfare falls by less than a hundredth, and
+the floor follows under the rule for the language doing what it says: the
+2026-10-12 ruling that a file names only what it can see and that a test
+file is an outside consumer, the 2026-08-29 ruling that the author's own
+name wins, and the 2026-08-03 ruling that a module's files share their
+declarations.
