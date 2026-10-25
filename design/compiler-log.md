@@ -1582,7 +1582,10 @@ interp_instructions 385,499,694 -> 385,496,174 and interp_allocs 401,591 ->
 every benchmark's machine code grows 320 bytes, text 5,498,444 -> 5,502,924
 over the fourteen, and building compiles it: codegen_instructions_dev
 116,447,795 -> 116,453,133 and codegen_instructions_release 370,219,514 ->
-370,245,362. No run row moved. Welfare falls by less than a hundredth, and
+370,245,362. The run rows move with the layout around that code, by under
+a thousand each: work_runbench 788,981,005 -> 788,981,075, work_encodebench
+2,325,240,037 -> 2,325,240,758, work_livebench 936,030,078 -> 936,030,540 and
+work_oneshot 10,050,617 -> 10,050,106. Welfare falls by less than a hundredth, and
 the floor follows under the rule for the language doing what it says: the
 2026-10-12 ruling that a file names only what it can see and that a test
 file is an outside consumer, the 2026-08-29 ruling that the author's own
