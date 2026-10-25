@@ -1,0 +1,73 @@
+import "std/list"
+import "std/text"
+
+# A set kept in a record admits a key only when it does not hold it. `fresh`
+# is only ever handed a record nothing else holds, so it writes the set and
+# the list in place. `shared` is handed one its caller reads again, and
+# `kept` reads the set after the write, so neither may write in place: each
+# record some other name holds keeps what it held.
+type state
+  seen
+  out
+
+type pair
+  left
+  right
+
+fn key i n
+  i * 7 % n
+
+fn fresh st _ 0
+  st
+
+fn fresh st n i
+  x = key i n
+  next = if (st.seen[x] == none) (state (put st.seen x true) (push st.out x)) st
+  fresh next n (i - 1)
+
+fn shared st _ 0
+  st
+
+fn shared st n i
+  x = key i n
+  next = if (st.seen[x] == none) (state (put st.seen x true) (push st.out x)) st
+  shared next n (i - 1)
+
+fn guarded st x
+  return st if st.seen[x] != none
+  state (put st.seen x true) (push st.out x)
+
+fn walk st _ 0
+  st
+
+fn walk st n i
+  walk (guarded st (key i n)) n (i - 1)
+
+fn kept st _ 0
+  st
+
+fn kept st n i
+  x = key i n
+  next = if (st.seen[x] == none) (state (put st.seen x true) st.out) st
+  pair (kept next n (i - 1)) st.seen
+
+fn shown st
+  text/join (list/to_list (list/map (keys st.seen) (k -> "{k}"))) ","
+
+fn pushed st
+  length st.out
+
+fn deep p
+  length p.left.left.right
+
+pub play =
+  seed = state { 0:true } [0]
+  first = shared seed 9 20
+  second = shared seed 5 3
+  third = walk seed 7 30
+  fourth = kept (state {} []) 6 4
+  fifth = fresh (state {} []) 11 40
+  print "{shown first} {pushed first} | {shown second} | {shown third}"
+  print "{shown seed} {pushed seed}"
+  print "{length fourth.right} {deep fourth}"
+  print "{shown fifth} {pushed fifth}"
