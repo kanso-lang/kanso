@@ -1269,6 +1269,18 @@ earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
 the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
 print 62.
 
+CI's rows. The run program with all four phases reads work_runbench
+788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
+20.2% of the new whole. The program is larger, so the code it emits grows:
+emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
+emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
+163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
+5,518,316 over the fourteen. No compile row and no browser row moves. Under
+the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
+stack and bag joined: the run_instructions baseline keeps its ratio to the
+run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
+the fixes in #2106 score against these rows as a rise.
+
 The fixes follow in their own pull requests and will score as rises.
 
 
@@ -1383,6 +1395,43 @@ more. `a_map_overwritten_each_lap_is_copied_without_its_dead_entries` holds
 `reentered` phase reads 988,276,908 on main and 881,351,361 with this change
 alone. That is below the 917,694,203 main reads without the phase, because
 other phases' loops stopped staging on their first lap too.
+
+CI's rows for the four fixes together (#2106), against the run program that
+already holds their shapes (#2104). work_runbench 988,172,222 -> 797,618,426,
+a 19.3% fall, which is the rise this pull request banks. The other run rows
+move by layout and by the carry change: work_deepbench 198,788,407 ->
+197,973,136, work_widebench 28,461,019 -> 28,445,045, work_basket 31,062,419
+-> 31,039,074, work_encodebench 2,325,240,758 -> 2,327,444,715,
+work_oneshot 10,050,106 -> 10,050,789, work_livebench 936,030,540 ->
+936,030,277, work_digestbench 4,122,778 -> 4,122,908 and work_escapebench
+40,308,387 -> 40,308,398. The tab runs its corpus in
+browser_run_instructions 33,345,113. The linearity changes cost the front
+end little and the binary's layout moves the rest: compile_instructions
+24,681,406 -> 24,664,014, entry_instructions 72,814,555 -> 72,772,292,
+library_instructions 72,478,036 -> 72,435,518, emit_instructions 5,628,759,
+browser_compile_instructions 218,660,965 -> 218,703,716,
+codegen_instructions_dev 116,452,600 and codegen_instructions_release
+370,226,904. The runtime grows, so every benchmark's machine code does too,
+text 5,518,316 -> 5,521,457 over the fourteen, and the run program's emitted
+code loses three lines, emitted_other_lines 163,953 -> 163,950.
+
+The mem vein moves as the carry entry above says. The three fixtures that
+pin a repaired node copy a little more:
+- a_node_repaired_by_an_inner_pop_outlives_the_outer_stage_evac_allocs 165,
+  a_node_repaired_by_an_inner_pop_outlives_the_outer_stage_evac_bytes 5,728;
+- a_repaired_node_below_a_loop_that_copies_nothing_allocs 273,
+  a_repaired_node_below_a_loop_that_copies_nothing_alloc_bytes 7,058,721,
+  a_repaired_node_below_a_loop_that_copies_nothing_evac_allocs 157,
+  a_repaired_node_below_a_loop_that_copies_nothing_evac_bytes 5,440,
+  a_repaired_node_below_a_loop_that_copies_nothing_survive_slots 22;
+- a_repaired_node_below_a_loop_that_returns_a_number_allocs 115,
+  a_repaired_node_below_a_loop_that_returns_a_number_alloc_bytes 3,532,993,
+  a_repaired_node_below_a_loop_that_returns_a_number_evac_allocs 41,
+  a_repaired_node_below_a_loop_that_returns_a_number_evac_bytes 1,344,
+  a_repaired_node_below_a_loop_that_returns_a_number_survive_slots 10.
+
+a_long_chain_answers_survival_from_its_index_chain_finds 95,601 -> 95,597
+moves with one fewer stage.
 
 ## 2026-10-25 — a slice that starts before the value answers none
 
