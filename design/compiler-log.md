@@ -23,42 +23,6 @@
 
 
 
-## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
-
-A per-function count of the tab's compile of `bench/interp_corpus` put
-`memchr_aligned` at 5,857,105 instructions and `trim_matches` at 1,689,320.
-Both came from walking text one line at a time with the standard library.
-
-- `ir_defines`, which splits emitted IR into definitions for the prune,
-  stepped with `split_inclusive('\n')`. That calls memchr once a line, and on
-  wasm32 memchr reads four bytes a step. It now finds each line with
-  `compare::byte_from`, eight bytes a step, and trims only a line that opens
-  with `}`.
-- `prune_shipped`, which drops the library declarations a program does not
-  reach, walked the library's source the same way and now steps the same way.
-- The tab's translator trimmed every line of IR with `str::trim`, which
-  decodes each character at both ends and asks the Unicode table. Emitted IR
-  is ASCII, so both of its per-line trims are `trim_ascii` now.
-
-Measured with the per-function count, which runs a named build and reads a
-few hundred thousand above the browser row: 221,423,495 -> 219,980,398 for
-`ir_defines`, -> 219,053,485 for the trims, and -> 218,810,755 for
-`prune_shipped`, -2,612,740 (-1.18%) in all. Natively the entry check fell
-from 75,017,916 to 74,717,928, because `prune_shipped` runs there too. CI's
-rows replace these.
-
-The ratchet row `prune_lines` puts the per-line `str::find` back in
-`ir_defines` and reads 220,266,296 on the same count; `ascii_trim` puts
-`str::trim` back on both of the translator's trims and reads 219,737,668.
-
-CI's rows for this branch against room-first appends, all taken into the
-goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
-`compile_instructions` 25,172,884 -> 25,077,347, `entry_instructions`
-74,435,723 -> 74,133,494, `library_instructions` 74,096,953 -> 73,794,737
-and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
-`prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
-Welfare rose under the second decimal, 93.27 as printed, and is banked.
-
 ## 2026-10-24 — the lexer reads a line before it walks it
 
 The entry compile spent 9,277,662 instructions in the lexer, and about a
@@ -1797,5 +1761,40 @@ elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
 natively and quadratic on the interpreter, 64 ms at 5,000 characters and
 563 ms at 20,000. On #2152's build, which shares a long string and slices
 an ASCII one by byte, the same two read 39 ms and 77 ms.
+
+CI's rows: ROWS.
+
+## 2026-10-25 — the rest of a list after a drop is one copy
+
+`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
+`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
+a list, and it asks a new internal builtin, `rest_from`. Given a list and a
+position of at least 1, it answers the list's elements from that position
+on, copied in one move. Given anything else it answers none, and std walks
+that a step at a time as before, so a string still drops to its characters,
+bytes to their numbers and a negative count to nothing. `fold` gains the
+indexed arm a capped cursor already had, so a fold over a drop reads by
+index. Before this, each rest was built a step record and an advanced cursor
+per element.
+
+Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
+interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
+so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
+shared its list's storage would be linear, but a list's items pointer is
+also how a push onto it finds its buffer's header, so a list that points
+into the middle of another's items needs a header of its own first.
+
+`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
+the end and a negative count, from lists of numbers, records and lists, and
+from a string, bytes and a map, which keep their step walk; it also folds
+over a drop. Its output is main's interpreter, and both engines agree with
+it. A first draft clamped a negative drop to the whole list, where main
+answers none of it, and the fixture caught the difference. Moving the copy
+one element either way, on either engine, turns it red.
+
+On this container the run program reads 888,090,230 -> 847,406,017 and the
+interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
+phase's 40.8 million instructions natively, and all but 1.7 million of its
+34 million interpreted.
 
 CI's rows: ROWS.
