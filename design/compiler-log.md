@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-24 — a short float written in one pass
-
-`render_ryu`'s short path wrote a float from its scaled decimal m and place
-count p by dividing m by 10^p, writing the whole part forward after counting
-its digits, and then writing the fraction behind the point. It now writes m
-right to left in one pass, two digits at a time: the p fraction digits, the
-point, then what is left of m. The text goes into the top of a scratch buffer
-and moves out as three words. On runbench 191,070 floats take this path, and
-in this container the run program fell from 815,624,421 to 813,607,261
-instructions (-0.25%), with byte-identical output.
-
-`tests/every_rendered_float_reads_back_as_itself.rs` now checks the text as
-well: the digits ryu chose, placed by the rule the interpreter's
-`render_float` follows. Its other checks pass `.5` for `0.5`, which reads
-back. With the whole part's zero dropped, it reported 141,779 text failures
-and none of the other kinds. At ten times its size it read 50,807,850
-doubles with no failure. The ratchet row `float_one_pass` puts the division
-back.
-
 ## 2026-10-24 — the module's symbols read in one scan
 
 The module writer asks two questions of every piece of the body: which
@@ -1614,3 +1595,23 @@ distinct. It reads each map back by length, keys, values, a persistent put,
 a delete and equality, on the interpreter and on both native tiers: 0 of
 120 disagree. With the restart copying from the log instead of the view,
 30 of 120 disagree.
+
+## 2026-10-25 — a drained map joins the run program and the interpreted corpus
+
+The probe that found the word count timed a few more accumulation shapes
+at two sizes: a string joined onto itself, a list concatenated onto, a map
+of maps, a record carrying a list through a fold, and a map drained by
+`delete`. Only the last is superlinear. Taking half the keys out of a map
+of 5,000 in no order took 1.26 billion instructions natively, and of
+20,000 took 27.9 billion. The interpreter takes 0.21 s and 3.76 s for the
+same two. `delete` answers a fresh map (ruled 2026-10-13, kanso#1914), so
+each call copies the whole map on both engines, and a map drained by a loop
+costs the square of its size. Under the 2026-09-05 corpus-first gavel the
+shape joins the corpus here, measured on #2116's tree before its fix.
+
+`drained` fills a map of 1,100 keys and deletes 550 of them. On this
+container the run program reads 847,672,857 with the phase and 801,953,443
+without it, a column of 45,719,414 (5.39%). The interpreted corpus drains a
+map of 600 keys, 461,296,007 → 486,601,057, and the tab runs the same
+corpus. CI's rows and the re-based welfare baselines follow in this pull
+request.

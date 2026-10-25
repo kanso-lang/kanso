@@ -1,0 +1,19 @@
+# A map filled with keys and then drained by `delete`, half of its keys in no
+# order: a work set, or the open entries of a table taken out as each is
+# settled. `delete` answers a fresh map on every engine, so each call copied
+# the whole map, and draining half of 20,000 keys took 1.5 seconds natively
+# and 3.8 on the interpreter.
+fn fill m 0
+  m
+
+fn fill m i
+  fill (put m i i) (i - 1)
+
+fn drain m _ 0
+  m
+
+fn drain m n i
+  drain (delete m (i * 7919 % n + 1)) n (i - 1)
+
+pub fn total n
+  length (drain (fill {} n) n (n / 2))

@@ -8,7 +8,9 @@ type bag
   items
   n
 
-pub play = print "interp {rounds 6} {branched 680} {padded 18 0} {counted 1000}"
+pub play =
+  maps = "{counted 1000} {drained 600}"
+  print "interp {rounds 6} {branched 680} {padded 18 0} {maps}"
 
 fn rounds n
   source = document 220
@@ -62,3 +64,19 @@ fn padded n acc
 fn counted n
   words = list/map (list/take list/naturals n) (i -> "w{i * 7919 % (n / 2)}")
   length (list/tally (list/to_list words))
+
+# A map filled and then drained of half its keys by `delete`, in no order.
+fn filled m 0
+  m
+
+fn filled m i
+  filled (put m i i) (i - 1)
+
+fn emptied m _ 0
+  m
+
+fn emptied m n i
+  emptied (delete m (i * 7919 % n + 1)) n (i - 1)
+
+fn drained n
+  length (emptied (filled {} n) n (n / 2))

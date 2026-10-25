@@ -108592,3 +108592,22 @@ narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
 against the 5,863,976 the assume change left it, a move of 178; the dev
 build that row counts still narrows its module, and writes the same text.
 CI's browser rows matched this container's.
+
+## 2026-10-24 — a short float written in one pass
+
+`render_ryu`'s short path wrote a float from its scaled decimal m and place
+count p by dividing m by 10^p, writing the whole part forward after counting
+its digits, and then writing the fraction behind the point. It now writes m
+right to left in one pass, two digits at a time: the p fraction digits, the
+point, then what is left of m. The text goes into the top of a scratch buffer
+and moves out as three words. On runbench 191,070 floats take this path, and
+in this container the run program fell from 815,624,421 to 813,607,261
+instructions (-0.25%), with byte-identical output.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` now checks the text as
+well: the digits ryu chose, placed by the rule the interpreter's
+`render_float` follows. Its other checks pass `.5` for `0.5`, which reads
+back. With the whole part's zero dropped, it reported 141,779 text failures
+and none of the other kinds. At ten times its size it read 50,807,850
+doubles with no failure. The ratchet row `float_one_pass` puts the division
+back.

@@ -204,11 +204,22 @@
 # round twice in no order. A put of a key the map already held walked the
 # map's append log back from its end to find that key's entry, so the second
 # sighting of each word cost the number of words counted so far.
+#
+# One more joined on 2026-10-25 from the same probe, measured at kanso#2116
+# before its fix. Its column is the whole program with it, 847,672,857, less
+# the whole without, 801,953,443, and its share is of the former.
+#
+#   drained   550 deletes from a map of 1,100 keys       45,719,414  5.39%
+#
+# `drained` fills a map and takes half its keys out again with `delete`, in
+# no order. `delete` answers a fresh map, so each call copied the whole map
+# on both engines and draining a map cost the square of its size.
 import "./bag"
 import "./branched"
 import "./bump"
 import "./counted"
 import "./deep"
+import "./drained"
 import "./escape"
 import "./fold"
 import "./guarded"
@@ -278,6 +289,8 @@ padded_rows = 75
 
 counted_words = 2000
 
+drained_keys = 1100
+
 fn decoded _ 0 sofar
   sofar
 
@@ -323,8 +336,9 @@ fn tally raw doc a b
   ported9 = ported8 + branched/total branched_pushes
   ported10 = ported9 + padded/total padded_rows
   ported11 = ported10 + counted/total counted_words
+  ported12 = ported11 + drained/total drained_keys
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported11 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported12 + rest))
   bulk .> on
 
 fn shaped raw doc a
