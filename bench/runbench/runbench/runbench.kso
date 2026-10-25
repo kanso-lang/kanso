@@ -220,11 +220,23 @@
 # hold it, testing `m[k] == none` in an `if`. The read in the condition
 # counted as a second holder, so the put copied the map, and the copy had no
 # sorted view for the next read, which sorted the whole map again.
+#
+# One more joined on 2026-10-25 from the same probe, measured on kanso#2119's
+# tree before its fix. Its column is the whole program with it, 855,640,794,
+# less the whole without, 809,929,455, and its share is of the former.
+#
+#   deduped   850 words kept once each, in first order   45,711,339  5.34%
+#
+# `deduped` is `admitted` with the set kept in a record beside the list of
+# words it admits. The read of the set in the condition, and the arm that
+# hands the record back unchanged, each counted as another holder of the
+# record, so the set and the list were both copied for every word.
 import "./admitted"
 import "./bag"
 import "./branched"
 import "./bump"
 import "./counted"
+import "./deduped"
 import "./deep"
 import "./drained"
 import "./escape"
@@ -300,6 +312,8 @@ drained_keys = 1100
 
 admitted_keys = 430
 
+deduped_words = 850
+
 fn decoded _ 0 sofar
   sofar
 
@@ -347,8 +361,9 @@ fn tally raw doc a b
   ported11 = ported10 + counted/total counted_words
   ported12 = ported11 + drained/total drained_keys
   ported13 = ported12 + admitted/total admitted_keys
+  ported14 = ported13 + deduped/total deduped_words
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported13 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported14 + rest))
   bulk .> on
 
 fn shaped raw doc a

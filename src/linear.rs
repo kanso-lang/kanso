@@ -432,18 +432,28 @@ impl<'a> Analysis<'a> {
                 }
             }
         }
-        let mut handed = HashSet::default();
+        // Every call site hands the record over is a greatest fixpoint too: a
+        // loop that hands its record back whole from one arm of an `if`, and a
+        // rebuilt one from the other, hands it over exactly when its own
+        // callers do. It starts from every parameter called by name and loses
+        // those whose call sites refuse under what is left.
         for (name, arity, i, f) in seeds {
             if !self.called_by_name(&name, arity) {
                 continue;
             }
-            if self.callers_hand_over(&name, arity, i) {
-                handed.insert((name.clone(), arity, i));
-            }
+            self.records_handed.insert((name.clone(), arity, i));
             self.field_params.insert((name, arity, i, f));
         }
-        self.records_handed = handed;
         loop {
+            let drop_handed: Vec<_> = self
+                .records_handed
+                .iter()
+                .filter(|(name, arity, i)| !self.call_sites_hand_over(name, *arity, *i))
+                .cloned()
+                .collect();
+            for k in &drop_handed {
+                self.records_handed.remove(k);
+            }
             let drop_params: Vec<_> = self
                 .field_params
                 .iter()
@@ -460,7 +470,7 @@ impl<'a> Analysis<'a> {
                 })
                 .cloned()
                 .collect();
-            if drop_params.is_empty() && drop_returns.is_empty() {
+            if drop_handed.is_empty() && drop_params.is_empty() && drop_returns.is_empty() {
                 return;
             }
             for k in drop_params {
@@ -943,8 +953,8 @@ impl<'a> Analysis<'a> {
                 if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if")
                     && args.len() == 3 =>
             {
-                self.unique_in_with(&args[1], ctx, scoped, exempt)
-                    && self.unique_in_with(&args[2], ctx, scoped, exempt)
+                self.arm_unique(&args[1], &args[2], ctx, scoped, exempt)
+                    && self.arm_unique(&args[2], &args[1], ctx, scoped, exempt)
             }
             Expr::Guard { early, rest, .. } => {
                 let tail = matches!(rest.last(), Some(Stmt::Expr(e))
@@ -991,6 +1001,30 @@ impl<'a> Analysis<'a> {
     /// A variable holding a uniquely-owned list: a linear parameter, or a local
     /// bound to a unique list — in either case used at most once in the body, so
     /// no alias outlives the move.
+    /// One arm of an `if`, which runs instead of `other`. An arm that answers
+    /// a name whole, `if c (state (put st.seen x true) st.out) st`, is judged
+    /// on its own path: the other arm's mentions never run beside it. The
+    /// body's count takes the busier arm, so the path through this one uses
+    /// the name at most that count less however many more times the other
+    /// arm does. Counting both arms against it kept a record's field from
+    /// moving under any `if` that hands the record back unchanged.
+    fn arm_unique(
+        &self,
+        arm: &Expr,
+        other: &Expr,
+        ctx: &FnDecl,
+        scoped: Option<&str>,
+        exempt: &[&Expr],
+    ) -> bool {
+        match arm {
+            Expr::Ident(var, _, _) => {
+                let less = count_in_expr(var, other).saturating_sub(count_in_expr(var, arm));
+                self.is_unique_source_less(var, ctx, scoped, exempt, less)
+            }
+            _ => self.unique_in_with(arm, ctx, scoped, exempt),
+        }
+    }
+
     fn is_unique_source(
         &self,
         var: &str,
@@ -998,21 +1032,40 @@ impl<'a> Analysis<'a> {
         scoped: Option<&str>,
         exempt: &[&Expr],
     ) -> bool {
+        self.is_unique_source_less(var, ctx, scoped, exempt, 0)
+    }
+
+    fn is_unique_source_less(
+        &self,
+        var: &str,
+        ctx: &FnDecl,
+        scoped: Option<&str>,
+        exempt: &[&Expr],
+        less: usize,
+    ) -> bool {
         // a folding lambda's parameter: the fold hands it a uniquely-owned
         // accumulator on every call, and the lambda was checked before this
         // name was put in scope
         if scoped == Some(var) {
             return true;
         }
-        let discounted: usize =
-            exempt.iter().filter(|e| !holds(var, e)).map(|e| count_in_expr(var, e)).sum();
+        let discounted: usize = less
+            + exempt
+                .iter()
+                .filter(|e| !holds(var, e))
+                .map(|e| count_in_expr(var, e))
+                .sum::<usize>();
         if effective_uses(var, &ctx.body).saturating_sub(discounted) > 1 {
             return false;
         }
         if let Some(idx) =
             ctx.params.iter().position(|p| matches!(p, Pattern::Var(n, _) if n == var))
         {
-            return self.linear_params.contains(&ctx.name, ctx.params.len(), idx);
+            // used at most once on this path, so what remains is that every
+            // caller hands the value over, which `records_handed` says of a
+            // parameter some other path reads twice for its fields
+            return self.linear_params.contains(&ctx.name, ctx.params.len(), idx)
+                || self.records_handed.contains(&(ctx.name.clone(), ctx.params.len(), idx));
         }
         // a local binding `var = e`, read through the guards above it: the
         // lines under a `return x if c` are the guard's `rest`, one arm of
@@ -1110,7 +1163,7 @@ impl FieldTally {
         // pushed through `st.events` under such a guard and copied the list
         // every lap; the same loop written as two arms grew it in place.
         if let Expr::Guard { cond, early, rest, .. } = e {
-            self.walk(p, f, cond, under_lambda);
+            self.condition(p, f, cond, under_lambda);
             let mut fired = FieldTally::default();
             fired.walk(p, f, early, under_lambda);
             for st in rest.iter() {
@@ -1126,7 +1179,7 @@ impl FieldTally {
         // guard and the two-arm spellings grew it in place.
         if let Expr::App { head, args, piped: false, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
-                self.walk(p, f, &args[0], under_lambda);
+                self.condition(p, f, &args[0], under_lambda);
                 for arm in &args[1..] {
                     let mut taken = FieldTally::default();
                     taken.walk(p, f, arm, under_lambda);
@@ -1139,6 +1192,42 @@ impl FieldTally {
         for c in child_exprs(e) {
             self.walk(p, f, c, inner);
         }
+    }
+
+    /// The condition of an `if` or a guard, which is finished before either
+    /// path runs. `st.seen[x]` with a key that calls and compares nothing
+    /// answers the element and lets the record go, as the same read of a
+    /// plain map does (`count_in_condition`), so it is no read of the field
+    /// the path below may move: a set kept in a record's field, admitting a
+    /// key only when it does not hold it, copied the set for every key.
+    fn condition(&mut self, p: &str, f: &str, cond: &Expr, under_lambda: bool) {
+        fn element_reads(p: &str, f: &str, e: &Expr) -> (usize, usize) {
+            if let Expr::Index { base, index, .. } = e {
+                if let Some((b, field)) = field_read(base) {
+                    if b == p && cheap_key(index) {
+                        return (1, (field == f) as usize);
+                    }
+                }
+            }
+            if matches!(e, Expr::Lambda { .. }) {
+                return (0, 0);
+            }
+            let mut n = (0, 0);
+            crate::for_each_child(e, |c| {
+                let (all, of_f) = element_reads(p, f, c);
+                n.0 += all;
+                n.1 += of_f;
+            });
+            n
+        }
+        self.walk(p, f, cond, under_lambda);
+        if under_lambda {
+            return;
+        }
+        let (all, of_f) = element_reads(p, f, cond);
+        self.mentions -= all;
+        self.field_reads -= all;
+        self.reads_of_f -= of_f;
     }
 
     /// The tally of one path that runs instead of another. A path that never
@@ -1419,19 +1508,22 @@ fn read_in_block(var: &str, body: &[Stmt]) -> usize {
 /// `var[k]`, with a key that calls nothing and compares nothing: a read the
 /// demand analysis never defers, so it is finished when its binding is.
 fn strict_read(var: &str, e: &Expr) -> bool {
-    fn cheap(e: &Expr) -> bool {
-        match e {
-            Expr::App { .. } | Expr::Lambda { .. } | Expr::Guard { .. } | Expr::Block(..) => false,
-            Expr::BinOp { op, .. } if *op == "==" || *op == "!=" => false,
-            _ => {
-                let mut ok = true;
-                crate::for_each_child(e, |c| ok &= cheap(c));
-                ok
-            }
+    matches!(e, Expr::Index { base, index, .. }
+        if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) && cheap_key(index))
+}
+
+/// A key that calls nothing and compares nothing, so the read it indexes is
+/// finished where it is written.
+fn cheap_key(e: &Expr) -> bool {
+    match e {
+        Expr::App { .. } | Expr::Lambda { .. } | Expr::Guard { .. } | Expr::Block(..) => false,
+        Expr::BinOp { op, .. } if *op == "==" || *op == "!=" => false,
+        _ => {
+            let mut ok = true;
+            crate::for_each_child(e, |c| ok &= cheap_key(c));
+            ok
         }
     }
-    matches!(e, Expr::Index { base, index, .. }
-        if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) && cheap(index))
 }
 
 /// Every mention of `var` in `e`, on every path.
@@ -1565,13 +1657,20 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
 /// Uses of `var` in the condition of an `if` or a guard, less its strict
 /// reads. The condition is finished before either arm runs, and `m[k]` with a
 /// key that calls and compares nothing answers the element and lets the map
-/// go, as the same read bound to a name does (`read_in_block`). So
-/// `if (m[k] == none) (put m k true) m` holds `m` once, and adding a key a set
-/// did not hold no longer copies the set.
+/// go, as the same read bound to a name does (`read_in_block`), and so does
+/// `st.seen[k]` off a record's field. So `if (m[k] == none) (put m k true) m`
+/// holds `m` once, and adding a key a set did not hold no longer copies the
+/// set.
 fn count_in_condition(var: &str, cond: &Expr) -> usize {
     fn strict_reads(var: &str, e: &Expr) -> usize {
         if strict_read(var, e) {
             return 1;
+        }
+        // and `st.seen[x]`, an element read off one of a record's fields
+        if let Expr::Index { base, index, .. } = e {
+            if field_read(base).is_some_and(|(b, _)| b == var) && cheap_key(index) {
+                return 1;
+            }
         }
         if matches!(e, Expr::Lambda { .. }) {
             return 0;

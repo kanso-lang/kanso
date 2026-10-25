@@ -108637,3 +108637,64 @@ about; treating the end of the text as a line's end turned that spec red on
 went red with the marking taken out. The ratchet row `one_scan` scans each
 piece a second time and reads 225,543,228; `strings_in_scan` scans the body
 for strings again and reads 224,854,630.
+
+## 2026-10-24 — a pair of leaves held in place
+
+The tab's translator asks a type for its scalar leaves, with their byte
+offsets, at every load, store, call and return of an aggregate. A scalar
+answered in place, and every struct built a vector, so each `%KValue`, two
+`i64`s, cost an allocation and a free. `Ty::leaves` now answers a struct of
+two scalars in place too. The tab's compile of its corpus fell from
+223,778,736 to 222,368,963 instructions (-0.63%) in this container, and the
+wasm it wrote is byte-identical. A spec holds `leaves` to the list `scalars`
+writes for scalars, pairs, a nested pair, a triple and arrays; giving the
+second leaf a fixed offset of 8 turned it red on `{i1, i16}`. The ratchet row
+`pair_leaves` lists pairs in a vector again and reads 223,694,975.
+
+**CI's rows for the three.** The run program fell from 815,624,816 to
+813,606,641, and the other benchmarks that render floats with it:
+encodebench 2,362,394,628 -> 2,353,427,661, livebench 970,491,700 ->
+961,524,285, widebench 28,539,533 -> 28,476,897 and oneshot 10,278,879 ->
+10,256,694. Every binary's text is 688 bytes smaller, the renderer's. The
+browser rows matched this container's. emit_instructions fell from 5,864,154
+to 5,690,029 (-3.0%), since `finish` runs `assembled` on every build and
+reads the module once where it read it three times. compile_instructions
+25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
+library_instructions 74,183,641 -> 74,096,953 count `kanso check`, which
+reaches none of the three changes, so I read them as the binary's layout.
+codegen_instructions_dev moved 116,219,760 -> 116,218,430 and
+codegen_instructions_release 425,504,448 -> 425,508,082; I have not isolated
+either. Welfare rose from 93.12 to 93.14 and is banked.
+
+Measured and set aside while looking: stripping the comment lines DECLARES
+carries from dev and tab modules, 11,317 of the corpus module's 327,126
+bytes, saved 85,914 instructions of the tab's compile (0.04%); and summing
+short integer literals in an `i64` rather than an `i128` in the translator's
+tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
+per-function count of `docs/kanso.wasm` built with its names: the tokenizer
+was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
+2.2%.
+
+## 2026-10-24 — the tab's bcmp answers equality alone
+
+The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
+`kanso::compare::bytes`. A per-function count of `docs/kanso.wasm` built
+with its names showed the result of one body under two names: every compare
+in the tab's compile of its corpus called `memcmp`, and `memcmp` called
+`bcmp`, 154,063 times, together 4.2% of the compile. `bcmp` now has a body of
+its own, `compare::differ`, which answers equality alone. In the wasm built
+from this tree nothing on that path calls `bcmp`; `memcmp` runs the compare
+itself, and the call through to the second function is gone.
+
+The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
+this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
+`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
+on every position of every length up to 24; skipping the last word of a run
+longer than eight turned both red. The ratchet row `equal_bcmp` gives `bcmp`
+the ordering body again, and the compile reads 222,368,963.
+
+The calls come from `==` on strings, which reaches `memcmp` even against a
+short literal: the type names in `P::ty` and the attribute words in
+`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
+keys built from their bytes cost more than it saved, 222,368,963 ->
+222,475,311 on the tree before this change, and was set aside.

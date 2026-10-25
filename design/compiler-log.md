@@ -23,67 +23,6 @@
 
 
 
-## 2026-10-24 — a pair of leaves held in place
-
-The tab's translator asks a type for its scalar leaves, with their byte
-offsets, at every load, store, call and return of an aggregate. A scalar
-answered in place, and every struct built a vector, so each `%KValue`, two
-`i64`s, cost an allocation and a free. `Ty::leaves` now answers a struct of
-two scalars in place too. The tab's compile of its corpus fell from
-223,778,736 to 222,368,963 instructions (-0.63%) in this container, and the
-wasm it wrote is byte-identical. A spec holds `leaves` to the list `scalars`
-writes for scalars, pairs, a nested pair, a triple and arrays; giving the
-second leaf a fixed offset of 8 turned it red on `{i1, i16}`. The ratchet row
-`pair_leaves` lists pairs in a vector again and reads 223,694,975.
-
-**CI's rows for the three.** The run program fell from 815,624,816 to
-813,606,641, and the other benchmarks that render floats with it:
-encodebench 2,362,394,628 -> 2,353,427,661, livebench 970,491,700 ->
-961,524,285, widebench 28,539,533 -> 28,476,897 and oneshot 10,278,879 ->
-10,256,694. Every binary's text is 688 bytes smaller, the renderer's. The
-browser rows matched this container's. emit_instructions fell from 5,864,154
-to 5,690,029 (-3.0%), since `finish` runs `assembled` on every build and
-reads the module once where it read it three times. compile_instructions
-25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
-library_instructions 74,183,641 -> 74,096,953 count `kanso check`, which
-reaches none of the three changes, so I read them as the binary's layout.
-codegen_instructions_dev moved 116,219,760 -> 116,218,430 and
-codegen_instructions_release 425,504,448 -> 425,508,082; I have not isolated
-either. Welfare rose from 93.12 to 93.14 and is banked.
-
-Measured and set aside while looking: stripping the comment lines DECLARES
-carries from dev and tab modules, 11,317 of the corpus module's 327,126
-bytes, saved 85,914 instructions of the tab's compile (0.04%); and summing
-short integer literals in an `i64` rather than an `i128` in the translator's
-tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
-per-function count of `docs/kanso.wasm` built with its names: the tokenizer
-was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
-2.2%.
-
-## 2026-10-24 — the tab's bcmp answers equality alone
-
-The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
-`kanso::compare::bytes`. A per-function count of `docs/kanso.wasm` built
-with its names showed the result of one body under two names: every compare
-in the tab's compile of its corpus called `memcmp`, and `memcmp` called
-`bcmp`, 154,063 times, together 4.2% of the compile. `bcmp` now has a body of
-its own, `compare::differ`, which answers equality alone. In the wasm built
-from this tree nothing on that path calls `bcmp`; `memcmp` runs the compare
-itself, and the call through to the second function is gone.
-
-The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
-this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
-`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
-on every position of every length up to 24; skipping the last word of a run
-longer than eight turned both red. The ratchet row `equal_bcmp` gives `bcmp`
-the ordering body again, and the compile reads 222,368,963.
-
-The calls come from `==` on strings, which reaches `memcmp` even against a
-short literal: the type names in `P::ty` and the attribute words in
-`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
-keys built from their bytes cost more than it saved, 222,368,963 ->
-222,475,311 on the tree before this change, and was set aside.
-
 ## 2026-10-24 — a name no query starts like is passed over
 
 `queries_named` reads every `@name` in a text, measures it and looks it up in
@@ -1722,3 +1661,122 @@ The interpreter's in-place delete takes a value on the holder count as push
 and put do, so the ratchet's row "a shared seed copied every lap" now finds
 five such sites in `src/eval/builtins.rs` where it found four, and disables
 the delete's with the others. Its spec still turns red under it.
+
+## 2026-10-25 — a deduped list joins the corpus
+
+The same probe timed three more record and map shapes. A map of lists grown
+by pushing onto `m[k]` scales linearly. A set kept in a record beside the
+list of what it admitted does not: `if (st.seen[x] == none) (words (put
+st.seen x true) (push st.out x)) st`, the distinct words of a text in the
+order they first appear. 5,000 words took 2.22 billion instructions
+natively and 20,000 took 44.7 billion; the interpreter took 0.13 s and
+1.52 s. Two counts refused it. The read of the set in the condition counted
+as a second read of the field the put moves, and the arm that hands the
+record back unchanged counted the busier arm's two field reads against it,
+so neither the record nor its fields were handed over and the set and the
+list were copied for every word. A map of maps counted in place is the third
+shape, and it is quadratic natively only; it waits for its own corpus
+phase.
+
+Under the 2026-09-05 corpus-first gavel `deduped` joins the corpus here,
+measured on #2119's tree before its fix. It keeps 850 words once each. On
+this container the run program reads 855,640,794 with it and 809,929,455
+without it, a column of 45,711,339 (5.34%). The interpreted corpus keeps 800
+words, 485,629,040 → 511,418,942.
+
+CI's rows for the corpus with the phase. work_runbench 809,823,849 ->
+855,535,787 and run_peak_bytes 5,737,009 -> 8,546,977, with
+run_held_peak_bytes 216,080 -> 3,026,048. The interpreted corpus reads
+interp_instructions 430,978,258 -> 469,727,924, interp_peak_bytes 765,587 ->
+1,203,737 and interp_allocs 461,292 -> 500,455. The tab compiles and runs it:
+browser_compile_instructions 273,807,879 -> 303,782,324,
+browser_compile_peak_bytes 715,283 -> 722,748, browser_run_instructions
+42,417,870 -> 280,790,947 and browser_run_peak_bytes 1,310,720 -> 2,097,152.
+The run program's emitted code grows by the phase: emitted_other_defines
+2,204 -> 2,209, emitted_other_calls 20,078 -> 20,164, emitted_other_branches
+17,572 -> 17,649, emitted_other_lines 165,914 -> 166,511 and text 5,646,113
+-> 5,647,585. Its allocation vein: run_allocs 1,446,946 -> 1,449,080,
+run_alloc_bytes 215,868,632 -> 219,600,424, run_beat_iters 112,473 ->
+113,323, run_sh_buf 86,960,912 -> 87,015,792, run_sh_map 12,160 -> 25,760
+and run_sh_rec 3,906,784 -> 3,934,048. Welfare re-bases the eight terms the
+phase moves, each keeping its ratio to its baseline, and the floor stays at
+94.83.
+
+## 2026-10-25 — a set in a record admits a word in place
+
+The fix for `deduped`, the shape the entry above put in the corpus. Three
+counts in `src/linear.rs` kept the record and its set from being written in
+place, and each is now taken on the path it describes.
+
+A field's element read in a condition, `st.seen[x]`, is finished before
+either arm runs, as `m[k]` on a plain map already was. `FieldTally` no
+longer counts it as a read of the field the arm below moves, and
+`count_in_condition` no longer counts it as a use of the record.
+
+An arm that answers a name whole, the `st` in `if c (words (put st.seen x
+true) (push st.out x)) st`, is judged on its own path. The body's count
+takes the busier arm, which reads `st` twice for its fields, so the bare
+`st` was counted twice and never handed over. The path through the bare arm
+uses the name at most that count less how many more times the other arm
+does, and that is the discount it now gets. The bound holds because the
+path through the other arm, with the same choices outside the `if`, is
+among those the body's count already covers.
+
+Whether every caller hands a record over is a greatest fixpoint, as
+linearity is. It was computed once, after linearity, and a loop that hands
+its record back whole from one arm hands it over exactly when its own
+callers do, which a single pass could not see. `records_handed` now starts
+from every parameter called by name and loses those whose call sites refuse
+under what is left, in the same loop as the field facts. A parameter used
+at most once on a path is unique there when its callers hand it over, which
+is what `records_handed` says of a record some other path reads twice for
+its fields.
+
+Natively, keeping the distinct words of 5,000 took 2,221,969,523
+instructions and now takes 7,363,697; of 20,000, 44,652,443,199 and now
+35,005,980. The interpreter took 1.59 s at 20,000 and now takes 0.05 s.
+The same set written through a helper that guards, `return st if
+st.seen[x] != none` above the rebuilt record, is still copied: the helper's
+own answer is decided in the linearity fixpoint, before the record facts
+exist, and joining the two fixpoints is a larger change than this one.
+
+`mem/a_set_in_a_record_admits_without_copying` keeps 2,000 of 4,000 words
+in 33 allocations of 370,640 bytes, where the tree without the fix made
+10,184 of 92,997,520. `micro/a_set_in_a_record_keeps_what_its_holders_saw`
+runs the shape on a record only it holds, which is written in place, and on
+records a caller reads again or whose set is read after the write, which
+are not. It prints what main's interpreter prints. A generated differential
+over 120 such programs, fresh seeds and shared ones, spelled with `if` and
+with a guard, agrees with main's interpreter on the interpreter and both
+native tiers; 15 of them write in place. Making every bare arm count as
+unique leaves all of these green, because a field moves only when every
+other mention of the record is a field read, so the arm's discount alone
+cannot reach a record something else holds.
+
+CI's rows, against #2120's corpus: the run program 855,535,787 ->
+810,657,719 (-5.2%), the interpreted corpus 469,727,924 -> 455,385,272
+(-3.1%), and the tab's run 280,790,947 -> 44,919,990, with
+browser_run_peak_bytes 2,097,152 -> 1,310,720. Against main, which holds
+neither the phase nor the fix: work_runbench 809,823,849 -> 810,657,719,
+run_peak_bytes 5,737,009 -> 5,744,913, interp_instructions 430,978,258 ->
+455,385,272, interp_peak_bytes 765,587 -> 1,222,789, interp_allocs 461,292
+-> 490,981, browser_run_instructions 42,417,870 -> 44,919,990,
+browser_compile_instructions 273,807,879 -> 308,823,716 and
+browser_compile_peak_bytes 715,283 -> 722,756, each the phase less what the
+fix takes back. The interpreter's peak stays where the phase put it, and
+moves 1,203,737 -> 1,222,789 against #2120; nothing here isolates why. The
+run
+program's allocation vein against main: run_alloc_bytes 215,868,632 ->
+215,955,960, run_put_mut_grow 48 -> 55, run_push_mut_slow 1,579,791 ->
+1,580,216, run_sh_buf 86,960,912 -> 86,961,200, run_bytes_malloc 7,901 ->
+7,910, run_perm_live_bytes 32,049 -> 48,273 and run_perm_peak_bytes 802,321
+-> 810,225. The phase's code is in the corpus entry above: text 5,646,113 ->
+5,647,825 and emitted_other_lines 165,914 -> 166,508 with it.
+
+The analysis costs the front end more. `records_handed` is now settled over
+rounds rather than in one pass, and every bare arm counts the other arm:
+compile_instructions 24,695,561 -> 24,731,131 (+0.14%), entry_instructions
+72,875,974 -> 72,970,344, library_instructions 72,547,701 -> 72,642,115 and
+emit_instructions 5,636,850 -> 5,641,862, and the tab's compile
+browser_compile_instructions 303,782,324 -> 308,823,716 against #2120.
+Welfare rises 94.83 -> 95.01 and the rise is banked.

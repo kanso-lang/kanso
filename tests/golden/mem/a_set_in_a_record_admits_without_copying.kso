@@ -1,0 +1,20 @@
+# The distinct words of a text in first order: a record carries the set of
+# words seen and the list of them, and a word joins both only when the set
+# does not hold it. The read in the condition and the arm that hands the
+# record back unchanged each counted as another holder, so every word copied
+# the set and the list. 4,000 words, 2,000 distinct.
+type words
+  seen
+  out
+
+fn step st _ 0
+  st
+
+fn step st n i
+  x = i * 7919 % (n / 2)
+  next = if (st.seen[x] == none) (words (put st.seen x true) (push st.out x)) st
+  step next n (i - 1)
+
+pub play =
+  kept = step (words {} []) 4000 4000
+  print "{length kept.out} {kept.out[1]} {length kept.seen}"
