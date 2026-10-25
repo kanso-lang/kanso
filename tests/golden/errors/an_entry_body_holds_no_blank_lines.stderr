@@ -1,0 +1,4 @@
+error[formatting]: blank lines may not appear inside a body
+  --> an_entry_body_holds_no_blank_lines.kso:4:1
+   4 |   "no"
+       ^
