@@ -250,6 +250,12 @@ struct Analysis<'a> {
     /// the map holds, so a helper that takes an element out and puts it back
     /// hands its loop the same promise.
     returns_elems: HashSet<(String, usize)>,
+    /// By function, the (arity, parameter) pairs where every arm answers
+    /// that parameter, mentioned nowhere else, or a fresh literal, so the
+    /// result is unique wherever the argument is. `fn or_map none` answers
+    /// `{}` and `fn or_map m` answers `m`. Asked per call, so one caller
+    /// handing in a shared value costs only that call.
+    passes: crate::hash::Map<String, Vec<(usize, usize)>>,
 }
 
 /// Where a name occurs, gathered once, so `escapes_as_value` stops re-walking
@@ -385,6 +391,7 @@ impl<'a> Analysis<'a> {
             records_handed: HashSet::default(),
             elems_params: HashSet::default(),
             returns_elems: HashSet::default(),
+            passes: passes_through(program),
             type_fields: program
                 .types
                 .iter()
@@ -868,10 +875,8 @@ impl<'a> Analysis<'a> {
     /// accumulator on the silence of a walk that found no call site.
     fn arms_move(&self, name: &str, arity: usize, i: usize) -> bool {
         // In every arm the parameter must be moved: a plain Var used at most
-        // once, or a wildcard or a nullary like `none` (dropped, used zero
-        // times). `fn or_map none` then `fn or_map m` hands its argument
-        // back. Anything else — a number or string discriminator, a
-        // destructure — can't be a linear accumulator.
+        // once, or a wildcard (dropped, used zero times). Anything else — a
+        // literal discriminator, a destructure — can't be a linear accumulator.
         for decl in self.group(name, arity) {
             match decl.params.get(i) {
                 Some(Pattern::Var(pname, _)) => {
@@ -879,7 +884,7 @@ impl<'a> Analysis<'a> {
                         return false;
                     }
                 }
-                Some(Pattern::Wildcard(_) | Pattern::Nullary(..)) => {}
+                Some(Pattern::Wildcard(_)) => {}
                 _ => return false,
             }
         }
@@ -1228,7 +1233,15 @@ impl<'a> Analysis<'a> {
                 // was missing only because a type is not a declaration and
                 // `returns_unique` is built from declarations
                 Expr::Ident(n, _, _) if self.types.contains(n.as_str()) => true,
-                Expr::Ident(n, _, _) => self.returns_unique.contains(&(n.to_string(), args.len())),
+                Expr::Ident(n, _, _) => {
+                    self.returns_unique.contains(&(n.to_string(), args.len()))
+                        || self.passes.get(n.as_str()).is_some_and(|ps| {
+                            ps.iter().any(|&(arity, i)| {
+                                arity == args.len()
+                                    && self.unique_in_with(&args[i], ctx, scoped, exempt)
+                            })
+                        })
+                }
                 _ => false,
             },
             Expr::Ident(name, _, _) => self.is_unique_source(name, ctx, scoped, exempt),
@@ -1498,6 +1511,37 @@ fn bound_in<'a>(body: &'a [Stmt], var: &str) -> Option<&'a Expr> {
         }
     }
     None
+}
+
+/// The parameters each group hands back or replaces with a fresh literal,
+/// and does nothing else with.
+fn passes_through(program: &Program) -> crate::hash::Map<String, Vec<(usize, usize)>> {
+    let fresh = |e: &Expr| matches!(e, Expr::MapLit(..) | Expr::List(..) | Expr::Str(..));
+    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> = crate::hash::Map::default();
+    for d in real_fns(program) {
+        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+    }
+    let mut out: crate::hash::Map<String, Vec<(usize, usize)>> = crate::hash::Map::default();
+    for ((name, arity), arms) in groups {
+        for i in 0..arity {
+            let ok = arms.iter().all(|d| {
+                let Some((Stmt::Expr(tail), lead)) = d.body.split_last() else { return false };
+                match &d.params[i] {
+                    Pattern::Var(v, _) => {
+                        let handed = matches!(tail, Expr::Ident(n, _, _) if n == v);
+                        let elsewhere = count_uses(v, lead) > 0;
+                        !elsewhere && (handed || (fresh(tail) && count_in_expr(v, tail) == 0))
+                    }
+                    Pattern::Wildcard(_) | Pattern::Nullary(..) => fresh(tail),
+                    _ => false,
+                }
+            });
+            if ok {
+                out.entry(name.to_string()).or_default().push((arity, i));
+            }
+        }
+    }
+    out
 }
 
 /// Where a map element read sits in the program: a value that is kept, an
