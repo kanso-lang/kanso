@@ -1112,6 +1112,27 @@ static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
     k_map_view_insert_built(m, key, val);
 }
 
+/* The pairs an in-place write moves a map to. An accumulator's pairs go
+   outside the arena for the same reason a list's items do: the loop's rewind
+   reclaims the iteration's garbage without reaching what the iteration was
+   building. */
+static inline KValue* k_pairs_alloc(KMap* m, long long cap, int* perm) {
+    *perm = k_outlives_beat(m);
+    return *perm ? k_buf_perm(cap) : k_buf(cap);
+}
+
+/* The map takes its new pairs, and the outgrown ones go back to malloc when
+   they came from it and to the shelf when they did not. */
+static inline void k_pairs_install(KMap* m, KValue* np, int perm) {
+    if (k_buf_malloced(k_buf_of(m->pairs))) {
+        free(k_buf_of(m->pairs));
+    } else {
+        k_buf_donate(m->pairs);
+    }
+    m->pairs = np;
+    if (perm) k_permreg_add(m, &m->pairs);
+}
+
 KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key) || !k_not_failure(val), 0)) return k_failed3(mv, key, val);
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
@@ -1158,11 +1179,8 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         long long need = 2 * (n + 1) * room;
         long long cap = 8;
         while (cap < need) cap <<= 1;
-        /* An accumulator's pairs go outside the arena for the same reason a
-           list's items do: the loop's rewind reclaims the iteration's garbage
-           without reaching what the iteration was building. */
-        int perm = k_outlives_beat(m);
-        KValue* np = perm ? k_buf_perm(cap) : k_buf(cap);
+        int perm;
+        KValue* np = k_pairs_alloc(m, cap, &perm);
         memcpy(np, from, sizeof(KValue) * 2 * n);
         if (from != m->pairs) {
             k_map_view_free(m->sorted);
@@ -1179,14 +1197,8 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
             n++;
         }
         k_buf_of(np)->used = n * 2;
-        if (k_buf_malloced(k_buf_of(m->pairs))) {
-            free(k_buf_of(m->pairs));
-        } else {
-            k_buf_donate(m->pairs);
-        }
-        m->pairs = np;
+        k_pairs_install(m, np, perm);
         m->len = n;
-        if (perm) k_permreg_add(m, &m->pairs);
         if (!held) k_map_view_insert(m, key, val);
         return mv;
     }
@@ -1283,19 +1295,13 @@ KValue k_b_delete_mut(KValue mv, KValue key) {
     if (s != m->pairs || n != m->len) {
         long long cap = 8;
         while (cap < 2 * n) cap <<= 1;
-        int perm = k_outlives_beat(m);
-        KValue* np = perm ? k_buf_perm(cap) : k_buf(cap);
+        int perm;
+        KValue* np = k_pairs_alloc(m, cap, &perm);
         memcpy(np, s, sizeof(KValue) * 2 * (size_t)n);
         hit = np + (hit - s);
         if (s != m->pairs) k_map_view_free(m->sorted);
-        if (k_buf_malloced(k_buf_of(m->pairs))) {
-            free(k_buf_of(m->pairs));
-        } else {
-            k_buf_donate(m->pairs);
-        }
-        m->pairs = np;
+        k_pairs_install(m, np, perm);
         m->sorted = np;
-        if (perm) k_permreg_add(m, &m->pairs);
     }
     long long at = (hit - m->pairs - 1) / 2;
     memmove(m->pairs + at * 2, m->pairs + (at + 1) * 2, sizeof(KValue) * 2 * (size_t)(n - at - 1));
