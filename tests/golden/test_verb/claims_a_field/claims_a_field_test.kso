@@ -1,0 +1,4 @@
+# The first arm of `go` claims a request whose path is a none. The test file
+# calls nothing in the module, and the module passes `kanso check`.
+
+test_one = 1 == 1

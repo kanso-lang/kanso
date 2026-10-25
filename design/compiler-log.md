@@ -21,84 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — a string index the checker proves goes straight to the text
-
-Where the sets prove the container a string and the position an int, the
-emitter now calls `k_b_at_str` with the string's pointer and the position.
-It is the string arm of `k_b_at`, lifted out, and `k_b_at` calls it too. The
-site used to emit a bytes test that a string never passes, then call
-`k_b_at` with two KValues, which tested both tags again, then merge the slow
-answer back with a select that rebuilt the byte form. The arm answers a
-one-character string or `none`, and nothing in it stops the program but
-running out of memory, so the site stamps no place for a death.
-
-Measured here on #2047's build, the run program 855,758,710 -> 844,029,230
-(-1.37%) with the same output. Every index in it of this shape is the index
-phase's walk, 690,000 calls: the door fell 40,070,237 -> 34,500,017
-(`k_b_at` against `k_b_at_str`), and `tally_4`, where the walk is inlined,
-fell 22,887,971 -> 16,677,970 without the bytes test and the merge.
-
-CI's rows. run_instructions 855,758,740 -> 844,029,138 (-1.37%), and
-work_indexbench, which is the same walk alone, 2,326,925 -> 1,986,925
-(-14.6%). Three moved by amounts this entry does not account for:
-work_encodebench 2,456,797,378 -> 2,456,796,006, work_oneshot 10,361,059 ->
-10,361,367 and work_livebench 990,759,394 -> 990,759,429. The emitted code
-of the two programs with the walk shrinks: indexbench's branches 48 -> 42
-and lines 787 -> 756, runbench's branches 6,451 -> 6,445 and lines 57,875 ->
-57,843, so emitted_other_branches and emitted_other_lines fall. Machine code
-grows by 1,040 bytes in most programs and 960 and 992 in the two with the
-walk, since `k_b_at_str` is a function beside `k_b_at`: text 5,317,806 ->
-5,332,238. Building the run program: codegen_instructions_dev 116,141,087 ->
-116,162,655, codegen_instructions_release 422,507,483 -> 422,568,857, and
-emit_instructions 6,433,837 -> 6,434,680. In the tab:
-browser_compile_instructions 428,036,106 -> 427,996,730,
-browser_compile_peak_bytes 768,205 -> 768,243 and browser_run_instructions
-30,460,236 -> 30,450,747. The welfare floor rises 92.83 -> 92.88.
-
-Declined: giving the index twin `k_b_at_fast` the same string arm, for
-indexes whose sets do not prove a string. Alone it read the run program
--8,405, against a branch and a call at every unproven index site.
-
-The micro golden `a_string_index_the_checker_proves_goes_straight_to_the_text`
-walks strings of one- to four-byte characters forward, which steps the
-cursor, and backward, which seeks, with positions past both ends. The
-release build, which the corpus runs, takes `k_b_at_str` at both walks. With
-the cursor stepping one byte instead of one character the walk splits the
-wide characters and the golden goes red. The ratchet row
-`a_proven_string_index_through_the_tag_tests` takes the arm away.
-
-## 2026-10-23 — join keeps its list and separator in locals
-
-`k_b_join` cost 12,305,923 instructions in the run program, about 61 for each
-of its 200,000 pieces, most of them in the pend phase's `text/join digits " "`.
-The copying loop read the list's length and items, and each piece's length,
-through their structs after every copy, because a store through `char*` may
-alias them; each piece's length was read twice. A one-byte separator went
-through `k_copy_short`'s size ladder, five compares to store one byte. The
-summing loop added the separator's length on every pass behind an `if (i)`.
-
-The list, the separator and each piece's length are now read into locals. A
-one-byte separator is stored from a byte held in a register, and the
-separator's share of the total is added once after the summing loop, as
-`(n - 1) * sl`. `k_b_join` falls to 7,308,590, measured here.
-
-CI's rows. run_instructions 844,029,138 -> 839,032,001 (-0.59%) and
-work_pendbench 176,531,937 -> 156,541,737 (-11.3%). work_basket fell
-31,152,439 -> 31,104,262; it joins too. Five moved by amounts this entry does
-not account for: work_encodebench 2,456,796,006 -> 2,456,797,210,
-work_oneshot 10,361,367 -> 10,361,430, work_indexbench 1,986,925 ->
-1,987,038, work_scanbench 274,277 -> 274,340 and work_livebench 990,759,429 ->
-990,759,737. Machine code grows by 384 bytes in every program: text
-5,332,238 -> 5,337,614. Building the run program compiles the runtime, so
-codegen_instructions_dev 116,162,655 -> 116,163,063 and
-codegen_instructions_release 422,568,857 -> 422,573,245. In the tab,
-browser_run_instructions 30,450,747 -> 30,425,950.
-
-Both engines print the same bytes for an empty list, one item, an empty
-separator, one- and two-byte separators with empty pieces, pieces and a
-separator past sixteen bytes, and multi-byte pieces and separator, whose
-character count is read too. The change is a rewrite of the loop the work
-vein already counts, so the vein is its witness.
 
 ## 2026-10-23 — the site a death names is stamped as an id
 
@@ -1689,3 +1611,57 @@ makes 51,816 and 9,160,000,672. markdown's reduction at 64,000 pushes runs in
 On this container the run program with the `guarded` phase falls from
 874,292,848 instructions to 831,115,619 and prints the same total; CI's rows
 follow.
+
+## 2026-10-24 — a field read is asked the none question the same way on every route
+
+`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
+inflate's port has the shape: `fn go (req none)` answers a request whose
+path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
+test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
+split, and toml's had it between `check lib` and `check main.kso`.
+
+The none question in `after_infer.rs` asks whether an argument can be a none.
+It answers no for a field read, so a none carried in a field stays the
+runtime's sentence. But the module and play routes run the check before
+field reads are rewritten into getter calls, and the entry and test routes
+run it after. On those two the argument was a call to `Get_path`, whose
+return set is every value the field was built from, and the first arm's
+claim on the none never reaches that set. The question now answers no for a
+getter call too, so all four routes give a field read the same answer.
+
+`tests/golden/test_verb/claims_a_field` is inflate's shape, and
+`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
+it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
+in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
+what `check lib` passed.
+
+Whether a none carried in a field should be refused at check is #2088's
+question, for every route at once.
+
+CI's rows. A getter call now answers the none question before the table
+lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
+entry_instructions 72,335,545 -> 72,317,212, library_instructions
+72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
+218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-25 — a copied map leaves its dead entries behind
+
+The fix for the `overwrite` phase (#2089, fourth item). A map keeps an append
+log of its pairs, overwrites included, and sorts and deduplicates it into a
+cached view on the first read. A put that cannot write in place copies the
+map, and `k_b_put` copied the whole log. chip8's memory, 16 keys read and
+overwritten once a lap, therefore carried every earlier lap's entries into
+each copy: 8,000 laps allocated 1,783,786,288 bytes and took 2.1 seconds
+natively.
+
+When the map's sorted view is current and shorter than its log, the copy now
+starts from the view, which holds each key's last value, and the new pair goes
+after it. The answer reads the same either way. The chip8 shape at 8,000 laps
+falls to 9,286,608 bytes and 0.015 seconds, and prints what the interpreter
+prints.
+
+`tests/golden/mem/a_map_overwritten_each_lap_is_copied_without_its_dead_entries`
+runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
+8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
+33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
+tally's map is copied from a view too.

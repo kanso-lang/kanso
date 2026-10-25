@@ -1162,15 +1162,27 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
         out->pairs = m->pairs;
         return ov;
     }
-    long long need = 2 * (m->len + 1);
+    /* A copy starts from the sorted view when one is current and shorter
+       than the log: the log keeps every overwrite until something sorts it,
+       and copying it whole made a map overwritten once a lap carry every
+       earlier lap's entries into the next copy (chip8's memory, 16 keys,
+       1.78 GB at 8,000 laps). The view holds each key's last value, and the
+       new pair goes after it, so the answer reads the same either way. */
+    KValue* from = m->pairs;
+    long long n = m->len;
+    if (!k_view_stale(m->sorted) && m->sorted_len < m->len) {
+        from = m->sorted;
+        n = m->sorted_len;
+    }
+    long long need = 2 * (n + 1);
     long long cap = 4;
     while (cap < need) cap <<= 1;
     KValue* np = k_buf(cap);
-    memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
-    np[m->len * 2] = key;
-    np[m->len * 2 + 1] = val;
-    k_buf_of(np)->used = m->len * 2 + 2;
-    out->len = m->len + 1;
+    memcpy(np, from, sizeof(KValue) * 2 * n);
+    np[n * 2] = key;
+    np[n * 2 + 1] = val;
+    k_buf_of(np)->used = n * 2 + 2;
+    out->len = n + 1;
     out->pairs = np;
     return ov;
 }

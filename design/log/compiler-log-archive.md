@@ -107585,6 +107585,7 @@ It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
 12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
 total and the oracle's counters agree. The old fixture's comment, which still
 described the region it no longer has, says what it pins now.
+<<<<<<< HEAD
 
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
@@ -107700,3 +107701,199 @@ the most it could have saved.
 Kanso#2024 is closed. Its first lead shipped in #2025 and its third with
 `append_key`. Of its second, 8,091,439 overflow checks still execute. Most
 guard arithmetic on ints with no bound inside their own group.
+=======
+>>>>>>> claude/a-copied-map-leaves-its-dead-entries
+
+## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
+
+The encoder writes a string with an escape in it through
+`k_json_escape_into`, which copied the bytes before each escape a word at a
+time and then a byte at a time. The strings the run program writes this way
+average about 23 bytes with two or three escapes each, so most runs were
+shorter than a word and went through the byte loop at nine instructions a
+byte. The writer now reads sixteen bytes at a time on x86-64 and arm64,
+stores all sixteen, and finds the first quote, backslash or byte below a
+space with three compares and a mask. A string's last block is read through
+`k_tail_window` when it is shorter than sixteen bytes, as the scanners read
+theirs, and the bytes past its end are ignored. Where the window would cross
+a page, and on targets without the vector compares, the word and byte walk
+still runs; it is out of line, so its constants no longer take registers in
+the block loop. The writer leaves sixteen bytes of slack past its worst case
+instead of eight.
+
+The first version clamped every block to the string's end. With that
+bookkeeping on each block the run program read 870,530,776; with the clamp
+only on the last block it read 864,531,687. Moving the stack buffer the
+writer uses for a builder without room into its own cold function took the
+792-byte frame off every call.
+
+The decoder's `k_json_escaped`, from the previous entry, copies the run
+after each escape to the next quote or backslash. The run averages about
+five bytes on the run program, and the word loop took one word and most of
+another. It now reads a block of sixteen while sixteen bytes of the document
+remain, and the word loop finishes the last fifteen. The run program read
+864,531,687 -> 859,100,922 (`k_json_escaped` 39,591,486 -> 34,160,742).
+
+Two more doors take preserve_none, measured one at a time as the first four
+were: `append_string_mut` -2,228,335 and `to_float_slice_raw` -1,113,877.
+`to_float_slice_raw` is the door the decoder's number twin calls when the
+tags are plain; `to_float_slice`, on the list since the four were chosen, is
+now its fallback. `to_int_slice_raw` read +472,341 and stays on the C
+convention.
+
+Measured here, `k_b_append_string_mut` fell 39,182,580 -> 31,498,560, and
+the run program printed the same output.
+
+CI's rows. run_instructions 871,922,904 -> 855,758,740 (-1.85%), and the
+programs that encode or decode escaped strings fall with it: jsonbench
+593,998,829 -> 584,083,829, livebench 1,032,837,487 -> 990,759,394, oneshot
+10,531,404 -> 10,361,059. Two rose by amounts this entry does not account
+for: work_encodebench 2,456,796,258 -> 2,456,797,378 (+1,120) and
+work_readbench 4,582,072 -> 4,582,081 (+9). Machine code shrinks in every program,
+2,544 bytes in most and 2,432 to 2,480 in the four with the decoder; text
+5,353,102 -> 5,317,806. Building the run program:
+codegen_instructions_dev 116,128,678 -> 116,141,087,
+codegen_instructions_release 422,378,106 -> 422,507,483, and
+emit_instructions 6,432,635 -> 6,433,837. The tab's runtime is built for
+wasm32, where the writer has no blocks and takes the walk:
+browser_run_instructions 30,427,332 -> 30,460,236 and
+browser_compile_instructions 428,034,601 -> 428,036,106.
+
+append_fast rises where a builder grows for the wider slack: the writer
+reserves sixteen bytes past its worst case instead of eight, so a builder
+short of that grows once on the out-of-line path and later appends find
+room. run_append_fast 5,328,540 -> 5,329,260, live_append_fast 23,682,400 ->
+23,685,600 and oneshot_append_fast 59,206 -> 59,214; in the mem vein,
+`a_literal_appended_across_a_rewind` 2,120 -> 2,200,
+`a_nested_map_gives_back_its_entries` 156,014 -> 156,026 and
+`a_written_map_allocates_no_columns` 12,007 -> 12,015. With the old reserve
+the first reads 2,120 again. The welfare floor rises 92.76 -> 92.83.
+
+The fuzzers were built against the joined runtime with its `main` renamed,
+so they run the real functions.
+- The writer's reference is a byte-at-a-time escaper written from lib/json's
+  rules. Every entry is driven: `append_string`, `append_escaped` and
+  `append_key`, in place and copying, into builders with and without room.
+  A quarter of the strings end on the last byte before an unmapped page.
+  25 seeded runs of 2,000,000 cases each found no failure, 12,497,738 of the
+  cases ending at the unmapped page. Without the window test it faults at
+  that page, and without the clamp to the string's end it reads 54,373
+  failures in 200,000 cases.
+- The decoder's walk ran under the previous entry's fuzzer, arena stress
+  included: 25 seeded runs of 2,000,000 cases each, 48,354,997 escaped
+  strings, no failure. Reading blocks to within eight bytes of the end, which
+  takes bytes past it, reads 13 failures in 500,000 cases.
+- Both ran again cross-compiled for arm64 under qemu, where the NEON blocks
+  run: the same 25 seeded runs of 2,000,000 cases each, no failure in
+  either. Without the NEON block's control-byte compare the writer reads
+  72,894 failures in 100,000 cases, and without its backslash compare the
+  undo walk reads 33,697.
+
+The micro golden `a_string_is_escaped_sixteen_bytes_at_a_time` decodes and
+encodes again strings with escapes just before, on and just after a
+sixteen-byte boundary, control bytes, a key and two-byte characters. The
+interpreter prints the same twelve lines. With the control-byte compare
+taken out of the block, the native build writes raw control bytes and the
+golden goes red. The ratchet rows `an_escaped_string_written_a_word_at_a_time`
+and `an_escaped_string_undone_a_word_at_a_time` take the blocks away from
+each walk.
+
+Declined: the block-less walk answering its position and letting the caller
+move the output by the same amount, instead of writing through a pointer to
+it. The run program read 865,760,286 against 864,531,687.
+
+Also declined: carrying a joined string's character count into a string
+built by a template. The 142 `length` scans on the run program are not
+joins. Ninety are `length` on the encoder's output, counted 16 bytes a
+compare at about a third of an instruction a byte, and making the builder
+count as it appends costs more than the scan.
+
+Also measured and not built: storing the site a death names as a small
+index with an immediate, where the address of its literal now costs a `lea`
+and a store. A prototype that stamped only the index read the run program
+855,758,710 -> 853,297,005 (-0.29%). Building it would give every twin that
+takes a site an index beside its origin pointer, and 4,374,601 stores were
+the most it could have saved.
+
+Kanso#2024 is closed. Its first lead shipped in #2025 and its third with
+`append_key`. Of its second, 8,091,439 overflow checks still execute. Most
+guard arithmetic on ints with no bound inside their own group.
+
+## 2026-10-22 — a string index the checker proves goes straight to the text
+
+Where the sets prove the container a string and the position an int, the
+emitter now calls `k_b_at_str` with the string's pointer and the position.
+It is the string arm of `k_b_at`, lifted out, and `k_b_at` calls it too. The
+site used to emit a bytes test that a string never passes, then call
+`k_b_at` with two KValues, which tested both tags again, then merge the slow
+answer back with a select that rebuilt the byte form. The arm answers a
+one-character string or `none`, and nothing in it stops the program but
+running out of memory, so the site stamps no place for a death.
+
+Measured here on #2047's build, the run program 855,758,710 -> 844,029,230
+(-1.37%) with the same output. Every index in it of this shape is the index
+phase's walk, 690,000 calls: the door fell 40,070,237 -> 34,500,017
+(`k_b_at` against `k_b_at_str`), and `tally_4`, where the walk is inlined,
+fell 22,887,971 -> 16,677,970 without the bytes test and the merge.
+
+CI's rows. run_instructions 855,758,740 -> 844,029,138 (-1.37%), and
+work_indexbench, which is the same walk alone, 2,326,925 -> 1,986,925
+(-14.6%). Three moved by amounts this entry does not account for:
+work_encodebench 2,456,797,378 -> 2,456,796,006, work_oneshot 10,361,059 ->
+10,361,367 and work_livebench 990,759,394 -> 990,759,429. The emitted code
+of the two programs with the walk shrinks: indexbench's branches 48 -> 42
+and lines 787 -> 756, runbench's branches 6,451 -> 6,445 and lines 57,875 ->
+57,843, so emitted_other_branches and emitted_other_lines fall. Machine code
+grows by 1,040 bytes in most programs and 960 and 992 in the two with the
+walk, since `k_b_at_str` is a function beside `k_b_at`: text 5,317,806 ->
+5,332,238. Building the run program: codegen_instructions_dev 116,141,087 ->
+116,162,655, codegen_instructions_release 422,507,483 -> 422,568,857, and
+emit_instructions 6,433,837 -> 6,434,680. In the tab:
+browser_compile_instructions 428,036,106 -> 427,996,730,
+browser_compile_peak_bytes 768,205 -> 768,243 and browser_run_instructions
+30,460,236 -> 30,450,747. The welfare floor rises 92.83 -> 92.88.
+
+Declined: giving the index twin `k_b_at_fast` the same string arm, for
+indexes whose sets do not prove a string. Alone it read the run program
+-8,405, against a branch and a call at every unproven index site.
+
+The micro golden `a_string_index_the_checker_proves_goes_straight_to_the_text`
+walks strings of one- to four-byte characters forward, which steps the
+cursor, and backward, which seeks, with positions past both ends. The
+release build, which the corpus runs, takes `k_b_at_str` at both walks. With
+the cursor stepping one byte instead of one character the walk splits the
+wide characters and the golden goes red. The ratchet row
+`a_proven_string_index_through_the_tag_tests` takes the arm away.
+
+## 2026-10-23 — join keeps its list and separator in locals
+
+`k_b_join` cost 12,305,923 instructions in the run program, about 61 for each
+of its 200,000 pieces, most of them in the pend phase's `text/join digits " "`.
+The copying loop read the list's length and items, and each piece's length,
+through their structs after every copy, because a store through `char*` may
+alias them; each piece's length was read twice. A one-byte separator went
+through `k_copy_short`'s size ladder, five compares to store one byte. The
+summing loop added the separator's length on every pass behind an `if (i)`.
+
+The list, the separator and each piece's length are now read into locals. A
+one-byte separator is stored from a byte held in a register, and the
+separator's share of the total is added once after the summing loop, as
+`(n - 1) * sl`. `k_b_join` falls to 7,308,590, measured here.
+
+CI's rows. run_instructions 844,029,138 -> 839,032,001 (-0.59%) and
+work_pendbench 176,531,937 -> 156,541,737 (-11.3%). work_basket fell
+31,152,439 -> 31,104,262; it joins too. Five moved by amounts this entry does
+not account for: work_encodebench 2,456,796,006 -> 2,456,797,210,
+work_oneshot 10,361,367 -> 10,361,430, work_indexbench 1,986,925 ->
+1,987,038, work_scanbench 274,277 -> 274,340 and work_livebench 990,759,429 ->
+990,759,737. Machine code grows by 384 bytes in every program: text
+5,332,238 -> 5,337,614. Building the run program compiles the runtime, so
+codegen_instructions_dev 116,162,655 -> 116,163,063 and
+codegen_instructions_release 422,568,857 -> 422,573,245. In the tab,
+browser_run_instructions 30,450,747 -> 30,425,950.
+
+Both engines print the same bytes for an empty list, one item, an empty
+separator, one- and two-byte separators with empty pieces, pieces and a
+separator past sixteen bytes, and multi-byte pieces and separator, whose
+character count is read too. The change is a rewrite of the loop the work
+vein already counts, so the vein is its witness.
