@@ -1778,5 +1778,19 @@ linearly, at some 24,000 instructions a count, most of it the copy. On this
 container the run program reads 851,889,184 with it and 810,763,317 without
 it, a column of 41,125,867 (4.83%). The interpreted corpus keeps 1,000
 counts, 497,655,907 → 520,126,043, and the tab runs the same corpus on the
-native runtime. CI's rows and the re-based welfare baselines follow in this
-pull request.
+native runtime.
+
+CI's rows, against #2121: work_runbench 810,657,719 → 851,781,946,
+run_allocs 1,446,942 → 1,456,758, run_alloc_bytes 215,955,960 →
+221,484,024, run_held_peak_bytes 216,080 → 4,120,448, run_sh_buf 86,961,200
+→ 87,410,768 and run_sh_map 12,160 → 120,960. The interpreter reads
+interp_instructions 455,385,272 → 478,102,371, interp_allocs 490,981 →
+516,759 and interp_peak_bytes 1,222,789 → 1,233,920. The tab reads
+browser_run_instructions 44,919,990 → 130,514,490 and browser_run_peak_bytes
+1,310,720 → 4,325,376, and compiling the corpus there costs browser_compile_instructions 308,823,716 →
+314,821,332 and browser_compile_peak_bytes 722,756 → 728,260. The new module
+adds machine code and emitted lines: text 5,647,825 → 5,649,473,
+emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
+17,724, emitted_other_calls 20,164 → 20,219 and emitted_other_defines 2,209 →
+2,214. Each welfare term these move is re-based to keep its ratio to its
+baseline, so the score stays 95.01.
