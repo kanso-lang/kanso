@@ -1877,3 +1877,12 @@ a blank line; their output is unchanged. Four error goldens cover the new
 refusals, each of which main ran: two blanks between a play file's
 declarations, two between statements, a blank inside an entry's `if` body,
 and a leading blank in an entry file. kq's three entries pass.
+
+CI's rows. Five compile rows fell: compile_instructions 24,741,552 ->
+24,657,263, entry_instructions 72,986,583 -> 72,734,084,
+library_instructions 72,659,822 -> 72,405,561, emit_instructions 5,655,748
+-> 5,654,777 and browser_compile_instructions 334,007,116 -> 333,912,133.
+interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
+entry is now judged line by line. Nothing here separates the part of each
+move that is the new check from the part that is the binary's layout.
+Welfare holds the net rise at 95.15.
