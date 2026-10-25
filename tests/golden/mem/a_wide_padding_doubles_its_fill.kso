@@ -1,0 +1,8 @@
+# `text/pad_start` to a width of 40,000 with a two-character fill. The
+# padding used to grow one copy of the fill at a time and count its
+# characters on every step, so main made 20,005 allocations of 400,600,128
+# bytes and scanned 400,060,001 bytes. The fill now doubles until it is wide
+# enough.
+import "std/text"
+
+pub play = print (length (text/pad_start "a" 40000 "xy"))
