@@ -1,0 +1,24 @@
+# A template that joins onto a string may read that string again in a later
+# piece. Every engine joins in place at these sites, so a later piece must
+# read the string before the join takes it.
+fn doubled s 0
+  s
+
+fn doubled s i
+  doubled "{s}{s}" (i - 1)
+
+fn tagged s 0
+  s
+
+fn tagged s i
+  tagged "{s}<{i}:{length s}>" (i - 1)
+
+fn grown s 0
+  s
+
+fn grown s i
+  grown "{s}{i}," (i - 1)
+
+print (doubled "ab" 3)
+  .> (_ -> print (tagged "" 4))
+  .> (_ -> print (grown "" 5))

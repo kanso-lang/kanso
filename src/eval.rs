@@ -724,6 +724,9 @@ pub struct Interp<'a> {
     /// `linear::moved_writes`, built the first time a write's value has no
     /// holder but the name that moves it. Lazy for the reason `in_place` is.
     moved: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
+    /// The joins of `linear::string_builders`, built the first time a template
+    /// opens with a name. Lazy for the reason `in_place` is.
+    joins: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
@@ -847,6 +850,7 @@ impl<'a> Interp<'a> {
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
+            joins: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
             fixed: RefCell::new(Vec::new()),
@@ -1408,7 +1412,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Map(Rc::new(entries)))
             }
-            Expr::Str(parts, _) => self.eval_template(parts, env, frame),
+            Expr::Str(parts, span) => self.eval_template(parts, *span, env, frame),
             Expr::Ident(name, span, resolved) => self.eval_ident_at(name, *span, resolved, env),
             Expr::Partial(name, span) => {
                 let callee = self.eval_ident(name, *span, env)?;
@@ -1866,10 +1870,32 @@ impl<'a> Interp<'a> {
     fn eval_template(
         &self,
         parts: &[TemplatePart],
+        span: Span,
         env: &Option<Rc<Env>>,
         frame: &Frame,
     ) -> EvalResult {
+        if let [TemplatePart::Interp(Expr::Ident(name, _, _)), rest @ ..] = parts {
+            if !rest.is_empty() && self.joins_here(span, frame) {
+                if let Some(joined) = self.join_onto(name, rest, env, frame)? {
+                    return Ok(joined);
+                }
+            }
+        }
         let mut out = String::new();
+        self.render_parts(parts, env, frame, &mut out).map(|failed| match failed {
+            Some(err) => err,
+            None => Value::Str(Text::from(out)),
+        })
+    }
+
+    /// Each part rendered onto `out`, or the err a part answered.
+    fn render_parts(
+        &self,
+        parts: &[TemplatePart],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+        out: &mut String,
+    ) -> Result<Option<Value>, RuntimeError> {
         for part in parts {
             match part {
                 TemplatePart::Lit(s) => out.push_str(s),
@@ -1878,16 +1904,53 @@ impl<'a> Interp<'a> {
                     // an err propagates (the whole string returns the err); a
                     // none is a value and renders its sentinel
                     if matches!(value, Value::ErrV(_)) {
-                        return Ok(value);
+                        return Ok(Some(value));
                     }
                     match self.render_interpolated(value)? {
                         Ok(rendered) => out.push_str(&rendered),
-                        Err(err) => return Ok(err),
+                        Err(err) => return Ok(Some(err)),
                     }
                 }
             }
         }
-        Ok(Value::Str(Text::from(out)))
+        Ok(None)
+    }
+
+    /// `"{s}..."` where `linear::string_builders` proved nothing reads `s`
+    /// after this join: the string comes out of the binding and the rest is
+    /// pushed onto it. Reading `s` would copy it, and a loop that grows a
+    /// string this way copied the whole string on every lap, 77 million
+    /// instructions for 3,000 pieces. Native and the tab join in place at the
+    /// same sites. `None` is a binding that holds something other than a
+    /// string, which takes the ordinary path.
+    fn join_onto(
+        &self,
+        name: &Name,
+        rest: &[TemplatePart],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> Result<Option<Value>, RuntimeError> {
+        let Some(slot) = slot_of(env, name) else { return Ok(None) };
+        // SAFETY: the slot lives as long as `env`, which this call holds.
+        if !matches!(unsafe { &*slot }, Value::Str(_)) {
+            return Ok(None);
+        }
+        // The rest first: a later piece may read `s` as well, `"{s}{s}"`, and
+        // has to read the whole of it.
+        let mut tail = String::new();
+        if let Some(err) = self.render_parts(rest, env, frame, &mut tail)? {
+            return Ok(Some(err));
+        }
+        // SAFETY: as `written_in_place`. A string is never shared between
+        // holders, so the binding owns these bytes, and the analysis proved no
+        // later read of it exists. Nothing else refers into the slot across
+        // the replace.
+        let Value::Str(text) = std::mem::replace(unsafe { &mut *slot }, Value::NoneV) else {
+            unreachable!("checked to be a string above")
+        };
+        let mut joined = text.into_string();
+        joined.push_str(&tail);
+        Ok(Some(Value::Str(Text::from(joined))))
     }
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
@@ -2833,6 +2896,20 @@ impl<'a> Interp<'a> {
     /// that binding is the name this write moves, which nothing reads again,
     /// so the count is the rest of the proof `in_place_pushes` could not make
     /// from the callers.
+    /// Whether `linear::string_builders` licensed this template to join onto
+    /// the string its first part names. Keyed as `writes_in_place` is.
+    fn joins_here(&self, span: Span, frame: &Frame) -> bool {
+        let Some(site) = frame else { return false };
+        let sites = site.joins.get_or_init(|| {
+            let all = self.joins.get_or_init(|| crate::linear::string_builders(self.program).0);
+            all.iter()
+                .filter(|(file, _, _)| **file == *site.file)
+                .map(|(_, l, c)| (*l, *c))
+                .collect()
+        });
+        sites.contains(&(span.line as usize, span.col as usize))
+    }
+
     fn moved_here(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.moved.get_or_init(|| {
