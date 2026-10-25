@@ -1760,7 +1760,7 @@ Whether a none carried in a field should be refused at check is #2088's
 question, for every route at once.
 
 CI's rows. A getter call now answers the none question before the table
-lookup it used to make: compile_instructions 24,230,258 -> 24,227,775,
-entry_instructions 71,606,414 -> 71,588,081, library_instructions
-71,254,677 -> 71,236,741 and browser_compile_instructions 216,735,256 ->
-216,670,950. Welfare rose, and the rise is banked.
+lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
+entry_instructions 72,335,545 -> 72,317,212, library_instructions
+72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
+218,016,527. Welfare rose, and the rise is banked.
