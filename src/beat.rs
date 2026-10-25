@@ -2096,6 +2096,23 @@ fn is_scalar_list_chain(
                         &args[0], program, own, decl, inference, decl_index, locals, mut_sites,
                     )
             }
+            // an in-place concat of a list written out here pushes each of
+            // its items, so it is the push above once per item
+            Expr::Ident(n, _, _)
+                if matches!(n.as_str(), "concat" | "list/concat" | "builtin_concat")
+                    && args.len() == 2
+                    && mut_sites.contains(&(
+                        decl.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    )) =>
+            {
+                matches!(&args[1], Expr::List(items, _) if items.iter().all(|x| {
+                    scalar_elem(x, program, own, decl, inference, decl_index)
+                })) && is_scalar_list_chain(
+                    &args[0], program, own, decl, inference, decl_index, locals, mut_sites,
+                )
+            }
             _ => false,
         },
         _ => false,

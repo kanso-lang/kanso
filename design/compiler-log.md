@@ -23,101 +23,6 @@
 
 
 
-## 2026-10-24 — the empty list and map inlined into the decoder
-
-The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
-called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
-arena bump and a header written into it. Both now have inline copies in the
-hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
-and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
-which the string index uses too. The cold paths for a short arena or a
-counting build stay in the runtime as calls.
-
-Without `always_inline` the link would not inline them. Its remark was
-"conflicting attributes", which `alwaysinline` overrides; that is why the
-earlier helpers all carry the attribute. The conflict is the hot unit's
-`+ssse3`, which the LTO link's target does not carry: given
-`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
-That flag moved runbench by +951 with byte-identical output, so the
-attribute stays and the flag was set aside.
-
-runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
-function in the binary calls either. The ratchet row `empty_inline` puts
-`noinline` in place of both `always_inline`s and reads 797,156,333.
-
-Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
-instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
-Inlined, the record constructor made `json/obj_value` too large to inline
-into `obj_key_start`, so `obj_value` became a call of its own and cost
-58,253,679 where `obj_key_start` gave back 37,835,883.
-
-CI's rows for this branch against the string index's, all taken into the
-goldens:
-
-- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
-  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
-  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
-  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
-  the string index's rise: `work_escapebench` 40,308,388 and
-  `work_scanbench` 274,349.
-- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
-  the two bodies the link now inlines at every empty list and map.
-- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
-  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
-  from the rewrap lines `call_pair` writes at each site.
-- The tab's rows rose for the same lines: `browser_compile_instructions`
-  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
-  (+28,146).
-- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
-- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
-  every program that builds an empty list or map.
-- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
-  second decimal, banked.
-
-## 2026-10-24 — a builder append asks for room first
-
-The emitter's in-place append twins tested whether the builder owned its
-buffer, then whether the builder ended at the buffer's frontier, then whether
-the bytes fit. The first test exists because a borrowed view has no buffer
-header to read. But a view's capacity is zero, so the room test turns it away
-on its own, and if it comes first the header is read only for an owned
-buffer. Six twins add a constant to the length in their room test (one byte,
-two bytes, a key's or a string's quotes, a word) and now ask for room first.
-Two add only a length, which may be zero, and keep the ownership test: an
-empty append onto an empty view would pass a room test alone.
-
-Against main in this container, with byte-identical output: runbench
-813,606,690 -> 807,626,521 (-0.74%) and encodebench 2,353,427,724 ->
-2,325,267,437 (-1.20%). The encoder appends a separator or a bracket between
-almost every value, so most of the fall is there.
-
-The micro program `an_append_onto_a_view_never_claims_it` appends onto the
-empty bytes, a literal's bytes and a slice, on all three engines. With every
-one-byte room test weakened to admit an empty view it printed ` abB` where
-the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
-back in front of the room test in `k_b_append_mut_int`, the twin the
-encoder's separators go through, and reads runbench 811,580,683 and
-encodebench 2,346,183,576.
-
-CI's rows for this branch against the empty collections', all taken into
-the goldens:
-
-- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
-  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
-  and oneshot 10,114,082 -> 10,051,248.
-- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
-  not isolated.
-- The twins' text grew by a few lines where a block moved: the compile
-  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
-  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
-  `codegen_instructions_dev` 116,426,119 (+5,840) and
-  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
-- `emit_instructions` 5,665,979, `browser_compile_instructions`
-  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
-  fell from the empty collections' values. All but the tab's run row stay
-  above main, from the two branches below this one.
-- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
-
 ## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
 
 A per-function count of the tab's compile of `bench/interp_corpus` put
@@ -1795,6 +1700,76 @@ interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
 entry is now judged line by line. Nothing here separates the part of each
 move that is the new check from the part that is the binary's layout.
 Welfare holds the net rise at 95.15.
+
+## 2026-10-25 — a concat of numbers crosses the rewind where it stands
+
+`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
+second argument is a list literal of scalars, as it accepted an in-place
+`push` of one. Such a concat writes each item onto the accumulator's frontier,
+so the accumulator still holds no pointer into the arena, and the license
+that lets a list of numbers cross a rewind by pointer applies. The loop from
+#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
+numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
+22,454,668 and take 6,496,051. No allocation counter sees the copies the
+stage made, so the run program's work row is where this shows.
+
+The one-element list each lap is still built. Emitting such a concat as one
+push per item would remove it, but a list literal keeps an item that fails
+where `push` answers the failure, so the two would need to agree first.
+
+`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
+booleans and strings made on the lap, 20,000 laps each. Its output is main's
+interpreter. The strings must stay refused: the ratchet mutation
+`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
+run of the fixture then dies reading the reclaimed strings ("ran out of
+stack"), while the interpreter, which has no rewind, stays green.
+
+## 2026-10-25 — a read a sibling forces lets the map go
+
+`bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
+1) (push b.items i))`, now writes the map in place. #2126 discounted a read
+binding when a sibling of the write wrote into it. `forces` in
+`src/linear.rs` generalizes that to any position that reads the value and
+runs on every path before the write: a field or element read, an operand,
+an interpolation, a condition, or an argument of `put`, `push`, `delete`,
+`length` or `keys`. A binding forced once answers every later mention from
+its value, so the write cannot change what the binding read. A bare name
+handed to a function or a constructor does not count, because a lazy binding
+travels there as an unforced cell; neither do one arm of an `if` (and so
+`and` and `or`), a guard past its condition, or a lambda.
+
+On its own, 16,000 numbers in 20 buckets took 132,724,010 instructions and
+take 9,025,501. `a_map_of_records_files_in_place` pins 4,000 numbers: 8,133
+allocations and 440,064 bytes, where main made 20,457 and 5,216,096.
+`a_record_read_out_of_a_map_keeps_its_fields` keeps the record it read in a
+carried list, in a lambda and under one arm of an `if`; its output is main's
+interpreter, and both engines agree with it.
+
+The read context is conservative and no program here shows it necessary. A
+binding is lazy only when every use hands it bare to a function that may
+discard it, and with the context dropped the probe that tried that shape
+still printed main's answer, because its binding stayed strict. No ratchet
+mutation is pinned for the context for that reason.
+
+CI's rows for both fixes, against main at #2146. The run program reads
+work_runbench 847,302,475 → 828,232,672 (−2.3%), run_allocs 1,585,686 →
+1,579,529, run_alloc_bytes 224,179,080 → 221,800,088, run_sh_map 76,160 →
+12,160, run_sh_buf 89,503,776 → 89,333,968, run_held_peak_bytes 1,863,712 →
+248,688, run_arena_blocks 5 → 4, run_arena_peak_bytes 5,767,184 → 4,718,608
+and run_spare_peak_bytes 3,670,032 → 2,621,456; run_put_mut_grow rises 260 →
+264, where the bucketed map now grows in place. The interpreter reads
+interp_instructions 525,925,462 → 520,276,149 and interp_allocs 585,540 →
+578,088, and interp_peak_bytes rises 1,281,294 → 1,281,313. The tab's run
+falls browser_run_instructions 107,399,948 → 54,006,705 and
+browser_run_peak_bytes 3,866,624 → 1,507,328, its compile rises
+browser_compile_instructions 333,912,133 → 334,848,599, and
+browser_compile_peak_bytes falls 743,930 → 743,876. Native compiles read
+compile_instructions 24,657,263 → 24,735,836, entry_instructions 72,734,084 →
+72,954,229, library_instructions 72,405,561 → 72,625,200 and
+emit_instructions 5,654,777 → 5,655,925: the two analyses cost the compiler
+about 0.3%. The machine code reads text 5,652,977 → 5,653,121, all of it in
+runbench. Welfare
+rises 95.15 → 95.22 and the rise is banked.
 
 ## 2026-10-25 — a list walked by its rest joins the corpus
 
