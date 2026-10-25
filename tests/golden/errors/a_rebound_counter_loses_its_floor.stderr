@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `double` has no arm for it — resolve it here, or give `double` a `none` arm (in a_rebound_counter_loses_its_floor.kso) (module a_rebound_counter_loses_its_floor)
+  --> a_rebound_counter_loses_its_floor.kso:9:37
+   9 |   total xs (at + 2) (acc + double xs[at])
+                                           ^
