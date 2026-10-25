@@ -1,0 +1,20 @@
+# The benchmark programs the counter gates build and read, one to a line, in
+# the order their rows stand in bench/instructions_golden.txt,
+# bench/text_golden.txt and bench/emitted_golden_others.txt. Every gate that
+# loops over the benchmarks reads this file through
+# scripts/gates/benchmarks.sh. A name followed by `plain` has no counter gate,
+# so build_benchmarks.sh builds it once, without --counters.
+jsonbench
+encodebench
+oneshot
+basket
+widebench
+deepbench plain
+escapebench
+pendbench
+indexbench plain
+scanbench
+digestbench
+readbench
+livebench
+runbench
