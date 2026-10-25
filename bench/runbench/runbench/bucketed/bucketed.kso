@@ -1,0 +1,25 @@
+# Numbers filed into 20 buckets, a record per key in a map, each bucket a
+# list and a count. The bucket is read out of the map and handed to the put
+# only through its fields, and the analysis let the map go before the put
+# only for a name that reached it through arithmetic, so natively every
+# number copied the map and the copy sorted itself again on its next read.
+type bucket
+  hits
+  items
+
+fn or_bucket none
+  bucket 0 []
+
+fn or_bucket b
+  b
+
+fn filed m _ 0
+  m
+
+fn filed m n i
+  k = i % 20
+  b = or_bucket m[k]
+  filed (put m k (bucket (b.hits + 1) (push b.items i))) n (i - 1)
+
+pub fn total n
+  length (filed {} n n)[3].items
