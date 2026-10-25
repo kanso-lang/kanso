@@ -22,69 +22,6 @@
 
 
 
-## 2026-10-23 — the site a death names is stamped as an id
-
-Before every call that can stop the program, compiled code records the place
-a death will name (ruled on #1975). It stored the interned literal's address
-in `k_site`: a `lea` to materialise the address and a 64-bit store, 4,374,601
-times a run. It now stores a 32-bit id as an immediate into `k_site_id`, one
-`mov`. The program defines `k_site_name`, which maps an id back to its
-literal through a table, and `k_died` reads it only when the program dies.
-The 25 twin slow paths that receive the site as a `ptr %site` still store it
-in `k_site`, and zero the id; `k_site_now` prefers the id when it is set. The
-tab reaches `k_site_name` through an eighth hook in `wasm/hooks.c`.
-
-The table went through three shapes, each measured. As `[N x ptr]` it put a
-relocation per slot in the position-independent binary, and scanbench rose
-3,107 instructions in `_dl_relocate_object`. As offsets into one
-`@k_site_text` constant it needs none. A slot whose stamp was pruned with its
-function holds zero and writes no text. Appended to the module's globals, the
-table pushed that buffer past a doubling, and the tab compile's peak memory
-rose 13,902 bytes; written into the module, which is allocated at its final
-size after one counting pass, the rise is 1,142 bytes. Encoding the offsets as
-a byte string rather than `[N x i32]` read the same to within 160 bytes, so
-the table keeps the readable form.
-
-CI's rows, against main with the join merged. run_instructions 839,032,001
--> 836,829,464 (-0.26%). The other work rows that fell most:
-work_encodebench 2,456,797,210 -> 2,367,636,382 (-3.6%), work_livebench
-990,759,737 -> 980,646,434 (-1.0%), work_deepbench 203,571,400 ->
-201,843,399 (-0.85%), work_digestbench 5,241,199 -> 5,211,213,
-work_pendbench 156,541,737 -> 155,739,870, work_oneshot 10,361,430 ->
-10,346,159, work_basket 31,104,262 -> 31,068,983, work_widebench 28,619,457
--> 28,587,459, work_scanbench 274,340 -> 274,212 and work_readbench 4,582,081
--> 4,581,876. Two rose: work_jsonbench 584,083,829 -> 585,129,095 (+0.18%)
-and work_escapebench 39,058,437 -> 39,058,492; work_indexbench moved by one,
-1,987,038 -> 1,987,039. Every program gains the `k_site_name` definition,
-and the stamps' literals leave the body: emitted_other_defines 2,217 ->
-2,230 and emitted_other_lines 161,822 -> 161,270, and the decoder's
-emitted_defines 157 -> 158 and emitted_lines 14,319 -> 14,296. The small
-compile corpus, which has few stamps, gains more lines than it loses: its
-defines 42 -> 46 and lines 1,528 -> 1,569, and the module build's
-module_defines 29 -> 30 and module_lines 1,164 -> 1,171. Machine code falls,
-text 5,337,614 -> 5,335,758. The emitter's scan for surviving stamps and the
-table cost the compiler: emit_instructions 6,434,680 -> 6,521,335 (+1.3%),
-codegen_instructions_dev 116,163,063 -> 116,434,829 and
-codegen_instructions_release 422,573,245 -> 425,464,049 (+0.68%).
-compile_instructions, entry_instructions and library_instructions each fell
-by 15 to 25, which is layout. In the tab: browser_compile_instructions
-427,996,730 -> 428,979,212, browser_compile_peak_bytes 768,243 -> 769,385 and
-browser_run_instructions 30,425,950 -> 30,274,594. The run side outweighs the
-compile side, and welfare rises.
-
-jsonbench rises: `d_json/obj_key_start_4_w`'s IR differs from main by the one
-stamp line, and with `rax` no longer needed for the address the register
-allocator added a `mov r14,r10` / `mov r10,r14` pair on one path of its loop.
-
-Declined: testing whether a float is integral with a cast and compare instead
-of `floor`, in `k_b_append_rendered`. glibc's `__floor_sse41` costs three
-instructions a call through the PLT, and the inline test cost four more, so the
-run program rose 182,110.
-
-The ratchet row `a_site_named_by_its_address_alone` has the runtime read only
-`k_site`, and `runtime_corpus_reports_endpoint_violations` goes red: a death
-behind an id stamp loses its `failed in` line.
-
 ## 2026-10-23 — the module writer moves out of codegen.rs, and the site table stops searching
 
 `src/codegen.rs` was 4,680 lines. The code that writes the module around the
@@ -1680,3 +1617,40 @@ runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
 8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
 33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
 tally's map is copied from a view too.
+
+## 2026-10-25 — a loop entered from its own lap stages by its own drift
+
+#2089's third item, the `reentered` phase. lox's statement loop re-enters
+itself when a Lox constructor builds a tree, and its reduction took 7.0
+seconds natively at depth 10, 4,094 writes, where the interpreter writes
+16,382 leaves in 0.4.
+
+Two things in the lap rule made every entry copy the whole tree. A loop
+measured its drift from the position the last stage at its depth had left,
+and when a fresh loop began, that position was below a rewind already. So
+the first lap of every entry staged. The push now records the loop's own
+entry position, and depth 10 fell to 0.099 seconds.
+
+That left a quadratic with a smaller constant: depth 12 took 0.80 seconds
+against the interpreter's 0.37. The wait between stages grows to twice what
+the last stage copied, but that size was read off the carry pair, which the
+push empties. Each fresh entry therefore waited the default quarter
+megabyte and then copied a tree of several megabytes. The size is now kept
+per depth, across loops, and depth 12 takes 0.28 seconds. Skipping a stage
+is always sound; what the longer wait costs is garbage held until the next
+stage, bounded by twice the depth's last copy.
+
+`a_loop_entered_from_its_own_lap_copies_its_tree_rarely` pins it in the mem
+vein at depth 8: evac_bytes 25,762,640 on main and 3,004,432 with the fix,
+evac_allocs 805,083 and 93,889, beat_iters 8,177 on both.
+
+Fourteen other mem goldens move. Eleven fall, because a fresh loop no longer
+stages on its first lap: `record_reuse_shape`, for one, evacuates 80 bytes
+where it evacuated 144. Three rise, the fixtures that pin a repaired node
+below a loop. A pop after a skipped lap walks its whole value, and these
+loops now skip where they used to stage, so they copy 160, 432 and 288 bytes
+more. `a_map_overwritten_each_lap_is_copied_without_its_dead_entries` holds
+32 bytes more at its peak. On this container the run program with the
+`reentered` phase reads 988,276,908 on main and 881,351,361 with this change
+alone. That is below the 917,694,203 main reads without the phase, because
+other phases' loops stopped staging on their first lap too.

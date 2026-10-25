@@ -107779,3 +107779,66 @@ separator, one- and two-byte separators with empty pieces, pieces and a
 separator past sixteen bytes, and multi-byte pieces and separator, whose
 character count is read too. The change is a rewrite of the loop the work
 vein already counts, so the vein is its witness.
+
+## 2026-10-23 — the site a death names is stamped as an id
+
+Before every call that can stop the program, compiled code records the place
+a death will name (ruled on #1975). It stored the interned literal's address
+in `k_site`: a `lea` to materialise the address and a 64-bit store, 4,374,601
+times a run. It now stores a 32-bit id as an immediate into `k_site_id`, one
+`mov`. The program defines `k_site_name`, which maps an id back to its
+literal through a table, and `k_died` reads it only when the program dies.
+The 25 twin slow paths that receive the site as a `ptr %site` still store it
+in `k_site`, and zero the id; `k_site_now` prefers the id when it is set. The
+tab reaches `k_site_name` through an eighth hook in `wasm/hooks.c`.
+
+The table went through three shapes, each measured. As `[N x ptr]` it put a
+relocation per slot in the position-independent binary, and scanbench rose
+3,107 instructions in `_dl_relocate_object`. As offsets into one
+`@k_site_text` constant it needs none. A slot whose stamp was pruned with its
+function holds zero and writes no text. Appended to the module's globals, the
+table pushed that buffer past a doubling, and the tab compile's peak memory
+rose 13,902 bytes; written into the module, which is allocated at its final
+size after one counting pass, the rise is 1,142 bytes. Encoding the offsets as
+a byte string rather than `[N x i32]` read the same to within 160 bytes, so
+the table keeps the readable form.
+
+CI's rows, against main with the join merged. run_instructions 839,032,001
+-> 836,829,464 (-0.26%). The other work rows that fell most:
+work_encodebench 2,456,797,210 -> 2,367,636,382 (-3.6%), work_livebench
+990,759,737 -> 980,646,434 (-1.0%), work_deepbench 203,571,400 ->
+201,843,399 (-0.85%), work_digestbench 5,241,199 -> 5,211,213,
+work_pendbench 156,541,737 -> 155,739,870, work_oneshot 10,361,430 ->
+10,346,159, work_basket 31,104,262 -> 31,068,983, work_widebench 28,619,457
+-> 28,587,459, work_scanbench 274,340 -> 274,212 and work_readbench 4,582,081
+-> 4,581,876. Two rose: work_jsonbench 584,083,829 -> 585,129,095 (+0.18%)
+and work_escapebench 39,058,437 -> 39,058,492; work_indexbench moved by one,
+1,987,038 -> 1,987,039. Every program gains the `k_site_name` definition,
+and the stamps' literals leave the body: emitted_other_defines 2,217 ->
+2,230 and emitted_other_lines 161,822 -> 161,270, and the decoder's
+emitted_defines 157 -> 158 and emitted_lines 14,319 -> 14,296. The small
+compile corpus, which has few stamps, gains more lines than it loses: its
+defines 42 -> 46 and lines 1,528 -> 1,569, and the module build's
+module_defines 29 -> 30 and module_lines 1,164 -> 1,171. Machine code falls,
+text 5,337,614 -> 5,335,758. The emitter's scan for surviving stamps and the
+table cost the compiler: emit_instructions 6,434,680 -> 6,521,335 (+1.3%),
+codegen_instructions_dev 116,163,063 -> 116,434,829 and
+codegen_instructions_release 422,573,245 -> 425,464,049 (+0.68%).
+compile_instructions, entry_instructions and library_instructions each fell
+by 15 to 25, which is layout. In the tab: browser_compile_instructions
+427,996,730 -> 428,979,212, browser_compile_peak_bytes 768,243 -> 769,385 and
+browser_run_instructions 30,425,950 -> 30,274,594. The run side outweighs the
+compile side, and welfare rises.
+
+jsonbench rises: `d_json/obj_key_start_4_w`'s IR differs from main by the one
+stamp line, and with `rax` no longer needed for the address the register
+allocator added a `mov r14,r10` / `mov r10,r14` pair on one path of its loop.
+
+Declined: testing whether a float is integral with a cast and compare instead
+of `floor`, in `k_b_append_rendered`. glibc's `__floor_sse41` costs three
+instructions a call through the PLT, and the inline test cost four more, so the
+run program rose 182,110.
+
+The ratchet row `a_site_named_by_its_address_alone` has the runtime read only
+`k_site`, and `runtime_corpus_reports_endpoint_violations` goes red: a death
+behind an id stamp loses its `failed in` line.
