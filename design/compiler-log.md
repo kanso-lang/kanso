@@ -21,26 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — the region row has a witness again
-
-The ratchet row `a region that keeps what it made` went blind when std/json
-began writing a map from its entries in place (c2b48e57). Its mutation makes
-`k_region_pop` keep everything the region allocated, and its witness was the
-mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
-under it. Once the encoder stopped building `keys` and `values` for each map,
-its calls had no allocating argument, so the emitter made no region at all:
-no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
-and with the mutation applied the whole mem corpus stayed green on main. The
-row came up on #2047, whose diff touches `core.c`, and read BLIND.
-
-The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
-encoder's old shape: a walk that builds a map's keys as the argument of its
-call into the map and answers bytes. The emitter makes that call a region.
-It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
-12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
-total and the oracle's counters agree. The old fixture's comment, which still
-described the region it no longer has, says what it pins now.
-
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
 The encoder writes a string with an escape in it through
@@ -1771,3 +1751,36 @@ the empty program, and prints the same total on both engines.
 On this container the whole program reads 917,589,885, where main reads
 788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
 The fixes follow in their own pull requests and will score as rises.
+
+On this container the whole program reads 874,292,848, where main reads
+788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
+in their own pull requests and will score as rises.
+
+empty program, 5.00% of the whole program's 830,558,275 on this container,
+where main reads 788,981,054. The phase prints the same total on both
+engines. The fix follows in its own pull request and will score as a rise.
+
+## 2026-10-25 — a read handed to a call keeps the write in place
+
+The fix for the `handed` phase the previous entry put into the run program
+(#2089, first item). `seen = m[key]` then `put m key (counted seen)` copied
+the map on every put, because `linear.rs` discounts a name bound to a read of
+the map only when every later use reaches the put through arithmetic: a use
+anywhere else could force the read after the write.
+
+That can happen only if the binding is a thunk, and `demand::analyze` makes a
+binding a thunk only when its expression is expensive, which a plain index
+read with a key that calls nothing and compares nothing is not. Both engines
+read the same verdict, so `seen` holds the element before anything below its
+line runs. `read_in_block` now discounts such a binding's read of the map
+whatever the name does next. Pooled names, which the work-ahead pass always
+makes cells, are left out.
+
+`tests/golden/mem/a_read_handed_to_a_call_stays_in_place` is the shape at
+2,000 updates over 100 keys: 15 allocations and 16,800 bytes, where main
+makes 6,006 and 80,274,944. No other mem golden moved, and
+`micro/a_read_named_before_a_write_sees_the_old_value`, whose names are used
+after the write, still prints the old value beside the new on every engine.
+On this container the `handed` phase built alone falls from 41,838,242
+instructions to 1,090,527, each including the empty program's 329,467; CI's
+rows follow.
