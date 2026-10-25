@@ -1534,3 +1534,31 @@ a push past 22,310. The count is 22,305. `padded` pads 75 rows to widths of
 The interpreted corpus runs both too, at 680 pushes and 18 rows: 392,521,332
 with the code and neither run, 425,717,899 with both. The tab runs the same
 corpus, so its run row moves with it.
+
+CI's rows for the corpus with both shapes. work_runbench 797,623,329 ->
+880,946,052. The run program's emitted code grows by the two phases,
+runbench defines 771 -> 781, calls 7,818 -> 7,956, branches 6,791 -> 6,886,
+lines 60,113 -> 60,916, and its machine code 779,308 -> 785,212 bytes. Over
+every benchmark that is emitted_other_defines 2,178 -> 2,188,
+emitted_other_calls 19,778 -> 19,916, emitted_other_branches 17,310 ->
+17,405, emitted_other_lines 163,950 -> 164,753 and text 5,523,025 ->
+5,528,929. Its
+allocation vein: run_allocs 1,444,950 -> 1,541,511, run_alloc_bytes
+213,685,416 -> 290,828,216, run_arena_blocks 4 -> 5, run_arena_peak_bytes
+4,718,608 -> 5,767,200, run_spare_peak_bytes 2,621,456 -> 3,670,048,
+run_cohort_frees 5 -> 68, run_perm_allocs 101 -> 102, run_beat_iters 89,113
+-> 111,493, run_evac_allocs 8,626 -> 8,970, run_evac_bytes 4,822,160 ->
+13,592,736, run_str_scans 1,023 -> 53,763, run_str_scan_bytes 17,930,494 ->
+67,106,410, run_sh_str 16,193,568 -> 66,689,376, run_sh_rec 3,906,544 ->
+5,268,656 and run_sh_buf 86,615,088 -> 111,082,496. The interpreted corpus:
+interp_instructions 385,420,176 -> 425,717,899, interp_allocs 401,614 ->
+445,515 and interp_peak_bytes 637,429 -> 735,045. The tab compiles and runs
+the larger corpus: browser_compile_instructions 218,703,716 -> 239,148,990,
+browser_compile_peak_bytes 532,354 -> 610,900 and browser_run_instructions
+33,345,263 -> 38,837,644.
+
+Each welfare term these move keeps its ratio to its baseline, as the four
+#2089 phases did: run_instructions, run_peak_bytes, interp_instructions,
+interp_peak_bytes, browser_compile_instructions, browser_compile_peak_bytes
+and browser_run_instructions. The floor's history records each old and new
+baseline. The fixes score against them.
