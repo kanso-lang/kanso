@@ -1281,6 +1281,16 @@ stack and bag joined: the run_instructions baseline keeps its ratio to the
 run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
 the fixes in #2106 score against these rows as a rise.
 
+The run program's allocation vein moves with it, and the peak it holds is the
+run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
+re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
+baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
+on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
+run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
+run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
+run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
+run_ten_blocks 2.
+
 The fixes follow in their own pull requests and will score as rises.
 
 
@@ -1432,6 +1442,19 @@ pin a repaired node copy a little more:
 
 a_long_chain_answers_survival_from_its_index_chain_finds 95,601 -> 95,597
 moves with one fewer stage.
+
+The run program's allocation vein, read by the counter sweep and matching CI's
+allocs and alloc_bytes: run_allocs 1,451,390 -> 1,444,950, run_alloc_bytes
+248,577,384 -> 213,685,416, run_evac_bytes 15,563,184 -> 4,822,160,
+run_evac_allocs 8,626, run_survive_slots 5,891, run_put_mut_grow 22,
+run_push_mut_slow 1,557,480, run_sh_buf 86,615,088, run_sh_rec 3,906,544,
+run_sh_map 12,160, run_bytes_malloc 7,885 and run_ten_blocks 1. Of its peaks,
+run_held_peak_bytes falls 2,397,872 -> 233,760, while run_arena_peak_bytes
+rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
+212,465. Which of the four fixes moves the arena and permanent peaks is not
+isolated here. The basket vein loses two evacuations: basket_allocs 27,270,
+basket_alloc_bytes 6,162,417, basket_evac_allocs 3, basket_evac_bytes 192 and
+basket_sh_rec 130,112.
 
 ## 2026-10-25 — a slice that starts before the value answers none
 
