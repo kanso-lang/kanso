@@ -1349,6 +1349,15 @@ fn read_in_block(var: &str, body: &[Stmt]) -> usize {
         if shadowed || v == var {
             continue;
         }
+        // A plain read of the map is never a thunk (`demand::expensive` keeps
+        // a bind with no call and no comparison strict on every engine), so
+        // the name holds the element before anything below it runs, wherever
+        // the name goes next. toml's `seen = m[key]` handed to `counted`
+        // inside the put copied the map every time.
+        if strict_read(var, expr) && !v.as_str().starts_with(crate::ahead::POOLED) {
+            discounted += reads;
+            continue;
+        }
         let later = &body[i + 1..];
         let total: usize = later.iter().map(|s| mentions(v, stmt_expr(s))).sum();
         let fed =
@@ -1358,6 +1367,24 @@ fn read_in_block(var: &str, body: &[Stmt]) -> usize {
         }
     }
     discounted
+}
+
+/// `var[k]`, with a key that calls nothing and compares nothing: a read the
+/// demand analysis never defers, so it is finished when its binding is.
+fn strict_read(var: &str, e: &Expr) -> bool {
+    fn cheap(e: &Expr) -> bool {
+        match e {
+            Expr::App { .. } | Expr::Lambda { .. } | Expr::Guard { .. } | Expr::Block(..) => false,
+            Expr::BinOp { op, .. } if *op == "==" || *op == "!=" => false,
+            _ => {
+                let mut ok = true;
+                crate::for_each_child(e, |c| ok &= cheap(c));
+                ok
+            }
+        }
+    }
+    matches!(e, Expr::Index { base, index, .. }
+        if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) && cheap(index))
 }
 
 /// Every mention of `var` in `e`, on every path.

@@ -1,0 +1,24 @@
+# `seen = m[i]` on its own line, then the name handed to a function inside
+# `put m i (counted seen)`. A plain read is never deferred, so the name holds
+# the element before the put writes, wherever it goes next. The name used to
+# count as a second use of `m` because it reached the put through a call, and
+# every put copied the map.
+fn counted none
+  1
+
+fn counted c
+  c + 1
+
+fn bump m k steps n
+  return m if steps == 0
+  i = k % n + 1
+  seen = m[i]
+  bump (put m i (counted seen)) ((k * 7 + 3) % 1000003) (steps - 1) n
+
+fn total m i n acc
+  return acc if n < i
+  total m (i + 1) n (acc + counted m[i])
+
+pub play =
+  m = bump {} 1 2000 100
+  print "{total m 1 100 0}"
