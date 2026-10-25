@@ -20,8 +20,9 @@ type bucket
 
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
-  nest = "{nested 1000} {appended 6000} {bucketed 1500} {grown 3000}"
-  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
+  nest = "{nested 1000} {appended 6000} {bucketed 1500}"
+  texts = "{grown 3000} {scanned 1000}"
+  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
 
 fn rounds n
   source = document 220
@@ -178,3 +179,19 @@ fn joined_onto s i
 
 fn grown n
   length (joined_onto "" n)
+
+# A long string walked a character at a time by a loop that hands it on to
+# each step, as a scanner does.
+fn tally s i n acc
+  stepped s i n acc (i > n)
+
+fn stepped _ _ _ acc true
+  acc
+
+fn stepped s i n acc false
+  hit = text/slice s i i == "a"
+  tally s (i + 1) n (if hit (acc + 1) acc)
+
+fn scanned n
+  s = text/join (list/to_list (list/map (span n) (_ -> "ab"))) ""
+  tally s 1 (length s) 0
