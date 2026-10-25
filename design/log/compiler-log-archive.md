@@ -108611,3 +108611,29 @@ back. With the whole part's zero dropped, it reported 141,779 text failures
 and none of the other kinds. At ten times its size it read 50,807,850
 doubles with no failure. The ratchet row `float_one_pass` puts the division
 back.
+
+## 2026-10-24 — the module's symbols read in one scan
+
+The module writer asks two questions of every piece of the body: which
+symbols it calls, written `@sym(`, to choose the declarations and call twins
+it keeps, and which symbols end a line, written `@sym\n`, to choose the
+closure cells. `called_symbols` and `symbols_before_newline` answered them
+with two scans of each piece, and the second stopped at every newline as
+well as every at. `called_and_ending` answers both in one pass over the ats:
+from each at to the first `(` or newline, a `(` making a call and a newline
+an ending when no other at comes first.
+
+The same pass now marks the interned strings the body names, `@sN` and
+`@sN_lit`, which `named_strings` found with a third scan of every piece; it
+still reads the type tables on their own. The tab's compile of its corpus fell
+from 227,562,045 to 224,770,876 instructions with the two scans merged and to
+223,778,736 with the third folded in, -1.66% in all, in this container. Its
+peak and the run did not move, and the tab's IR and the native IR of the
+nineteen benchmarks in both tiers are byte-identical. The specs that held each
+scan to a plain search now hold the merged one to it, with the ending side
+asked only about symbols without a `(`, which is every symbol the writer asks
+about; treating the end of the text as a line's end turned that spec red on
+`"@a"`. A new spec holds the pass's string marks to `named_strings`'s, and
+went red with the marking taken out. The ratchet row `one_scan` scans each
+piece a second time and reads 225,543,228; `strings_in_scan` scans the body
+for strings again and reads 224,854,630.
