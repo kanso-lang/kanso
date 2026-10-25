@@ -4200,7 +4200,7 @@ welfare                      77.37         82.09</code></pre>
 
 <p>A native map keeps an append log of every put and, once something reads it, a sorted view holding each key's last value. A put of a key the view already held set the view's slot and then walked the log back from its end to set the key's entry there too. In a word count whose words come round twice, the second sighting of each word cost the number of words counted so far: 20,000 ints each seen twice took 1.19 billion instructions. The put now sets the view and appends the pair to the log, the state a persistent put already leaves, and the view decides which entry is current. When the log has to grow it starts again from the view. Copied in order, it holds each key once, so it becomes the map's view and later overwrites are set in it directly. The same 20,000 ints take 43 million instructions.</p>
 
-<p>Map keys of one kind now compare without unwrapping, two ints or two strings. The int-only test from section 250 had cost kq's string keys a test on every compare. A search of the view asks an int key's kind once rather than at every probe.</p>
+<p>Map keys of one kind now compare without unwrapping, two ints or two strings. The int-only test from section 250 had cost kq's string keys a test on every compare. A search of the view asks an int key's kind once rather than at every probe. With both changes the run program falls 5.0%, the basket benchmark 40.5% and the tab's run 31.4%. The runtime's machine code is 7,728 bytes larger in every binary, where the compare and the search are inlined into their callers.</p>
 
 <h2 id="deletes"><span class="sec-num">252</span>a delete in place, and a condition that lets go</h2>
 
