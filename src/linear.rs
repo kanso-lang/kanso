@@ -1115,20 +1115,42 @@ impl FieldTally {
             for st in rest.iter() {
                 self.walk(p, f, stmt_expr(st), under_lambda);
             }
-            match fired.reads_of_f {
-                0 => self.refused |= fired.refused,
-                _ => {
-                    self.mentions += fired.mentions;
-                    self.field_reads += fired.field_reads;
-                    self.reads_of_f += fired.reads_of_f;
-                    self.refused |= fired.refused;
-                }
-            }
+            self.join(fired);
             return;
+        }
+        // `if c a b` runs one arm, and an arm that does not read the field
+        // answers on a path where nothing is moved out of the record, as the
+        // guard's early answer does above. `if (k == 0) b (fill (bag (push
+        // b.items k) …))` copied the list every lap on both engines, where the
+        // guard and the two-arm spellings grew it in place.
+        if let Expr::App { head, args, piped: false, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
+                self.walk(p, f, &args[0], under_lambda);
+                for arm in &args[1..] {
+                    let mut taken = FieldTally::default();
+                    taken.walk(p, f, arm, under_lambda);
+                    self.join(taken);
+                }
+                return;
+            }
         }
         let inner = under_lambda || matches!(e, Expr::Lambda { .. });
         for c in child_exprs(e) {
             self.walk(p, f, c, inner);
+        }
+    }
+
+    /// The tally of one path that runs instead of another. A path that never
+    /// reads the field keeps only its refusal; one that does counts in full.
+    fn join(&mut self, path: FieldTally) {
+        match path.reads_of_f {
+            0 => self.refused |= path.refused,
+            _ => {
+                self.mentions += path.mentions;
+                self.field_reads += path.field_reads;
+                self.reads_of_f += path.reads_of_f;
+                self.refused |= path.refused;
+            }
         }
     }
 }
