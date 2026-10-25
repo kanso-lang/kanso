@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `double` has no arm for it — resolve it here, or give `double` a `none` arm (in a_loop_counter_started_at_zero_can_miss.kso) (module a_loop_counter_started_at_zero_can_miss)
+  --> a_loop_counter_started_at_zero_can_miss.kso:8:37
+   8 |   total xs (at + 1) (acc + double xs[at])
+                                           ^
