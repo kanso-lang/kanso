@@ -108927,3 +108927,137 @@ goldens:
   every program that builds an empty list or map.
 - No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
   second decimal, banked.
+
+## 2026-10-24 — a builder append asks for room first
+
+The emitter's in-place append twins tested whether the builder owned its
+buffer, then whether the builder ended at the buffer's frontier, then whether
+the bytes fit. The first test exists because a borrowed view has no buffer
+header to read. But a view's capacity is zero, so the room test turns it away
+on its own, and if it comes first the header is read only for an owned
+buffer. Six twins add a constant to the length in their room test (one byte,
+two bytes, a key's or a string's quotes, a word) and now ask for room first.
+Two add only a length, which may be zero, and keep the ownership test: an
+empty append onto an empty view would pass a room test alone.
+
+Against main in this container, with byte-identical output: runbench
+813,606,690 -> 807,626,521 (-0.74%) and encodebench 2,353,427,724 ->
+2,325,267,437 (-1.20%). The encoder appends a separator or a bracket between
+almost every value, so most of the fall is there.
+
+The micro program `an_append_onto_a_view_never_claims_it` appends onto the
+empty bytes, a literal's bytes and a slice, on all three engines. With every
+one-byte room test weakened to admit an empty view it printed ` abB` where
+the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
+back in front of the room test in `k_b_append_mut_int`, the twin the
+encoder's separators go through, and reads runbench 811,580,683 and
+encodebench 2,346,183,576.
+
+CI's rows for this branch against the empty collections', all taken into
+the goldens:
+
+- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
+  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
+  and oneshot 10,114,082 -> 10,051,248.
+- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
+  not isolated.
+- The twins' text grew by a few lines where a block moved: the compile
+  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
+  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
+  `codegen_instructions_dev` 116,426,119 (+5,840) and
+  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
+- `emit_instructions` 5,665,979, `browser_compile_instructions`
+  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
+  fell from the empty collections' values. All but the tab's run row stay
+  above main, from the two branches below this one.
+- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
+
+## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
+
+A per-function count of the tab's compile of `bench/interp_corpus` put
+`memchr_aligned` at 5,857,105 instructions and `trim_matches` at 1,689,320.
+Both came from walking text one line at a time with the standard library.
+
+- `ir_defines`, which splits emitted IR into definitions for the prune,
+  stepped with `split_inclusive('\n')`. That calls memchr once a line, and on
+  wasm32 memchr reads four bytes a step. It now finds each line with
+  `compare::byte_from`, eight bytes a step, and trims only a line that opens
+  with `}`.
+- `prune_shipped`, which drops the library declarations a program does not
+  reach, walked the library's source the same way and now steps the same way.
+- The tab's translator trimmed every line of IR with `str::trim`, which
+  decodes each character at both ends and asks the Unicode table. Emitted IR
+  is ASCII, so both of its per-line trims are `trim_ascii` now.
+
+Measured with the per-function count, which runs a named build and reads a
+few hundred thousand above the browser row: 221,423,495 -> 219,980,398 for
+`ir_defines`, -> 219,053,485 for the trims, and -> 218,810,755 for
+`prune_shipped`, -2,612,740 (-1.18%) in all. Natively the entry check fell
+from 75,017,916 to 74,717,928, because `prune_shipped` runs there too. CI's
+rows replace these.
+
+The ratchet row `prune_lines` puts the per-line `str::find` back in
+`ir_defines` and reads 220,266,296 on the same count; `ascii_trim` puts
+`str::trim` back on both of the translator's trims and reads 219,737,668.
+
+CI's rows for this branch against room-first appends, all taken into the
+goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
+`compile_instructions` 25,172,884 -> 25,077,347, `entry_instructions`
+74,435,723 -> 74,133,494, `library_instructions` 74,096,953 -> 73,794,737
+and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
+`prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
+Welfare rose under the second decimal, 93.27 as printed, and is banked.
+
+## 2026-10-24 — the lexer reads a line before it walks it
+
+The entry compile spent 9,277,662 instructions in the lexer, and about a
+quarter of that came before any token: the work `lex` does on each raw line
+to decide what kind of line it is. Five pieces of it are cheaper now, with
+every diagnostic unchanged.
+
+- The source is split into lines a word at a time, with
+  `compare::byte_from`, where `str::lines` called memchr once a line. A
+  `\r` before a newline still comes off, and one at the end of a file
+  without a newline still stays.
+- The tab test is `compare::find` on the bytes. `str::find('\t')` went
+  through the char searcher and a `bcmp` for every line.
+- The line is trimmed once, where it was trimmed twice.
+- The width cap counts a line's characters only when its bytes exceed the
+  cap, since a character is at least one byte.
+- The text-block opener and the span opener each walked every byte of a
+  code line, tracking quotes and stopping at `#`. A line with no quote and
+  no `#` has no text block and its span opener is its last byte, so one
+  scan for either byte, a word at a time, answers both for most lines.
+
+Measured in this container at the tip of the lines-a-word-at-a-time branch:
+`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
+`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
+
+The ratchet row `lex_lines` puts `str::lines` back and reads
+`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
+reads 24,561,382.
+
+CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
+71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
+(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
+`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
+the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
+whose process lexes its program before it emits. Nothing else moved.
+Welfare 93.27 -> 93.28, banked.
+
+What is left in the lexer is `lex_line` itself, about 1,150 instructions a
+code line, most of it a scanner that decodes each line into a `Vec<char>`
+before it reads a token. A scanner over bytes would touch every token
+method and the column arithmetic, so it is a change of its own.
+
+Measured and set aside: the scanner reading an ascii line's bytes in place
+instead of widening them into its `Vec<char>`, through accessors that test
+`ascii` at every read. The widening costs 348,608 instructions of the entry
+compile, and the test at every character cost more: `entry_instructions`
+71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
+24,224,312.
+
+Measured and set aside: an unchecked `u64` sum for the tab translator's
+integers of eighteen digits or fewer, ahead of the checked `i128` loop.
+`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
+ratchet row of its own.

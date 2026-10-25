@@ -146,6 +146,34 @@ fn lookup_at(env: &Option<Rc<Env>>, name: &Name, place: u32) -> Option<Value> {
     }
 }
 
+/// The binding of a local name, in place, for a write the linearity analysis
+/// licensed; `lookup` answers a copy. The pointer comes from `Rc::as_ptr`, as
+/// `Interp::written_in_place`'s does.
+fn slot_of(env: &Option<Rc<Env>>, name: &Name) -> Option<*mut Value> {
+    let mut cur = env.as_ref();
+    while let Some(frame) = cur {
+        let at = Rc::as_ptr(frame) as *mut Env;
+        // SAFETY: a shared read of a frame the `Rc` keeps alive.
+        match unsafe { &mut *at } {
+            Env::One(bound, value, parent) => {
+                if bound == name {
+                    return Some(value as *mut Value);
+                }
+                cur = parent.as_ref();
+            }
+            Env::Many(slots, parent) => {
+                for (bound, value) in slots.iter_mut().rev() {
+                    if bound == name {
+                        return Some(value as *mut Value);
+                    }
+                }
+                cur = parent.as_ref();
+            }
+        }
+    }
+    None
+}
+
 fn lookup(env: &Option<Rc<Env>>, name: &Name) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {

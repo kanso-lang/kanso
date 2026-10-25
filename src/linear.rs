@@ -42,6 +42,18 @@ pub fn for_the_emitter(program: &Program) -> EmitterFacts {
     )
 }
 
+/// Both of the interpreter's questions from one `Analysis`: where a push
+/// writes in place, and where a template joins onto a string. Building one per
+/// question cost a run that asked both about 35 million instructions twice
+/// over on the interpreted corpus, and keeping the analysis for the run's
+/// second question held it in memory for the whole run.
+pub fn for_the_interpreter(
+    program: &Program,
+) -> (HashSet<(std::sync::Arc<str>, usize, usize)>, Sites) {
+    let analysis = Analysis::new(program);
+    (in_place_pushes_with(&analysis, program), string_builders_with(&analysis, program).0)
+}
+
 pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
     in_place_pushes_with(&Analysis::new(program), program)
 }
