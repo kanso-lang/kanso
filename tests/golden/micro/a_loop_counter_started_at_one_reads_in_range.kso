@@ -1,0 +1,12 @@
+# A loop that walks a list from its first element starts its counter at one
+# and only ever adds to it, and every call to it is in sight. The counter is
+# then at least one at every read, so the guard on the far end is the whole
+# proof, and `xs[at]` hands `double` an element, never a none.
+fn double n
+  n * 2
+
+fn total xs at acc
+  return acc if length xs < at
+  total xs (at + 1) (acc + double xs[at])
+
+pub play = print "{total [1 2 3] 1 0}"

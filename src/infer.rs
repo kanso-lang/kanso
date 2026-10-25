@@ -496,7 +496,8 @@ pub fn infer(program: &Program) -> Inference {
     // returns land before any caller asks; after that the direction
     // alternates, and each sweep carries one flow the whole way instead of
     // one hop per round.
-    let order = callee_first(program);
+    let (order, mentions, mention_starts) = callee_first(program);
+    let floors = counter_floors(program, &mentions, &mention_starts);
     // `"{x}"` and `print x` call the render group on a value of any kind, and
     // neither is a call site this walk visits. So its parameters start at
     // every kind a value can be. Read from the explicit calls alone, a
@@ -552,7 +553,10 @@ pub fn infer(program: &Program) -> Inference {
                     }
                 }
             }
+            let mark = ctx.facts.len();
+            ctx.facts.extend(floors[i].iter().map(|&(name, k)| Fact::NamedLower(name, k)));
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
+            ctx.facts.truncate(mark);
             let mut widened = false;
             if ret | ctx.returns[i] != ctx.returns[i] {
                 ctx.returns[i] |= ret;
@@ -621,6 +625,8 @@ enum Fact<'a> {
     Lower(&'a Expr, i64),
     /// `length list >= n`
     AtLeast(&'a str, i64),
+    /// `name >= n` for a parameter, from `counter_floors`
+    NamedLower(&'a str, i64),
 }
 
 /// The list whose length `e` reads, when `e` is `length xs`.
@@ -759,6 +765,227 @@ fn offset_of(e: &Expr) -> (Option<&Expr>, i64) {
     (Some(e), 0)
 }
 
+/// Whether `body` binds `name` again anywhere, a guard's rest and a branch's
+/// block included. A parameter rebound is a new value, and a floor proved of
+/// the one the arm was handed says nothing about it.
+fn rebinds(body: &[Stmt], name: &str) -> bool {
+    fn in_expr(e: &Expr, name: &str) -> bool {
+        match e {
+            Expr::Guard { rest, .. } if rebinds(rest, name) => return true,
+            Expr::Block(stmts, _) => return rebinds(stmts, name),
+            _ => {}
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || in_expr(c, name));
+        found
+    }
+    body.iter().any(|stmt| match stmt {
+        Stmt::Bind { pattern: Pattern::Var(n, _), .. } if n == name => true,
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => in_expr(expr, name),
+    })
+}
+
+/// Whether `name` is one of a handful of names: a length test first, which
+/// turns most names away before a byte is compared.
+fn is_one_of(few: &[&str], name: &str) -> bool {
+    few.iter().any(|c| c.len() == name.len() && *c == name)
+}
+
+/// The least value each parameter of a loop can hold, where the program shows
+/// every value it is handed: `(group, arity, position) -> floor`. A loop that
+/// walks a list from its first element is written `go xs 1 acc` with
+/// `go xs (at + 1) ...` inside it, and its reads `xs[at]` need `at >= 1`,
+/// which no guard says because the author knows where the loop starts. A
+/// guard on the upper end alone then proves the read.
+///
+/// A floor is only kept where every value is in sight: the group is not pub,
+/// so nothing outside the program calls it; it is never named except as the
+/// head of a call, so it never travels as a value; every call from outside
+/// the group passes an integer literal there; and every call from inside it
+/// passes its own parameter at that position, plus a literal that is not
+/// negative. Anything else leaves the position without a floor.
+fn counter_floors<'p>(
+    program: &'p Program,
+    mentions: &[usize],
+    starts: &[u32],
+) -> Vec<Vec<(&'p str, i64)>> {
+    #[derive(Clone, Copy)]
+    enum Seen {
+        Floor(i64),
+        Unknown,
+    }
+    // A floor needs a group that calls itself with a parameter passed on
+    // raised, and most programs have none outside std's pub loops. Finding
+    // the candidates compares names and builds nothing; the walk below then
+    // hashes only what a candidate's floor depends on.
+    fn raises_own(e: &Expr, d: &crate::ast::FnDecl) -> bool {
+        if let Expr::App { head, args, piped: false, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if *n == d.name)
+                && args.len() == d.params.len()
+                && args.iter().zip(&d.params).any(|(a, p)| match (p, offset_of(a)) {
+                    (Pattern::Var(own, _), (Some(Expr::Ident(n, _, _)), k)) => n == own && k >= 0,
+                    _ => false,
+                })
+            {
+                return true;
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || raises_own(c, d));
+        found
+    }
+    // `callee_first` has already listed what each declaration mentions, so
+    // an arm that never mentions itself is passed over without a walk.
+    let mentioned = |i: usize| &mentions[starts[i] as usize..starts[i + 1] as usize];
+    let candidates: crate::hash::Set<&str> = program
+        .fns
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| !(d.is_pub || d.written_pub) && !d.params.is_empty())
+        .filter(|&(i, d)| {
+            mentioned(i).contains(&i)
+                && d.body.iter().any(|stmt| {
+                    let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+                    raises_own(expr, d)
+                })
+        })
+        .map(|(_, d)| d.name.as_str())
+        .collect();
+    if candidates.is_empty() {
+        return vec![Vec::new(); program.fns.len()];
+    }
+    // Only a declaration that mentions a candidate can hand it a value or
+    // hand it on, so only those are walked.
+    // A handful of names, so a length test against each turns most
+    // declarations away before a byte is compared, where hashing every
+    // declaration's name cost more than the rest of this function.
+    let few: Vec<&str> = candidates.iter().copied().collect();
+    let candidate_arms: Vec<bool> = program.fns.iter().map(|d| is_one_of(&few, &d.name)).collect();
+    let readers: Vec<usize> = (0..program.fns.len())
+        .filter(|&i| mentioned(i).iter().any(|&j| candidate_arms[j]))
+        .collect();
+    let mut floors: HashMap<(&str, usize, usize), Seen> = HashMap::default();
+    let mut escapes: crate::hash::Set<&str> = Default::default();
+    let mut arities: crate::hash::Set<(&str, usize)> = Default::default();
+    for (d, _) in program.fns.iter().zip(&candidate_arms).filter(|(_, &c)| c) {
+        arities.insert((d.name.as_str(), d.params.len()));
+        if d.is_pub || d.written_pub {
+            escapes.insert(d.name.as_str());
+        }
+    }
+    struct Walk<'a, 'p> {
+        floors: &'p mut HashMap<(&'a str, usize, usize), Seen>,
+        escapes: &'p mut crate::hash::Set<&'a str>,
+        arities: &'p crate::hash::Set<(&'a str, usize)>,
+        // (arm, position) of every self-call that passes the parameter on
+        // raised; the arm must not rebind it, asked once per pair below
+        raised: &'p mut crate::hash::Set<(usize, usize)>,
+        at: usize,
+        candidates: &'p [&'a str],
+    }
+    fn visit<'a>(e: &'a Expr, caller: &'a crate::ast::FnDecl, w: &mut Walk<'a, '_>) {
+        match e {
+            Expr::App { head, args, piped, .. } => {
+                if let Expr::Ident(name, _, _) = head.as_ref() {
+                    if !is_one_of(w.candidates, name) {
+                        for arg in args {
+                            visit(arg, caller, w);
+                        }
+                        return;
+                    }
+                    // a piped call or one short of every arm hands the group
+                    // on, and its later arguments come from out of sight
+                    if *piped || !w.arities.contains(&(name.as_str(), args.len())) {
+                        w.escapes.insert(name.as_str());
+                    }
+                    let recursive = caller.name == *name && caller.params.len() == args.len();
+                    for (pos, arg) in args.iter().enumerate() {
+                        let seen = match (recursive, int_of(arg)) {
+                            (false, Some(k)) => Seen::Floor(k),
+                            (false, None) => Seen::Unknown,
+                            (true, _) => match (&caller.params[pos], offset_of(arg)) {
+                                (Pattern::Var(own, _), (Some(Expr::Ident(n, _, _)), k))
+                                    if n == own && k >= 0 =>
+                                {
+                                    w.raised.insert((w.at, pos));
+                                    continue;
+                                }
+                                _ => Seen::Unknown,
+                            },
+                        };
+                        let slot = w.floors.entry((name.as_str(), args.len(), pos)).or_insert(seen);
+                        *slot = match (*slot, seen) {
+                            (Seen::Floor(a), Seen::Floor(b)) => Seen::Floor(a.min(b)),
+                            _ => Seen::Unknown,
+                        };
+                    }
+                    for arg in args {
+                        visit(arg, caller, w);
+                    }
+                    return;
+                }
+            }
+            Expr::Ident(name, _, _) | Expr::Partial(name, _) if is_one_of(w.candidates, name) => {
+                w.escapes.insert(name.as_str());
+            }
+            _ => {}
+        }
+        crate::for_each_child(e, |c| visit(c, caller, w));
+    }
+    let mut raised: crate::hash::Set<(usize, usize)> = Default::default();
+    let mut w = Walk {
+        floors: &mut floors,
+        escapes: &mut escapes,
+        arities: &arities,
+        raised: &mut raised,
+        at: 0,
+        candidates: &few,
+    };
+    for &i in &readers {
+        let d = &program.fns[i];
+        w.at = i;
+        for stmt in &d.body {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            visit(expr, d, &mut w);
+        }
+    }
+    // An arm that passes its parameter on raised but also rebinds it passes
+    // on a value nobody bounded.
+    for &(i, pos) in &raised {
+        let d = &program.fns[i];
+        if let Pattern::Var(own, _) = &d.params[pos] {
+            if rebinds(&d.body, own) {
+                floors.insert((d.name.as_str(), d.params.len(), pos), Seen::Unknown);
+            }
+        }
+    }
+    // What each arm is handed, as the facts its body starts with: a floor
+    // for each parameter it names and never rebinds.
+    program
+        .fns
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            if !candidate_arms[i] || escapes.contains(d.name.as_str()) {
+                return Vec::new();
+            }
+            d.params
+                .iter()
+                .enumerate()
+                .filter_map(|(pos, p)| {
+                    let Pattern::Var(name, _) = p else { return None };
+                    match floors.get(&(d.name.as_str(), d.params.len(), pos)) {
+                        Some(Seen::Floor(k)) if !rebinds(&d.body, name) => {
+                            Some((name.as_str(), *k))
+                        }
+                        _ => None,
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// Whether the facts in force put `list[index]` inside the list: the index
 /// is at least one, and at most the length. A literal carries its own lower
 /// bound and needs the list's length known to be at least it; anything else
@@ -775,8 +1002,11 @@ fn in_range(facts: &[Fact<'_>], index: &Expr, list: &str) -> bool {
     let lower = match base {
         None => off >= 1,
         // the fact says base + eo >= k, so base + off >= k - eo + off
-        Some(_) => facts.iter().any(|f| match f {
+        Some(b) => facts.iter().any(|f| match f {
             Fact::Lower(e, k) => same_base(e).is_some_and(|eo| k - eo + off >= 1),
+            Fact::NamedLower(n, k) => {
+                matches!(b, Expr::Ident(name, _, _) if name == n) && k + off >= 1
+            }
             _ => false,
         }),
     };
@@ -801,7 +1031,7 @@ fn in_range(facts: &[Fact<'_>], index: &Expr, list: &str) -> bool {
 /// it mentions, so within a round the shared params and returns are already
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
-fn callee_first(program: &Program) -> Vec<usize> {
+fn callee_first(program: &Program) -> (Vec<usize>, Vec<usize>, Vec<u32>) {
     // The declarations sharing a name, as one flat vector and a range apiece.
     // `by_name.entry(..).or_default().push(i)` allocated a `Vec` per DISTINCT
     // name — 937 blocks for a table that is built once and only ever read.
@@ -915,7 +1145,7 @@ fn callee_first(program: &Program) -> Vec<usize> {
             }
         }
     }
-    order
+    (order, flat, starts)
 }
 
 /// The locals a declaration has bound, newest last.

@@ -21,91 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — an escaped JSON string is read in one walk
-
-A JSON string with an escape in it was read twice. `plain_string`'s emitted
-twin found the first backslash, then walked to the closing quote with a
-`find2` from each backslash, and answered the quote's position; the decoder
-then called `unescape` on the same range, which read the bytes again to undo
-the escapes. The twin now hands the first backslash to `k_json_escaped`, which
-undoes the escapes while it looks for the quote. It writes the undone bytes at
-the arena's frontier, and at the quote it allocates the string `unescape`
-would have allocated, at the same length, which lands where the bytes already
-are; so no allocation counter moves. It keeps the string, keyed by the bytes'
-address and the range, and `unescape` answers it first when asked for that
-range, before a frame. A `u` escape, an escape JSON does not have, or a
-frontier without room leaves nothing kept, and the old walk finds the quote.
-
-The fuzzer was built first, against the joined runtime with its `main`
-renamed, so it ran the real functions. Its reference is the walk the emitter
-wrote before followed by `k_b_unescape_raw`. Half its calls cut the arena's
-frontier short, so every fallback runs. Unstressed it ran 48,354,448 escaped
-strings and found 19 failures: when the frontier ran out in the middle of a
-run, the walk handed a plain byte's position to `k_json_quote_after`, which
-takes a backslash's and skips the byte after it. The stress found the same bug
-2,952 times in 2,000,000 cases. With `k_json_quote_from` for that case, 25
-seeded runs of 2,000,000 cases each read 48,354,997 escaped strings, 8,013,430
-of them answered from the kept string, and found no failure.
-
-Measured here, the run program 878,353,521 -> 871,922,860 (-0.73%) with the
-same output. `k_b_unescape` fell 38,534,463 -> 3,335,013, and the decoder
-frames that inlined the twin lost the rescan loop (`array_items` -6,489,450,
-`parse_value` -5,370,849, `obj_key_start` +929,412), against 39,591,486 in
-`k_json_escaped`. find2_calls falls where the walk no longer calls
-`find2`: run_find2_calls 1,488,669 -> 1,037,031, the decoder's find2_calls
-2,255,550 -> 1,571,250, oneshot_find2_calls and live_find2_calls 15,037 ->
-10,475. The decoder's emitted code sheds the loop: emitted_branches 1,346 ->
-1,344 and emitted_lines 14,330 -> 14,319; every program gains the new door's
-declare line, so emitted_other_lines rises by one a program where the decoder
-is absent.
-
-CI's rows. run_instructions 878,353,565 -> 871,922,904 (-0.73%), and the
-other programs that decode an escaped string fall with it: jsonbench
-599,978,129 -> 593,998,829, oneshot 10,572,323 -> 10,531,404, livebench
-1,032,877,307 -> 1,032,837,487, encodebench 2,456,796,762 -> 2,456,796,258.
-Machine code: the programs with the decoder shrink (jsonbench text 402,057 ->
-401,417, runbench 750,713 -> 750,041, livebench 412,121 -> 411,481, oneshot
-408,601 -> 407,961) and every other program grows by 1,504 bytes
-(encodebench 342,473 -> 343,977). Building the run program:
-codegen_instructions_dev 116,068,667 -> 116,128,678,
-codegen_instructions_release 422,581,877 -> 422,378,106, and
-emit_instructions 6,435,278 -> 6,432,635. The machine-code total, text, is
-5,340,654 -> 5,353,102. The compile corpus's programs carry the declare line
-too: lines 1,524 -> 1,528 over its four, and module_lines 1,163 -> 1,164. In the tab, which carries the same
-library: browser_compile_instructions 428,211,402 -> 428,034,601,
-browser_compile_peak_bytes 768,853 -> 768,205, browser_run_instructions
-30,540,337 -> 30,427,332. The welfare floor rises 92.73 -> 92.76.
-
-The micro golden `an_escaped_string_is_undone_in_one_walk` puts escapes at
-the front, the back and each side of a word boundary, two backslashes
-together, a document that ends a byte after the string, a `u` escape, an
-unknown escape and two strings that run out. The interpreter prints the same
-26 lines, and an `\n` undone as a tab turns it red. The ratchet row
-`an_escaped_string_undone_twice` keeps nothing, so `unescape` reads every
-string again; the run program reads 910,139,124.
-
-Measured on #2043's shape and declined. Looping one more decoder state as
-well as `obj_key_start` reads higher every time: `obj_delim` 901,567,246,
-`obj_open` 882,623,604, `array_open` 889,848,391, `obj_key_end` 910,134,560,
-`array_delim` 892,170,102, against 878,353,218. Dropping the five `_past`
-helpers by binding the skipped position in each blank arm cut the corpus check
-38,158,594 -> 37,784,461 and read the run program 930,125,639. Three encoder
-shapes read higher too: the list's body written in `encode_onto`'s arm
-885,700,026, the map's 885,870,393, and the first element folded into
-`encode_items` behind a separator group 885,304,273.
-
-Also declined: an int of up to eight digits read inline by `to_int`'s slice
-twin, through a hot-unit helper LTO folds in, with the call kept for every
-other shape. `k_b_to_int_slice_raw` fell 13,492,972 -> 640,000, but the
-inlined read cost 50 instructions an int in `array_items` and `parse_value`,
-against 65 for the call, and the run program read 878,353,521 -> 876,146,778
-(-0.25%), before what inlining it at every site costs the release build.
-
-A container that restarted came up with clang 18, where the probe for
-`preserve_none` answers no and the emitter writes another convention: main
-emitted 2,135 fewer lines for jsonbench there than its golden says. The rows
-above were taken under clang 19, as CI installs it.
-
 ## 2026-10-22 — the region row has a witness again
 
 The ratchet row `a region that keeps what it made` went blind when std/json
@@ -1767,6 +1682,56 @@ emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
 emits the same way, takes browser_compile_instructions from 216,735,094 to
 216,735,256. No benchmark builds a pipe of that shape, and nothing at run
 time moved.
+
+## 2026-10-24 — a loop counter knows where it starts
+
+The ports' re-sit counted the same complaint in about ten journals: a guard
+proves a list read only when it is written `i < 1 or length xs < i` (httpd
+F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
+its counter at one and only adds to it, and its author writes the guard on
+the far end alone: `return acc if length xs < at`. The checker read that as
+a bound above and none below, so `xs[at]` could be a none, and the read had
+to be resolved where it could not miss.
+
+Inference now gives a parameter a floor when every value it can hold is in
+sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
+outside the program exists. It is never named except as the head of a call
+with an arity it declares, so it never travels as a value or a partial.
+Every call from outside the group passes an integer literal at that position.
+Every call from inside passes the parameter itself plus a literal that is not
+negative, and no arm rebinds the parameter. The floor is the least literal,
+and it enters each arm as a fact beside the ones guards add, so `in_range`
+reads `at >= 1` from it and the guard on the far end finishes the proof.
+
+`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
+refuses it with "this can be a none and `double` has no arm for it". Two
+error goldens pin where the floor stops: a loop entered at zero
+(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
+the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
+lambda, whose arguments come from out of sight, is refused as before.
+
+A proven read carries no none in inference's sets, so inference settles
+sooner where std/text reads one: compiling `text/uppercase` alone now takes
+223 expression visits, one fewer, and
+`tests/an_import_reads_what_the_program_names.rs` says so.
+
+What it does not reach: the about 130 reads #2088's named-none check refuses
+in the tree. With the floor under that check the count is still 130. Most of
+them read behind a bound passed through a boolean, `applied dir list at acc
+(at > length list)` with the read in the `false` arm, where the fact lives in
+the caller and no floor on the counter covers it.
+
+CI's rows. Every compile asks the call graph where each counter starts, and
+the tab compiles with the same front end: compile_instructions 24,230,258 ->
+24,488,495, entry_instructions 71,606,414 -> 72,335,545,
+library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
+-> 5,637,678, compile_allocs 13,789 -> 13,815 and
+browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
+corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
+401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
+native moved. Welfare fell by less than a hundredth, and the floor follows
+under the language exception: the ruling asks for index reads to be proven,
+and this proves more of them.
 
 ## 2026-10-25 — a function's arms split across files are counted together
 
