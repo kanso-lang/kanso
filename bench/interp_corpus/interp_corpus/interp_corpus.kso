@@ -20,7 +20,7 @@ type bucket
 
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
-  nest = "{nested 1000} {appended 6000} {bucketed 1500}"
+  nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
 
 fn rounds n
@@ -168,3 +168,14 @@ fn filed m n i
 
 fn bucketed n
   length (filed {} n n)[3].items
+
+# A list walked by reading its first element and handing on the rest that
+# `list/drop` leaves, as the repository's own scripts walk theirs.
+fn walked _ acc 0
+  acc
+
+fn walked xs acc n
+  walked (list/to_list (list/drop xs 1)) (acc + xs[1]) (n - 1)
+
+fn rested n
+  walked (span n) 0 n
