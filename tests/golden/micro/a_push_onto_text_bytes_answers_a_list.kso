@@ -1,0 +1,18 @@
+# `text/bytes` answers an int list, so `push` onto it answers the list of its
+# byte values with the item after them, as `list/concat` does. Every engine
+# stopped with "push takes a list and a value". The answer is a list, and the
+# bytes it came from are unchanged.
+import "std/text"
+
+pub play =
+  bs = text/bytes "ab"
+  print "{push bs 2}"
+  print "{push (push bs 2) 3}"
+  print "{length bs} {text/utf8 bs}"
+  print "{pushed (text/slice (text/bytes "abc") 2 3) 9}"
+
+fn pushed none _
+  []
+
+fn pushed xs x
+  push xs x
