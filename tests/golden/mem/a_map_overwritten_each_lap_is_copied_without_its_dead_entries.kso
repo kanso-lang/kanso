@@ -1,0 +1,29 @@
+# A map of 16 keys in a record, read and then overwritten once a lap. A put
+# that cannot write in place copies the map, and the copy used to take the
+# whole append log, every earlier overwrite included, so 2,000 laps copied a
+# log that grew by one entry each lap. The copy now starts from the sorted
+# view, which holds each key's last value.
+import "std/list"
+
+type machine
+  memory
+  pc
+
+fn boot size
+  pairs = list/map (list/take list/naturals size) (n -> [n 0])
+  machine (list/to_h (list/to_list pairs)) 1
+
+fn run m 0
+  m.memory[1]
+
+fn run m n
+  seen = or_zero m.memory[(m.pc * 7) % 16 + 1]
+  run (machine (put m.memory m.pc (n + seen)) (m.pc % 16 + 1)) (n - 1)
+
+fn or_zero none
+  0
+
+fn or_zero x
+  x
+
+pub play = print "{run (boot 16) 2000}"

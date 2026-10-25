@@ -21,26 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — the region row has a witness again
-
-The ratchet row `a region that keeps what it made` went blind when std/json
-began writing a map from its entries in place (c2b48e57). Its mutation makes
-`k_region_pop` keep everything the region allocated, and its witness was the
-mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
-under it. Once the encoder stopped building `keys` and `values` for each map,
-its calls had no allocating argument, so the emitter made no region at all:
-no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
-and with the mutation applied the whole mem corpus stayed green on main. The
-row came up on #2047, whose diff touches `core.c`, and read BLIND.
-
-The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
-encoder's old shape: a walk that builds a map's keys as the argument of its
-call into the map and answers bytes. The emitter makes that call a region.
-It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
-12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
-total and the oracle's counters agree. The old fixture's comment, which still
-described the region it no longer has, says what it pins now.
-
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
 The encoder writes a string with an escape in it through
@@ -1764,3 +1744,25 @@ lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
 entry_instructions 72,335,545 -> 72,317,212, library_instructions
 72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
 218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-25 — a copied map leaves its dead entries behind
+
+The fix for the `overwrite` phase (#2089, fourth item). A map keeps an append
+log of its pairs, overwrites included, and sorts and deduplicates it into a
+cached view on the first read. A put that cannot write in place copies the
+map, and `k_b_put` copied the whole log. chip8's memory, 16 keys read and
+overwritten once a lap, therefore carried every earlier lap's entries into
+each copy: 8,000 laps allocated 1,783,786,288 bytes and took 2.1 seconds
+natively.
+
+When the map's sorted view is current and shorter than its log, the copy now
+starts from the view, which holds each key's last value, and the new pair goes
+after it. The answer reads the same either way. The chip8 shape at 8,000 laps
+falls to 9,286,608 bytes and 0.015 seconds, and prints what the interpreter
+prints.
+
+`tests/golden/mem/a_map_overwritten_each_lap_is_copied_without_its_dead_entries`
+runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
+8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
+33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
+tally's map is copied from a view too.
