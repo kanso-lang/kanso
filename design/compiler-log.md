@@ -1762,7 +1762,24 @@ natively and quadratic on the interpreter, 64 ms at 5,000 characters and
 563 ms at 20,000. On #2152's build, which shares a long string and slices
 an ASCII one by byte, the same two read 39 ms and 77 ms.
 
-CI's rows: ROWS.
+CI's rows, against main at #2141. The run program reads work_runbench
+828,232,672 -> 869,011,503, and each rest's step records cost it memory as
+well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
+242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
+94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
+23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
+1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
+run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
+emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
+168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
+-> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
+interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
+623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
+browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
+1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
+344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
+re-bases the eight terms among these it weighs, each keeping its ratio to
+its baseline, and the floor stays at 95.22.
 
 ## 2026-10-25 — the rest of a list after a drop is one copy
 
