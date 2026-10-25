@@ -1885,3 +1885,21 @@ other constructor diagnostics' do.
 `errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
 `errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
 main passes both. The stdlib, the twenty ports and kq check as before.
+
+## 2026-10-25 — a test that fails inside a library names the library's line
+
+From #2091's sixth item, chip8's port. A test whose helper handed
+`text/split` a none failed inside std/text, and `kanso test` printed
+"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
+number under the test file's path. In the port, line 38 of the test file was
+a different test, one that had passed. The runner rendered every failure's
+span against the test file's own source.
+
+A failure that knows its place now prints it the way `run` and `play` do,
+`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
+(#1975) that a failure names the line it happened on. A failure with no place
+keeps the rendered span.
+
+`tests/golden/test_verb/fails_in_std` is the reduction, and
+`a_test_failing_inside_a_library_names_the_librarys_line` in
+`tests/test_verb.rs` pins both streams.
