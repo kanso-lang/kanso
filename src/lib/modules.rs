@@ -782,12 +782,23 @@ fn compile_module_loaded(
         1 => crate::hash::Set::default(),
         _ => parsed.iter().flat_map(|(_, _, p)| check::declared_names(p)).collect(),
     };
-    // The functions the module's other files declare: a call of one on a
-    // value a function was handed is shaded, as a call of the file's own is.
-    // A module of one file has no others.
-    let module_fns: crate::hash::Set<&str> = match parsed.len() {
-        1 => crate::hash::Set::default(),
-        _ => parsed.iter().flat_map(|(_, _, p)| p.fns.iter().map(|f| f.name.as_str())).collect(),
+    // The functions the module's files declare: a call of one on a value a
+    // function was handed is shaded, as a call of the file's own is. Each
+    // carries the first file that declares it and whether another file
+    // declares arms of it too, which leaves its arity to the merged check. A
+    // module of one file has no others.
+    let module_fns: crate::hash::Map<&str, (u32, bool)> = match parsed.len() {
+        1 => crate::hash::Map::default(),
+        _ => {
+            let mut seen = crate::hash::Map::default();
+            for (at, (_, _, p)) in parsed.iter().enumerate() {
+                for f in &p.fns {
+                    let slot = seen.entry(f.name.as_str()).or_insert((at as u32, false));
+                    slot.1 |= slot.0 != at as u32;
+                }
+            }
+            seen
+        }
     };
     let mut file_travels: Vec<Vec<check::Travel>> = Vec::with_capacity(parsed.len());
     for ((file, source, program), mut diags) in parsed.iter().zip(marker_diags) {

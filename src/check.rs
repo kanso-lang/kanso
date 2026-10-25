@@ -1409,7 +1409,7 @@ pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diag
         &HashSet::default(),
         &HashSet::default(),
         &[],
-        &HashSet::default(),
+        &HashMap::default(),
         &mut travels,
     );
     // A call of a function the file declares was resolved where it stands.
@@ -1444,7 +1444,7 @@ pub fn check_file_shadow(
     shadowable: &HashSet<String>,
     sibling_types: &HashSet<String>,
     sibling_decls: &[&crate::ast::TypeDecl],
-    sibling_fns: &HashSet<&str>,
+    sibling_fns: &HashMap<&str, (u32, bool)>,
     travels: &mut Vec<Travel>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();

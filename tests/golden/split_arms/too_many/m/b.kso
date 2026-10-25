@@ -1,0 +1,2 @@
+fn lookup doc path n
+  "{doc}.{path}.{n}"

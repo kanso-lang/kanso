@@ -1917,3 +1917,28 @@ binding ``. The lookup runs only on a refused compile.
 
 `errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
 shape, and main prints the message without the place.
+
+## 2026-10-25 — a function's arms split across files are counted together
+
+From #2090, toml's port. A module's files share their declarations, and
+toml's `lookup` had a 2-argument arm in one file that called a 3-argument
+arm in the next. The per-file check counted only the arms in the file it was
+reading and refused the call with "no 3-argument arm of `lookup` (arms take
+2)". The same two arms in one file ran.
+
+The module path now records, for each function its files declare, whether
+more than one file declares arms of it, and the per-file arity check leaves
+such a name to the merged check, which sees every arm. A count no file's arms
+take is still refused there, and the message names every arity: "no
+4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
+said "arms take 2".
+
+`tests/arms_split_across_files.rs` runs toml's shape on both engines and
+pins the refusal; main fails both.
+
+CI's rows. The module path now counts, per name, which files declare it:
+compile_instructions 24,488,495 -> 24,527,482, entry_instructions
+72,335,545 -> 72,367,482, library_instructions 72,011,050 -> 72,043,033 and
+browser_compile_instructions 218,080,833 -> 218,175,578. Nothing at run time
+moved. Welfare fell by less than a hundredth, and the floor follows: a
+module's files share their declarations under the 2026-08-03 ruling.
