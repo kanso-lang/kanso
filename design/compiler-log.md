@@ -1543,6 +1543,22 @@ more. `a_map_overwritten_each_lap_is_copied_without_its_dead_entries` holds
 alone. That is below the 917,694,203 main reads without the phase, because
 other phases' loops stopped staging on their first lap too.
 
+The ratchet's row "a thunk's captures unsized by the walk that evacuates
+survivors" reported BLIND on this branch's tree: its mutation, which stops
+the sizing walk looking inside a thunk, left its gate green. It is blind on
+main as well, at cdc6be5c and at a70d2458, and this branch is the first since
+then to touch `core.c` and so select the row. Its witness,
+`micro/a_thunk_capture_survives_the_cohort`, was written to grow past the
+cohort threshold and read its captures after the rewind; its program no
+longer grows that far (cohort_frees=0), and a read of reclaimed memory goes
+wrong only when something has written over it. Under the mutation the
+survivor copy writes past the end of the carry buffer the walk sized, and
+nothing reads the damage. `k_copy_alloc` now refuses a copy that outruns the
+walk, "a carry copied more than its sizing walk counted", and under the
+mutation `mem/work_ahead_pools_a_call_on_a_builtin_read`, whose pooled cell
+carries its captured list through a stage, dies with that message. The row's
+gate is the mem corpus now, and the mutation's comment names the new witness.
+
 CI's rows for the four fixes together (#2106), against the run program that
 already holds their shapes (#2104). work_runbench 988,172,222 -> 797,618,426,
 a 19.3% fall, which is the rise this pull request banks. The other run rows

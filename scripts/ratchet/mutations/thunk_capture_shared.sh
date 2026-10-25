@@ -1,10 +1,14 @@
 #!/bin/sh
 # The sizing walk stops seeing inside a thunk, which is the pre-#972 world:
 # the malloc'd cell survives the rewind while its captured args do not, and
-# the survivor copy neither counts nor moves what the thunk holds. The micro
-# golden a_thunk_capture_survives_the_cohort reads reclaimed memory and goes
-# red. The mutation removes the walk rather than editing the golden because
-# the golden is what an edit would prove nothing about.
+# the survivor copy then writes past what the walk counted. k_copy_alloc
+# refuses a copy that outruns the walk, and mem/work_ahead_pools_a_call_on_a_
+# builtin_read, whose pooled cell carries its captured list through a stage,
+# dies there. The micro golden a_thunk_capture_survives_the_cohort was the
+# witness until its program stopped reaching a cohort, and it read reclaimed
+# memory, which shows only when something has overwritten it. The mutation
+# removes the walk rather than editing the golden because the golden is what
+# an edit would prove nothing about.
 set -e
 A1='    if (v.tag == K_THUNK) {' \
 A2='        KThunk* t = (KThunk*)(intptr_t)v.payload;' \

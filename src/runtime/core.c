@@ -2172,6 +2172,12 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
     if (K_COUNTING) k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
     if (cp->in_ten) return k_ten_alloc(n);
+    /* The sizing walk counted what this copy may write, and the buffer was
+       grown to that count. A copy that writes more has outrun the walk and
+       would run off the end of the malloc'd buffer, a corruption nothing reads
+       until much later, if at all. Refused here so it is seen where it happens. */
+    if (__builtin_expect(cp->buf->used + n > cp->buf->cap, 0))
+        k_die("a carry copied more than its sizing walk counted");
     void* p = cp->buf->data + cp->buf->used;
     cp->buf->used += n;
     return p;
