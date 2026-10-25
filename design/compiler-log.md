@@ -1380,7 +1380,11 @@ allocs and alloc_bytes: run_allocs 1,451,390 -> 1,444,950, run_alloc_bytes
 248,577,384 -> 213,685,416, run_evac_bytes 15,563,184 -> 4,822,160,
 run_evac_allocs 8,626, run_survive_slots 5,891, run_put_mut_grow 22,
 run_push_mut_slow 1,557,480, run_sh_buf 86,615,088, run_sh_rec 3,906,544,
-run_sh_map 12,160, run_bytes_malloc 7,885 and run_ten_blocks 1. Of its peaks,
+run_sh_map 12,160, run_bytes_malloc 7,885 and run_ten_blocks 1, with
+run_ten_frees 2 -> 1 and run_ten_handups 6 -> 1 for the block that is no
+longer taken. run_view_allocs and run_view_frees fall 769 -> 399 and
+run_cohort_frees 6 -> 5; which fix moves the map views is not isolated
+either. Of its peaks,
 run_held_peak_bytes falls 2,397,872 -> 233,760, while run_arena_peak_bytes
 rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
 212,465. Which of the four fixes moves the arena and permanent peaks is not
