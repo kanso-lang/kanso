@@ -1608,4 +1608,16 @@ earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
 the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
 print 62.
 
+CI's rows. The run program with all four phases reads work_runbench
+788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
+20.2% of the new whole. The program is larger, so the code it emits grows:
+emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
+emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
+163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
+5,518,316 over the fourteen. No compile row and no browser row moves. Under
+the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
+stack and bag joined: the run_instructions baseline keeps its ratio to the
+run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
+the fixes in #2106 score against these rows as a rise.
+
 The fixes follow in their own pull requests and will score as rises.
