@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-24 — dev and tab bodies write no llvm.assume
-
-The emitter told LLVM what it had proved with `llvm.assume`: a parameter's
-tag where inference pins one kind, a length that is never negative, an int's
-tag after a `%parsed` is unpacked, and the range of a byte position in a
-dispatcher. Each one costs a compare and a call, and the tag ones an
-`extractvalue` too. Only a release module is optimized. The dev tier compiles
-at -O0, which drops the call without reading it, and the tab's translator in
-`src/ir_wasm.rs` skips the call but still translates the compare and runs it.
-The dev tier emits with the settings the tab does, and for
-`bench/interp_corpus` it held 271 assumes, which with their feeding lines
-came to 729 of its 9,964 lines; runbench's fell from 36,674 to 35,082. The
-two assumes left are in the fixed helpers `DECLARES` carries.
-
-`FnEmit::assumes` now answers false for a body built with `words`, which is
-every dev and tab body, and the five sites that write an assume ask it first.
-A dispatcher still records a byte position as an int, which the emitter reads
-itself; only the lines for LLVM go. The release IR of all nineteen
-benchmarks built from their directories is byte-identical before and after.
-
-In this container, at the golden's rustc, the tab's compile of the corpus fell
-from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from 598,093
-to 532,354 bytes (-11%), and the run fell from 34,963,054 to 33,372,898
-(-4.5%), the compares it no longer executes. On CI the dev build's two rows
-fell with the emitted text: emit_instructions 5,918,172 -> 5,863,976 and
-codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
-IR lost ten of its twelve assumes. Every other compile row reads what main
-left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
-every body again.
-
 ## 2026-10-24 — the tab leaves its tail calls as written
 
 `Written::finish_pieces`, which hands the tab its module, ran the same
@@ -1572,3 +1542,46 @@ new arm rule: compile_instructions lands on 24,695,561, entry_instructions
 239,691,017, with browser_compile_peak_bytes 610,760, and
 codegen_instructions_dev on 116,456,086 and codegen_instructions_release on
 370,239,646. Welfare rises 0.32, which this pull request banks.
+
+## 2026-10-25 — a word count joins the run program and the interpreted corpus
+
+A probe built each list, text and map function natively at two sizes, four
+times apart, and counted the instructions of each. Every one grew linearly
+or as n log n except `list/tally` over keys that come round more than once:
+4× the items cost 15× the instructions, with string keys and with int keys
+alike. Tallying 20,000 ints, each seen twice, took 1.19 billion
+instructions natively, and 80,000 took 1.49 s against 0.11 s for 20,000.
+The interpreter keeps its maps in a B-tree and is linear on the same
+program, 0.15 s and 0.44 s. Under the 2026-09-05 corpus-first gavel the
+shape joins the corpus here, measured on main at kanso#2112 before its fix.
+
+`counted` is a word count, `list/tally` over 2,000 words that each come
+round twice in no order. The tally reads a word's count and puts it back one
+higher. When the map already holds the key, the in-place put sets the
+value in the map's sorted view and then walks the map's append log back
+from its end to set the same key's entry there, so a word's second sighting
+costs the number of words already counted.
+
+On this container the run program reads 843,728,377 with the phase and
+799,281,633 without it, a column of 44,446,744 (5.27%). The interpreted
+corpus counts 1,000 words, 440,075,578 → 462,532,645. That corpus is the
+tab's program too, and the tab runs the native runtime built for wasm32,
+where the walk is the same.
+
+CI's rows for the corpus with the phase. work_runbench 799,174,946 ->
+843,623,597, a rise of 44,448,651. The interpreted corpus reads
+interp_instructions 399,115,104 -> 424,511,367, interp_peak_bytes 734,933 ->
+741,380 and interp_allocs 420,622 -> 457,070. The tab compiles and runs the
+same corpus: browser_compile_instructions 239,691,017 -> 263,967,351,
+browser_compile_peak_bytes 610,760 -> 699,180, and browser_run_instructions
+34,483,426 -> 60,166,290, where 1,000 words cost three quarters as much again
+as the rest of the corpus because the tab's runtime walks the log too. The
+run program's emitted code grows by the phase: emitted_other_defines 2,188 ->
+2,196, emitted_other_calls 19,914 -> 19,957, emitted_other_branches 17,407 ->
+17,435, emitted_other_lines 164,739 -> 165,000 and text 5,492,433 ->
+5,496,337. Its allocation vein: run_allocs 1,445,901 -> 1,449,911,
+run_alloc_bytes 215,212,648 -> 215,555,576, run_perm_allocs 102 -> 103,
+run_push_mut_slow 1,579,785 -> 1,579,791, run_put_mut_grow 22 -> 30,
+run_sh_buf 86,615,200 -> 86,746,592, run_sh_rec 3,906,672 -> 3,906,784 and
+run_sh_str 16,642,592 -> 16,769,952. Welfare re-bases the six terms the phase
+moves, each keeping its ratio to its baseline, and the floor stays at 94.33.

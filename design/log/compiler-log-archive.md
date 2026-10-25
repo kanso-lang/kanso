@@ -108543,3 +108543,33 @@ emit_instructions 5,919,265 -> 5,918,172 and browser_compile_instructions
 ratchet mutations `a_call_into_a_loop_left_unbracketed` and
 `a_proven_result_left_unsaid` follow their de-indented lines, and every
 mutation that edits `emit.rs` applies and builds.
+
+## 2026-10-24 — dev and tab bodies write no llvm.assume
+
+The emitter told LLVM what it had proved with `llvm.assume`: a parameter's
+tag where inference pins one kind, a length that is never negative, an int's
+tag after a `%parsed` is unpacked, and the range of a byte position in a
+dispatcher. Each one costs a compare and a call, and the tag ones an
+`extractvalue` too. Only a release module is optimized. The dev tier compiles
+at -O0, which drops the call without reading it, and the tab's translator in
+`src/ir_wasm.rs` skips the call but still translates the compare and runs it.
+The dev tier emits with the settings the tab does, and for
+`bench/interp_corpus` it held 271 assumes, which with their feeding lines
+came to 729 of its 9,964 lines; runbench's fell from 36,674 to 35,082. The
+two assumes left are in the fixed helpers `DECLARES` carries.
+
+`FnEmit::assumes` now answers false for a body built with `words`, which is
+every dev and tab body, and the five sites that write an assume ask it first.
+A dispatcher still records a byte position as an int, which the emitter reads
+itself; only the lines for LLVM go. The release IR of all nineteen
+benchmarks built from their directories is byte-identical before and after.
+
+In this container, at the golden's rustc, the tab's compile of the corpus fell
+from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from 598,093
+to 532,354 bytes (-11%), and the run fell from 34,963,054 to 33,372,898
+(-4.5%), the compares it no longer executes. On CI the dev build's two rows
+fell with the emitted text: emit_instructions 5,918,172 -> 5,863,976 and
+codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
+IR lost ten of its twelve assumes. Every other compile row reads what main
+left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
+every body again.

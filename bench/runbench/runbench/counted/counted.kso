@@ -1,0 +1,14 @@
+# A word count over text whose words come round twice, in no order:
+# `list/tally`, which reads each word's count and puts it back one higher.
+# Natively, a put of a key the map already holds walked the map's append log
+# back from its end to find the key's entry, so each overwrite cost the
+# number of words already counted and the phase is quadratic: 20,000 words
+# took 1.2 billion instructions.
+import "std/list"
+
+fn word n i
+  "w{i * 7919 % (n / 2)}"
+
+pub fn total n
+  words = list/map (list/take list/naturals n) (i -> word n i)
+  length (list/tally (list/to_list words))

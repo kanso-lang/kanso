@@ -192,9 +192,22 @@
 # copy of the fill at a time and counted its characters on every step: a row
 # cost the square of its width. Its count lands it near five per cent like
 # the stress shapes above.
+#
+# One more joined on 2026-10-25, found by a probe that timed each list, text
+# and map function at two sizes, measured on main at kanso#2112 before its
+# fix. Its column is the whole program with it, 843,728,377, less the whole
+# without, 799,281,633, and its share is of the former.
+#
+#   counted   2,000 words counted, each twice            44,446,744  5.27%
+#
+# `counted` is a word count with `list/tally` over words that each come
+# round twice in no order. A put of a key the map already held walked the
+# map's append log back from its end to find that key's entry, so the second
+# sighting of each word cost the number of words counted so far.
 import "./bag"
 import "./branched"
 import "./bump"
+import "./counted"
 import "./deep"
 import "./escape"
 import "./fold"
@@ -263,6 +276,8 @@ branched_pushes = 22305
 
 padded_rows = 75
 
+counted_words = 2000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -307,8 +322,9 @@ fn tally raw doc a b
   ported8 = ported7 + reentered/total reentered_depth
   ported9 = ported8 + branched/total branched_pushes
   ported10 = ported9 + padded/total padded_rows
+  ported11 = ported10 + counted/total counted_words
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported10 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported11 + rest))
   bulk .> on
 
 fn shaped raw doc a
