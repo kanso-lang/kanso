@@ -23,21 +23,6 @@
 
 
 
-## 2026-10-24 — the number span inlined into the decoder
-
-The same move for `k_b_number_span_raw`, the word-at-a-time scan the
-decoder's number twin calls at every number, 417,483 times on runbench. It
-returns an `i64`, so the call's type already matched, and only the definition
-had to move. It is defined in the hot unit under the same `K_HOT_ELSEWHERE`
-guard, with `k_nondigits8`, `k_digits_end` and the `k_number_bytes` table
-beside it. `k_number_span_scan`, the RFC checks it hands everything else to,
-stays out of line and now has external linkage.
-
-In this container runbench fell from 809,811,674 to 804,150,430 instructions
-(-0.70%), with byte-identical output, and no function in the program calls
-the span any more. The ratchet row `number_span_inline` takes the
-`always_inline` away and reads 809,811,999.
-
 ## 2026-10-24 — the slice parsers inlined into the decoder
 
 The decoder's number twins hand each number to `k_b_to_int_slice_raw` or
@@ -1787,3 +1772,26 @@ this container the run program reads 866,203,703 with it and 851,886,947
 without it, a column of 14,316,756 (1.65%). The interpreted corpus keeps
 6,000 numbers, 520,130,058 → 543,327,698, and the tab runs the same corpus.
 CI's rows and the re-based welfare baselines follow in this pull request.
+
+## 2026-10-25 — a concat of numbers crosses the rewind where it stands
+
+`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
+second argument is a list literal of scalars, as it accepted an in-place
+`push` of one. Such a concat writes each item onto the accumulator's frontier,
+so the accumulator still holds no pointer into the arena, and the license
+that lets a list of numbers cross a rewind by pointer applies. The loop from
+#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
+numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
+22,454,668 and take 6,496,051. No allocation counter sees the copies the
+stage made, so the run program's work row is where this shows.
+
+The one-element list each lap is still built. Emitting such a concat as one
+push per item would remove it, but a list literal keeps an item that fails
+where `push` answers the failure, so the two would need to agree first.
+
+`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
+booleans and strings made on the lap, 20,000 laps each. Its output is main's
+interpreter. The strings must stay refused: the ratchet mutation
+`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
+run of the fixture then dies reading the reclaimed strings ("ran out of
+stack"), while the interpreter, which has no rewind, stays green.
