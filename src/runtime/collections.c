@@ -608,23 +608,28 @@ static KValue k_partial_run(KClosure* p) {
     return k_none();
 }
 
+static int k_str_key_cmp(KStr* sa, KStr* sb) {
+    long n = sa->len < sb->len ? sa->len : sb->len;
+    int c = memcmp(sa->data, sb->data, n);
+    if (c) return c > 0 ? 1 : -1;
+    return (sa->len > sb->len) - (sa->len < sb->len);
+}
+
 static int k_key_cmp(KValue a, KValue b) {
-    /* Two machine ints are most keys a map holds, and every probe of a
-       search and every step of a merge asks this. Unwrapping subtypes and
-       testing for a bignum first cost a scrambled count of 2,340 int keys a
-       fifth of its instructions. */
-    if (__builtin_expect(a.tag == K_INT && b.tag == K_INT, 1))
-        return (a.payload > b.payload) - (a.payload < b.payload);
+    /* Two machine ints or two strings are most keys a map holds, and every
+       probe of a search and every step of a merge asks this. Unwrapping
+       subtypes and testing for a bignum first cost a scrambled count of 2,340
+       int keys a fifth of its instructions. */
+    if (__builtin_expect(a.tag == b.tag, 1)) {
+        if (a.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
+        if (a.tag == K_STR) return k_str_key_cmp(k_as_str(a), k_as_str(b));
+    }
     a = k_sub_base(a);
     b = k_sub_base(b);
     /* every int ranks with the ints, a bignum among them */
     if (K_IS_INT(a) && K_IS_INT(b)) return k_int_cmp(a, b);
     if (a.tag != b.tag) return K_IS_INT(a) ? -1 : K_IS_INT(b) ? 1 : (a.tag < b.tag ? -1 : 1);
-    KStr* sa = k_as_str(a); KStr* sb = k_as_str(b);
-    long n = sa->len < sb->len ? sa->len : sb->len;
-    int c = memcmp(sa->data, sb->data, n);
-    if (c) return c > 0 ? 1 : -1;
-    return (sa->len > sb->len) - (sa->len < sb->len);
+    return k_str_key_cmp(k_as_str(a), k_as_str(b));
 }
 
 /* Sort indices by (key, insertion order) so equal keys stay ordered by when
@@ -933,6 +938,23 @@ KValue k_b_put(KValue mv, KValue key, KValue val);
 /* The value slot for `key` in a sorted run of n pairs, or NULL. */
 static KValue* k_view_search(KValue* run, long long n, KValue key) {
     long long lo = 0, hi = n - 1;
+    /* the key is one kind for the whole search, so an int key asks its
+       question once rather than on every probe */
+    if (key.tag == K_INT) {
+        while (lo <= hi) {
+            long long mid = lo + (hi - lo) / 2;
+            KValue at = run[mid * 2];
+            int c = at.tag == K_INT ? (at.payload > key.payload) - (at.payload < key.payload)
+                                    : k_key_cmp(at, key);
+            if (c == 0) return &run[mid * 2 + 1];
+            if (c < 0) {
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return NULL;
+    }
     while (lo <= hi) {
         long long mid = lo + (hi - lo) / 2;
         int c = k_key_cmp(run[mid * 2], key);
@@ -948,7 +970,7 @@ static KValue* k_view_search(KValue* run, long long n, KValue key) {
 
 /* The value slot for `key` in a map whose view is built, searching the view
    and then its side, so a read between two puts merges nothing. */
-static KValue* k_map_find(KMap* m, KValue key) {
+static inline __attribute__((always_inline)) KValue* k_map_find(KMap* m, KValue key) {
     if (!((uintptr_t)m->sorted & K_VIEW_SIDE)) return k_view_search(m->sorted, m->sorted_len, key);
     KValue* main = k_view_untagged(m->sorted);
     KValue* hit = k_view_search(main, m->sorted_len, key);
@@ -957,31 +979,22 @@ static KValue* k_map_find(KMap* m, KValue key) {
     return k_view_search(side, *k_view_word(side), key);
 }
 
-static int k_map_replace(KMap* m, KValue key, KValue val) {
-    /* Only when a view is already built. Without one there is no cheap way
-       to know whether the key is present, and appending is correct anyway
-       (the view keeps the last write) — so a write-only loop pays nothing
-       and never scans for a key that is not there. */
-    if (!m->sorted) {
-        return 0;
-    }
-    /* the view is sorted, so absence costs a binary search rather than a
-       walk: a loop writing keys it has never written pays nothing here */
+/* An in-place put of a key the view already holds sets it there and answers
+   the slot. Only when a view is already built: without one there is no cheap
+   way to know whether the key is present, and appending is correct anyway
+   (the view keeps the last write), so a write-only loop never scans for a key
+   that is not there. The view being sorted, absence costs a binary search.
+
+   The log is not searched. It used to be, from its end, to set the key's
+   entry there too, so each overwrite cost the keys put since that entry: a
+   tally of 20,000 ints each seen twice took 1.19 billion instructions. The
+   log keeps a duplicate instead, as every persistent put already leaves one,
+   and the view holds each key's last value. */
+static KValue* k_map_replace(KMap* m, KValue key, KValue val) {
+    if (!m->sorted) return NULL;
     KValue* slot = k_map_find(m, key);
-    if (!slot) {
-        return 0;
-    }
-    *slot = val;
-    /* the pairs log holds the same key, last write winning, so the newest
-       occurrence is the one a rebuild would keep */
-    for (long long i = m->len - 1; i >= 0; i--) {
-        if (k_key_cmp(m->pairs[i * 2], key) == 0) {
-            m->pairs[i * 2 + 1] = val;
-            k_note_if_carried(val);
-            return 1;
-        }
-    }
-    return 1;
+    if (slot) *slot = val;
+    return slot;
 }
 
 /// A key not yet present is inserted into the view rather than discarding it.
@@ -1105,7 +1118,10 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
     val = k_big_kept(val, m);
-    if (k_map_replace(m, key, val)) {
+    KValue* held = k_map_replace(m, key, val);
+    if (held && m->sorted == m->pairs) {
+        /* a view that is the pairs was set in the log itself */
+        k_note_if_carried(val);
         return mv;
     }
     KBuf* buf = k_buf_of(m->pairs);
@@ -1117,14 +1133,29 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         buf->used += 2;
         m->len++;
         if (K_COUNTING) k_stat_put_mut_fast++;
-        k_map_view_insert(m, key, val);
+        if (!held) k_map_view_insert(m, key, val);
         return mv;
     }
     /* growth at a proven-unique site: the map keeps its header, the pairs
        move to a bigger buffer, and the outgrown one goes to the shelf */
     {
         if (K_COUNTING) k_stat_put_mut_grow++;
-        long long need = 2 * (m->len + 1);
+        /* A log holding duplicates restarts from the view, which holds each
+           key once with its last value. Copied in order, the log is a view
+           itself, so the view is freed and the map reads its pairs, where a
+           later overwrite is set in place. The restart takes room for as many
+           keys again: a key out of order gives the map its own view back, and
+           the overwrites after it append, so the next restart is that many
+           puts away. */
+        KValue* from = m->pairs;
+        long long n = m->len, room = 1;
+        if (m->sorted && m->sorted != m->pairs) {
+            long long live = m->sorted_len;
+            if ((uintptr_t)m->sorted & K_VIEW_SIDE)
+                live += *k_view_word(k_view_side(k_view_untagged(m->sorted)));
+            if (live < n) { from = k_map_sorted(m, &live); n = live; room = 2; }
+        }
+        long long need = 2 * (n + 1) * room;
         long long cap = 8;
         while (cap < need) cap <<= 1;
         /* An accumulator's pairs go outside the arena for the same reason a
@@ -1132,20 +1163,31 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
            without reaching what the iteration was building. */
         int perm = k_outlives_beat(m);
         KValue* np = perm ? k_buf_perm(cap) : k_buf(cap);
-        memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
-        np[m->len * 2] = key;
-        np[m->len * 2 + 1] = val;
-        k_buf_of(np)->used = m->len * 2 + 2;
-        if (m->sorted == m->pairs) m->sorted = np;
+        memcpy(np, from, sizeof(KValue) * 2 * n);
+        if (from != m->pairs) {
+            k_map_view_free(m->sorted);
+            m->sorted = np;
+        } else if (m->sorted == m->pairs) {
+            m->sorted = np;
+        }
+        if (held && from != m->pairs) {
+            /* the view the log was copied from already held it */
+            k_note_if_carried(val);
+        } else {
+            np[n * 2] = key;
+            np[n * 2 + 1] = val;
+            n++;
+        }
+        k_buf_of(np)->used = n * 2;
         if (k_buf_malloced(k_buf_of(m->pairs))) {
             free(k_buf_of(m->pairs));
         } else {
             k_buf_donate(m->pairs);
         }
         m->pairs = np;
-        m->len++;
+        m->len = n;
         if (perm) k_permreg_add(m, &m->pairs);
-        k_map_view_insert(m, key, val);
+        if (!held) k_map_view_insert(m, key, val);
         return mv;
     }
 }

@@ -1,0 +1,16 @@
+# A tally whose keys each come round twice, in no order. A put of a key the
+# map already held walked the map's append log back from its end to set that
+# key's entry, so the second sighting of a word cost the number of words
+# counted so far. The put now leaves a duplicate in the log, as a persistent
+# put does, and the log restarts from the sorted view when it has to grow:
+# put_mut_grow counts those restarts with the ordinary doublings. 4,000
+# words, 2,000 distinct.
+import "std/list"
+
+fn word i
+  "w{i * 7919 % 2000}"
+
+pub play =
+  words = list/map (list/take list/naturals 4000) word
+  counts = list/tally (list/to_list words)
+  print "{length counts} {counts["w0"]} {counts["w1999"]}"
