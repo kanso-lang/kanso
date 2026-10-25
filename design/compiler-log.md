@@ -23,28 +23,6 @@
 
 
 
-## 2026-10-24 — the slice parsers inlined into the decoder
-
-The decoder's number twins hand each number to `k_b_to_int_slice_raw` or
-`k_b_to_float_slice_raw`, 417,483 calls on runbench. A whole-runtime LTO link
-had shown about 6.5M instructions there once both were inlined. Both now live
-in the hot unit, with the integer reader, the float shape test, eisel-lemire
-and their small tables beside them. Eisel-lemire's table of powers stays in
-`runtime.c` and is read through an extern, and so are the two slow paths,
-`k_b_to_int_slow` and `k_to_float_scan_out`. `k_int` and `k_float` are plain
-functions in `runtime.c`, so the unit takes a static copy of each. Both
-parsers return a `KValue`, so the twins call them as returning
-`{ i64, i64 }` and rebuild the `%KValue`, as the string index does.
-
-The float parser had been a `preserve_none` door, worth 1,113,877 when it
-was a call. Inlined, its convention no longer matters, so it is back on the
-C convention and off `PRESERVE_NONE_DOORS`.
-
-In this container runbench fell from 804,149,817 to 797,455,326 instructions
-(-0.83%), with byte-identical output, and neither parser is called anywhere
-in the program. The ratchet row `slice_parsers_inline` takes both
-`always_inline`s away and reads 805,258,746.
-
 ## 2026-10-24 — the hot unit's copies made inline-only
 
 CI's first reading of this branch put the release codegen row at 468,610,053
@@ -1881,3 +1859,36 @@ emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
 17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
 2,222. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.15.
+
+## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
+
+Probing the standard library's text functions on the interpreter turned up
+two shapes it runs in quadratic time, where native and the tab run them in
+linear time. Both grow or walk one long string through a loop.
+
+`joined_onto "{s}{i}," (i - 1)` builds a string a piece at a time.
+`linear::string_builders` licenses that join, and native and the tab write
+it in place, but the interpreter never asked the analysis. Its `Text` held a
+long string as a plain `String`, so reading `s` copied it and the template
+copied it again. Run alone, 3,000 pieces took 76,760,738 instructions and
+12,000 took 1,551,921,916; 200,000 took 2.39 s against native's 0.08 s.
+
+The second is a scanner: a loop that hands a long string to each step and
+reads it a character at a time with `text/slice s i i`. Each call copied the
+string, and `text/slice` counted the characters and then collected all of
+them into a `Vec<char>` to take one. 2,500 pairs of characters took
+497,826,665 instructions, 65% of it collecting, and an 80,000-character
+walk took 6.9 s against native's 0.08 s.
+
+Under the 2026-09-05 corpus-first gavel `grown 3000` and `scanned 1000` join
+the interpreted corpus here, measured before their fixes. Both engines
+print the same line for it.
+
+CI's rows for the corpus with the two phases: interp_instructions
+525,831,073 -> 636,709,702, interp_allocs 585,540 -> 651,249 and
+interp_peak_bytes 1,281,294 -> 1,298,220. The tab compiles and runs the
+same corpus: browser_compile_instructions 334,007,116 -> 343,847,622,
+browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
+107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
+3,997,696. Welfare re-bases the six terms among these it weighs, each
+keeping its ratio to its baseline, and the floor stays at 95.15.
