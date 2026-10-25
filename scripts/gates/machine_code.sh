@@ -27,15 +27,10 @@ size --format=sysv ./jsonbench >/dev/null 2>&1 || {
   echo "::error::host running it does not have. The linux runner does."
   exit 1
 }
-# scanbench and digestbench joined the corpus after this gate was written and
-# nobody extended the list, so the two newest benchmarks were the two this vein
-# could not see. The bit twins landed on digestbench and moved its `.text` by
-# 1,968 bytes with every row here byte-identical, which is the shape of move
-# this file exists to catch. livebench joined on 2026-09-05 and was the third
-# to be left out; tests/every_benchmark_is_in_the_objective.rs derives the list
-# from this loop now, so a fourth cannot be forgotten quietly.
-for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench livebench runbench; do
+# Every benchmark in bench/benchmarks.txt. Three were once left out of a list
+# written here, and the bit twins moved digestbench's `.text` by 1,968 bytes
+# while it was one of them.
+for b in $(sh scripts/gates/benchmarks.sh); do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
 # Measured, and on a host the golden does not name that is as far as this goes.

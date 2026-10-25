@@ -18,8 +18,8 @@ widebench defines=158 calls=1393 branches=1035 lines=11647
 deepbench defines=50 calls=242 branches=250 lines=2378
 escapebench defines=20 calls=88 branches=92 lines=1026
 pendbench defines=72 calls=491 branches=414 lines=3703
-scanbench defines=323 calls=3054 branches=2947 lines=25214
 indexbench defines=22 calls=70 branches=42 lines=778
+scanbench defines=323 calls=3054 branches=2947 lines=25214
 digestbench defines=117 calls=872 branches=919 lines=7915
 readbench defines=22 calls=70 branches=44 lines=776
 livebench defines=177 calls=1683 branches=1435 lines=15447
