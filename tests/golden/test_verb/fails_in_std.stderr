@@ -1,0 +1,2 @@
+error[runtime]: split takes two strings
+  failed in text/split at std/text/text.kso:38

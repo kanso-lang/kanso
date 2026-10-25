@@ -64,6 +64,21 @@ fn a_test_file_reading_a_private_name_is_refused() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+/// A test fails inside std/text, and the report names std/text's file and
+/// line as `run` does. Watched red: std/text's line number printed under the
+/// test file's path, `fails_in_std/fails_in_std_test.kso:38:3` in a file of
+/// twelve lines.
+#[test]
+fn a_test_failing_inside_a_library_names_the_librarys_line() {
+    let output = in_fixtures(&["test", "fails_in_std"]);
+    let out = std::fs::read_to_string(fixture_dir().join("fails_in_std.out")).expect("golden");
+    let err = std::fs::read_to_string(fixture_dir().join("fails_in_std.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(String::from_utf8_lossy(&output.stderr), err);
+    assert_eq!(output.status.code(), Some(1));
+}
+
 /// The test's helper and the module's private function share the name
 /// `label`, and each file keeps its own. Watched red as an overlapping
 /// overload of `label`.
