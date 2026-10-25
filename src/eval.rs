@@ -702,6 +702,11 @@ pub struct Interp<'a> {
     /// the cache names it. A put that writes in place regardless, at a site
     /// the linearity analysis proved unique, empties the cache first.
     entries_at: RefCell<Option<EntriesAt>>,
+    /// Where the last slice of a string with a wider character ended: the
+    /// string, a character's position and the byte it starts at. A scan asks
+    /// for each next character of one string in turn, so the walk to it goes
+    /// on from here; see `char_offset`.
+    text_cursor: RefCell<Option<(Text, usize, usize)>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -849,6 +854,7 @@ impl<'a> Interp<'a> {
             tie_serial: Cell::new(0),
             spare_binds: RefCell::new(Vec::new()),
             entries_at: RefCell::new(None),
+            text_cursor: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
@@ -2901,6 +2907,23 @@ impl<'a> Interp<'a> {
     /// that binding is the name this write moves, which nothing reads again,
     /// so the count is the rest of the proof `in_place_pushes` could not make
     /// from the callers.
+    /// The byte where character `n` (counted from 0) of `text` starts, or the
+    /// string's length when `n` is its count, walking on from `text_cursor`
+    /// when it holds the same string at or before `n`. `None` is past the end.
+    fn char_offset(&self, text: &Text, n: usize) -> Option<usize> {
+        let mut cursor = self.text_cursor.borrow_mut();
+        let (mut k, mut b) = match &*cursor {
+            Some((held, k, b)) if held.same(text) && *k <= n => (*k, *b),
+            _ => (0, 0),
+        };
+        while k < n {
+            b += text[b..].chars().next()?.len_utf8();
+            k += 1;
+        }
+        *cursor = Some((text.clone(), k, b));
+        Some(b)
+    }
+
     /// Whether `linear::string_builders` licensed this template to join onto
     /// the string its first part names. Keyed as `writes_in_place` is.
     fn joins_here(&self, span: Span, frame: &Frame) -> bool {

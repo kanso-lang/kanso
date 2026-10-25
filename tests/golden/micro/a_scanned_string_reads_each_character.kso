@@ -1,6 +1,7 @@
 # A long string handed to each step of a scan, sliced a character at a time.
 # The interpreter shares a long string rather than copying it, and slices an
-# all-ASCII one by byte; one with a wider character is sliced by character.
+# all-ASCII one by byte. One with a wider character is walked to the range,
+# on from where the last slice of the same string ended.
 import "std/text"
 
 fn picked s i n acc
@@ -18,9 +19,13 @@ fn edges s
 
 plain = "the quick brown fox jumps over the lazy dog"
 wide = "thé quick brown fox jumps över the lazy dög"
+other = "ñandú, ñandú, ñandú and ñandú"
 print (picked plain 1 (length plain) "")
   .> (_ -> print (picked wide 1 (length wide) ""))
   .> (_ -> print (edges plain))
   .> (_ -> print (edges wide))
   .> (_ -> print (text/slice wide 3 3))
   .> (_ -> print (text/slice plain 44 44))
+  .> (_ -> print "[{text/slice wide 5 3}] [{text/slice wide 44 43}]")
+  .> (_ -> print "{text/slice wide 45 43} {text/slice wide 0 2}")
+  .> (_ -> print "{text/slice wide 2 2}{text/slice other 5 5}")

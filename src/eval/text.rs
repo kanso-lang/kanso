@@ -58,6 +58,14 @@ impl Text {
         }
     }
 
+    /// Whether the two are one shared string, rather than equal ones.
+    pub fn same(&self, other: &Text) -> bool {
+        match (&self.0, &other.0) {
+            (Held::Heap(a), Held::Heap(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+
     /// How many characters the string holds.
     pub fn char_count(&self) -> usize {
         match self.is_ascii() {
