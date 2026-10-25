@@ -215,7 +215,8 @@ fn compile_parsed_entry(
     let counts = inline::group_sizes(&merged);
     let builtins = inline::aliases_from(&merged, &counts);
     let wrappers = inline::wrapper_table(&builtins, &counts);
-    let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);
+    let merged_diags =
+        check::check_merged_after_aliases_with(&merged, true, true, &rewritten, builtins);
     inline::apply_wrappers(&mut merged, &wrappers);
     match merged_diags.is_empty() {
         true => {
@@ -433,7 +434,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     // quotes `m/one` where the source says `one` -- the spelling kanso#1120
     // settled. `Rewrites` is how the check gets told.
     let rewritten = canonicalize_bare_aliases(&mut program);
-    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
+    let merged_diags = check::check_merged_after_aliases(&program, false, true, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -547,6 +548,8 @@ fn compile_library_beside(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     // the module under test is loaded with the file's own imports but never
     // joins `program.imports`, so it cannot read as an import left unused
+    // A test file is the whole program it runs; a library waits for one.
+    let root = beside.is_some();
     import_list.extend(beside);
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
@@ -624,7 +627,7 @@ fn compile_library_beside(
     // quotes `m/one` where the source says `one` -- the spelling kanso#1120
     // settled. `Rewrites` is how the check gets told.
     let rewritten = canonicalize_bare_aliases(&mut program);
-    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
+    let merged_diags = check::check_merged_after_aliases(&program, false, root, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }

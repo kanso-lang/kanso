@@ -1,0 +1,8 @@
+error[name]: no record type has a field `strat`
+  --> typo/typo.kso:6:6
+   6 |   "{h.strat}..{h.end}"
+            ^
+error[name]: `h` is read for `strat` and `end`, and no record type has both
+  --> typo/typo.kso:6:6
+   6 |   "{h.strat}..{h.end}"
+            ^

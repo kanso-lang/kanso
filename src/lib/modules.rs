@@ -895,7 +895,7 @@ fn compile_module_loaded(
     let diags = match shipped {
         true => Vec::new(),
         false => phase::watched("check_merged", || {
-            check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
+            check::check_merged_after_aliases_with(&merged, require_entry, require_entry, &rewritten, builtins)
         }),
     };
     inline::apply_wrappers(&mut merged, &wrappers);

@@ -370,6 +370,7 @@ fn check_per_node<'a>(
     rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
     builtins: &'a HashMap<(&'a str, usize), &'a str>,
+    root: bool,
 ) -> Vec<Diagnostic> {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
@@ -441,6 +442,7 @@ fn check_per_node<'a>(
         },
         scan: FieldScan {
             program,
+            root,
             // an err answers its three readers whatever the program declares
             declared: program
                 .types
@@ -533,7 +535,7 @@ fn check_per_node<'a>(
             }
         }
         for (base, seen) in &state.open {
-            judge_cooccurrence(base, seen, program, diags);
+            judge_cooccurrence(base, seen, &tables.scan, diags);
         }
         // This walk reads the merged program, which holds every file of a
         // module, and a diagnostic that names no file is printed with the
@@ -1632,6 +1634,12 @@ struct FieldScan<'a> {
     /// Every field name any type declares, so a name none declares is refused
     /// wherever it appears.
     declared: HashSet<&'a str>,
+    /// Whether this program is the whole of what runs. A field is read without
+    /// importing the type that owns it (ch03, #1894), so a library checked
+    /// before anything imports it may read a field only an importer's types
+    /// declare, as it may call a function only they write. The root answers
+    /// for a name no type in the program declares.
+    root: bool,
     /// A plain record constructs its own fields: no parent to inherit from, no
     /// typeset members to stand for something else. Only those can say with
     /// certainty which fields a value of theirs has, and certainty is the whole
@@ -1680,12 +1688,14 @@ fn note_read<'a>(open: &mut Open<'a>, base: &'a str, name: &'a str, span: Span) 
 fn judge_cooccurrence(
     base: &str,
     seen: &[(&str, Span)],
-    program: &Program,
+    scan: &FieldScan<'_>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    if seen.len() < 2 {
+    // Before the root, the value may be of a type an importer declares.
+    if seen.len() < 2 || !scan.root {
         return;
     }
+    let program = scan.program;
     let holds = |ty: &TypeDecl, without: Option<&str>| {
         seen.iter()
             .filter(|(name, _)| Some(*name) != without)
@@ -1738,7 +1748,7 @@ fn field_reads_after<'a>(
             while at < open.len() {
                 if pattern_binds(pattern, open[at].0) {
                     let (base, seen) = open.remove(at);
-                    judge_cooccurrence(base, &seen, scan.program, diags);
+                    judge_cooccurrence(base, &seen, scan, diags);
                 } else {
                     at += 1;
                 }
@@ -1765,7 +1775,13 @@ fn field_read_at<'a>(
 ) {
     let Expr::Field { base, name, span } = e else { return };
     if !scan.declared.contains(name.as_str()) {
-        diags.push(Diagnostic::new("name", format!("no record type has a field `{name}`"), *span));
+        if scan.root {
+            diags.push(Diagnostic::new(
+                "name",
+                format!("no record type has a field `{name}`"),
+                *span,
+            ));
+        }
     } else if let Some(ty) = base_type(base, &scan.plain, local) {
         if !scan.plain[ty].contains(name.as_str()) {
             diags.push(Diagnostic::new("name", format!("`{ty}` has no field `{name}`"), *span));
@@ -1838,7 +1854,7 @@ fn merge_at<'a>(
     }
     let mut missing = false;
     for (key, span) in &keys {
-        if !scan.declared.contains(key) {
+        if !scan.declared.contains(key) && scan.root {
             diags.push(Diagnostic::new(
                 "name",
                 format!("no record type has a field `{key}`"),
@@ -1886,7 +1902,7 @@ fn base_type<'a>(
 }
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
-    check_merged_after_aliases(program, require_entry, &crate::Rewrites::default())
+    check_merged_after_aliases(program, require_entry, require_entry, &crate::Rewrites::default())
 }
 
 /// The whole-program check, told which call names `canonicalize_bare_aliases`
@@ -1900,10 +1916,11 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
 pub fn check_merged_after_aliases(
     program: &Program,
     require_entry: bool,
+    root: bool,
     rewritten: &crate::Rewrites,
 ) -> Vec<Diagnostic> {
     let builtins = crate::inline::aliases(program);
-    check_merged_after_aliases_with(program, require_entry, rewritten, builtins)
+    check_merged_after_aliases_with(program, require_entry, root, rewritten, builtins)
 }
 
 /// The same check, handed an alias map its caller has already built.
@@ -1915,6 +1932,7 @@ pub fn check_merged_after_aliases(
 pub fn check_merged_after_aliases_with<'a>(
     program: &'a Program,
     require_entry: bool,
+    root: bool,
     rewritten: &crate::Rewrites,
     builtins: HashMap<(&'a str, usize), &'a str>,
 ) -> Vec<Diagnostic> {
@@ -1922,7 +1940,7 @@ pub fn check_merged_after_aliases_with<'a>(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    let named_diags = check_per_node(program, rewritten, &mut diags, &builtins);
+    let named_diags = check_per_node(program, rewritten, &mut diags, &builtins, root);
     let walked = diags.len();
     if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
