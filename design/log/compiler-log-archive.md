@@ -108471,3 +108471,75 @@ at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor
 `paired_appends`'s long needle saved 172,616 instructions and for
 `branches_to`'s `label %` probe 286,197, too little to give either a helper of
 its own.
+
+## 2026-10-23 — a short float walks down by its zeros
+
+`ryu_short` starts its search at the place count the last float took. When
+the float passes there, it used to try each place below until one failed, so
+a float with the same precision as the one before it paid two tries: one to
+pass and one to fail. Each try multiplies, rounds, converts back and divides.
+On the run program 172,979 of the 191,070 floats it renders take that path.
+
+While the search's bound holds, the interval of decimals that read back as
+the float is narrower than a unit at p places, so it holds at most one
+decimal with p places. A decimal with p - 1 places in it is also one with p
+places, so it is m / 10, and it exists exactly when m ends in a zero. The
+walk down now takes the zeros off m instead of trying: it reaches the same
+place count and the same m with no division of doubles. `k_tenfold` asks
+whether m is a multiple of ten by multiplying by five's inverse modulo 2^64
+and comparing, and the quotient is taken only for a zero that is there.
+
+On this container, the run program from a fixed path:
+
+| tree | runbench |
+| --- | ---: |
+| main | 816,801,133 |
+| `m % 10 == 0`, quotient and remainder together | 816,057,840 |
+| `k_tenfold`, quotient only on a zero | 815,624,925 |
+
+That is −1,176,208 (−0.144%), with output byte-identical to main.
+`tests/every_rendered_float_reads_back_as_itself.rs` lifts the search from
+the runtime and sweeps 5,809,326 doubles with no failures. With the walk
+down removed it reports 975,871 not shortest, the count it gave for the old
+walk's removal. The ratchet row `float_walk` puts the tries back, and the
+mutated tree reads the run program at main's 816,801,133.
+
+**A switch line read by its first word.** The tab's translator asked of every
+body line whether it held `= switch`, scanning for the `=` a byte at a time.
+A switch is a terminator and names no result, and the emitter writes it as a
+bare `switch`, so that test could never pass. The line's first word is now
+the whole test: browser_compile_instructions 256,933,580 -> 256,026,859
+(-0.35%) on the tree before #2068, and 244,413,637 -> 243,046,113 (-0.56%)
+on the tree after it. The ratchet row `switch_line` now puts a substring searcher back
+on every line, and the browser row is its witness, as before.
+
+**CI's rows.** runbench 816,801,024 -> 815,624,816 (-0.144%). The other
+benchmarks that render floats fall with it: encodebench 2,367,625,387 ->
+2,362,394,628, livebench 975,721,913 -> 970,491,700, widebench 28,587,526
+-> 28,539,533 and oneshot 10,291,264 -> 10,278,879. The rest do not move.
+Each binary's text is 208 bytes smaller, since the float renderer is
+inlined into it. codegen_instructions_dev 116,472,553 -> 116,472,194 and
+codegen_instructions_release 425,509,866 -> 425,504,448 compile the smaller
+runtime. On the tree after #2068, emit_instructions, compile_instructions,
+entry_instructions and library_instructions read what #2068 left them. A run
+of this branch before that merge had them moving by 3,000 to 87,000, which
+the merge took away, so neither change here moves them.
+
+## 2026-10-24 — emit_call_rest gives up its fused builtins and its declared call
+
+`emit_call_rest` in `src/codegen/emit.rs` ran from line 3169 to the end of the
+file, about 1,020 lines (#2071). Its fused builtin calls (`utf8` of a slice,
+`length`, the three shapes of `append`, the one-argument doors and `bytes`)
+are now `emit_fused_builtin`, and the call to a declared group is
+`emit_declared_call`. The lines moved verbatim apart from the fused block's
+returns, which answer `Some`, and the declared call's body, which lost one
+level of indent and was formatted again.
+
+The emitted IR of the thirteen benchmarks built from their directories is
+byte-identical before and after. Two rows moved, and I read both as the
+binary's layout, since the emitter writes the same text:
+emit_instructions 5,919,265 -> 5,918,172 and browser_compile_instructions
+243,046,113 -> 243,034,646. Every other row reads what main left it. The
+ratchet mutations `a_call_into_a_loop_left_unbracketed` and
+`a_proven_result_left_unsaid` follow their de-indented lines, and every
+mutation that edits `emit.rs` applies and builds.

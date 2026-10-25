@@ -1,0 +1,8 @@
+error[type]: `put` takes a map here, not a list (module a_list_handed_to_put)
+  --> a_list_handed_to_put.kso:10:7
+  10 |   put xs 2 n
+             ^
+error[type]: `put` takes a map here, not a list (module a_list_handed_to_put)
+  --> a_list_handed_to_put.kso:13:8
+  13 |   put (filled n) 2 n
+              ^

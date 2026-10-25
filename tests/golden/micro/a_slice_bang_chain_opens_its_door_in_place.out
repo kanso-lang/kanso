@@ -1,6 +1,6 @@
 <kanso>
 <>
-<>
+slice! takes a range inside the value, got 0 to 5
 slice! takes a range inside the value, got 10 to 13
 k:42
 slice! takes a range inside the value, got 7 to 20

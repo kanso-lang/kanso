@@ -23,78 +23,6 @@
 
 
 
-## 2026-10-23 — a short float walks down by its zeros
-
-`ryu_short` starts its search at the place count the last float took. When
-the float passes there, it used to try each place below until one failed, so
-a float with the same precision as the one before it paid two tries: one to
-pass and one to fail. Each try multiplies, rounds, converts back and divides.
-On the run program 172,979 of the 191,070 floats it renders take that path.
-
-While the search's bound holds, the interval of decimals that read back as
-the float is narrower than a unit at p places, so it holds at most one
-decimal with p places. A decimal with p - 1 places in it is also one with p
-places, so it is m / 10, and it exists exactly when m ends in a zero. The
-walk down now takes the zeros off m instead of trying: it reaches the same
-place count and the same m with no division of doubles. `k_tenfold` asks
-whether m is a multiple of ten by multiplying by five's inverse modulo 2^64
-and comparing, and the quotient is taken only for a zero that is there.
-
-On this container, the run program from a fixed path:
-
-| tree | runbench |
-| --- | ---: |
-| main | 816,801,133 |
-| `m % 10 == 0`, quotient and remainder together | 816,057,840 |
-| `k_tenfold`, quotient only on a zero | 815,624,925 |
-
-That is −1,176,208 (−0.144%), with output byte-identical to main.
-`tests/every_rendered_float_reads_back_as_itself.rs` lifts the search from
-the runtime and sweeps 5,809,326 doubles with no failures. With the walk
-down removed it reports 975,871 not shortest, the count it gave for the old
-walk's removal. The ratchet row `float_walk` puts the tries back, and the
-mutated tree reads the run program at main's 816,801,133.
-
-**A switch line read by its first word.** The tab's translator asked of every
-body line whether it held `= switch`, scanning for the `=` a byte at a time.
-A switch is a terminator and names no result, and the emitter writes it as a
-bare `switch`, so that test could never pass. The line's first word is now
-the whole test: browser_compile_instructions 256,933,580 -> 256,026,859
-(-0.35%) on the tree before #2068, and 244,413,637 -> 243,046,113 (-0.56%)
-on the tree after it. The ratchet row `switch_line` now puts a substring searcher back
-on every line, and the browser row is its witness, as before.
-
-**CI's rows.** runbench 816,801,024 -> 815,624,816 (-0.144%). The other
-benchmarks that render floats fall with it: encodebench 2,367,625,387 ->
-2,362,394,628, livebench 975,721,913 -> 970,491,700, widebench 28,587,526
--> 28,539,533 and oneshot 10,291,264 -> 10,278,879. The rest do not move.
-Each binary's text is 208 bytes smaller, since the float renderer is
-inlined into it. codegen_instructions_dev 116,472,553 -> 116,472,194 and
-codegen_instructions_release 425,509,866 -> 425,504,448 compile the smaller
-runtime. On the tree after #2068, emit_instructions, compile_instructions,
-entry_instructions and library_instructions read what #2068 left them. A run
-of this branch before that merge had them moving by 3,000 to 87,000, which
-the merge took away, so neither change here moves them.
-
-## 2026-10-24 — emit_call_rest gives up its fused builtins and its declared call
-
-`emit_call_rest` in `src/codegen/emit.rs` ran from line 3169 to the end of the
-file, about 1,020 lines (#2071). Its fused builtin calls (`utf8` of a slice,
-`length`, the three shapes of `append`, the one-argument doors and `bytes`)
-are now `emit_fused_builtin`, and the call to a declared group is
-`emit_declared_call`. The lines moved verbatim apart from the fused block's
-returns, which answer `Some`, and the declared call's body, which lost one
-level of indent and was formatted again.
-
-The emitted IR of the thirteen benchmarks built from their directories is
-byte-identical before and after. Two rows moved, and I read both as the
-binary's layout, since the emitter writes the same text:
-emit_instructions 5,919,265 -> 5,918,172 and browser_compile_instructions
-243,046,113 -> 243,034,646. Every other row reads what main left it. The
-ratchet mutations `a_call_into_a_loop_left_unbracketed` and
-`a_proven_result_left_unsaid` follow their de-indented lines, and every
-mutation that edits `emit.rs` applies and builds.
-
 ## 2026-10-24 — dev and tab bodies write no llvm.assume
 
 The emitter told LLVM what it had proved with `llvm.assume`: a parameter's
@@ -1403,6 +1331,103 @@ rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
 isolated here. The basket vein loses two evacuations: basket_allocs 27,270,
 basket_alloc_bytes 6,162,417, basket_evac_allocs 3, basket_evac_bytes 192 and
 basket_sh_rec 130,112.
+
+## 2026-10-25 — a slice that starts before the value answers none
+
+From #2088's last item, bc's port. Under the 2026-10-13 gavel on #1890, a
+`text/slice` whose range runs past the end of the value, or starts past it,
+answers `none`. A range that started before position 1 answered the empty
+result on every engine: `text/slice "abc" 0 2` was `""`, and so was a start
+of -1, where `"abc"[0]` answers `none`. bc's journal called the edges
+inconsistent. A shortened answer at the front is the silent loss the gavel
+ruled against at the back, so a start before 1 now answers `none` too, and
+`slice!` refuses it. The empty range at the start, `1 0`, is inside the value
+and still answers empty. `text/to_span` already answered `none` for a start
+before 1, so a span and a slice now agree on where a range may sit.
+
+The native test is one unsigned compare, `from - 1 > len`, which a start
+below 1 fails by wrapping to the top of the range. It replaces `from > len +
+1` in `k_b_slice` and `k_b_slice_raw`, so the hot path gains no instruction.
+The cheaper test made LLVM inline `k_b_slice` into the four fused doors'
+fallbacks, and CI read every binary 7,216 bytes larger for code that runs
+only on a bad range, so `k_b_slice` is marked out of line. On this container
+indexbench's text is 64 bytes smaller than before the change, and the run
+program 961 instructions lighter.
+
+CI's rows, against #2106's. The library's `past?` reads one more comparison
+and the interpreter's builtin one more test, so the front end and the
+interpreter move a little: compile_instructions 24,664,014 -> 24,664,426,
+entry_instructions 72,772,292 -> 72,794,039, library_instructions 72,435,518
+-> 72,459,948, browser_compile_instructions 218,703,716 -> 218,730,086,
+interp_instructions 385,420,176 -> 385,422,816 and browser_run_instructions
+33,345,263 -> 33,347,903. Programs that slice emit the extra comparison too:
+the run program's emitted_other_branches 17,310 -> 17,312 and
+emitted_other_lines 163,950 -> 163,955. Natively every binary's machine code
+is 64 bytes smaller, text 5,523,025 -> 5,522,129 over the fourteen, and
+building it costs codegen_instructions_dev 116,456,350 -> 116,455,729 and
+codegen_instructions_release 370,087,521 -> 370,086,817. The run rows move by
+under 0.02% each: work_runbench 797,623,329 -> 797,622,606, work_encodebench
+2,327,445,961 -> 2,327,403,174, work_widebench 28,445,165 -> 28,413,165,
+work_livebench 936,030,663 -> 936,030,838, work_oneshot 10,050,755 ->
+10,050,461 and work_digestbench 4,122,953 -> 4,122,823. No allocation counter
+moves. Welfare falls by less than a hundredth, and the floor follows: this
+builds the 2026-10-13 ruling on #1890 at the start of the range, which #2088
+asked for.
+The interpreter reads a start no machine word holds as 0, as before, and 0 is
+now outside. `past?`, which the compiler asks before reading a range that
+`slice!` hands straight to a door, adds `from < 1`. std's own `slice_in`
+calls all start at 1 or above.
+
+`micro/a_slice_that_starts_before_the_value_answers_none` covers text, wide
+text, a list and bytes from 0, a start of -1, the empty range at the start,
+and `slice!` from 0. On main every line prints `[]` or `<>`.
+
+Five micro goldens had pinned the old edge, and each line that moves is a
+start below 1 going from the empty result to `none`: `slice_at_its_edges`,
+`utf8_of_a_byte_slice_at_its_edges`, `an_append_of_a_slice_reads_the_range_in_place`
+(`below one` and `both zero`), `a_number_read_from_a_slice_reads_the_range_in_place`
+(`int below one` and `float below one`, which read the empty string and
+answered an err) and `a_slice_bang_chain_opens_its_door_in_place`, where
+`slice! "kanso" 0 5` now fails inside its box. The interpreter, the native
+build and the wasm translator agree on all five.
+
+## 2026-10-25 — a list handed to put is refused wherever the list is certain
+
+#2091's fifth item, the `put` half. `put` writes a key of a map, and on a
+list it stops at run time on every engine with "put takes a map, a key, and
+a value". The literal check refused `put [1 2 3] 2 9`, because the list is
+written in place, and passed `xs = [1 2 3]` followed by `put xs 2 9`. diff's
+and inflate's ports met the second shape. #2086 asks whether `put` should
+write a list at an index, and says this inconsistency is cloud's to fix
+whatever it rules.
+
+The after-inference walk now refuses a list handed to `put`, `delete`,
+`keys`, `values` or `entries` when the list is certain: a name the same
+declaration binds once to a list literal, or a call of a group whose every
+arm answers a list and nothing else. A parameter, or a name bound to
+anything less certain, is left to the run, as the walk's other kind checks
+leave theirs. The message is the literal check's: "`put` takes a map here,
+not a list". The callee's name is tested first, by its last byte and then
+the word where it ends, and the declaration's list bindings are read only
+after a call of `put` or its kin turns up. The first version split every
+callee's name on `/` and collected every declaration's list bindings up
+front, which cost the front end 130,307 instructions on compile_instructions;
+this one costs 24,741.
+
+`errors/a_list_handed_to_put` holds both shapes. Main checks it as ok. No
+program in the tree, the book's samples or kq is refused. One run-time
+golden met the new check: `runtime/delete_takes_a_map_at_run_time` handed
+`delete` a list through an identity function, which inference sees answer
+nothing but a list in that program. It hands an int now, and its stderr is
+unchanged.
+
+CI's rows, against #2107's: compile_instructions 24,664,426 -> 24,689,167,
+entry_instructions 72,794,039 -> 72,851,547, library_instructions
+72,459,948 -> 72,517,015 and browser_compile_instructions 218,730,086 ->
+218,996,814. No run row, allocation counter or mem golden moves. Welfare
+falls by less than a hundredth and the floor follows: check now refuses what
+every engine refuses at run time, which #2086 named a checker bug whatever
+it rules.
 
 ## 2026-10-25 — two cliffs join the run program and the interpreted corpus
 
