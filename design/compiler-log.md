@@ -23,97 +23,6 @@
 
 
 
-## 2026-10-24 — the hot unit's copies made inline-only
-
-CI's first reading of this branch put the release codegen row at 468,610,053
-against main's 425,508,082, +10.1%. All of it was in `ld.lld`. The corpus
-program calls none of the new helpers, so none of it was inlining. The hot
-unit defined each helper as an ordinary function, so every release link
-optimized it and compiled it to machine code whether the program called it
-or not. Main paid the same for the four helpers the unit already held.
-
-Each helper is now compiled into the cached runtime as machine code, and the
-hot unit's copy is a C99 inline definition, which clang emits as
-`available_externally`. The link inlines it where the program calls it and
-drops it everywhere else. Clang emits an inline definition only where its
-unit refers to it, so the unit ends with a table that refers to all eight.
-The table has external linkage, which keeps it through the unit's own
-compile, and nothing reads it, so the link removes it. With `used` on the
-table, the link kept all the bodies and optimized them. `K_HOT_ELSEWHERE`
-has no users left and is gone.
-
-Linking the codegen corpus alone, `ld.lld` read 252,430,133 on main,
-295,287,065 with the eight helpers defined outright, and 187,756,033 with
-the eight inline, 25.6% under main. runbench reads 797,155,085, 300,195
-below the eight defined outright, with byte-identical output, and the program
-calls none of the eight.
-
-Two fixes came with it. The hot object's cache key was the runtime's digest
-alone, so a change to `hot_source_of` reused an object the old recipe made;
-the key now also carries a digest of `src/main.rs`. And the hot source was
-built on every release build to be handed to a cache that nearly always had
-it. It is built now only on a miss, and kanso's own process on the corpus
-build fell from 74,931,992 to 30,665,523 instructions.
-
-The four ratchet rows that took an `always_inline` away now put `noinline` in
-its place, since an inline copy without the attribute can still be inlined at
-the link's threshold of 2000. Dry-run on a copy against 797,155,085, with the
-same output each time: `index_inline` reads 800,950,764,
-`number_span_inline` 804,913,953, `slice_parsers_inline` 804,964,001, and
-the byte scanners' row 822,443,871.
-
-CI's rows for this branch against main, all taken into the goldens:
-
-- runbench 813,606,641 -> 797,155,036 (-2.02%), jsonbench 578,723,373 ->
-  560,280,234 (-3.19%), indexbench 1,947,279 -> 1,837,323 (-5.65%),
-  deepbench 201,099,671 -> 200,299,696, oneshot 10,256,694 -> 10,133,710,
-  livebench 961,524,285 -> 961,402,064 and widebench 28,476,897 ->
-  28,461,000.
-- Five work rows rose by 111 or fewer, which I have not isolated:
-  `work_basket` 31,068,030 (+48), `work_digestbench` 4,152,335 (+111),
-  `work_escapebench` 40,308,408 (+41), `work_readbench` 4,582,008 (+104)
-  and `work_scanbench` 274,369 (+41).
-- The release codegen row 425,508,082 -> 360,870,405 (-15.2%).
-- `codegen_instructions_dev` 116,281,615 (+63,185) and `emit_instructions`
-  5,652,483 (+1,239), from the rewrap lines the emitter now writes.
-- The tab's rows rose for the same lines: `browser_compile_instructions`
-  221,032,408 (+109,092) and `browser_run_instructions` 33,404,578
-  (+31,680).
-- `text` 5,419,472, up 97,154. Every binary grew by about 3,440 bytes, the
-  runtime's own copies of the four helpers the hot unit used to define, and
-  the four decoding benchmarks by 15,113 to 16,999 with the parsers inlined
-  at their sites.
-- `emitted_lines` 14,304 (+8) and `emitted_other_lines` 160,289 (+32): 4 to
-  12 more lines in the five programs that index strings or read numbers.
-- No allocation counter moved. Welfare 93.14 -> 93.24, banked.
-
-Measured and set aside: the renderer's whole-float test without `floor`,
-as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
-the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
-`__floor_sse41`, three instructions a call on this host, and the cast pair
-cost one more per float.
-
-Three ratchet mutations needed rewriting after the move. The door list is
-five names now, and its mutation reads the length from the source instead of
-writing it down. The cold helpers' mutation strips `preserve_most` from the
-runtime's definitions, and the hot unit declares two of them, the index's
-wide miss and the int parser's tail, with the attribute. Left alone, the
-program would call a definition that no longer saves what its declaration
-promises; the mutation now strips both declarations too, and runbench reads
-801,182,221 with identical output. The row that inlined the index's two cold
-arms back into it is retired. The program's index is now the hot unit's
-copy, which holds only a declaration of the wide miss, so nothing in the
-runtime can put that arm back in the walk's frame. Inlining both arms in the
-runtime read 797,121,834, below the branch's 797,155,085.
-
-The ratchet's shards found one more row the move left with nothing to
-watch: the list test put back in front of `k_b_at`'s string arm. No
-benchmark calls `k_b_at` any more, because the emitter sends every proven
-string index to `k_b_at_str`. With the mutation the function's code
-changes, and all fourteen work rows read the same as without it. The row
-is retired; `a proven string index through the tag tests` still guards
-the routing that moved those calls.
-
 ## 2026-10-24 — the empty list and map inlined into the decoder
 
 The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
@@ -1859,6 +1768,33 @@ emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
 17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
 2,222. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.15.
+
+## 2026-10-25 — entry and play files keep the blank-line policy
+
+`check_blank_policy` judged libraries only. `parse_entry` never called it,
+and `parse_play` called it on a declaration half whose blank lines it made
+up, one per gap. So an entry or play file could begin with a blank line, hold
+one inside a body, and put any number between two declarations or two
+statements, and every engine ran it (#2143). Both now judge the file as
+written. A top-level `x = …` there is a statement of the run, so it may pack
+against its neighbours, and at most one blank line separates two statements.
+An import below a statement is refused for its place, and the blank above it
+adds nothing.
+
+Eleven examples had a double blank between declarations, and two began with
+a blank line; their output is unchanged. Four error goldens cover the new
+refusals, each of which main ran: two blanks between a play file's
+declarations, two between statements, a blank inside an entry's `if` body,
+and a leading blank in an entry file. kq's three entries pass.
+
+CI's rows. Five compile rows fell: compile_instructions 24,741,552 ->
+24,657,263, entry_instructions 72,986,583 -> 72,734,084,
+library_instructions 72,659,822 -> 72,405,561, emit_instructions 5,655,748
+-> 5,654,777 and browser_compile_instructions 334,007,116 -> 333,912,133.
+interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
+entry is now judged line by line. Nothing here separates the part of each
+move that is the new check from the part that is the binary's layout.
+Welfare holds the net rise at 95.15.
 
 ## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
 
