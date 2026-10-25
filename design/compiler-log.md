@@ -1858,7 +1858,7 @@ put only through its fields, and the read discount accepts a name that
 reaches the write through arithmetic or a nested write into it, so the map is
 copied for every number. The lists are not copied: on its own the shape
 stays linear as they grow, at about 8,300 instructions a number. It keeps
-2,000 numbers; the run program reads 847,407,464 with both phases, a column of 18,693,839 (2.21%), and the
-interpreted corpus keeps 1,500. With both, the interpreted corpus reads
-515,277,561 → 567,834,663 on this container. CI's rows and the re-based
-welfare baselines follow in this pull request.
+2,000 numbers; the run program reads 847,407,464 with both phases, a column
+of 18,693,839 (2.21%), and the interpreted corpus keeps 1,500. With both, the
+interpreted corpus reads 515,277,561 → 567,834,663 on this container. CI's
+rows and the re-based welfare baselines follow in this pull request.
