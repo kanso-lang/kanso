@@ -23,28 +23,6 @@
 
 
 
-## 2026-10-24 — the slice parsers inlined into the decoder
-
-The decoder's number twins hand each number to `k_b_to_int_slice_raw` or
-`k_b_to_float_slice_raw`, 417,483 calls on runbench. A whole-runtime LTO link
-had shown about 6.5M instructions there once both were inlined. Both now live
-in the hot unit, with the integer reader, the float shape test, eisel-lemire
-and their small tables beside them. Eisel-lemire's table of powers stays in
-`runtime.c` and is read through an extern, and so are the two slow paths,
-`k_b_to_int_slow` and `k_to_float_scan_out`. `k_int` and `k_float` are plain
-functions in `runtime.c`, so the unit takes a static copy of each. Both
-parsers return a `KValue`, so the twins call them as returning
-`{ i64, i64 }` and rebuild the `%KValue`, as the string index does.
-
-The float parser had been a `preserve_none` door, worth 1,113,877 when it
-was a call. Inlined, its convention no longer matters, so it is back on the
-C convention and off `PRESERVE_NONE_DOORS`.
-
-In this container runbench fell from 804,149,817 to 797,455,326 instructions
-(-0.83%), with byte-identical output, and neither parser is called anywhere
-in the program. The ratchet row `slice_parsers_inline` takes both
-`always_inline`s away and reads 805,258,746.
-
 ## 2026-10-24 — the hot unit's copies made inline-only
 
 CI's first reading of this branch put the release codegen row at 468,610,053
@@ -1881,3 +1859,21 @@ emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
 17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
 2,222. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.15.
+
+## 2026-10-25 — entry and play files keep the blank-line policy
+
+`check_blank_policy` judged libraries only. `parse_entry` never called it,
+and `parse_play` called it on a declaration half whose blank lines it made
+up, one per gap. So an entry or play file could begin with a blank line, hold
+one inside a body, and put any number between two declarations or two
+statements, and every engine ran it (#2143). Both now judge the file as
+written. A top-level `x = …` there is a statement of the run, so it may pack
+against its neighbours, and at most one blank line separates two statements.
+An import below a statement is refused for its place, and the blank above it
+adds nothing.
+
+Eleven examples had a double blank between declarations, and two began with
+a blank line; their output is unchanged. Four error goldens cover the new
+refusals, each of which main ran: two blanks between a play file's
+declarations, two between statements, a blank inside an entry's `if` body,
+and a leading blank in an entry file. kq's three entries pass.
