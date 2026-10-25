@@ -108748,3 +108748,18 @@ In this container runbench fell from 813,607,261 to 809,811,674 instructions
 (-0.47%), with byte-identical output, and `tally_4` no longer calls the
 index. The ratchet row `index_inline` takes the `always_inline` away and
 reads 813,606,898.
+
+## 2026-10-24 — the number span inlined into the decoder
+
+The same move for `k_b_number_span_raw`, the word-at-a-time scan the
+decoder's number twin calls at every number, 417,483 times on runbench. It
+returns an `i64`, so the call's type already matched, and only the definition
+had to move. It is defined in the hot unit under the same `K_HOT_ELSEWHERE`
+guard, with `k_nondigits8`, `k_digits_end` and the `k_number_bytes` table
+beside it. `k_number_span_scan`, the RFC checks it hands everything else to,
+stays out of line and now has external linkage.
+
+In this container runbench fell from 809,811,674 to 804,150,430 instructions
+(-0.70%), with byte-identical output, and no function in the program calls
+the span any more. The ratchet row `number_span_inline` takes the
+`always_inline` away and reads 809,811,999.

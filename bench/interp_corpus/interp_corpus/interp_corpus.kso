@@ -13,9 +13,14 @@ type uniq
   seen
   out
 
+# A count and a list per key, which `bucketed` files numbers into.
+type bucket
+  hits
+  items
+
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
-  nest = "{nested 1000}"
+  nest = "{nested 1000} {appended 6000} {bucketed 1500}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
 
 fn rounds n
@@ -135,3 +140,31 @@ fn counted_in m n i
 
 fn nested n
   length (counted_in {} n n)
+
+# A list built one number at a time with a concat of a one-element list.
+fn concat_built acc 0
+  acc
+
+fn concat_built acc i
+  concat_built (list/concat acc [i]) (i - 1)
+
+fn appended n
+  length (concat_built [] n)
+
+# Numbers filed into a map of records, each a count and a list.
+fn or_bucket none
+  bucket 0 []
+
+fn or_bucket b
+  b
+
+fn filed m _ 0
+  m
+
+fn filed m n i
+  k = i % 20
+  b = or_bucket m[k]
+  filed (put m k (bucket (b.hits + 1) (push b.items i))) n (i - 1)
+
+fn bucketed n
+  length (filed {} n n)[3].items

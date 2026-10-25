@@ -35,8 +35,10 @@ const CARRIED: &[(&str, &str)] = &[
 /// `padded` later that day, measured on main before theirs.
 const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/admitted/admitted.kso",
+    "bench/runbench/runbench/appended/appended.kso",
     "bench/runbench/runbench/bag/bag.kso",
     "bench/runbench/runbench/branched/branched.kso",
+    "bench/runbench/runbench/bucketed/bucketed.kso",
     "bench/runbench/runbench/bump/bump.kso",
     "bench/runbench/runbench/counted/counted.kso",
     "bench/runbench/runbench/deduped/deduped.kso",
