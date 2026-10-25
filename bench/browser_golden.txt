@@ -15,5 +15,5 @@
 # measured-on rustc=1.98.1
 browser_compile_instructions=218703716
 browser_compile_peak_bytes=532354
-browser_run_instructions=33345113
+browser_run_instructions=33345263
 browser_run_peak_bytes=1376256
