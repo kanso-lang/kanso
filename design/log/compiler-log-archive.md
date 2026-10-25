@@ -108573,3 +108573,22 @@ codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
 IR lost ten of its twelve assumes. Every other compile row reads what main
 left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
 every body again.
+
+## 2026-10-24 — the tab leaves its tail calls as written
+
+`Written::finish_pieces`, which hands the tab its module, ran the same
+tail-call narrowing as `finish`, which writes a native one. The narrowing
+keeps `tailcc` only on the functions a `musttail` reaches and sends a call to
+a function that spills its arguments through a trampoline. Both work around
+an arm64 miscompile. The tab's translator skips `tailcc` and `ccc` as words,
+so the pass searched the module for nothing it lowers. `finish_pieces` now
+stops before it, and `finish` narrows what `assembled` gives it.
+
+On `bench/interp_corpus`, in this container at the golden's rustc, the tab's
+compile fell from 235,063,784 to 227,562,045 instructions (-3.2%). Its peak
+and the run did not move, since the corpus's module holds no trampoline.
+Native IR is unchanged. The ratchet row `the_tab_narrowing_its_tail_calls`
+narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
+against the 5,863,976 the assume change left it, a move of 178; the dev
+build that row counts still narrows its module, and writes the same text.
+CI's browser rows matched this container's.

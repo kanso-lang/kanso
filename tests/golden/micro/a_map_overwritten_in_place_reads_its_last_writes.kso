@@ -1,0 +1,34 @@
+import "std/list"
+import "std/text"
+
+# A map overwritten in place keeps a duplicate of each overwritten key in its
+# append log, and the view holds the key's last value. When the log has to
+# grow it restarts from the view. Every way of reading the map, and every map
+# built from it, sees each key once with its last value: after the tally,
+# after a persistent put that copies it, and after a delete.
+fn word i
+  "w{i * 37 % 61}"
+
+fn counted 0 m
+  m
+
+fn counted n m
+  w = word n
+  counted (n - 1) (put m w (bump m[w]))
+
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+pub play =
+  m = counted 300 {}
+  copy = put m "w1" 0
+  less = delete m "w2"
+  first = list/to_list (list/take (keys m) 4)
+  print "{length m} {m["w0"]} {m["w1"]} {m["w60"]} {m["w61"]}"
+  print "{list/sum (values m)} {text/join first ","}"
+  print "{length copy} {copy["w1"]} {m["w1"]}"
+  print "{length less} {less["w2"]} {less["w3"]}"
+  print "{entries m == entries (counted 300 {})}"
