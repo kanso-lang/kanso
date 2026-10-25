@@ -1102,6 +1102,30 @@ impl FieldTally {
             self.mentions += 1;
             self.refused |= under_lambda;
         }
+        // `return st if done` runs instead of the lines below it, never beside
+        // them. When the early answer does not read the field, it hands the
+        // record back on a path where nothing is moved out of it, so its
+        // mentions do not count against the move below. markdown's loop
+        // pushed through `st.events` under such a guard and copied the list
+        // every lap; the same loop written as two arms grew it in place.
+        if let Expr::Guard { cond, early, rest, .. } = e {
+            self.walk(p, f, cond, under_lambda);
+            let mut fired = FieldTally::default();
+            fired.walk(p, f, early, under_lambda);
+            for st in rest.iter() {
+                self.walk(p, f, stmt_expr(st), under_lambda);
+            }
+            match fired.reads_of_f {
+                0 => self.refused |= fired.refused,
+                _ => {
+                    self.mentions += fired.mentions;
+                    self.field_reads += fired.field_reads;
+                    self.reads_of_f += fired.reads_of_f;
+                    self.refused |= fired.refused;
+                }
+            }
+            return;
+        }
         let inner = under_lambda || matches!(e, Expr::Lambda { .. });
         for c in child_exprs(e) {
             self.walk(p, f, c, inner);
