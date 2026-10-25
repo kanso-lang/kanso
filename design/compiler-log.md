@@ -1623,13 +1623,13 @@ run_beat_iters 111,493 -> 112,473, run_bytes_malloc 7,893 -> 7,901,
 run_perm_live_bytes 15,825 -> 32,049 and run_perm_peak_bytes 736,769 ->
 802,321. Both restarts, the delete's and the put's, take their pairs from
 outside the arena when the map outlives the loop it changes in, and which of
-the two phases accounts for the perm rows is not isolated here. The runtime's machine code
-grows by `k_b_delete_mut` and the searching persistent delete, 2,848 bytes in
-every benchmark binary: text 5,604,529 -> 5,646,113, emitted_other_lines
-165,000 -> 165,914 with the phases' own code, and work_oneshot 10,033,444 ->
-10,034,004 from the layout that moves with it. The front end's condition
-discount and the new builtin cost entry_instructions 72,875,969 ->
-72,875,974, emit_instructions 5,628,759 -> 5,636,850 and
+the two phases accounts for the perm rows is not isolated here. The runtime's
+machine code grows by `k_b_delete_mut` and the searching persistent delete,
+2,848 bytes in every benchmark binary: text 5,604,529 -> 5,646,113,
+emitted_other_lines 165,000 -> 165,914 with the phases' own code, and
+work_oneshot 10,033,444 -> 10,034,004 from the layout that moves with it. The
+front end's condition discount and the new builtin cost entry_instructions
+72,875,969 -> 72,875,974, emit_instructions 5,628,759 -> 5,636,850 and
 codegen_instructions_dev 116,458,530 -> 116,477,304, where
 codegen_instructions_release falls 370,260,066 -> 370,206,363. Welfare rises
 94.49 -> 94.83 and the rise is banked.
@@ -1766,10 +1766,10 @@ Both puts are emitted as the persistent `k_b_put`. The outer one is refused
 because `inner` reaches it through the nested put, and `fed_to_consumer`
 accepts only arithmetic and comparison operands. The inner one is refused
 because the outer map still holds the map it was read from. The copied inner
-map sorts itself again on its next read. 5,000 counts over 50 inner maps took 189 million
-instructions and 20,000 took 2.28 billion. The interpreter counts holders at
-run time and takes the inner map when only the outer slot and the binding
-hold it, so it stays near linear.
+map sorts itself again on its next read. 5,000 counts over 50 inner maps took
+189 million instructions and 20,000 took 2.28 billion. The interpreter counts
+holders at run time and takes the inner map when only the outer slot and the
+binding hold it, so it stays near linear.
 
 Under the 2026-09-05 corpus-first gavel `nested` joins the corpus here,
 measured on main at kanso#2121 before its fix. It keeps 1,700 counts. At
@@ -1778,5 +1778,20 @@ linearly, at some 24,000 instructions a count, most of it the copy. On this
 container the run program reads 851,889,184 with it and 810,763,317 without
 it, a column of 41,125,867 (4.83%). The interpreted corpus keeps 1,000
 counts, 497,655,907 → 520,126,043, and the tab runs the same corpus on the
-native runtime. CI's rows and the re-based welfare baselines follow in this
-pull request.
+native runtime.
+
+CI's rows, against #2121: work_runbench 810,657,719 → 851,781,946,
+run_allocs 1,446,942 → 1,456,758, run_alloc_bytes 215,955,960 →
+221,484,024, run_held_peak_bytes 216,080 → 4,120,448, run_sh_buf 86,961,200
+→ 87,410,768 and run_sh_map 12,160 → 120,960. The interpreter reads
+interp_instructions 455,385,272 → 478,102,371, interp_allocs 490,981 →
+516,759 and interp_peak_bytes 1,222,789 → 1,233,920. The tab reads
+browser_run_instructions 44,919,990 → 130,514,490 and browser_run_peak_bytes
+1,310,720 → 4,325,376, and compiling the corpus there costs
+browser_compile_instructions 308,823,716 → 314,821,332 and
+browser_compile_peak_bytes 722,756 → 728,260. The new module
+adds machine code and emitted lines: text 5,647,825 → 5,649,473,
+emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
+17,724, emitted_other_calls 20,164 → 20,219 and emitted_other_defines 2,209 →
+2,214. Each welfare term these move is re-based to keep its ratio to its
+baseline, so the score stays 95.01.
