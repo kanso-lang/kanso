@@ -23,57 +23,6 @@
 
 
 
-## 2026-10-24 — the empty list and map inlined into the decoder
-
-The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
-called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
-arena bump and a header written into it. Both now have inline copies in the
-hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
-and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
-which the string index uses too. The cold paths for a short arena or a
-counting build stay in the runtime as calls.
-
-Without `always_inline` the link would not inline them. Its remark was
-"conflicting attributes", which `alwaysinline` overrides; that is why the
-earlier helpers all carry the attribute. The conflict is the hot unit's
-`+ssse3`, which the LTO link's target does not carry: given
-`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
-That flag moved runbench by +951 with byte-identical output, so the
-attribute stays and the flag was set aside.
-
-runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
-function in the binary calls either. The ratchet row `empty_inline` puts
-`noinline` in place of both `always_inline`s and reads 797,156,333.
-
-Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
-instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
-Inlined, the record constructor made `json/obj_value` too large to inline
-into `obj_key_start`, so `obj_value` became a call of its own and cost
-58,253,679 where `obj_key_start` gave back 37,835,883.
-
-CI's rows for this branch against the string index's, all taken into the
-goldens:
-
-- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
-  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
-  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
-  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
-  the string index's rise: `work_escapebench` 40,308,388 and
-  `work_scanbench` 274,349.
-- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
-  the two bodies the link now inlines at every empty list and map.
-- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
-  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
-  from the rewrap lines `call_pair` writes at each site.
-- The tab's rows rose for the same lines: `browser_compile_instructions`
-  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
-  (+28,146).
-- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
-- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
-  every program that builds an empty list or map.
-- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
-  second decimal, banked.
-
 ## 2026-10-24 — a builder append asks for room first
 
 The emitter's in-place append twins tested whether the builder owned its
@@ -1828,3 +1777,36 @@ browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
 107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
 3,997,696. Welfare re-bases the six terms among these it weighs, each
 keeping its ratio to its baseline, and the floor stays at 95.15.
+
+## 2026-10-25 — a joined string grows where it stands on the interpreter
+
+`linear::string_builders` licenses a template whose first part is a string
+binding nothing reads afterwards, and native and the tab write those joins in
+place. The interpreter now asks the same question. At a licensed site
+`eval_template` renders the rest of the template first, so `"{s}{s}"` still
+reads all of `s`, then takes the string out of its binding and pushes the
+rest onto it. A string short enough to sit inline skips the question, since
+copying fifteen bytes costs less than building the analysis.
+
+The interpreter used to build `in_place_pushes` alone. It now calls
+`linear::for_the_interpreter`, which answers the push sites and the join
+sites from one analysis and drops it, so the run holds two sets and not the
+analysis behind them. Holding the analysis had cost interp_peak_bytes
+175,000 bytes in the first draft.
+
+`grown 200000` ran in 2.39 s and runs in 0.06 s, against native's 0.08 s.
+`a_string_joined_onto_itself_reads_itself_whole` pins `"{s}{s}"` at a
+licensed site, where a join that took the string before rendering the rest
+would print half of it.
+
+CI's rows, against #2150 on main at #2146. The interpreter reads
+interp_instructions 636,804,390 -> 629,524,864 and interp_allocs 651,249 ->
+643,872, and interp_peak_bytes rises 1,298,220 -> 1,298,476. CI's
+interpreter gate runs under pinned glibc tunables, where memcpy costs little
+in the count, so the copies that took 2.3 seconds at 200,000 pieces read as
+7.3 million instructions there. `kanso check` never builds the interpreter's
+sets, so the compile rows move with the binary's layout:
+compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
+-> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
+emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
+343,748,020 -> 343,857,683. Welfare stays at 95.15.
