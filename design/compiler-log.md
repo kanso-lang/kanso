@@ -1620,4 +1620,14 @@ stack and bag joined: the run_instructions baseline keeps its ratio to the
 run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
 the fixes in #2106 score against these rows as a rise.
 
+The run program's allocation vein moves with it, and the peak it holds is the
+run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
+re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
+baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
+on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
+run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
+run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
+run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
+run_ten_blocks 2.
+
 The fixes follow in their own pull requests and will score as rises.
