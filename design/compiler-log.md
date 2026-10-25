@@ -1750,3 +1750,10 @@ said "arms take 2".
 
 `tests/arms_split_across_files.rs` runs toml's shape on both engines and
 pins the refusal; main fails both.
+
+CI's rows. The module path now counts, per name, which files declare it:
+compile_instructions 24,488,495 -> 24,527,482, entry_instructions
+72,335,545 -> 72,367,482, library_instructions 72,011,050 -> 72,043,033 and
+browser_compile_instructions 218,080,833 -> 218,175,578. Nothing at run time
+moved. Welfare fell by less than a hundredth, and the floor follows: a
+module's files share their declarations under the 2026-08-03 ruling.

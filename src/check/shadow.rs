@@ -403,8 +403,10 @@ impl<'a> Resolver<'a> {
                         // sees them all. toml's 2-argument `lookup` in one
                         // file calling its 3-argument arm in another was
                         // refused here with "arms take 2".
-                        let split = self.declared.sibling_fns.get(name.as_str()).is_some_and(|s| s.1);
-                        if let Some(arities) = self.declared.fn_arities.get(name).filter(|_| !split) {
+                        let split =
+                            self.declared.sibling_fns.get(name.as_str()).is_some_and(|s| s.1);
+                        if let Some(arities) = self.declared.fn_arities.get(name).filter(|_| !split)
+                        {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =
                                     arities.iter().map(|a| a.to_string()).collect();
