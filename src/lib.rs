@@ -1502,6 +1502,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &Aliasing<'_>, wrote: &mut Rewrites) {
 /// module's constructions as foreign. The qualified spelling still reaches
 /// the import's type.
 pub fn own_types_beat_twins(program: &mut ast::Program) {
+    own_types_beat_twin_fns(program);
     // A collision is rare, so finding none allocates nothing.
     let beaten = |t: &ast::TypeDecl, types: &[ast::TypeDecl]| {
         t.synthetic
@@ -1515,6 +1516,31 @@ pub fn own_types_beat_twins(program: &mut ast::Program) {
     let keep: Vec<bool> = program.types.iter().map(|t| !beaten(t, &program.types)).collect();
     let mut keep = keep.into_iter();
     program.types.retain(|_| keep.next().unwrap_or(true));
+}
+
+/// A type the program declares is called by its name to build one, so an
+/// import's function enrolled under that bare name gives way to it, at any
+/// arity. mal declared `type tally` beside `import "std/list"`, and its
+/// constructions were refused as calls to `list/tally` with the wrong
+/// argument count. The import's function stays reachable as `list/tally`. A
+/// module cannot declare a function and a type of one name, so a synthetic
+/// bare function named like its own type is an import's twin.
+fn own_types_beat_twin_fns(program: &mut ast::Program) {
+    let twin_named = |t: &ast::TypeDecl, fns: &[ast::FnDecl]| {
+        !t.synthetic
+            && !ast::has_slash(&t.name)
+            && fns.iter().any(|f| f.synthetic && f.name == t.name)
+    };
+    if !program.types.iter().any(|t| twin_named(t, &program.fns)) {
+        return;
+    }
+    let beaten: Vec<String> = program
+        .types
+        .iter()
+        .filter(|t| twin_named(t, &program.fns))
+        .map(|t| t.name.clone())
+        .collect();
+    program.fns.retain(|f| !(f.synthetic && beaten.contains(&f.name)));
 }
 
 /// Rewrite every type reference that resolves to an enrollment clone to

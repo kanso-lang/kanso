@@ -1,0 +1,19 @@
+# A type the module declares is built by its name, and an import's function
+# of that name stays reachable by its qualified spelling. std/list exports
+# `tally` and `drop`. Main refused `tally 2 1` as a call to `list/tally` with
+# the wrong argument count, and built `drop 3 4` as std/list's record, whose
+# fields `d.a` then could not read.
+import "std/list"
+
+type drop
+  a
+  b
+
+type tally
+  failed
+  passed
+
+pub play =
+  t = tally (list/sum [1 1]) 1
+  d = drop 3 4
+  print "{t.failed} {t.passed} {d.a} {d.b} {list/to_list (list/drop [5 6 7] 1)}"
