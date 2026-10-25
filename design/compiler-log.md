@@ -21,26 +21,6 @@
 > before concluding an idea is new.
 
 
-## 2026-10-22 — the region row has a witness again
-
-The ratchet row `a region that keeps what it made` went blind when std/json
-began writing a map from its entries in place (c2b48e57). Its mutation makes
-`k_region_pop` keep everything the region allocated, and its witness was the
-mem fixture `a_nested_map_gives_back_its_entries`, whose arena peak doubled
-under it. Once the encoder stopped building `keys` and `values` for each map,
-its calls had no allocating argument, so the emitter made no region at all:
-no program in the benchmark corpus or the mem vein calls `k_region_pop` now,
-and with the mutation applied the whole mem corpus stayed green on main. The
-row came up on #2047, whose diff touches `core.c`, and read BLIND.
-
-The new mem fixture `a_descent_gives_back_the_keys_it_built` keeps the
-encoder's old shape: a walk that builds a map's keys as the argument of its
-call into the map and answers bytes. The emitter makes that call a region.
-It reads arena_peak_bytes 8,388,608 and arena_blocks 8; with the mutation,
-12,582,912 and 12, and chain_finds 0 -> 9. The interpreter prints the same
-total and the oracle's counters agree. The old fixture's comment, which still
-described the region it no longer has, says what it pins now.
-
 ## 2026-10-22 — JSON escapes are written and undone sixteen bytes at a time
 
 The encoder writes a string with an escape in it through
@@ -1764,3 +1744,37 @@ lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
 entry_instructions 72,335,545 -> 72,317,212, library_instructions
 72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
 218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-25 — a slice that starts before the value answers none
+
+From #2088's last item, bc's port. Under the 2026-10-13 gavel on #1890, a
+`text/slice` whose range runs past the end of the value, or starts past it,
+answers `none`. A range that started before position 1 answered the empty
+result on every engine: `text/slice "abc" 0 2` was `""`, and so was a start
+of -1, where `"abc"[0]` answers `none`. bc's journal called the edges
+inconsistent. A shortened answer at the front is the silent loss the gavel
+ruled against at the back, so a start before 1 now answers `none` too, and
+`slice!` refuses it. The empty range at the start, `1 0`, is inside the value
+and still answers empty. `text/to_span` already answered `none` for a start
+before 1, so a span and a slice now agree on where a range may sit.
+
+The native test is one unsigned compare, `from - 1 > len`, which a start
+below 1 fails by wrapping to the top of the range. It replaces `from > len +
+1` in `k_b_slice` and `k_b_slice_raw`, so the hot path gains no instruction.
+The interpreter reads a start no machine word holds as 0, as before, and 0 is
+now outside. `past?`, which the compiler asks before reading a range that
+`slice!` hands straight to a door, adds `from < 1`. std's own `slice_in`
+calls all start at 1 or above.
+
+`micro/a_slice_that_starts_before_the_value_answers_none` covers text, wide
+text, a list and bytes from 0, a start of -1, the empty range at the start,
+and `slice!` from 0. On main every line prints `[]` or `<>`.
+
+Five micro goldens had pinned the old edge, and each line that moves is a
+start below 1 going from the empty result to `none`: `slice_at_its_edges`,
+`utf8_of_a_byte_slice_at_its_edges`, `an_append_of_a_slice_reads_the_range_in_place`
+(`below one` and `both zero`), `a_number_read_from_a_slice_reads_the_range_in_place`
+(`int below one` and `float below one`, which read the empty string and
+answered an err) and `a_slice_bang_chain_opens_its_door_in_place`, where
+`slice! "kanso" 0 5` now fails inside its box. The interpreter, the native
+build and the wasm translator agree on all five.

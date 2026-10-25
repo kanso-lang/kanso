@@ -2185,7 +2185,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
    away, and for the list and string containers, which do not come here. */
 KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
                      long long to) {
-    if (__builtin_expect(to > len || from > len + 1, 0)) return k_none();
+    if (__builtin_expect(to > len || k_starts_outside(from, len), 0)) return k_none();
     if (!k_span_in(from, to, len)) return k_bytes_view(data, 0);
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
@@ -2254,17 +2254,17 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
-        if (to > l->len || from > l->len + 1) return k_none();
+        if (to > l->len || k_starts_outside(from, l->len)) return k_none();
         if (!k_span_in(from, to, l->len)) return k_mklist(0, NULL);
         return k_mklist(to - from + 1, l->items + (from - 1));
     }
     if (container.tag == K_STR) {
         KStr* s = k_as_str(container);
-        /* A range that runs past the end, or starts past it, answers none,
-           as an index past the end does (#1890). The count is the one the
-           ascii test below asks for, cached on the string. */
+        /* A range that runs past the end, or starts outside the value,
+           answers none, as an index outside it does (#1890). The count is the
+           one the ascii test below asks for, cached on the string. */
         long long chars = k_str_chars(s);
-        if (to > chars || from > chars + 1) return k_none();
+        if (to > chars || k_starts_outside(from, chars)) return k_none();
         /* Every character one byte, so a position is an offset and the walk
            that finds it is unnecessary. This is the case for html, source and
            anything else a gate reads. */

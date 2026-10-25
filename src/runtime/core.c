@@ -395,6 +395,15 @@ static KValue k_bytes_view(const unsigned char* data, long long len);
    to the top of the range and fails the first, a negative `to` fails the
    second. The signed spelling was three compares folded through `setcc` and
    `or`, 861,498 times a run at the head of the decoder's token path. */
+/* Where a slice may start: from position 1 to one past the end, where the
+   empty range sits. A start before 1 is outside the value, as a start past
+   that empty range is (#1890, and bc's report on #2088). One unsigned compare
+   answers both, because a `from` below 1 wraps to the top of the range. */
+static inline __attribute__((always_inline)) int k_starts_outside(long long from,
+                                                                  long long len) {
+    return (unsigned long long)from - 1 > (unsigned long long)len;
+}
+
 static inline __attribute__((always_inline)) int k_span_in(long long from, long long to,
                                                            long long len) {
     return (unsigned long long)from - 1 < (unsigned long long)to &&

@@ -1165,9 +1165,10 @@ impl<'a> Interp<'a> {
                 };
                 let from = usize::try_from(from).unwrap_or(0);
                 let to = usize::try_from(to).unwrap_or(0);
-                // A range that ends past the value, or starts past its end,
-                // answers none, as an index past the end does (#1890). The
-                // empty range just past the end is still the empty tail.
+                // A range that ends past the value, or starts outside it,
+                // answers none, as an index outside it does (#1890). A start
+                // before 1, or one no machine word holds, reads as 0 here.
+                // The empty range just past the end is still the empty tail.
                 let len = match &container {
                     Value::List(items) => Some(items.len()),
                     Value::Bytes(items) => Some(items.len()),
@@ -1175,7 +1176,7 @@ impl<'a> Interp<'a> {
                     _ => None,
                 };
                 if let Some(len) = len {
-                    if to > len || from > len + 1 {
+                    if to > len || from == 0 || from > len + 1 {
                         return Ok(Value::NoneV);
                     }
                 }

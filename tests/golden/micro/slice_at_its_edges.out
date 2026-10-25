@@ -2,7 +2,7 @@ two bytes: [104 105]
 one byte: [32]
 the whole of it: [104 105 32 116 104 101 114 101]
 the last byte: [101]
-from below one: []
+from below one: <none>
 backwards: []
 past the end: <none>
 wholly past the end: <none>
