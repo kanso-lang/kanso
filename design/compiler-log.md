@@ -23,30 +23,6 @@
 
 
 
-## 2026-10-24 — the tab's bcmp answers equality alone
-
-The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
-`kanso::compare::bytes`. A per-function count of `docs/kanso.wasm` built
-with its names showed the result of one body under two names: every compare
-in the tab's compile of its corpus called `memcmp`, and `memcmp` called
-`bcmp`, 154,063 times, together 4.2% of the compile. `bcmp` now has a body of
-its own, `compare::differ`, which answers equality alone. In the wasm built
-from this tree nothing on that path calls `bcmp`; `memcmp` runs the compare
-itself, and the call through to the second function is gone.
-
-The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
-this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
-`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
-on every position of every length up to 24; skipping the last word of a run
-longer than eight turned both red. The ratchet row `equal_bcmp` gives `bcmp`
-the ordering body again, and the compile reads 222,368,963.
-
-The calls come from `==` on strings, which reaches `memcmp` even against a
-short literal: the type names in `P::ty` and the attribute words in
-`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
-keys built from their bytes cost more than it saved, 222,368,963 ->
-222,475,311 on the tree before this change, and was set aside.
-
 ## 2026-10-24 — a name no query starts like is passed over
 
 `queries_named` reads every `@name` in a text, measures it and looks it up in
@@ -1708,3 +1684,54 @@ this container the run program reads 855,640,794 with it and 809,929,455
 without it, a column of 45,711,339 (5.34%). The interpreted corpus keeps 800
 words, 485,629,040 → 511,418,942. CI's rows and the re-based welfare
 baselines follow in this pull request.
+
+## 2026-10-25 — a set in a record admits a word in place
+
+The fix for `deduped`, the shape the entry above put in the corpus. Three
+counts in `src/linear.rs` kept the record and its set from being written in
+place, and each is now taken on the path it describes.
+
+A field's element read in a condition, `st.seen[x]`, is finished before
+either arm runs, as `m[k]` on a plain map already was. `FieldTally` no
+longer counts it as a read of the field the arm below moves, and
+`count_in_condition` no longer counts it as a use of the record.
+
+An arm that answers a name whole, the `st` in `if c (words (put st.seen x
+true) (push st.out x)) st`, is judged on its own path. The body's count
+takes the busier arm, which reads `st` twice for its fields, so the bare
+`st` was counted twice and never handed over. The path through the bare arm
+uses the name at most that count less how many more times the other arm
+does, and that is the discount it now gets. The bound holds because the
+path through the other arm, with the same choices outside the `if`, is
+among those the body's count already covers.
+
+Whether every caller hands a record over is a greatest fixpoint, as
+linearity is. It was computed once, after linearity, and a loop that hands
+its record back whole from one arm hands it over exactly when its own
+callers do, which a single pass could not see. `records_handed` now starts
+from every parameter called by name and loses those whose call sites refuse
+under what is left, in the same loop as the field facts. A parameter used
+at most once on a path is unique there when its callers hand it over, which
+is what `records_handed` says of a record some other path reads twice for
+its fields.
+
+Natively, keeping the distinct words of 5,000 took 2,221,969,523
+instructions and now takes 7,363,697; of 20,000, 44,652,443,199 and now
+35,005,980. The interpreter took 1.59 s at 20,000 and now takes 0.05 s.
+The same set written through a helper that guards, `return st if
+st.seen[x] != none` above the rebuilt record, is still copied: the helper's
+own answer is decided in the linearity fixpoint, before the record facts
+exist, and joining the two fixpoints is a larger change than this one.
+
+`mem/a_set_in_a_record_admits_without_copying` keeps 2,000 of 4,000 words
+in 33 allocations of 370,640 bytes, where the tree without the fix made
+10,184 of 92,997,520. `micro/a_set_in_a_record_keeps_what_its_holders_saw`
+runs the shape on a record only it holds, which is written in place, and on
+records a caller reads again or whose set is read after the write, which
+are not. It prints what main's interpreter prints. A generated differential
+over 120 such programs, fresh seeds and shared ones, spelled with `if` and
+with a guard, agrees with main's interpreter on the interpreter and both
+native tiers; 15 of them write in place. Making every bare arm count as
+unique leaves all of these green, because a field moves only when every
+other mention of the record is a field read, so the arm's discount alone
+cannot reach a record something else holds.

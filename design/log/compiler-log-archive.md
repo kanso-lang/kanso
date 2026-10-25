@@ -108674,3 +108674,27 @@ tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
 per-function count of `docs/kanso.wasm` built with its names: the tokenizer
 was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
 2.2%.
+
+## 2026-10-24 — the tab's bcmp answers equality alone
+
+The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
+`kanso::compare::bytes`. A per-function count of `docs/kanso.wasm` built
+with its names showed the result of one body under two names: every compare
+in the tab's compile of its corpus called `memcmp`, and `memcmp` called
+`bcmp`, 154,063 times, together 4.2% of the compile. `bcmp` now has a body of
+its own, `compare::differ`, which answers equality alone. In the wasm built
+from this tree nothing on that path calls `bcmp`; `memcmp` runs the compare
+itself, and the call through to the second function is gone.
+
+The compile fell from 222,368,963 to 221,598,648 instructions (-0.35%) in
+this container. `tests/the_word_compare_agrees_with_bytes.rs` holds
+`differ` to slice equality beside `bytes`, on its 4,000,000 random pairs and
+on every position of every length up to 24; skipping the last word of a run
+longer than eight turned both red. The ratchet row `equal_bcmp` gives `bcmp`
+the ordering body again, and the compile reads 222,368,963.
+
+The calls come from `==` on strings, which reaches `memcmp` even against a
+short literal: the type names in `P::ty` and the attribute words in
+`P::skip_attrs` alone made 10,124 of them. Matching those words as integer
+keys built from their bytes cost more than it saved, 222,368,963 ->
+222,475,311 on the tree before this change, and was set aside.
