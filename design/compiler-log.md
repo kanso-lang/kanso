@@ -1793,3 +1793,9 @@ what `check lib` passed.
 
 Whether a none carried in a field should be refused at check is #2088's
 question, for every route at once.
+
+CI's rows. A getter call now answers the none question before the table
+lookup it used to make: compile_instructions 24,230,258 -> 24,227,775,
+entry_instructions 71,606,414 -> 71,588,081, library_instructions
+71,254,677 -> 71,236,741 and browser_compile_instructions 216,735,256 ->
+216,670,950. Welfare rose, and the rise is banked.
