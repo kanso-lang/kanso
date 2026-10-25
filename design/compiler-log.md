@@ -23,108 +23,6 @@
 
 
 
-## 2026-10-23 — the tab holds its module once
-
-Five more changes to the tab's compile of `bench/interp_corpus`, three for its
-instructions and two for the most it holds.
-
-**Three more costs.** `Numbered`, the emitter's `%tN` and `LN` names, checked
-its bytes were UTF-8 on every read, and it is built in one place from a `&str`
-prefix and ASCII digits, so the read now skips the check, as `Name::as_str`
-does: 256,933,580 -> 255,076,345. `paired_appends`, the narrowing and the prune
-each compact a module's bytes around whole lines and then validated the whole
-buffer again; a release build no longer does, and a debug build still checks:
--> 253,497,498. `line_end` became `kanso::compare::byte_from`, which finds any
-byte eight at a time, and the emitter's three scans for `@` use it:
--> 250,608,006. Its fuzzer moved beside the word compare's and now tries five
-target bytes, each with neighbours one bit away.
-
-**Where the peak was.** A marker set at the start of each phase and read by the
-allocator when a new peak was reached put the peak in `Written::finish`: it
-allocated the module at its final size, 352,805 bytes, while every piece of the
-body was still live, so the module was held twice. The emitter never splits a
-definition between two pieces, so the tab now takes the pieces as they are.
-`Written::finish_pieces` hands them over, `finish` joins them for clang, the
-narrowing walks them in order and rewrites each where it stands, and
-`ir_wasm::translate_pieces` reads every piece's heads and then lowers the
-bodies a piece at a time, letting each piece go when its functions are done.
-
-    browser_compile_peak_bytes     769,408 -> 724,714
-    browser_compile_instructions  250,608,006 -> 251,137,543
-
-Rewriting six pieces and slicing them costs 529,537 more instructions than one
-join. Welfare read 93.05 against 93.04 without it, so the peak pays for them.
-
-**What the walk left out.** With the join gone the peak moved into emission.
-A census of the native route at its peak, every live allocation grouped by its
-caller, held 330 KB of body text and about 300 KB of syntax. Part of the syntax
-was the groups the entry cannot reach, kept so that a miss can put them back
-and emit again. The tab now lets them go before it emits. A miss answers
-`None`, and the tab compiles the source again and emits with them
-(`emit_ir_tab_pieces_whole`), so a miss costs a second compile and never changes
-the module. None of the 348 programs in the micro corpus misses.
-
-    browser_compile_peak_bytes     724,714 -> 664,061
-    browser_compile_instructions  251,137,543 -> 251,140,915
-
-**Room the parser doubled into.** The same census showed statement and pattern
-lists grown by `push` and `extend`, which keep the room they doubled into. The
-tab's emit now gives that room back for every kept function's body and
-parameters, and for the function list, before it emits. A native build skips
-the copies, since nothing prices its holdings at that moment.
-
-    browser_compile_peak_bytes     664,061 -> 598,093
-    browser_compile_instructions  251,140,915 -> 251,201,816
-
-Shrinking where the parser builds a body instead read 615,869 and cost 116K
-instructions, because it also shrinks the groups the walk leaves out and every
-native build pays for it.
-
-**The narrowing's searches by one byte.** With `byte_from` inline, the
-narrowing's three whole-module searches find `define `, `musttail call` and
-`tailcc ` by their `f`, `m` and `c` and compare the word where one lands. The
-same anchors read through `str::find` lost to the two-way searcher earlier
-today, because each hit paid for a searcher and a call into memchr; inline,
-the three cost less than the 7.1M the searcher took.
-
-    browser_compile_instructions  251,201,816 -> 248,961,764
-
-A spec builds 20,000 random texts from the three words, their anchors and near
-misses, and holds `lines_holding_at` to `lines_holding` on each; comparing from
-the anchor rather than from the word's start, or reporting a line once per
-anchor in it, each fail it.
-
-**Two bytes at a time.** `symbols_before_newline` walks the whole module for
-each line's last `@`, a byte a pass, and that walk was 5.5M. It now asks
-`compare::either_from` for whichever of `@` and a newline comes next, testing
-each eight-byte word for both.
-
-    browser_compile_instructions  248,961,764 -> 244,730,101
-
-`called_symbols`, which reads from each `@` to its `(` or the line's end, uses
-it too: -> 244,413,637.
-
-`either_from` has a fuzzer of its own beside `byte_from`'s, for three pairs of
-target bytes, and dropping the second test's `& !` fails it.
-
-**Specs.** The interp corpus cut into pieces every seventh definition translates
-to the same module as the whole text, and letting a piece go before its
-functions are lowered fails it. The lean emit writes the pieces the whole emit
-writes. Ratchet rows undo each change; the browser rows are the witness for
-six of them.
-
-**CI's rows.** The emitter's own count falls with its scans:
-emit_instructions 6,249,687 -> 5,919,265 (-5.3%). interp_instructions moves
-385,504,156 -> 385,492,276; no change here touches the interpreter's code.
-compile_instructions, entry_instructions, library_instructions and both
-codegen rows read what #2065 left them.
-
-**Declined.** Body pieces of 8, 16 and 32 KiB instead of 64 moved the peak by
-at most 5,564 bytes and cost 0.8M to 1.5M instructions. The same one-byte anchor for
-`paired_appends`'s long needle saved 172,616 instructions and for
-`branches_to`'s `label %` probe 286,197, too little to give either a helper of
-its own.
-
 ## 2026-10-23 — a short float walks down by its zeros
 
 `ryu_short` starts its search at the place count the last float took. When
@@ -1534,3 +1432,44 @@ a push past 22,310. The count is 22,305. `padded` pads 75 rows to widths of
 The interpreted corpus runs both too, at 680 pushes and 18 rows: 392,521,332
 with the code and neither run, 425,717,899 with both. The tab runs the same
 corpus, so its run row moves with it.
+
+## 2026-10-25 — three quadratics in the core fixed
+
+The fixes for the two shapes the entry above added to the corpus, and one
+for a map taking keys in no order, which the run program's `scatter` phase
+has held since kanso#1820.
+
+**A list in a record grows in place from an `if` arm.** kanso#1926 moves a
+list out of a record when every mention of the record is a field read, and
+#2106 let a guard's early answer off that rule because it runs instead of
+the push. An arm of `if c a b` runs instead of the other arm in the same
+way, so `FieldTally` now tallies each arm on its own and lets an arm that
+never reads the field keep only its refusal. 80,000 pushes written with the
+`if` went from 14.2 seconds to 0.068 natively and from 30.3 to 0.11 on the
+interpreter. `mem/a_list_in_a_record_grows_from_an_if_arm` pins it: 20,000
+pushes made 51,814 allocations of 9,160,000,528 bytes on main and make 13 of
+1,044,944.
+
+**Padding doubles its fill.** `text/pad_start` and `text/pad_end` grew
+their padding one copy of the fill at a time and counted its characters on
+every step. The fill now doubles until it covers the width and the front of
+it is kept, which answers the same string. A width of 300,000 takes 0.06
+seconds. `mem/a_wide_padding_doubles_its_fill` pins a width of 40,000 with
+a two-character fill: 20,005 allocations of 400,600,128 bytes on main, 21
+of 211,696 now.
+
+**Two int keys compare directly, and a map's side run grows longer.**
+`k_key_cmp` unwrapped subtypes and tested for a bignum before it compared
+two machine ints, and every probe of a view search and every step of a
+merge asks it. The side run that takes keys out of order merged into the
+view once it passed the square root of the view's length. An insert into
+the side is one memmove and a merge walks both runs, so the side now waits
+for four times the square root. 2,340 scrambled int keys went from
+7,703,440 instructions to 6,039,707 with the compare alone and to 4,575,844
+with both; eight times the square root read 4,631,595. The longer side
+holds more: `a_tally_of_scattered_keys_merges_its_view` reads
+held_peak_bytes 273,328 where it read 206,448.
+
+On this container the run program goes from 880,945,062 with the two new
+phases to 799,175,414 with the three fixes, and the interpreted corpus from
+425,717,899 to 399,112,446.
