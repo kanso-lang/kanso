@@ -556,3 +556,79 @@ impl<'a> Resolver<'a> {
         }
     }
 }
+
+/// A call on a value a function was handed: the name, where it stands, and for
+/// a shaded call the index of its declaration.
+pub type Travel = (crate::name::Name, Span, Option<usize>);
+
+/// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
+/// named like one is the local's to keep — the enrollment must never make
+/// every stdlib export a forbidden binding name.
+///
+/// `travels` gets each call made on a value a function was handed: of a name
+/// the file cannot see, which travels, or of a function the module declares,
+/// which is shaded and carries the index of the declaration it sits in.
+pub fn check_file_shadow(
+    program: &Program,
+    extern_globals: &HashSet<&str>,
+    shadowable: &HashSet<String>,
+    sibling_types: &HashSet<String>,
+    sibling_decls: &[&crate::ast::TypeDecl],
+    sibling_fns: &HashMap<&str, (u32, bool)>,
+    travels: &mut Vec<Travel>,
+) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+    check_type_order(program, &mut diags);
+    check_fn_order(program, &mut diags);
+    check_constants(program, &mut diags);
+    check_constant_cycles(program, sibling_types, &mut diags);
+    check_retired_any(program, &mut diags);
+    check_field_annotations(program, &mut diags);
+    check_field_conflicts(program, &mut diags);
+    // One set, read by the annotation walk and by the resolver. Built twice
+    // it cost a second HashSet on every compile, which compile_allocs saw.
+    let own_type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    // A module's files share their types, so a type the next file declares is
+    // as declared as one this file does. Until 2026-09-28 only this file's
+    // counted, and `p:pt` with `pt` declared beside it was refused. Asked of
+    // both sets in turn rather than merged, which cost an allocation per name.
+    let declared_type_names = TypeNames { own: &own_type_names, siblings: sibling_types };
+    let imported = Imported { globals: extern_globals, enrolled: shadowable };
+    check_annotation_names(program, declared_type_names, sibling_decls, imported, &mut diags);
+    let mut globals = collect_globals(program, &mut diags);
+    globals.extend(extern_globals.iter().copied());
+    let fn_arities = Arities::of(program);
+    // A construction is positional and complete: `point 1` where `point`
+    // declares two fields is the same mistake as calling a two-argument
+    // function with one, and the compiler knows both counts. A typeset never
+    // constructs and a subtype takes the one value it wraps, so neither is
+    // entered here.
+    let type_arity: crate::hash::Map<&str, (usize, Option<&str>)> = program
+        .types
+        .iter()
+        .filter(|t| t.members.is_empty() && (t.parent.is_some() || !t.fields.is_empty()))
+        .map(|t| (t.name.as_str(), (t.fields.len(), t.parent.as_deref())))
+        .collect();
+    let declared = Declared {
+        fn_arities: &fn_arities,
+        sibling_fns,
+        type_arity: &type_arity,
+        types: declared_type_names,
+    };
+    // One vector of locals for the whole file. Every body leaves it empty, and
+    // a fresh one per declaration grew from nothing each time.
+    let mut locals = Vec::new();
+    for (index, decl) in program.fns.iter().enumerate() {
+        check_fn_body_shadow(
+            (index, decl),
+            &globals,
+            &mut diags,
+            shadowable,
+            &declared,
+            &mut locals,
+            travels,
+        );
+    }
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    diags
+}
