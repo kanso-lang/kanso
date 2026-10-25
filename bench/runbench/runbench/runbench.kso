@@ -173,7 +173,27 @@
 # start-up, and inside this program each of those stages also walks what the
 # earlier phases left behind. Depth 3 sits below the knee and adds 1,254,367,
 # so 4 is the smallest depth that reaches it.
+#
+# Two more joined on 2026-10-25, found while profiling the run program after
+# #2106, measured on main at that merge before their fixes. Each column is
+# the whole program with both, 880,945,062, less the whole without that one,
+# and the shares are of the former.
+#
+#   branched  22,305 pushes through an `if` arm          40,556,036  4.60%
+#   padded    75 rows padded to a widening width         42,367,338  4.81%
+#
+# `branched` is `guarded` with the loop's end written as an `if` expression,
+# whose arm that answers the record whole kept the list from being moved out
+# of it, so every push copied the list once it passed the arena's knee. The
+# knee here falls between 22,290 and 22,310 pushes, below it the phase is
+# linear at about 260 instructions a push, and past it each push costs about
+# a million and a half, so the count sits a few pushes past it.
+# `padded` lays out a column with `text/pad_start`, whose padding grew one
+# copy of the fill at a time and counted its characters on every step: a row
+# cost the square of its width. Its count lands it near five per cent like
+# the stress shapes above.
 import "./bag"
+import "./branched"
 import "./bump"
 import "./deep"
 import "./escape"
@@ -184,6 +204,7 @@ import "./index"
 import "./insist"
 import "./machine"
 import "./overwrite"
+import "./padded"
 import "./pend"
 import "./reentered"
 import "./restate"
@@ -238,6 +259,10 @@ reentered_depth = 4
 
 insist_laps = 5000
 
+branched_pushes = 22305
+
+padded_rows = 75
+
 fn decoded _ 0 sofar
   sofar
 
@@ -280,8 +305,10 @@ fn tally raw doc a b
   ported6 = ported5 + guarded/total guarded_pushes
   ported7 = ported6 + overwrite/total overwrite_laps
   ported8 = ported7 + reentered/total reentered_depth
+  ported9 = ported8 + branched/total branched_pushes
+  ported10 = ported9 + padded/total padded_rows
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported8 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported10 + rest))
   bulk .> on
 
 fn shaped raw doc a

@@ -1,0 +1,13 @@
+# A list held in a record, pushed onto through the record in one arm of an
+# `if` whose other arm answers the record whole. That arm runs instead of the
+# push, never beside it, so the push still owns the list, as it does under a
+# `return st if done` guard. Main copied it every lap past the arena's knee:
+# 20,000 pushes made 51,814 allocations and 9,160,000,528 bytes.
+type bag
+  items
+  n
+
+fn fill b k
+  if (k == 0) b (fill (bag (push b.items k) (b.n + 1)) (k - 1))
+
+pub play = print (length (fill (bag [] 0) 20000).items)

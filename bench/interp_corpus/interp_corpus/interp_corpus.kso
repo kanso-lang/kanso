@@ -2,7 +2,13 @@ import "std/json"
 import "std/list"
 import "std/text"
 
-pub play = print "interp {rounds 6}"
+# A list held in a record and pushed onto from one arm of an `if`, which
+# `branched` runs; the record is the list and its count.
+type bag
+  items
+  n
+
+pub play = print "interp {rounds 6} {branched 680} {padded 18 0}"
 
 fn rounds n
   source = document 220
@@ -38,3 +44,16 @@ fn reached _ _ acc true
 
 fn reached i stop acc false
   climbed (i + 1) stop (push acc i)
+
+fn fill b k
+  if (k == 0) b (fill (bag (push b.items k) (b.n + 1)) (k - 1))
+
+fn branched k
+  length (fill (bag [] 0) k).items
+
+# A column padded to a widening width, as a report lays one out.
+fn padded 0 acc
+  acc
+
+fn padded n acc
+  padded (n - 1) (acc + length (text/pad_start "{n}" (n * 37) "-+"))

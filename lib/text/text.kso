@@ -146,13 +146,17 @@ pub fn pad_start s width fill
 pub fn pad_end s width fill
   "{s}{padding (width - length s) fill}"
 
+# The fill doubles until it covers `n` characters, then the front `n` are
+# kept. Appending one copy at a time copied the whole of the padding on every
+# step and counted its characters again, so a width of 40,000 allocated 801 MB
+# natively.
 fn padding n fill
   return "" if n < 1 or fill == ""
-  builtin_slice_in (filled fill fill n) 1 n
+  builtin_slice_in (filled fill n) 1 n
 
-fn filled acc fill n
+fn filled acc n
   return acc if length acc >= n
-  filled "{acc}{fill}" fill n
+  filled "{acc}{acc}" n
 
 # trim's two walks only ask for characters inside `s`, so neither slice is
 # ever none; these arms are there because the checker cannot see that.

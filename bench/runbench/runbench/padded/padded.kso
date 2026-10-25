@@ -1,0 +1,16 @@
+# A column padded to a width, the way a report or a table is laid out. Each
+# row is padded to a width a little past the last, so the run pads many
+# widths rather than one. `text/pad_start` grew its padding one copy of the
+# fill at a time and counted the characters again on every step, so the cost
+# of a row was quadratic in its width: 40,000 characters of padding made
+# 400 MB of allocation natively.
+import "std/text"
+
+fn rows 0 acc
+  acc
+
+fn rows n acc
+  rows (n - 1) (acc + length (text/pad_start "{n}" (n * 37) "-+"))
+
+pub fn total n
+  rows n 0
