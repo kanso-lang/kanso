@@ -243,7 +243,20 @@
 # puts copy, so every count copied the outer map and its inner map. Here the
 # inner maps stay small and the phase grows about linearly; at 20,000 counts
 # the probe took 2.28 billion instructions.
+#
+# One more joined on 2026-10-25, measured on main at kanso#2125 before its
+# fix. Its column is the whole program with it, 866,203,703, less the whole
+# without, 851,886,947, and its share is of the former.
+#
+#   appended  64,000 numbers concatenated one at a time   14,316,756  1.65%
+#
+# `appended` builds a list with `list/concat acc [i]`. The concat is made in
+# place, but each lap's one-element list makes the loop stage what it
+# carries, and natively each stage copied the accumulator. Here it costs about
+# 224 instructions a number, where `push` costs about 20; on its own, at
+# 128,000 numbers, it took 156 million instructions.
 import "./admitted"
+import "./appended"
 import "./bag"
 import "./branched"
 import "./bump"
@@ -329,6 +342,8 @@ deduped_words = 850
 
 nested_counts = 1700
 
+appended_numbers = 64000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -378,8 +393,9 @@ fn tally raw doc a b
   ported13 = ported12 + admitted/total admitted_keys
   ported14 = ported13 + deduped/total deduped_words
   ported15 = ported14 + nested/total nested_counts
+  ported16 = ported15 + appended/total appended_numbers
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported15 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported16 + rest))
   bulk .> on
 
 fn shaped raw doc a

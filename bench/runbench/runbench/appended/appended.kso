@@ -1,0 +1,15 @@
+# A list built one number at a time with `list/concat acc [i]`. The concat is
+# made in place, but the one-element list each lap leaves behind makes the
+# loop stage what it carries, and natively each stage copied the whole
+# accumulator. 128,000 numbers took 156 million instructions, where the same
+# list built with `push` takes 2.6 million.
+import "std/list"
+
+fn built acc 0
+  acc
+
+fn built acc i
+  built (list/concat acc [i]) (i - 1)
+
+pub fn total n
+  length (built [] n)

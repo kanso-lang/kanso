@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-24 — the string index inlined into the walk
-
-The run program's index phase calls `k_b_at_str` 690,000 times from
-`tally_4`, about 48 instructions a call. The release link inlines only what it
-holds as bitcode, and the runtime is machine code there apart from the hot
-unit `hot_source` builds. Linking runbench against the whole runtime as
-bitcode, with the link's own flags, read 811,029,731 against the shipped
-813,607,261, and the index was still a call: the emitted IR called it
-returning `%KValue`, clang gives a C function returning `KValue` the type
-`{ i64, i64 }`, and the inliner does not cross the two. With the call's type
-matched and the definition `always_inline`, the same link read 807,234,717.
-
-The change makes that hold without putting the runtime back in the link.
-`k_b_at_str` is defined in the hot unit, guarded by `K_HOT_ELSEWHERE` in
-`runtime.c` as the scanners are, with `k_at_char`, `k_cp_len` and
-`k_as_str` cut from `runtime.c` beside it. The cursor, the two character
-caches, the two seek counters and the three out-of-line arms it calls now
-have external linkage. The emitter calls it returning `{ i64, i64 }` and
-puts the two words back into a `%KValue`. The translator reads the two types
-as one, and the tab's rows did not move apart from 59 instructions of its
-compile.
-
-In this container runbench fell from 813,607,261 to 809,811,674 instructions
-(-0.47%), with byte-identical output, and `tally_4` no longer calls the
-index. The ratchet row `index_inline` takes the `always_inline` away and
-reads 813,606,898.
-
 ## 2026-10-24 — the number span inlined into the decoder
 
 The same move for `k_b_number_span_raw`, the word-at-a-time scan the
@@ -1795,3 +1768,22 @@ emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
 17,724, emitted_other_calls 20,164 → 20,219 and emitted_other_defines 2,209 →
 2,214. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.01.
+
+## 2026-10-25 — a list built by concat joins the corpus
+
+A list built one number at a time with `list/concat acc [i]` costs about ten
+times what `push` costs natively. The concat is made in place, but each lap's
+one-element list is garbage, so the loop stages what it carries, and the
+accumulator is not covered by the license that lets a list of numbers cross
+a rewind by pointer: that license reads in-place pushes only. Each stage then
+deep-copies the accumulator. On its own, 32,000 numbers took 14.6 million
+instructions and 128,000 took 156 million, most of it in `k_deep_copy`, where
+`push` takes 0.9 million and 2.6 million. The interpreter is linear on it.
+
+Under the 2026-09-05 corpus-first gavel `appended` joins the corpus here,
+measured on main at kanso#2125 before its fix. It keeps 64,000 numbers. In
+the run program it grows linearly at about 224 instructions a number. On
+this container the run program reads 866,203,703 with it and 851,886,947
+without it, a column of 14,316,756 (1.65%). The interpreted corpus keeps
+6,000 numbers, 520,130,058 → 543,327,698, and the tab runs the same corpus.
+CI's rows and the re-based welfare baselines follow in this pull request.

@@ -108721,3 +108721,30 @@ every byte and reads 221,611,521.
 On CI the dev build's emit fell with the prune's scan, emit_instructions
 5,690,029 -> 5,651,244, and the browser rows of both changes matched this
 container's. Every other row reads what main left it.
+
+## 2026-10-24 — the string index inlined into the walk
+
+The run program's index phase calls `k_b_at_str` 690,000 times from
+`tally_4`, about 48 instructions a call. The release link inlines only what it
+holds as bitcode, and the runtime is machine code there apart from the hot
+unit `hot_source` builds. Linking runbench against the whole runtime as
+bitcode, with the link's own flags, read 811,029,731 against the shipped
+813,607,261, and the index was still a call: the emitted IR called it
+returning `%KValue`, clang gives a C function returning `KValue` the type
+`{ i64, i64 }`, and the inliner does not cross the two. With the call's type
+matched and the definition `always_inline`, the same link read 807,234,717.
+
+The change makes that hold without putting the runtime back in the link.
+`k_b_at_str` is defined in the hot unit, guarded by `K_HOT_ELSEWHERE` in
+`runtime.c` as the scanners are, with `k_at_char`, `k_cp_len` and
+`k_as_str` cut from `runtime.c` beside it. The cursor, the two character
+caches, the two seek counters and the three out-of-line arms it calls now
+have external linkage. The emitter calls it returning `{ i64, i64 }` and
+puts the two words back into a `%KValue`. The translator reads the two types
+as one, and the tab's rows did not move apart from 59 instructions of its
+compile.
+
+In this container runbench fell from 813,607,261 to 809,811,674 instructions
+(-0.47%), with byte-identical output, and `tally_4` no longer calls the
+index. The ratchet row `index_inline` takes the `always_inline` away and
+reads 813,606,898.
