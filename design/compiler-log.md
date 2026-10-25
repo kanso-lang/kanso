@@ -1706,5 +1706,22 @@ Under the 2026-09-05 corpus-first gavel `deduped` joins the corpus here,
 measured on #2119's tree before its fix. It keeps 850 words once each. On
 this container the run program reads 855,640,794 with it and 809,929,455
 without it, a column of 45,711,339 (5.34%). The interpreted corpus keeps 800
-words, 485,629,040 → 511,418,942. CI's rows and the re-based welfare
-baselines follow in this pull request.
+words, 485,629,040 → 511,418,942.
+
+CI's rows for the corpus with the phase. work_runbench 809,823,849 ->
+855,535,787 and run_peak_bytes 5,737,009 -> 8,546,977, with
+run_held_peak_bytes 216,080 -> 3,026,048. The interpreted corpus reads
+interp_instructions 430,978,258 -> 469,727,924, interp_peak_bytes 765,587 ->
+1,203,737 and interp_allocs 461,292 -> 500,455. The tab compiles and runs it:
+browser_compile_instructions 273,807,879 -> 303,782,324,
+browser_compile_peak_bytes 715,283 -> 722,748, browser_run_instructions
+42,417,870 -> 280,790,947 and browser_run_peak_bytes 1,310,720 -> 2,097,152.
+The run program's emitted code grows by the phase: emitted_other_defines
+2,204 -> 2,209, emitted_other_calls 20,078 -> 20,164, emitted_other_branches
+17,572 -> 17,649, emitted_other_lines 165,914 -> 166,511 and text 5,646,113
+-> 5,647,585. Its allocation vein: run_allocs 1,446,946 -> 1,449,080,
+run_alloc_bytes 215,868,632 -> 219,600,424, run_beat_iters 112,473 ->
+113,323, run_sh_buf 86,960,912 -> 87,015,792, run_sh_map 12,160 -> 25,760
+and run_sh_rec 3,906,784 -> 3,934,048. Welfare re-bases the eight terms the
+phase moves, each keeping its ratio to its baseline, and the floor stays at
+94.83.
