@@ -23,50 +23,6 @@
 
 
 
-## 2026-10-24 — a builder append asks for room first
-
-The emitter's in-place append twins tested whether the builder owned its
-buffer, then whether the builder ended at the buffer's frontier, then whether
-the bytes fit. The first test exists because a borrowed view has no buffer
-header to read. But a view's capacity is zero, so the room test turns it away
-on its own, and if it comes first the header is read only for an owned
-buffer. Six twins add a constant to the length in their room test (one byte,
-two bytes, a key's or a string's quotes, a word) and now ask for room first.
-Two add only a length, which may be zero, and keep the ownership test: an
-empty append onto an empty view would pass a room test alone.
-
-Against main in this container, with byte-identical output: runbench
-813,606,690 -> 807,626,521 (-0.74%) and encodebench 2,353,427,724 ->
-2,325,267,437 (-1.20%). The encoder appends a separator or a bracket between
-almost every value, so most of the fall is there.
-
-The micro program `an_append_onto_a_view_never_claims_it` appends onto the
-empty bytes, a literal's bytes and a slice, on all three engines. With every
-one-byte room test weakened to admit an empty view it printed ` abB` where
-the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
-back in front of the room test in `k_b_append_mut_int`, the twin the
-encoder's separators go through, and reads runbench 811,580,683 and
-encodebench 2,346,183,576.
-
-CI's rows for this branch against the empty collections', all taken into
-the goldens:
-
-- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
-  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
-  and oneshot 10,114,082 -> 10,051,248.
-- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
-  not isolated.
-- The twins' text grew by a few lines where a block moved: the compile
-  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
-  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
-  `codegen_instructions_dev` 116,426,119 (+5,840) and
-  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
-- `emit_instructions` 5,665,979, `browser_compile_instructions`
-  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
-  fell from the empty collections' values. All but the tab's run row stay
-  above main, from the two branches below this one.
-- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
-
 ## 2026-10-24 — lines found a word at a time, and IR trimmed as ASCII
 
 A per-function count of the tab's compile of `bench/interp_corpus` put
@@ -1810,3 +1766,31 @@ compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
 -> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
 emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
 343,748,020 -> 343,857,683. Welfare stays at 95.15.
+
+## 2026-10-25 — a scanned string is read where it stands on the interpreter
+
+The interpreter's `Text` held a long string as a `String`, so handing one to
+a function copied it. A long string is now an `Rc` around the bytes and a
+flag saying whether they are all ASCII, computed once when the string is
+made. A call shares it.
+
+`text/slice` on an ASCII string indexes bytes, and so does `s.i`. On other
+strings `text/slice` counted the characters and collected them all into a
+`Vec<char>` to take one. It now walks from a cursor the interpreter keeps:
+the last string sliced and the character and byte offsets where the slice
+ended, so a scanner that reads the next character walks one character.
+
+An 80,000-character scan ran in 6.9 s and runs in 0.089 s, against native's
+0.08 s. A scan of non-ASCII text took 660 million instructions and takes 89
+million. `a_scanned_string_reads_each_character` scans a string that mixes
+ASCII with two- and three-byte characters, forwards and back, so a cursor
+that kept a stale offset prints the wrong characters.
+
+CI's rows, against #2151. The interpreter reads interp_instructions
+629,524,864 -> 568,584,597 (-9.7%) and interp_allocs 643,872 -> 632,223,
+and interp_peak_bytes holds at 1,298,476. The compile rows move with the
+binary's layout: compile_instructions 24,694,028 -> 24,711,192,
+entry_instructions 72,837,734 -> 72,889,740, library_instructions 72,508,468
+-> 72,563,065, emit_instructions 5,657,388 -> 5,654,754 and
+browser_compile_instructions 343,857,683 -> 343,738,623. Welfare rises
+95.15 -> 95.17 and the rise is banked.

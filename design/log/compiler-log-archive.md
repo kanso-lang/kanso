@@ -108927,3 +108927,47 @@ goldens:
   every program that builds an empty list or map.
 - No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
   second decimal, banked.
+
+## 2026-10-24 — a builder append asks for room first
+
+The emitter's in-place append twins tested whether the builder owned its
+buffer, then whether the builder ended at the buffer's frontier, then whether
+the bytes fit. The first test exists because a borrowed view has no buffer
+header to read. But a view's capacity is zero, so the room test turns it away
+on its own, and if it comes first the header is read only for an owned
+buffer. Six twins add a constant to the length in their room test (one byte,
+two bytes, a key's or a string's quotes, a word) and now ask for room first.
+Two add only a length, which may be zero, and keep the ownership test: an
+empty append onto an empty view would pass a room test alone.
+
+Against main in this container, with byte-identical output: runbench
+813,606,690 -> 807,626,521 (-0.74%) and encodebench 2,353,427,724 ->
+2,325,267,437 (-1.20%). The encoder appends a separator or a bracket between
+almost every value, so most of the fall is there.
+
+The micro program `an_append_onto_a_view_never_claims_it` appends onto the
+empty bytes, a literal's bytes and a slice, on all three engines. With every
+one-byte room test weakened to admit an empty view it printed ` abB` where
+the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
+back in front of the room test in `k_b_append_mut_int`, the twin the
+encoder's separators go through, and reads runbench 811,580,683 and
+encodebench 2,346,183,576.
+
+CI's rows for this branch against the empty collections', all taken into
+the goldens:
+
+- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
+  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
+  and oneshot 10,114,082 -> 10,051,248.
+- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
+  not isolated.
+- The twins' text grew by a few lines where a block moved: the compile
+  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
+  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
+  `codegen_instructions_dev` 116,426,119 (+5,840) and
+  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
+- `emit_instructions` 5,665,979, `browser_compile_instructions`
+  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
+  fell from the empty collections' values. All but the tab's run row stay
+  above main, from the two branches below this one.
+- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
