@@ -22,51 +22,6 @@
 
 
 
-## 2026-10-23 — a repaired node keeps what it points at through a lap rewind and a scalar pop
-
-A native program could read freed memory where the interpreter printed the
-right answer. The run program shows it with one constant changed: with
-`deep_trials = 0`, main's build segfaulted in `k_copy_size` under
-`k_beat_iter_carry`. Bisecting put the first bad commit at #1830, which added
-the list of repaired nodes. A pop inside a loop can repair a node older than
-the loop's mark so that it points at a copy at the arena's frontier, and the
-frontier is in the loop's lap. #1830 put such a node on a list the loop's next
-stage revisits before it rewinds, which carries the copy below the mark. Two
-other ways out of a lap did not ask that list, and both handed the copy back
-while the node still pointed at it.
-
-A plain lap rewind, for a loop that carries nothing it has to copy, now runs
-as a stage with nothing staged when the list holds a node below the loop's
-mark. The stage revisits the node, copies what it points at into the carry,
-rewinds and settles it back; `beat_iters` is corrected so the lap counts once.
-A pop whose result is a scalar, and the region pop and the cohort with one,
-keep the lap and hand it up to the enclosing loop when the list holds a node
-below the mark, as a pop with a heap result already does. Both tests are in
-out-of-line, cold functions, because a test inlined into `k_beat_pop` cost
-encodebench 35M instructions.
-
-Two mem fixtures pin the halves, and each fails on main and with only the
-other half applied: `a_repaired_node_below_a_loop_that_copies_nothing` printed
-`cover`'s bytes where the interpreter prints `name.`, and
-`a_repaired_node_below_a_loop_that_returns_a_number` segfaulted. No other mem
-golden moves, and the run program with `deep_trials = 0` runs to the end.
-
-CI's rows. The list is empty in every program in the corpus, so what moves is
-the test and the layout around it: run_instructions 828,053,655 -> 828,089,940
-(+0.004%), and work_runbench with it. The other work rows move by under 4,000
-each, oneshot and livebench falling and the rest rising to work_jsonbench
-578,723,373, work_encodebench 2,367,625,387, work_basket 31,067,982,
-work_widebench 28,587,526, work_deepbench 201,099,671, work_escapebench
-40,308,367, work_pendbench 155,740,406, work_indexbench 1,947,279,
-work_scanbench 274,328, work_digestbench 4,152,224 and work_readbench
-4,581,904. Every benchmark's machine code grows 336 bytes: text 5,330,158 ->
-5,334,862 summed over the fourteen. Building compiles the
-runtime: codegen_instructions_dev 116,461,460 -> 116,473,612 and
-codegen_instructions_release 425,504,615 -> 425,509,331.
-browser_run_instructions 30,275,515 -> 30,276,840. Welfare falls by what the
-fix costs, and the floor moves down with it under the rule for the language
-doing what it says.
-
 ## 2026-10-23 — a template joins onto a record field in place
 
 A template whose first piece is a field, `"{st.body}{d}"`, copied the whole
@@ -1600,3 +1555,29 @@ a `root` argument and a line of its own), and
 `a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
 re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
 other mutation still applies to this tree.
+
+## 2026-10-25 — a list handed to put is refused wherever the list is certain
+
+#2091's fifth item, the `put` half. `put` writes a key of a map, and on a
+list it stops at run time on every engine with "put takes a map, a key, and
+a value". The literal check refused `put [1 2 3] 2 9`, because the list is
+written in place, and passed `xs = [1 2 3]` followed by `put xs 2 9`. diff's
+and inflate's ports met the second shape. #2086 asks whether `put` should
+write a list at an index, and says this inconsistency is cloud's to fix
+whatever it rules.
+
+The after-inference walk now refuses a list handed to `put`, `delete`,
+`keys`, `values` or `entries` when the list is certain: a name the same
+declaration binds once to a list literal, or a call of a group whose every
+arm answers a list and nothing else. A parameter, or a name bound to
+anything less certain, is left to the run, as the walk's other kind checks
+leave theirs. The message is the literal check's: "`put` takes a map here,
+not a list". The callee's last name segment is tested first, so a call to
+anything else pays one comparison.
+
+`errors/a_list_handed_to_put` holds both shapes. Main checks it as ok. No
+program in the tree, the book's samples or kq is refused. One run-time
+golden met the new check: `runtime/delete_takes_a_map_at_run_time` handed
+`delete` a list through an identity function, which inference sees answer
+nothing but a list in that program. It hands an int now, and its stderr is
+unchanged.

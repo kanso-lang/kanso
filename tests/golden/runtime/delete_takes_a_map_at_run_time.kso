@@ -1,6 +1,7 @@
-# A value the check cannot see the kind of reaches `delete` at run time, and
-# every engine refuses it in the words `put` uses for the same fault.
+# An int reaches `delete` through a function, where no check asks its kind,
+# and every engine refuses it in the words `put` uses for the same fault. A
+# list there is refused at check (errors/a_list_handed_to_put).
 fn same x
   x
 
-pub play = print "{delete (same [1 2]) 1}"
+pub play = print "{delete (same 7) 1}"

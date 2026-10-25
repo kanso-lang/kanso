@@ -1,2 +1,2 @@
 error[runtime]: delete takes a map and a key
-  failed in delete_takes_a_map_at_run_time/play at delete_takes_a_map_at_run_time.kso:6
+  failed in delete_takes_a_map_at_run_time/play at delete_takes_a_map_at_run_time.kso:7
