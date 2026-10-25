@@ -23,97 +23,6 @@
 
 
 
-## 2026-10-24 — the hot unit's copies made inline-only
-
-CI's first reading of this branch put the release codegen row at 468,610,053
-against main's 425,508,082, +10.1%. All of it was in `ld.lld`. The corpus
-program calls none of the new helpers, so none of it was inlining. The hot
-unit defined each helper as an ordinary function, so every release link
-optimized it and compiled it to machine code whether the program called it
-or not. Main paid the same for the four helpers the unit already held.
-
-Each helper is now compiled into the cached runtime as machine code, and the
-hot unit's copy is a C99 inline definition, which clang emits as
-`available_externally`. The link inlines it where the program calls it and
-drops it everywhere else. Clang emits an inline definition only where its
-unit refers to it, so the unit ends with a table that refers to all eight.
-The table has external linkage, which keeps it through the unit's own
-compile, and nothing reads it, so the link removes it. With `used` on the
-table, the link kept all the bodies and optimized them. `K_HOT_ELSEWHERE`
-has no users left and is gone.
-
-Linking the codegen corpus alone, `ld.lld` read 252,430,133 on main,
-295,287,065 with the eight helpers defined outright, and 187,756,033 with
-the eight inline, 25.6% under main. runbench reads 797,155,085, 300,195
-below the eight defined outright, with byte-identical output, and the program
-calls none of the eight.
-
-Two fixes came with it. The hot object's cache key was the runtime's digest
-alone, so a change to `hot_source_of` reused an object the old recipe made;
-the key now also carries a digest of `src/main.rs`. And the hot source was
-built on every release build to be handed to a cache that nearly always had
-it. It is built now only on a miss, and kanso's own process on the corpus
-build fell from 74,931,992 to 30,665,523 instructions.
-
-The four ratchet rows that took an `always_inline` away now put `noinline` in
-its place, since an inline copy without the attribute can still be inlined at
-the link's threshold of 2000. Dry-run on a copy against 797,155,085, with the
-same output each time: `index_inline` reads 800,950,764,
-`number_span_inline` 804,913,953, `slice_parsers_inline` 804,964,001, and
-the byte scanners' row 822,443,871.
-
-CI's rows for this branch against main, all taken into the goldens:
-
-- runbench 813,606,641 -> 797,155,036 (-2.02%), jsonbench 578,723,373 ->
-  560,280,234 (-3.19%), indexbench 1,947,279 -> 1,837,323 (-5.65%),
-  deepbench 201,099,671 -> 200,299,696, oneshot 10,256,694 -> 10,133,710,
-  livebench 961,524,285 -> 961,402,064 and widebench 28,476,897 ->
-  28,461,000.
-- Five work rows rose by 111 or fewer, which I have not isolated:
-  `work_basket` 31,068,030 (+48), `work_digestbench` 4,152,335 (+111),
-  `work_escapebench` 40,308,408 (+41), `work_readbench` 4,582,008 (+104)
-  and `work_scanbench` 274,369 (+41).
-- The release codegen row 425,508,082 -> 360,870,405 (-15.2%).
-- `codegen_instructions_dev` 116,281,615 (+63,185) and `emit_instructions`
-  5,652,483 (+1,239), from the rewrap lines the emitter now writes.
-- The tab's rows rose for the same lines: `browser_compile_instructions`
-  221,032,408 (+109,092) and `browser_run_instructions` 33,404,578
-  (+31,680).
-- `text` 5,419,472, up 97,154. Every binary grew by about 3,440 bytes, the
-  runtime's own copies of the four helpers the hot unit used to define, and
-  the four decoding benchmarks by 15,113 to 16,999 with the parsers inlined
-  at their sites.
-- `emitted_lines` 14,304 (+8) and `emitted_other_lines` 160,289 (+32): 4 to
-  12 more lines in the five programs that index strings or read numbers.
-- No allocation counter moved. Welfare 93.14 -> 93.24, banked.
-
-Measured and set aside: the renderer's whole-float test without `floor`,
-as a cast to `long long` and back. A sweep of 32,001,840 doubles agreed with
-the floor form, and runbench rose 190,766. glibc resolves `floor` at load to
-`__floor_sse41`, three instructions a call on this host, and the cast pair
-cost one more per float.
-
-Three ratchet mutations needed rewriting after the move. The door list is
-five names now, and its mutation reads the length from the source instead of
-writing it down. The cold helpers' mutation strips `preserve_most` from the
-runtime's definitions, and the hot unit declares two of them, the index's
-wide miss and the int parser's tail, with the attribute. Left alone, the
-program would call a definition that no longer saves what its declaration
-promises; the mutation now strips both declarations too, and runbench reads
-801,182,221 with identical output. The row that inlined the index's two cold
-arms back into it is retired. The program's index is now the hot unit's
-copy, which holds only a declaration of the wide miss, so nothing in the
-runtime can put that arm back in the walk's frame. Inlining both arms in the
-runtime read 797,121,834, below the branch's 797,155,085.
-
-The ratchet's shards found one more row the move left with nothing to
-watch: the list test put back in front of `k_b_at`'s string arm. No
-benchmark calls `k_b_at` any more, because the emitter sends every proven
-string index to `k_b_at_str`. With the mutation the function's code
-changes, and all fourteen work rows read the same as without it. The row
-is retired; `a proven string index through the tag tests` still guards
-the routing that moved those calls.
-
 ## 2026-10-24 — the empty list and map inlined into the decoder
 
 The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
@@ -1863,3 +1772,30 @@ interpreter. The strings must stay refused: the ratchet mutation
 `a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
 run of the fixture then dies reading the reclaimed strings ("ran out of
 stack"), while the interpreter, which has no rewind, stays green.
+
+## 2026-10-25 — a read a sibling forces lets the map go
+
+`bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
+1) (push b.items i))`, now writes the map in place. #2126 discounted a read
+binding when a sibling of the write wrote into it. `forces` in
+`src/linear.rs` generalizes that to any position that reads the value and
+runs on every path before the write: a field or element read, an operand,
+an interpolation, a condition, or an argument of `put`, `push`, `delete`,
+`length` or `keys`. A binding forced once answers every later mention from
+its value, so the write cannot change what the binding read. A bare name
+handed to a function or a constructor does not count, because a lazy binding
+travels there as an unforced cell; neither do one arm of an `if` (and so
+`and` and `or`), a guard past its condition, or a lambda.
+
+On its own, 16,000 numbers in 20 buckets took 132,724,010 instructions and
+take 9,025,501. `a_map_of_records_files_in_place` pins 4,000 numbers: 8,133
+allocations and 440,064 bytes, where main made 20,457 and 5,216,096.
+`a_record_read_out_of_a_map_keeps_its_fields` keeps the record it read in a
+carried list, in a lambda and under one arm of an `if`; its output is main's
+interpreter, and both engines agree with it.
+
+The read context is conservative and no program here shows it necessary. A
+binding is lazy only when every use hands it bare to a function that may
+discard it, and with the context dropped the probe that tried that shape
+still printed main's answer, because its binding stayed strict. No ratchet
+mutation is pinned for the context for that reason.
