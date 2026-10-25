@@ -1788,3 +1788,14 @@ still reads std/io's bare.
 
 `micro/a_modules_function_named_like_an_imported_constant` prints `6` on
 every engine, and main stops it with "`<io>` is not callable".
+
+CI's rows. `qualify` asks each dependency which names its module declares,
+and the tab compiles with the same front end: compile_instructions
+24,230,258 -> 24,304,388, entry_instructions 71,606,414 -> 71,823,177,
+library_instructions 71,254,677 -> 71,474,194, emit_instructions 5,606,408
+-> 5,607,046, compile_allocs 13,789 -> 13,810, interp_allocs 401,539 ->
+401,562 and browser_compile_instructions 216,735,256 -> 216,952,734. The
+first cut cloned every declared name into a set, 305 allocations; the set
+now borrows them. Nothing native moved. Welfare fell by less than a
+hundredth, and the floor follows: the 2026-10-12 ruling says the author's
+own name wins.
