@@ -8,7 +8,7 @@ type bag
   items
   n
 
-pub play = print "interp {rounds 6} {branched 680} {padded 18 0}"
+pub play = print "interp {rounds 6} {branched 680} {padded 18 0} {counted 1000}"
 
 fn rounds n
   source = document 220
@@ -57,3 +57,8 @@ fn padded 0 acc
 
 fn padded n acc
   padded (n - 1) (acc + length (text/pad_start "{n}" (n * 37) "-+"))
+
+# A word count whose words each come round twice, in no order.
+fn counted n
+  words = list/map (list/take list/naturals n) (i -> "w{i * 7919 % (n / 2)}")
+  length (list/tally (list/to_list words))

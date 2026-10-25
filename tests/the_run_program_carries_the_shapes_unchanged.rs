@@ -37,6 +37,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/bag/bag.kso",
     "bench/runbench/runbench/branched/branched.kso",
     "bench/runbench/runbench/bump/bump.kso",
+    "bench/runbench/runbench/counted/counted.kso",
     "bench/runbench/runbench/fold/fold.kso",
     "bench/runbench/runbench/guarded/guarded.kso",
     "bench/runbench/runbench/handed/handed.kso",
@@ -103,7 +104,7 @@ fn every_carried_module_is_listed() {
     let mut listed: Vec<String> = CARRIED.iter().map(|(copy, _)| copy.to_string()).collect();
     listed.extend(BORN_HERE.iter().map(|copy| copy.to_string()));
     listed.sort();
-    assert_eq!(BORN_HERE.len(), 15, "a phase joined or left the run program without a line here");
+    assert_eq!(BORN_HERE.len(), 16, "a phase joined or left the run program without a line here");
     assert_eq!(found, listed, "a module under bench/runbench/runbench is not pinned above");
 }
 

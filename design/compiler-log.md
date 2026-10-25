@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-24 — dev and tab bodies write no llvm.assume
-
-The emitter told LLVM what it had proved with `llvm.assume`: a parameter's
-tag where inference pins one kind, a length that is never negative, an int's
-tag after a `%parsed` is unpacked, and the range of a byte position in a
-dispatcher. Each one costs a compare and a call, and the tag ones an
-`extractvalue` too. Only a release module is optimized. The dev tier compiles
-at -O0, which drops the call without reading it, and the tab's translator in
-`src/ir_wasm.rs` skips the call but still translates the compare and runs it.
-The dev tier emits with the settings the tab does, and for
-`bench/interp_corpus` it held 271 assumes, which with their feeding lines
-came to 729 of its 9,964 lines; runbench's fell from 36,674 to 35,082. The
-two assumes left are in the fixed helpers `DECLARES` carries.
-
-`FnEmit::assumes` now answers false for a body built with `words`, which is
-every dev and tab body, and the five sites that write an assume ask it first.
-A dispatcher still records a byte position as an int, which the emitter reads
-itself; only the lines for LLVM go. The release IR of all nineteen
-benchmarks built from their directories is byte-identical before and after.
-
-In this container, at the golden's rustc, the tab's compile of the corpus fell
-from 243,034,646 to 235,063,784 instructions (-3.3%) and its peak from 598,093
-to 532,354 bytes (-11%), and the run fell from 34,963,054 to 33,372,898
-(-4.5%), the compares it no longer executes. On CI the dev build's two rows
-fell with the emitted text: emit_instructions 5,918,172 -> 5,863,976 and
-codegen_instructions_dev 116,472,194 -> 116,219,760. The codegen corpus's dev
-IR lost ten of its twelve assumes. Every other compile row reads what main
-left it. The ratchet row `an_assume_written_for_no_optimizer` writes them for
-every body again.
-
 ## 2026-10-24 — the tab leaves its tail calls as written
 
 `Written::finish_pieces`, which hands the tab its module, ran the same
@@ -1572,3 +1542,28 @@ new arm rule: compile_instructions lands on 24,695,561, entry_instructions
 239,691,017, with browser_compile_peak_bytes 610,760, and
 codegen_instructions_dev on 116,456,086 and codegen_instructions_release on
 370,239,646. Welfare rises 0.32, which this pull request banks.
+
+## 2026-10-25 — a word count joins the run program and the interpreted corpus
+
+A probe built each list, text and map function natively at two sizes, four
+times apart, and counted the instructions of each. Every one grew linearly
+or as n log n except `list/tally` over keys that come round more than once:
+4× the items cost 15× the instructions, with string keys and with int keys
+alike. Tallying 20,000 ints, each seen twice, took 1.19 billion
+instructions natively. The interpreter is superlinear on the same program,
+0.19 s at 20,000 items and 1.64 s at 80,000. Under the 2026-09-05
+corpus-first gavel the shape joins the corpus here, measured on main at
+kanso#2112 before its fix.
+
+`counted` is a word count, `list/tally` over 2,000 words that each come
+round twice in no order. The tally reads a word's count and puts it back one
+higher. When the map already holds the key, the in-place put sets the
+value in the map's sorted view and then walks the map's append log back
+from its end to set the same key's entry there, so a word's second sighting
+costs the number of words already counted.
+
+On this container the run program reads 843,728,377 with the phase and
+799,281,633 without it, a column of 44,446,744 (5.27%). The interpreted
+corpus counts 1,000 words, 440,075,578 → 462,532,645. The tab runs the same
+corpus, so its run row moves with it. CI's rows and the re-based welfare
+baselines follow in this pull request.
