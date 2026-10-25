@@ -108876,3 +108876,149 @@ string index to `k_b_at_str`. With the mutation the function's code
 changes, and all fourteen work rows read the same as without it. The row
 is retired; `a proven string index through the tag tests` still guards
 the routing that moved those calls.
+
+## 2026-10-24 — the empty list and map inlined into the decoder
+
+The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
+called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
+arena bump and a header written into it. Both now have inline copies in the
+hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
+and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
+which the string index uses too. The cold paths for a short arena or a
+counting build stay in the runtime as calls.
+
+Without `always_inline` the link would not inline them. Its remark was
+"conflicting attributes", which `alwaysinline` overrides; that is why the
+earlier helpers all carry the attribute. The conflict is the hot unit's
+`+ssse3`, which the LTO link's target does not carry: given
+`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
+That flag moved runbench by +951 with byte-identical output, so the
+attribute stays and the flag was set aside.
+
+runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
+function in the binary calls either. The ratchet row `empty_inline` puts
+`noinline` in place of both `always_inline`s and reads 797,156,333.
+
+Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
+instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
+Inlined, the record constructor made `json/obj_value` too large to inline
+into `obj_key_start`, so `obj_value` became a call of its own and cost
+58,253,679 where `obj_key_start` gave back 37,835,883.
+
+CI's rows for this branch against the string index's, all taken into the
+goldens:
+
+- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
+  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
+  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
+  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
+  the string index's rise: `work_escapebench` 40,308,388 and
+  `work_scanbench` 274,349.
+- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
+  the two bodies the link now inlines at every empty list and map.
+- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
+  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
+  from the rewrap lines `call_pair` writes at each site.
+- The tab's rows rose for the same lines: `browser_compile_instructions`
+  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
+  (+28,146).
+- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
+- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
+  every program that builds an empty list or map.
+- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
+  second decimal, banked.
+
+## 2026-10-24 — the empty list and map inlined into the decoder
+
+The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
+called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
+arena bump and a header written into it. Both now have inline copies in the
+hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
+and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
+which the string index uses too. The cold paths for a short arena or a
+counting build stay in the runtime as calls.
+
+Without `always_inline` the link would not inline them. Its remark was
+"conflicting attributes", which `alwaysinline` overrides; that is why the
+earlier helpers all carry the attribute. The conflict is the hot unit's
+`+ssse3`, which the LTO link's target does not carry: given
+`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
+That flag moved runbench by +951 with byte-identical output, so the
+attribute stays and the flag was set aside.
+
+runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
+function in the binary calls either. The ratchet row `empty_inline` puts
+`noinline` in place of both `always_inline`s and reads 797,156,333.
+
+Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
+instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
+Inlined, the record constructor made `json/obj_value` too large to inline
+into `obj_key_start`, so `obj_value` became a call of its own and cost
+58,253,679 where `obj_key_start` gave back 37,835,883.
+
+CI's rows for this branch against the string index's, all taken into the
+goldens:
+
+- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
+  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
+  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
+  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
+  the string index's rise: `work_escapebench` 40,308,388 and
+  `work_scanbench` 274,349.
+- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
+  the two bodies the link now inlines at every empty list and map.
+- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
+  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
+  from the rewrap lines `call_pair` writes at each site.
+- The tab's rows rose for the same lines: `browser_compile_instructions`
+  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
+  (+28,146).
+- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
+- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
+  every program that builds an empty list or map.
+- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
+  second decimal, banked.
+
+## 2026-10-24 — a builder append asks for room first
+
+The emitter's in-place append twins tested whether the builder owned its
+buffer, then whether the builder ended at the buffer's frontier, then whether
+the bytes fit. The first test exists because a borrowed view has no buffer
+header to read. But a view's capacity is zero, so the room test turns it away
+on its own, and if it comes first the header is read only for an owned
+buffer. Six twins add a constant to the length in their room test (one byte,
+two bytes, a key's or a string's quotes, a word) and now ask for room first.
+Two add only a length, which may be zero, and keep the ownership test: an
+empty append onto an empty view would pass a room test alone.
+
+Against main in this container, with byte-identical output: runbench
+813,606,690 -> 807,626,521 (-0.74%) and encodebench 2,353,427,724 ->
+2,325,267,437 (-1.20%). The encoder appends a separator or a bracket between
+almost every value, so most of the fall is there.
+
+The micro program `an_append_onto_a_view_never_claims_it` appends onto the
+empty bytes, a literal's bytes and a slice, on all three engines. With every
+one-byte room test weakened to admit an empty view it printed ` abB` where
+the answer is `CBA abBA`. The ratchet row `room_first` puts the ownership test
+back in front of the room test in `k_b_append_mut_int`, the twin the
+encoder's separators go through, and reads runbench 811,580,683 and
+encodebench 2,346,183,576.
+
+CI's rows for this branch against the empty collections', all taken into
+the goldens:
+
+- runbench 795,184,707 -> 789,204,097 (-0.75%), encodebench 2,353,400,269
+  -> 2,325,240,311 (-1.20%), livebench 961,382,268 -> 936,031,367 (-2.64%)
+  and oneshot 10,114,082 -> 10,051,248.
+- `work_widebench` rose 28,460,996 -> 28,508,996 (+48,000), which I have
+  not isolated.
+- The twins' text grew by a few lines where a block moved: the compile
+  corpus's `lines` 1,593 (+24) and `module_lines` 1,181 (+6),
+  `emitted_lines` 14,371 (+3) and `emitted_other_lines` 160,895 (+30).
+  `codegen_instructions_dev` 116,426,119 (+5,840) and
+  `codegen_instructions_release` 370,142,417 (+6,648) follow them.
+- `emit_instructions` 5,665,979, `browser_compile_instructions`
+  221,423,495, `browser_run_instructions` 33,345,250 and `text` 5,462,380
+  fell from the empty collections' values. All but the tab's run row stay
+  above main, from the two branches below this one.
+- No allocation counter moved. Welfare 93.24 -> 93.27, banked.
