@@ -1824,3 +1824,26 @@ A loop whose arms are spelled with `return m if i == 0` is proven the same
 way. The interpreter writes in place at these sites on the analysis' word,
 so a wrong proof would be wrong identically on both engines; the fixture's
 expected output is main's interpreter for that reason.
+
+Grouping into a map of lists, `put m k (push (or_list m[k]) i)`, is the same
+take with `push` as the write, and it is proven by the same change: 8,000
+numbers in 20 groups allocated 32,786 times and now 129.
+`a_map_of_lists_groups_in_place` pins it.
+
+CI's rows, against #2125. The run program reads work_runbench 851,781,946 →
+814,679,425 (−4.4%), run_allocs 1,456,758 → 1,447,392, run_alloc_bytes
+221,484,024 → 216,354,904, run_held_peak_bytes 4,120,448 → 248,688 and
+run_sh_map 120,960 → 12,160. run_put_mut_grow rises 55 → 260, because the
+inner maps now grow in place where each copy had been sized afresh. The
+interpreter reads interp_instructions 478,102,371 → 473,127,289 and
+interp_allocs 516,759 → 507,913, and interp_peak_bytes rises 1,233,920 →
+1,263,998. The tab's run falls browser_run_instructions 130,514,490 →
+47,716,164 and browser_run_peak_bytes 4,325,376 → 1,376,256.
+
+The analysis costs the front end. The interpreted corpus holds a take, so
+the tab's compile seeds the map facts and runs their fixpoint:
+browser_compile_instructions 314,821,332 → 324,458,065 (+3.1%). Native
+compiles read compile_instructions 24,731,131 → 24,741,552, entry_instructions
+72,970,344 → 72,986,583, library_instructions 72,642,115 → 72,659,822 and
+emit_instructions 5,641,862 → 5,655,748, and the machine code reads text
+5,649,473 → 5,649,809. Welfare rises 95.01 → 95.15 and the rise is banked.
