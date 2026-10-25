@@ -126,11 +126,24 @@
 # for a range it has already bounded. Before the fix every read built the
 # slice and the box between the two steps. It adds 25 bytes to the peak, the
 # line it reads.
+#
+# A tenth joined on 2026-10-25, from #2089's first item, measured on main at
+# kanso#2092 before its fix: built alone, less the empty program's 329,467,
+# and shared of the whole program on that compiler, 830,558,275.
+#
+#   handed   380 updates through a read handed to a call  41,508,775  5.00%
+#
+# `handed` is `bump` with the name passed to a function inside the put,
+# `seen = m[i]` then `put m i (counted seen)`, which toml, datalog, diff, bc
+# and inflate all wrote. kanso#1822 discounts the name only when it reaches
+# the write through arithmetic, so every put here copies the map, and the
+# phase is superlinear in its count like `bump` was.
 import "./bag"
 import "./bump"
 import "./deep"
 import "./escape"
 import "./fold"
+import "./handed"
 import "./index"
 import "./insist"
 import "./machine"
@@ -177,6 +190,8 @@ stack_laps = 115
 
 bag_items = 4300
 
+handed_steps = 380
+
 insist_laps = 5000
 
 fn decoded _ 0 sofar
@@ -217,7 +232,7 @@ fn tally raw doc a b
   ported2 = machine/total machine_passes + fold/total fold_pieces
   ported3 = ported2 + restate/total restate_passes
   ported4 = rewind/total rewind_laps + stack/total stack_laps
-  ported5 = ported3 + ported4 + bag/total bag_items
+  ported5 = ported3 + ported4 + bag/total bag_items + handed/total handed_steps
   rest = digested raw digest_bytes
   on = (k -> scanned .> (s -> k + shapes + s + ported + ported5 + rest))
   bulk .> on
