@@ -9,7 +9,7 @@ type bag
   n
 
 pub play =
-  maps = "{counted 1000} {drained 600}"
+  maps = "{counted 1000} {drained 600} {admitted 500}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps}"
 
 fn rounds n
@@ -80,3 +80,14 @@ fn emptied m n i
 
 fn drained n
   length (emptied (filled {} n) n (n / 2))
+
+# A set kept as a map, admitting a key only when it does not hold it yet.
+fn let_in m _ 0
+  m
+
+fn let_in m n i
+  k = i * 7919 % n
+  let_in (if (m[k] == none) (put m k true) m) n (i - 1)
+
+fn admitted n
+  length (let_in {} n n)

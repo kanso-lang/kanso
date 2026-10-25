@@ -1596,22 +1596,34 @@ a delete and equality, on the interpreter and on both native tiers: 0 of
 120 disagree. With the restart copying from the log instead of the view,
 30 of 120 disagree.
 
-## 2026-10-25 — a drained map joins the run program and the interpreted corpus
+## 2026-10-25 — a drained map and an admitting set join the corpus
 
-The probe that found the word count timed a few more accumulation shapes
-at two sizes: a string joined onto itself, a list concatenated onto, a map
-of maps, a record carrying a list through a fold, and a map drained by
-`delete`. Only the last is superlinear. Taking half the keys out of a map
-of 5,000 in no order took 1.26 billion instructions natively, and of
-20,000 took 27.9 billion. The interpreter takes 0.21 s and 3.76 s for the
-same two. `delete` answers a fresh map (ruled 2026-10-13, kanso#1914), so
-each call copies the whole map on both engines, and a map drained by a loop
-costs the square of its size. Under the 2026-09-05 corpus-first gavel the
-shape joins the corpus here, measured on #2116's tree before its fix.
+The probe that found the word count timed six more accumulation shapes at
+two sizes: a string joined onto itself, a list concatenated onto, a map of
+maps, a record carrying a list through a fold, a map drained by `delete`,
+and a set kept as a map that admits a key only when it does not hold it.
+The first four grow linearly. The last two do not, on either engine.
 
-`drained` fills a map of 1,100 keys and deletes 550 of them. On this
-container the run program reads 847,672,857 with the phase and 801,953,443
-without it, a column of 45,719,414 (5.39%). The interpreted corpus drains a
-map of 600 keys, 461,296,007 → 486,601,057, and the tab runs the same
-corpus. CI's rows and the re-based welfare baselines follow in this pull
-request.
+`delete` answers a fresh map (ruled 2026-10-13, kanso#1914), so each call
+copies the whole map, and a loop that drains a map costs the square of its
+size. Taking half the keys out of a map of 5,000 in no order took 1.26
+billion instructions natively and 0.21 s on the interpreter; of 20,000,
+27.9 billion and 3.76 s.
+
+The admitting set is `if (m[k] == none) (put m k true) m`. The linearity
+analysis counts the read in the condition as a second holder of the map, so
+the put copies it. Natively the copy has no sorted view, and the next read
+sorts the whole map again. Admitting 5,000 keys took 9.39 billion
+instructions natively and 0.30 s on the interpreter; 20,000 took 178
+billion and 5.1 s. The guard spelling, `return m if m[k] != none` above
+`put m k true`, is refused the same way.
+
+Under the 2026-09-05 corpus-first gavel both shapes join the corpus here,
+measured on #2116's tree before their fixes. `drained` deletes 550 keys
+from a map of 1,100 and `admitted` admits 430 keys. On this container the
+run program reads 894,638,261 with both. Without `drained` it reads
+848,089,560, a column of 46,548,701 (5.20%), and without `admitted`
+847,672,459, a column of 46,965,802 (5.25%). The interpreted corpus drains
+600 keys and admits 500, and reads 509,290,842 with both. The tab runs the
+same corpus. CI's rows and the re-based welfare baselines follow in this
+pull request.
