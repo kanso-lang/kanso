@@ -20,7 +20,7 @@ type bucket
 
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
-  nest = "{nested 1000} {appended 6000} {bucketed 1500}"
+  nest = "{nested 1000} {appended 6000} {bucketed 1500} {grown 3000}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest}"
 
 fn rounds n
@@ -168,3 +168,13 @@ fn filed m n i
 
 fn bucketed n
   length (filed {} n n)[3].items
+
+# A string built one piece at a time by a template that joins onto it.
+fn joined_onto s 0
+  s
+
+fn joined_onto s i
+  joined_onto "{s}{i}," (i - 1)
+
+fn grown n
+  length (joined_onto "" n)
