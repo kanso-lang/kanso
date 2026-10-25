@@ -1479,8 +1479,12 @@ declaration binds once to a list literal, or a call of a group whose every
 arm answers a list and nothing else. A parameter, or a name bound to
 anything less certain, is left to the run, as the walk's other kind checks
 leave theirs. The message is the literal check's: "`put` takes a map here,
-not a list". The callee's last name segment is tested first, so a call to
-anything else pays one comparison.
+not a list". The callee's name is tested first, by its last byte and then
+the word where it ends, and the declaration's list bindings are read only
+after a call of `put` or its kin turns up. The first version split every
+callee's name on `/` and collected every declaration's list bindings up
+front, which cost the front end 130,307 instructions on compile_instructions;
+this one costs 24,741.
 
 `errors/a_list_handed_to_put` holds both shapes. Main checks it as ok. No
 program in the tree, the book's samples or kq is refused. One run-time
@@ -1488,3 +1492,11 @@ golden met the new check: `runtime/delete_takes_a_map_at_run_time` handed
 `delete` a list through an identity function, which inference sees answer
 nothing but a list in that program. It hands an int now, and its stderr is
 unchanged.
+
+CI's rows, against #2107's: compile_instructions 24,664,426 -> 24,689,167,
+entry_instructions 72,794,039 -> 72,851,547, library_instructions
+72,459,948 -> 72,517,015 and browser_compile_instructions 218,730,086 ->
+218,996,814. No run row, allocation counter or mem golden moves. Welfare
+falls by less than a hundredth and the floor follows: check now refuses what
+every engine refuses at run time, which #2086 named a checker bug whatever
+it rules.
