@@ -1818,3 +1818,20 @@ binding is lazy only when every use hands it bare to a function that may
 discard it, and with the context dropped the probe that tried that shape
 still printed main's answer, because its binding stayed strict. No ratchet
 mutation is pinned for the context for that reason.
+
+CI's rows for both fixes, against #2139. The run program reads work_runbench
+847,302,475 → 828,232,672 (−2.3%), run_allocs 1,585,686 → 1,579,529,
+run_alloc_bytes 224,179,080 → 221,800,088, run_sh_map 76,160 → 12,160,
+run_sh_buf 89,503,776 → 89,333,968, run_held_peak_bytes 1,863,712 → 248,688,
+run_arena_blocks 5 → 4, run_arena_peak_bytes 5,767,184 → 4,718,608 and
+run_spare_peak_bytes 3,670,032 → 2,621,456; run_put_mut_grow rises 260 →
+264, where the bucketed map now grows in place. The interpreter reads
+interp_instructions 525,831,073 → 520,305,378 and interp_allocs 585,540 →
+578,088, and interp_peak_bytes rises 1,281,294 → 1,281,313. The tab's run
+falls browser_run_instructions 107,399,948 → 54,006,705 and
+browser_run_peak_bytes 3,866,624 → 1,507,328, and its compile rises
+browser_compile_instructions 334,007,116 → 334,943,582. Native compiles read
+compile_instructions 24,741,552 → 24,741,567, entry_instructions 72,986,583 →
+72,986,608, library_instructions 72,659,822 → 72,659,847 and
+emit_instructions 5,655,748 → 5,656,420, and the machine code reads text
+5,652,977 → 5,653,121. Welfare rises 95.15 → 95.22 and the rise is banked.
