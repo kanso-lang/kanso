@@ -64,8 +64,6 @@ fn a_test_file_reading_a_private_name_is_refused() {
     assert_eq!(output.status.code(), Some(2));
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 /// `go`'s first arm claims a request whose path is a none, and `kanso check`
 /// passes the module. The test file's compile reads `r.path` as a getter
 /// call, after the rewrite, and asked it the none question the field read
@@ -84,7 +82,8 @@ fn a_test_file_checks_its_module_as_check_does() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(output.status.code(), Some(0));
-=======
+}
+
 /// A helper in the test file calls the module's private `hidden`, and is
 /// refused at check like the same call in a test constant. Watched red as a
 /// run-time failure naming `~hidden`, a spelling the author never wrote.
@@ -95,8 +94,8 @@ fn a_test_helper_reaching_a_private_name_is_refused() {
 
     assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
     assert_eq!(output.status.code(), Some(2));
->>>>>>> origin/claude/a-test-helper-sees-only-pub
-=======
+}
+
 /// A test fails inside std/text, and the report names std/text's file and
 /// line as `run` does. Watched red: std/text's line number printed under the
 /// test file's path, `fails_in_std/fails_in_std_test.kso:38:3` in a file of
@@ -110,7 +109,6 @@ fn a_test_failing_inside_a_library_names_the_librarys_line() {
     assert_eq!(String::from_utf8_lossy(&output.stdout), out);
     assert_eq!(String::from_utf8_lossy(&output.stderr), err);
     assert_eq!(output.status.code(), Some(1));
->>>>>>> origin/claude/a-test-failure-names-its-place
 }
 
 /// The test's helper and the module's private function share the name
