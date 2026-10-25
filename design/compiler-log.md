@@ -23,141 +23,6 @@
 
 
 
-## 2026-10-24 — the lexer reads a line before it walks it
-
-The entry compile spent 9,277,662 instructions in the lexer, and about a
-quarter of that came before any token: the work `lex` does on each raw line
-to decide what kind of line it is. Five pieces of it are cheaper now, with
-every diagnostic unchanged.
-
-- The source is split into lines a word at a time, with
-  `compare::byte_from`, where `str::lines` called memchr once a line. A
-  `\r` before a newline still comes off, and one at the end of a file
-  without a newline still stays.
-- The tab test is `compare::find` on the bytes. `str::find('\t')` went
-  through the char searcher and a `bcmp` for every line.
-- The line is trimmed once, where it was trimmed twice.
-- The width cap counts a line's characters only when its bytes exceed the
-  cap, since a character is at least one byte.
-- The text-block opener and the span opener each walked every byte of a
-  code line, tracking quotes and stopping at `#`. A line with no quote and
-  no `#` has no text block and its span opener is its last byte, so one
-  scan for either byte, a word at a time, answers both for most lines.
-
-Measured in this container at the tip of the lines-a-word-at-a-time branch:
-`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
-`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
-
-The ratchet row `lex_lines` puts `str::lines` back and reads
-`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
-reads 24,561,382.
-
-CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
-71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
-(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
-`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
-the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
-whose process lexes its program before it emits. Nothing else moved.
-Welfare 93.27 -> 93.28, banked.
-
-What is left in the lexer is `lex_line` itself, about 1,150 instructions a
-code line, most of it a scanner that decodes each line into a `Vec<char>`
-before it reads a token. A scanner over bytes would touch every token
-method and the column arithmetic, so it is a change of its own.
-
-Measured and set aside: the scanner reading an ascii line's bytes in place
-instead of widening them into its `Vec<char>`, through accessors that test
-`ascii` at every read. The widening costs 348,608 instructions of the entry
-compile, and the test at every character cost more: `entry_instructions`
-71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
-24,224,312.
-
-Measured and set aside: an unchecked `u64` sum for the tab translator's
-integers of eighteen digits or fewer, ahead of the checked `i128` loop.
-`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
-ratchet row of its own.
-
-## 2026-10-24 — kq under the pin to 29dafd0f
-
-kq's instruction rows rose when its pin moved to 29dafd0f, the string index
-and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
-path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
-CI runs on two different CPUs read the same four rows, and building kq here
-with kanso before and after #2077 gives the same rise within a few hundred.
-
-The rise is in kq's decoder, around the string scan. `Flat3_string_end`
-keeps an overflow-checked increment the earlier build folded into a `lea`,
-and `parse_string` keeps the same check and a test of a constant zero. The
-IR kanso emits for kq is the same under both pins, apart from the
-declarations #2077 retyped, so the folds are lost in the hot unit or at the
-link. Every `find2` site in kq is inlined since #2077, where 13 were calls
-before.
-
-Measured and set aside: the two scanners without `always_inline`. The link
-then left 6 calls, and kq read print_small 26,132,733 and path_small
-10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
-forced inlining is not what costs kq. The cause is not isolated.
-
-## 2026-10-24 — a chain built from the left runs past the beat stack
-
-The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
-stopped at its first compile error, under rulings made since, so each was
-migrated and its journal re-tested; the re-sit has its own entry. Two ports,
-rg and site, hit the same native crash, and this entry fixes it.
-
-rg walks a directory by folding `.>` onto an effect, once per entry:
-`list/fold entries (effect 0) added`, where `added` answers
-`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
-and native code runs it by entering `k_exec` for the inner chain from the
-outer one, a frame per link. The interpreter printed the sum at 100,000 links.
-Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
-
-Two faults were behind it, and both were in `k_exec`.
-
-- Each chain pushes a beat mark and then reads and writes
-  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
-  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
-  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
-  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
-  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
-  runs in `k_exec_unmarked`, which does what a beat past the stack has always
-  done: it keeps count and stages nothing, and its garbage waits for an outer
-  mark.
-- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
-  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
-  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
-  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
-  360 bytes a link.
-
-`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
-and prints `total 500500` on every engine. Main stops it with "ran out of
-stack". With the frame fix alone and the depth guard removed, it stops the
-same way. A chain of 100,000 links still runs out of native stack: the
-interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
-gives, as any deep recursion does. Running a left-built chain without
-recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
-there would lose the failure it is owed, so it is not attempted here.
-
-A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
-links one segfaults on main as well as on this branch, at 20 links, before
-printing anything. The sweep's own `--prove` was not run, and nothing here
-claims a clean sweep.
-
-CI's rows. Every benchmark does less work, because a frame that reserved
-64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
-work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
-28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
-2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
-work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
-4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
-4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
-and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
-274,348. Every binary's text grows 2,576 bytes for the two new functions,
-runbench's to 762,112, and text, the sum over fourteen binaries, from
-5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
-codegen_instructions_dev 116,426,119 -> 116,447,795 and
-codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
-
 ## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
 
 The 2026-10-12 entry "a name the author declared wins over a builtin and an
@@ -1734,6 +1599,113 @@ emit_instructions 5,654,777 → 5,655,925: the two analyses cost the compiler
 about 0.3%. The machine code reads text 5,652,977 → 5,653,121, all of it in
 runbench. Welfare
 rises 95.15 → 95.22 and the rise is banked.
+
+## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
+
+Probing the standard library's text functions on the interpreter turned up
+two shapes it runs in quadratic time, where native and the tab run them in
+linear time. Both grow or walk one long string through a loop.
+
+`joined_onto "{s}{i}," (i - 1)` builds a string a piece at a time.
+`linear::string_builders` licenses that join, and native and the tab write
+it in place, but the interpreter never asked the analysis. Its `Text` held a
+long string as a plain `String`, so reading `s` copied it and the template
+copied it again. Run alone, 3,000 pieces took 76,760,738 instructions and
+12,000 took 1,551,921,916; 200,000 took 2.39 s against native's 0.08 s.
+
+The second is a scanner: a loop that hands a long string to each step and
+reads it a character at a time with `text/slice s i i`. Each call copied the
+string, and `text/slice` counted the characters and then collected all of
+them into a `Vec<char>` to take one. 2,500 pairs of characters took
+497,826,665 instructions, 65% of it collecting, and an 80,000-character
+walk took 6.9 s against native's 0.08 s.
+
+Under the 2026-09-05 corpus-first gavel `grown 3000` and `scanned 1000` join
+the interpreted corpus here, measured before their fixes. Both engines
+print the same line for it.
+
+CI's rows for the corpus with the two phases: interp_instructions
+525,925,462 -> 636,804,390, interp_allocs 585,540 -> 651,249 and
+interp_peak_bytes 1,281,294 -> 1,298,220. The tab compiles and runs the
+same corpus: browser_compile_instructions 333,912,133 -> 343,748,020,
+browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
+107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
+3,997,696. Welfare re-bases the six terms among these it weighs, each
+keeping its ratio to its baseline, and the floor stays at 95.15.
+
+## 2026-10-25 — a joined string grows where it stands on the interpreter
+
+`linear::string_builders` licenses a template whose first part is a string
+binding nothing reads afterwards, and native and the tab write those joins in
+place. The interpreter now asks the same question. At a licensed site
+`eval_template` renders the rest of the template first, so `"{s}{s}"` still
+reads all of `s`, then takes the string out of its binding and pushes the
+rest onto it. A string short enough to sit inline skips the question, since
+copying fifteen bytes costs less than building the analysis.
+
+The interpreter used to build `in_place_pushes` alone. It now calls
+`linear::for_the_interpreter`, which answers the push sites and the join
+sites from one analysis and drops it, so the run holds two sets and not the
+analysis behind them. Holding the analysis had cost interp_peak_bytes
+175,000 bytes in the first draft.
+
+`grown 200000` ran in 2.39 s and runs in 0.06 s, against native's 0.08 s.
+`a_string_joined_onto_itself_reads_itself_whole` pins `"{s}{s}"` at a
+licensed site, where a join that took the string before rendering the rest
+would print half of it.
+
+CI's rows, against #2150 on main at #2146. The interpreter reads
+interp_instructions 636,804,390 -> 629,524,864 and interp_allocs 651,249 ->
+643,872, and interp_peak_bytes rises 1,298,220 -> 1,298,476. CI's
+interpreter gate runs under pinned glibc tunables, where memcpy costs little
+in the count, so the copies that took 2.3 seconds at 200,000 pieces read as
+7.3 million instructions there. `kanso check` never builds the interpreter's
+sets, so the compile rows move with the binary's layout:
+compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
+-> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
+emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
+343,748,020 -> 343,857,683. Welfare stays at 95.15.
+
+## 2026-10-25 — a scanned string is read where it stands on the interpreter
+
+The interpreter's `Text` held a long string as a `String`, so handing one to
+a function copied it. A long string is now an `Rc` around the bytes and a
+flag saying whether they are all ASCII, computed once when the string is
+made. A call shares it.
+
+`text/slice` on an ASCII string indexes bytes, and so does `s.i`. On other
+strings `text/slice` counted the characters and collected them all into a
+`Vec<char>` to take one. It now walks from a cursor the interpreter keeps:
+the last string sliced and the character and byte offsets where the slice
+ended, so a scanner that reads the next character walks one character.
+
+An 80,000-character scan ran in 6.9 s and runs in 0.089 s, against native's
+0.08 s. A scan of non-ASCII text took 660 million instructions and takes 89
+million. `a_scanned_string_reads_each_character` scans a string that mixes
+ASCII with two- and three-byte characters, forwards and back, so a cursor
+that kept a stale offset prints the wrong characters.
+
+CI's rows, against #2151. The interpreter reads interp_instructions
+629,524,864 -> 568,584,597 (-9.7%) and interp_allocs 643,872 -> 632,223,
+and interp_peak_bytes holds at 1,298,476. The compile rows move with the
+binary's layout: compile_instructions 24,694,028 -> 24,711,192,
+entry_instructions 72,837,734 -> 72,889,740, library_instructions 72,508,468
+-> 72,563,065, emit_instructions 5,657,388 -> 5,654,754 and
+browser_compile_instructions 343,857,683 -> 343,738,623. Against #2151
+welfare read 95.15 -> 95.17.
+
+Merged with main at #2141, CI reads the three together against main. The
+interpreter reads interp_instructions 520,276,149 -> 564,058,857,
+interp_allocs 578,088 -> 624,771 and interp_peak_bytes 1,281,313 ->
+1,298,495. The tab runs and compiles the two corpus phases:
+browser_run_instructions 54,006,705 -> 61,205,256, browser_run_peak_bytes
+1,507,328 -> 1,572,864, browser_compile_instructions 334,848,599 ->
+344,676,704 and browser_compile_peak_bytes 743,876 -> 751,764. The compile
+rows move by layout: compile_instructions 24,735,836 -> 24,747,458,
+entry_instructions 72,954,229 -> 72,992,046, library_instructions
+72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
+corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
+95.22 -> 95.24 and the rise is banked.
 
 ## 2026-10-25 — a list walked by its rest joins the corpus
 

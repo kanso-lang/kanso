@@ -108928,57 +108928,6 @@ goldens:
 - No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
   second decimal, banked.
 
-## 2026-10-24 — the empty list and map inlined into the decoder
-
-The decoder opens 272,349 arrays and 273,339 objects on runbench, and each
-called `k_list_empty` or `k_map_empty`: 15 and 17 instructions, mostly an
-arena bump and a header written into it. Both now have inline copies in the
-hot unit with what they reach (the seed layouts, `k_buf_set_cap`, `k_ptr`),
-and the emitter calls them returning `{ i64, i64 }` through `call_pair`,
-which the string index uses too. The cold paths for a short arena or a
-counting build stay in the runtime as calls.
-
-Without `always_inline` the link would not inline them. Its remark was
-"conflicting attributes", which `alwaysinline` overrides; that is why the
-earlier helpers all carry the attribute. The conflict is the hot unit's
-`+ssse3`, which the LTO link's target does not carry: given
-`-plugin-opt=-mattr=+ssse3`, the remark became an ordinary cost decision.
-That flag moved runbench by +951 with byte-identical output, so the
-attribute stays and the flag was set aside.
-
-runbench 797,155,085 -> 795,184,756 (-0.25%), byte-identical output, and no
-function in the binary calls either. The ratchet row `empty_inline` puts
-`noinline` in place of both `always_inline`s and reads 797,156,333.
-
-Measured and set aside: `k_rec` the same way, 266,978 calls at 24.9
-instructions. runbench rose to 809,634,970 (+1.82%) with the same output.
-Inlined, the record constructor made `json/obj_value` too large to inline
-into `obj_key_start`, so `obj_value` became a call of its own and cost
-58,253,679 where `obj_key_start` gave back 37,835,883.
-
-CI's rows for this branch against the string index's, all taken into the
-goldens:
-
-- runbench 797,155,036 -> 795,184,707 (-0.25%), jsonbench 560,280,234 ->
-  557,386,434 (-0.52%), deepbench 200,299,696 -> 200,095,696, digestbench
-  4,152,335 -> 4,122,786 and oneshot 10,133,710 -> 10,114,082. The other
-  work rows fell by 20 to 5,610. Two of them still sit 21 above main, from
-  the string index's rise: `work_escapebench` 40,308,388 and
-  `work_scanbench` 274,349.
-- `codegen_instructions_release` 360,870,405 -> 370,135,769 (+2.6%), for
-  the two bodies the link now inlines at every empty list and map.
-- `codegen_instructions_dev` 116,420,279 (+138,664), `emit_instructions`
-  5,666,973 (+14,490) and the compile corpus's `module_lines` 1,175 (+4),
-  from the rewrap lines `call_pair` writes at each site.
-- The tab's rows rose for the same lines: `browser_compile_instructions`
-  221,541,805 (+509,397) and `browser_run_instructions` 33,432,724
-  (+28,146).
-- `text` 5,464,764 (+45,292), the inlined bodies at their sites.
-- `emitted_lines` 14,368 (+64) and `emitted_other_lines` 160,865 (+576):
-  every program that builds an empty list or map.
-- No allocation counter moved. Welfare 93.24 -> 93.24, a rise under the
-  second decimal, banked.
-
 ## 2026-10-24 — a builder append asks for room first
 
 The emitter's in-place append twins tested whether the builder owned its
@@ -109058,3 +109007,192 @@ goldens: `browser_compile_instructions` 221,423,495 -> 218,810,755 (-1.18%),
 and `emit_instructions` 5,665,979 -> 5,605,884. The native rows fell with
 `prune_shipped` and `ir_defines`, which run there too. Nothing else moved.
 Welfare rose under the second decimal, 93.27 as printed, and is banked.
+
+## 2026-10-24 — the lexer reads a line before it walks it
+
+The entry compile spent 9,277,662 instructions in the lexer, and about a
+quarter of that came before any token: the work `lex` does on each raw line
+to decide what kind of line it is. Five pieces of it are cheaper now, with
+every diagnostic unchanged.
+
+- The source is split into lines a word at a time, with
+  `compare::byte_from`, where `str::lines` called memchr once a line. A
+  `\r` before a newline still comes off, and one at the end of a file
+  without a newline still stays.
+- The tab test is `compare::find` on the bytes. `str::find('\t')` went
+  through the char searcher and a `bcmp` for every line.
+- The line is trimmed once, where it was trimmed twice.
+- The width cap counts a line's characters only when its bytes exceed the
+  cap, since a character is at least one byte.
+- The text-block opener and the span opener each walked every byte of a
+  code line, tracking quotes and stopping at `#`. A line with no quote and
+  no `#` has no text block and its span opener is its last byte, so one
+  scan for either byte, a word at a time, answers both for most lines.
+
+Measured in this container at the tip of the lines-a-word-at-a-time branch:
+`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
+`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
+
+The ratchet row `lex_lines` puts `str::lines` back and reads
+`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
+reads 24,561,382.
+
+CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
+71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
+(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
+`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
+the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
+whose process lexes its program before it emits. Nothing else moved.
+Welfare 93.27 -> 93.28, banked.
+
+What is left in the lexer is `lex_line` itself, about 1,150 instructions a
+code line, most of it a scanner that decodes each line into a `Vec<char>`
+before it reads a token. A scanner over bytes would touch every token
+method and the column arithmetic, so it is a change of its own.
+
+Measured and set aside: the scanner reading an ascii line's bytes in place
+instead of widening them into its `Vec<char>`, through accessors that test
+`ascii` at every read. The widening costs 348,608 instructions of the entry
+compile, and the test at every character cost more: `entry_instructions`
+71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
+24,224,312.
+
+Measured and set aside: an unchecked `u64` sum for the tab translator's
+integers of eighteen digits or fewer, ahead of the checked `i128` loop.
+`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
+ratchet row of its own.
+
+## 2026-10-24 — the lexer reads a line before it walks it
+
+The entry compile spent 9,277,662 instructions in the lexer, and about a
+quarter of that came before any token: the work `lex` does on each raw line
+to decide what kind of line it is. Five pieces of it are cheaper now, with
+every diagnostic unchanged.
+
+- The source is split into lines a word at a time, with
+  `compare::byte_from`, where `str::lines` called memchr once a line. A
+  `\r` before a newline still comes off, and one at the end of a file
+  without a newline still stays.
+- The tab test is `compare::find` on the bytes. `str::find('\t')` went
+  through the char searcher and a `bcmp` for every line.
+- The line is trimmed once, where it was trimmed twice.
+- The width cap counts a line's characters only when its bytes exceed the
+  cap, since a character is at least one byte.
+- The text-block opener and the span opener each walked every byte of a
+  code line, tracking quotes and stopping at `#`. A line with no quote and
+  no `#` has no text block and its span opener is its last byte, so one
+  scan for either byte, a word at a time, answers both for most lines.
+
+Measured in this container at the tip of the lines-a-word-at-a-time branch:
+`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
+`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
+
+The ratchet row `lex_lines` puts `str::lines` back and reads
+`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
+reads 24,561,382.
+
+CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
+71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
+(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
+`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
+the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
+whose process lexes its program before it emits. Nothing else moved.
+Welfare 93.27 -> 93.28, banked.
+
+What is left in the lexer is `lex_line` itself, about 1,150 instructions a
+code line, most of it a scanner that decodes each line into a `Vec<char>`
+before it reads a token. A scanner over bytes would touch every token
+method and the column arithmetic, so it is a change of its own.
+
+Measured and set aside: the scanner reading an ascii line's bytes in place
+instead of widening them into its `Vec<char>`, through accessors that test
+`ascii` at every read. The widening costs 348,608 instructions of the entry
+compile, and the test at every character cost more: `entry_instructions`
+71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
+24,224,312.
+
+Measured and set aside: an unchecked `u64` sum for the tab translator's
+integers of eighteen digits or fewer, ahead of the checked `i128` loop.
+`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
+ratchet row of its own.
+
+## 2026-10-24 — kq under the pin to 29dafd0f
+
+kq's instruction rows rose when its pin moved to 29dafd0f, the string index
+and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
+path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
+CI runs on two different CPUs read the same four rows, and building kq here
+with kanso before and after #2077 gives the same rise within a few hundred.
+
+The rise is in kq's decoder, around the string scan. `Flat3_string_end`
+keeps an overflow-checked increment the earlier build folded into a `lea`,
+and `parse_string` keeps the same check and a test of a constant zero. The
+IR kanso emits for kq is the same under both pins, apart from the
+declarations #2077 retyped, so the folds are lost in the hot unit or at the
+link. Every `find2` site in kq is inlined since #2077, where 13 were calls
+before.
+
+Measured and set aside: the two scanners without `always_inline`. The link
+then left 6 calls, and kq read print_small 26,132,733 and path_small
+10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
+forced inlining is not what costs kq. The cause is not isolated.
+
+## 2026-10-24 — a chain built from the left runs past the beat stack
+
+The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
+stopped at its first compile error, under rulings made since, so each was
+migrated and its journal re-tested; the re-sit has its own entry. Two ports,
+rg and site, hit the same native crash, and this entry fixes it.
+
+rg walks a directory by folding `.>` onto an effect, once per entry:
+`list/fold entries (effect 0) added`, where `added` answers
+`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
+and native code runs it by entering `k_exec` for the inner chain from the
+outer one, a frame per link. The interpreter printed the sum at 100,000 links.
+Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
+
+Two faults were behind it, and both were in `k_exec`.
+
+- Each chain pushes a beat mark and then reads and writes
+  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
+  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
+  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
+  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
+  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
+  runs in `k_exec_unmarked`, which does what a beat past the stack has always
+  done: it keeps count and stages nothing, and its garbage waits for an outer
+  mark.
+- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
+  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
+  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
+  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
+  360 bytes a link.
+
+`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
+and prints `total 500500` on every engine. Main stops it with "ran out of
+stack". With the frame fix alone and the depth guard removed, it stops the
+same way. A chain of 100,000 links still runs out of native stack: the
+interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
+gives, as any deep recursion does. Running a left-built chain without
+recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
+there would lose the failure it is owed, so it is not attempted here.
+
+A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
+links one segfaults on main as well as on this branch, at 20 links, before
+printing anything. The sweep's own `--prove` was not run, and nothing here
+claims a clean sweep.
+
+CI's rows. Every benchmark does less work, because a frame that reserved
+64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
+work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
+28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
+2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
+work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
+4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
+4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
+and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
+274,348. Every binary's text grows 2,576 bytes for the two new functions,
+runbench's to 762,112, and text, the sum over fourteen binaries, from
+5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
+codegen_instructions_dev 116,426,119 -> 116,447,795 and
+codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
