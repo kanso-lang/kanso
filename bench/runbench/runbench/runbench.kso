@@ -243,9 +243,33 @@
 # puts copy, so every count copied the outer map and its inner map. Here the
 # inner maps stay small and the phase grows about linearly; at 20,000 counts
 # the probe took 2.28 billion instructions.
+#
+# One more joined on 2026-10-25, measured on main at kanso#2126 before its
+# fix. Its column is the whole program with it, 828,713,625, less the whole
+# without, 814,784,428, and its share is of the former.
+#
+#   appended  64,000 numbers concatenated one at a time   13,929,197  1.68%
+#
+# `appended` builds a list with `list/concat acc [i]`. The concat is made in
+# place, but each lap's one-element list makes the loop stage what it
+# carries, and natively each stage copied the accumulator. Here it costs about
+# 218 instructions a number, where `push` costs about 20; on its own, at
+# 128,000 numbers, it took 156 million instructions.
+#
+# Another joined beside it, measured on the same main. Its column is the
+# whole program with both, 847,407,464, less the whole with `appended`
+# alone, 828,713,625, and its share is of the former.
+#
+#   bucketed  2,000 numbers filed into a map of records   18,693,839  2.21%
+#
+# `bucketed` keeps a record per key, a count and a list. The record is read
+# out of the map and reaches the put only through its fields, so natively
+# every number copied the map.
 import "./admitted"
+import "./appended"
 import "./bag"
 import "./branched"
+import "./bucketed"
 import "./bump"
 import "./counted"
 import "./deduped"
@@ -329,6 +353,10 @@ deduped_words = 850
 
 nested_counts = 1700
 
+appended_numbers = 64000
+
+bucketed_numbers = 2000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -378,8 +406,10 @@ fn tally raw doc a b
   ported13 = ported12 + admitted/total admitted_keys
   ported14 = ported13 + deduped/total deduped_words
   ported15 = ported14 + nested/total nested_counts
+  ported16 = ported15 + appended/total appended_numbers
+  ported17 = ported16 + bucketed/total bucketed_numbers
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported15 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported17 + rest))
   bulk .> on
 
 fn shaped raw doc a
