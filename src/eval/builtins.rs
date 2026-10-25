@@ -1194,7 +1194,7 @@ impl<'a> Interp<'a> {
                 let len = match &container {
                     Value::List(items) => Some(items.len()),
                     Value::Bytes(items) => Some(items.len()),
-                    Value::Str(text) => Some(text.chars().count()),
+                    Value::Str(text) => Some(text.char_count()),
                     _ => None,
                 };
                 if let Some(len) = len {
@@ -1214,6 +1214,12 @@ impl<'a> Interp<'a> {
                             .map(|r| items[r].to_vec())
                             .unwrap_or_default();
                         Ok(Value::Bytes(Rc::new(sliced)))
+                    }
+                    // A position is a byte's in an ASCII string, so a scan that
+                    // slices one character at a time reads only that character.
+                    Value::Str(text) if text.is_ascii() => {
+                        let sliced = slice_range(text.len(), from, to).map(|r| &text[r]);
+                        Ok(Value::Str(Text::from(sliced.unwrap_or_default())))
                     }
                     Value::Str(text) => {
                         let all: Vec<char> = text.chars().collect();
@@ -1473,7 +1479,7 @@ impl<'a> Interp<'a> {
                 match list {
                     Value::List(items) => Ok(Value::int(items.len())),
                     Value::Bytes(items) => Ok(Value::int(items.len())),
-                    Value::Str(s) => Ok(Value::int(s.chars().count())),
+                    Value::Str(s) => Ok(Value::int(s.char_count())),
                     Value::Map(entries) => Ok(Value::int(entries.len())),
                     other => Err(RuntimeError {
                         at: None,

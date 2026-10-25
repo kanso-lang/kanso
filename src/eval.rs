@@ -1948,16 +1948,14 @@ impl<'a> Interp<'a> {
         if let Some(err) = self.render_parts(rest, env, frame, &mut tail)? {
             return Ok(Some(err));
         }
-        // SAFETY: as `written_in_place`. A string is never shared between
-        // holders, so the binding owns these bytes, and the analysis proved no
-        // later read of it exists. Nothing else refers into the slot across
-        // the replace.
+        // SAFETY: as `written_in_place`. The analysis proved no later read of
+        // the binding exists, and nothing else refers into the slot across
+        // the replace. A string some other holder shares is copied once by
+        // `push_str` rather than written.
         let Value::Str(text) = std::mem::replace(unsafe { &mut *slot }, Value::NoneV) else {
             unreachable!("checked to be a string above")
         };
-        let mut joined = text.into_string();
-        joined.push_str(&tail);
-        Ok(Some(Value::Str(Text::from(joined))))
+        Ok(Some(Value::Str(text.push_str(&tail))))
     }
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
