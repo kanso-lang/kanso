@@ -395,6 +395,15 @@ static KValue k_bytes_view(const unsigned char* data, long long len);
    to the top of the range and fails the first, a negative `to` fails the
    second. The signed spelling was three compares folded through `setcc` and
    `or`, 861,498 times a run at the head of the decoder's token path. */
+/* Where a slice may start: from position 1 to one past the end, where the
+   empty range sits. A start before 1 is outside the value, as a start past
+   that empty range is (#1890, and bc's report on #2088). One unsigned compare
+   answers both, because a `from` below 1 wraps to the top of the range. */
+static inline __attribute__((always_inline)) int k_starts_outside(long long from,
+                                                                  long long len) {
+    return (unsigned long long)from - 1 > (unsigned long long)len;
+}
+
 static inline __attribute__((always_inline)) int k_span_in(long long from, long long to,
                                                            long long len) {
     return (unsigned long long)from - 1 < (unsigned long long)to &&
@@ -1505,15 +1514,20 @@ static long long k_ptr(void* p);
 
 typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
 /* at_arena and at_blocks record where the arena stood at this depth's last
-   stage, so a chain step can tell how far its region has drifted since;
+   stage, or at the loop's entry if it has not staged, so a chain step can
+   tell how far its region has drifted since;
    they were one pair of globals shared by every depth until 2026-09-07, and
    an inner chain read the outer chain's last stage as its own.
 
    skipped says a lap went by without staging since the last stage did. The
-   pop reads it: see k_beat_pop_slow. */
+   pop reads it: see k_beat_pop_slow.
+
+   last_copy is what the last stage at this depth copied, kept across loops:
+   k_beat_lap_carry sizes its wait by it. */
 typedef struct {
     KCarryBuf from; KCarryBuf to; int used_flag;
     const char* at_arena; const void* at_blocks; int skipped;
+    size_t last_copy;
 } KCarry;
 KCarry k_carries[K_BEAT_MAX];
 
@@ -1550,6 +1564,11 @@ __attribute__((always_inline)) void k_beat_push(void) {
         k_carries[k_beat_depth].skipped = 0;
         k_carries[k_beat_depth].from.used = 0;
         k_carries[k_beat_depth].to.used = 0;
+        /* A loop's drift is measured from its own entry. The position an
+           earlier loop at this depth left is below a rewind by now, and
+           measured from there every entry staged on its first lap. */
+        k_carries[k_beat_depth].at_arena = k_arena;
+        k_carries[k_beat_depth].at_blocks = (const void*)k_blocks;
         /* In range by the test above, so the new top is the mark just written
            and the general setter's range test would be dead code. */
         k_beat_depth++;
@@ -2162,6 +2181,12 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
     if (K_COUNTING) k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
     if (cp->in_ten) return k_ten_alloc(n);
+    /* The sizing walk counted what this copy may write, and the buffer was
+       grown to that count. A copy that writes more has outrun the walk and
+       would run off the end of the malloc'd buffer, a corruption nothing reads
+       until much later, if at all. Refused here so it is seen where it happens. */
+    if (__builtin_expect(cp->buf->used + n > cp->buf->cap, 0))
+        k_die("a carry copied more than its sizing walk counted");
     void* p = cp->buf->data + cp->buf->used;
     cp->buf->used += n;
     return p;
@@ -3295,6 +3320,7 @@ __attribute__((noinline)) void k_beat_iter_carry(void) {
     k_pend_keep_repaired(k_beat_depth - 1);
     k_beat_rewind(m);
     k_repaired_settle(m);
+    c->last_copy = c->to.used;
     KCarryBuf swap = c->from;
     c->from = c->to;
     c->to = swap;
@@ -3325,9 +3351,8 @@ __attribute__((noinline)) void k_beat_iter_carry(void) {
    what the test already bounds. Asking it made every edge of a cycle that
    sorts a map stage at once: 3,200,304 bytes copied where the lap rule copied
    6,224, and mal ran fifteen times slower. The lap rule's figure is 6,128
-   since constants stopped being copied. A stale position left by an
-   earlier loop at the same depth only makes the first lap stage early, and the
-   cohort and the chain still call `k_beat_iter_carry` directly. */
+   since constants stopped being copied. The cohort and the chain still call
+   `k_beat_iter_carry` directly. */
 /* How far the arena has moved since a stage left it at `at_arena` in the block
    `at_blocks`: the rest of that block, every block opened since, and what the
    newest holds. Counting the newest at its full size made a stage of every
@@ -3352,13 +3377,17 @@ static size_t k_drift_since(const KCarry* kc) {
    twice the copy keeps the copying proportional to the garbage it reclaims,
    which is the rule a copying collector sizes its heap by. A loop whose stages
    copy little waits the quarter megabyte it always did, and only such a loop
-   still stages when the arena opens a block. */
+   still stages when the arena opens a block.
+   The size is the depth's, not the loop's. lox's statement loop re-enters
+   itself from its own lap, so each entry is a fresh loop carrying the same
+   tree, and a size forgotten at entry made each of them stage every quarter
+   megabyte and copy the whole tree. */
 void k_beat_lap_carry(void) {
     long long d = k_beat_depth - 1;
     if (d < 0 || d >= K_BEAT_MAX) { k_beat_iter_carry(); return; }
     KCarry* kc = &k_carries[d];
     size_t wait = (size_t)1 << 18;
-    if (kc->used_flag && 2 * kc->from.used > wait) wait = 2 * kc->from.used;
+    if (2 * kc->last_copy > wait) wait = 2 * kc->last_copy;
     if (kc->at_arena && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)
         && (kc->at_blocks == (const void*)k_blocks
                 ? (size_t)(k_arena - kc->at_arena) < wait

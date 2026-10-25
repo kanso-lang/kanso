@@ -1,0 +1,37 @@
+# A loop whose lap enters the same loop again, carrying a persistent binary
+# trie that each lap writes one leaf into: the lox port's statement loop when
+# a Lox constructor builds a tree (kanso#2089, third item). Natively a loop
+# entered afresh staged its carry on its first lap, measuring the arena's
+# drift from wherever the last loop at its depth had left it, so every entry
+# copied the whole trie: depth 10, 4,094 writes, took 7.0 seconds.
+type node
+  left
+  right
+
+type empty
+
+type world
+  next
+  tree
+
+fn run_from i d w
+  return w if 2 < i
+  run_from (i + 1) d (exec d w)
+
+fn exec 0 w
+  world (w.next + 1) (store w.tree 16 w.next w.next)
+
+fn exec d w
+  run_from 1 (d - 1) (exec 0 w)
+
+fn store empty bits id v
+  return v if bits == 0
+  store (node empty empty) bits id v
+
+fn store (node l r) bits id v
+  return v if bits == 0
+  return node (store l (bits - 1) (id / 2) v) r if id % 2 == 0
+  node l (store r (bits - 1) (id / 2) v)
+
+pub fn total depth
+  (run_from 1 depth (world 0 empty)).next

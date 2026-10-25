@@ -1,0 +1,16 @@
+# A list held in a record and pushed onto under a guard, the loop markdown's
+# port wrote: `return st if i > n` above `loop (state (push st.events i) i)`.
+# kanso#1926 grows such a field in place, but it asked that every mention of
+# the record be a field read, and the guard's `return st` is one that is not,
+# though it runs instead of the push and never beside it. So every lap copied
+# the list (kanso#2089, second item): 64,000 pushes took 8.9 seconds natively.
+type state
+  events
+  line
+
+fn loop st i n
+  return st if i > n
+  loop (state (push st.events i) i) (i + 1) n
+
+pub fn total n
+  length (loop (state [] 0) 1 n).events

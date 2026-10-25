@@ -1102,6 +1102,30 @@ impl FieldTally {
             self.mentions += 1;
             self.refused |= under_lambda;
         }
+        // `return st if done` runs instead of the lines below it, never beside
+        // them. When the early answer does not read the field, it hands the
+        // record back on a path where nothing is moved out of it, so its
+        // mentions do not count against the move below. markdown's loop
+        // pushed through `st.events` under such a guard and copied the list
+        // every lap; the same loop written as two arms grew it in place.
+        if let Expr::Guard { cond, early, rest, .. } = e {
+            self.walk(p, f, cond, under_lambda);
+            let mut fired = FieldTally::default();
+            fired.walk(p, f, early, under_lambda);
+            for st in rest.iter() {
+                self.walk(p, f, stmt_expr(st), under_lambda);
+            }
+            match fired.reads_of_f {
+                0 => self.refused |= fired.refused,
+                _ => {
+                    self.mentions += fired.mentions;
+                    self.field_reads += fired.field_reads;
+                    self.reads_of_f += fired.reads_of_f;
+                    self.refused |= fired.refused;
+                }
+            }
+            return;
+        }
         let inner = under_lambda || matches!(e, Expr::Lambda { .. });
         for c in child_exprs(e) {
             self.walk(p, f, c, inner);
@@ -1349,6 +1373,15 @@ fn read_in_block(var: &str, body: &[Stmt]) -> usize {
         if shadowed || v == var {
             continue;
         }
+        // A plain read of the map is never a thunk (`demand::expensive` keeps
+        // a bind with no call and no comparison strict on every engine), so
+        // the name holds the element before anything below it runs, wherever
+        // the name goes next. toml's `seen = m[key]` handed to `counted`
+        // inside the put copied the map every time.
+        if strict_read(var, expr) && !v.as_str().starts_with(crate::ahead::POOLED) {
+            discounted += reads;
+            continue;
+        }
         let later = &body[i + 1..];
         let total: usize = later.iter().map(|s| mentions(v, stmt_expr(s))).sum();
         let fed =
@@ -1358,6 +1391,24 @@ fn read_in_block(var: &str, body: &[Stmt]) -> usize {
         }
     }
     discounted
+}
+
+/// `var[k]`, with a key that calls nothing and compares nothing: a read the
+/// demand analysis never defers, so it is finished when its binding is.
+fn strict_read(var: &str, e: &Expr) -> bool {
+    fn cheap(e: &Expr) -> bool {
+        match e {
+            Expr::App { .. } | Expr::Lambda { .. } | Expr::Guard { .. } | Expr::Block(..) => false,
+            Expr::BinOp { op, .. } if *op == "==" || *op == "!=" => false,
+            _ => {
+                let mut ok = true;
+                crate::for_each_child(e, |c| ok &= cheap(c));
+                ok
+            }
+        }
+    }
+    matches!(e, Expr::Index { base, index, .. }
+        if matches!(base.as_ref(), Expr::Ident(n, _, _) if n == var) && cheap(index))
 }
 
 /// Every mention of `var` in `e`, on every path.

@@ -2,8 +2,8 @@ middle: abc234
 one: abc0
 all: abc0123456789
 inverted: abc
-below one: abc
+below one: none
 past end: none
-both zero: abc
+both zero: none
 multibyte: abcé
 twice: abc345345
