@@ -727,6 +727,8 @@ pub struct Interp<'a> {
     /// The joins of `linear::string_builders`, built the first time a template
     /// opens with a name. Lazy for the reason `in_place` is.
     joins: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
+    /// The one whole-program analysis `in_place` and `joins` are read from.
+    linearity: crate::linear::ForTheInterpreter<'a>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
@@ -851,6 +853,7 @@ impl<'a> Interp<'a> {
             in_place: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
             joins: std::cell::OnceCell::new(),
+            linearity: crate::linear::ForTheInterpreter::new(program),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
             fixed: RefCell::new(Vec::new()),
@@ -1875,8 +1878,8 @@ impl<'a> Interp<'a> {
         frame: &Frame,
     ) -> EvalResult {
         if let [TemplatePart::Interp(Expr::Ident(name, _, _)), rest @ ..] = parts {
-            if !rest.is_empty() && self.joins_here(span, frame) {
-                if let Some(joined) = self.join_onto(name, rest, env, frame)? {
+            if !rest.is_empty() {
+                if let Some(joined) = self.join_onto(name, rest, span, env, frame)? {
                     return Ok(joined);
                 }
             }
@@ -1921,18 +1924,22 @@ impl<'a> Interp<'a> {
     /// pushed onto it. Reading `s` would copy it, and a loop that grows a
     /// string this way copied the whole string on every lap, 77 million
     /// instructions for 3,000 pieces. Native and the tab join in place at the
-    /// same sites. `None` is a binding that holds something other than a
-    /// string, which takes the ordinary path.
+    /// same sites. `None` takes the ordinary path: a binding that holds
+    /// something other than a string, or a string short enough that copying
+    /// it costs less than asking. The analysis is only built once a long
+    /// string reaches a join.
     fn join_onto(
         &self,
         name: &Name,
         rest: &[TemplatePart],
+        span: Span,
         env: &Option<Rc<Env>>,
         frame: &Frame,
     ) -> Result<Option<Value>, RuntimeError> {
         let Some(slot) = slot_of(env, name) else { return Ok(None) };
         // SAFETY: the slot lives as long as `env`, which this call holds.
-        if !matches!(unsafe { &*slot }, Value::Str(_)) {
+        let long = matches!(unsafe { &*slot }, Value::Str(t) if t.len() > TEXT_INLINE);
+        if !long || !self.joins_here(span, frame) {
             return Ok(None);
         }
         // The rest first: a later piece may read `s` as well, `"{s}{s}"`, and
@@ -2880,7 +2887,7 @@ impl<'a> Interp<'a> {
     fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.in_place.get_or_init(|| {
-            let all = self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program));
+            let all = self.in_place.get_or_init(|| self.linearity.in_place_pushes());
             all.iter()
                 .filter(|(file, _, _)| **file == *site.file)
                 .map(|(_, l, c)| (*l, *c))
@@ -2901,7 +2908,7 @@ impl<'a> Interp<'a> {
     fn joins_here(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.joins.get_or_init(|| {
-            let all = self.joins.get_or_init(|| crate::linear::string_builders(self.program).0);
+            let all = self.joins.get_or_init(|| self.linearity.string_joins());
             all.iter()
                 .filter(|(file, _, _)| **file == *site.file)
                 .map(|(_, l, c)| (*l, *c))

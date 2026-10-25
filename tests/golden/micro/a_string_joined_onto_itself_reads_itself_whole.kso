@@ -1,6 +1,7 @@
 # A template that joins onto a string may read that string again in a later
 # piece. Every engine joins in place at these sites, so a later piece must
-# read the string before the join takes it.
+# read the string before the join takes it. The seeds are longer than the
+# interpreter holds inline, which is where it starts joining in place.
 fn doubled s 0
   s
 
@@ -19,6 +20,6 @@ fn grown s 0
 fn grown s i
   grown "{s}{i}," (i - 1)
 
-print (doubled "ab" 3)
-  .> (_ -> print (tagged "" 4))
-  .> (_ -> print (grown "" 5))
+print (doubled "abcdefghijklmnop" 2)
+  .> (_ -> print (tagged "abcdefghijklmnop" 3))
+  .> (_ -> print (grown "abcdefghijklmnop" 3))
