@@ -490,7 +490,7 @@ in one.
 ### Design flow
 
 - Dialog before changes while Clay is designing. A decision that waits on him
-  is an open `needs-clay` issue and appears nowhere else, a pull request body
-  included. The ruling goes in the log and the issue is relabelled or closed in
-  the same change; implementation starts after the gavel is recorded.
+  goes where The tracker says. The ruling goes in the log and the issue is
+  relabelled or closed in the same change; implementation starts after the
+  gavel is recorded.
 - Docs present the settled design; chronology lives only in the log.
