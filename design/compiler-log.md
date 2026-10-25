@@ -1518,17 +1518,19 @@ interpreter move a little: compile_instructions 24,664,014 -> 24,664,426,
 entry_instructions 72,772,292 -> 72,794,039, library_instructions 72,435,518
 -> 72,459,948, browser_compile_instructions 218,703,716 -> 218,730,086,
 interp_instructions 385,420,176 -> 385,422,816 and browser_run_instructions
-33,345,113 -> 33,347,753. Programs that slice emit the extra comparison too:
+33,345,263 -> 33,347,903. Programs that slice emit the extra comparison too:
 the run program's emitted_other_branches 17,310 -> 17,312 and
 emitted_other_lines 163,950 -> 163,955. Natively every binary's machine code
-is 64 bytes smaller, text 5,521,457 -> 5,520,561 over the fourteen, and
-building it costs codegen_instructions_dev 116,452,050 and
-codegen_instructions_release 370,225,965. The run rows move by under 0.02%
-each: work_runbench 797,618,426 -> 797,617,465, work_encodebench 2,327,444,715
--> 2,327,403,622, work_oneshot 10,050,789 -> 10,050,635 and work_widebench
-28,445,045 -> 28,413,045. No allocation counter moves. Welfare falls by less
-than a hundredth, and the floor follows: this builds the 2026-10-13 ruling on
-#1890 at the start of the range, which #2088 asked for.
+is 64 bytes smaller, text 5,523,025 -> 5,522,129 over the fourteen, and
+building it costs codegen_instructions_dev 116,456,350 -> 116,455,729 and
+codegen_instructions_release 370,087,521 -> 370,086,817. The run rows move by
+under 0.02% each: work_runbench 797,623,329 -> 797,622,606, work_encodebench
+2,327,445,961 -> 2,327,403,174, work_widebench 28,445,165 -> 28,413,165,
+work_livebench 936,030,663 -> 936,030,838, work_oneshot 10,050,755 ->
+10,050,461 and work_digestbench 4,122,953 -> 4,122,823. No allocation counter
+moves. Welfare falls by less than a hundredth, and the floor follows: this
+builds the 2026-10-13 ruling on #1890 at the start of the range, which #2088
+asked for.
 The interpreter reads a start no machine word holds as 0, as before, and 0 is
 now outside. `past?`, which the compiler asks before reading a range that
 `slice!` hands straight to a door, adds `from < 1`. std's own `slice_in`
