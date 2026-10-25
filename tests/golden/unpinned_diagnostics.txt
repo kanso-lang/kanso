@@ -455,3 +455,12 @@ append_string takes bytes and a string
 entry_count takes a map
 key_at takes a map and a position
 value_at takes a map and a position
+
+# A bound check in `k_copy_alloc`. A carry's buffer is sized by `k_copy_size`
+# walking the value first, then filled by the copy, which follows the same
+# edges. The copy can outrun the walk only when the two disagree about what a
+# value reaches, and that is a bug in the runtime, not in a program. The
+# ratchet reaches it: thunk_capture_shared removes the walk's thunk arm, and
+# mem/work_ahead_pools_a_call_on_a_builtin_read then dies here. No program
+# reaches it on an unmutated runtime.
+a carry copied more than its sizing walk counted

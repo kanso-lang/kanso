@@ -1319,6 +1319,23 @@ walk, "a carry copied more than its sizing walk counted", and under the
 mutation `mem/work_ahead_pools_a_call_on_a_builtin_read`, whose pooled cell
 carries its captured list through a stage, dies with that message. The row's
 gate is the mem corpus now, and the mutation's comment names the new witness.
+No program reaches the refusal on an unmutated runtime, so
+tests/golden/unpinned_diagnostics.txt lists it with that reason.
+
+The bound check is one compare and a cold call per carry allocation, and CI
+reads it on that head. Every benchmark's machine code grows 112 bytes, text
+5,521,457 -> 5,523,025 over the fourteen. work_runbench 797,618,426 ->
+797,623,329, work_deepbench 197,973,136 -> 197,978,249, work_encodebench
+2,327,444,715 -> 2,327,445,961, work_pendbench 155,737,782 -> 155,739,092,
+work_livebench 936,030,277 -> 936,030,663, work_widebench 28,445,045 ->
+28,445,165, work_digestbench 4,122,908 -> 4,122,953, work_indexbench
+1,837,223 -> 1,837,250, work_scanbench 274,291 -> 274,312, work_jsonbench
+557,386,421 -> 557,386,433, work_readbench 4,581,986 -> 4,581,998,
+work_escapebench 40,308,398 -> 40,308,401, work_basket 31,039,074 ->
+31,039,077 and work_oneshot 10,050,789 -> 10,050,755. The codegen rows
+move with the runtime's text: codegen_instructions_dev 116,452,600 ->
+116,456,350 and codegen_instructions_release 370,226,904 -> 370,087,521. No
+allocation counter, mem golden or browser row moves.
 
 CI's rows for the four fixes together (#2106), against the run program that
 already holds their shapes (#2104). work_runbench 988,172,222 -> 797,618,426,
