@@ -26,4 +26,4 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
-codegen_instructions_dev=116458530
+codegen_instructions_dev=116477304

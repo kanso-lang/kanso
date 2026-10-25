@@ -1690,3 +1690,30 @@ the instruction count overstates the time by more than the wall clock
 does. A view that marked deleted slots and skipped them would make each
 delete a search, but every reader of the view would have to skip the marks.
 That is #2118.
+
+CI's rows, against #2117's corpus: the run program 894,533,250 -> 809,823,849
+(-9.5%), the interpreted corpus 471,505,162 -> 430,978,258 (-8.6%), and the
+tab's run 456,882,925 -> 42,417,870, which puts it near where it stood
+before #2117 added the two phases. Against main, which holds neither the
+phases nor the fix: work_runbench 801,847,883 -> 809,823,849,
+interp_instructions 424,511,367 -> 430,978,258, interp_peak_bytes 741,380 ->
+765,587, interp_allocs 457,070 -> 461,292, browser_run_instructions
+41,265,571 -> 42,417,870, browser_run_peak_bytes 1,376,256 -> 1,310,720 and
+browser_compile_instructions 263,967,351 -> 273,807,879, each the two phases
+less what the fix takes back. The run program's allocation vein against
+main: run_allocs 1,446,913 -> 1,446,946, run_alloc_bytes 215,551,096 ->
+215,868,632, run_sh_buf 86,829,600 -> 86,960,912, run_put_mut_grow 32 -> 48,
+run_beat_iters 111,493 -> 112,473, run_bytes_malloc 7,893 -> 7,901,
+run_perm_live_bytes 15,825 -> 32,049 and run_perm_peak_bytes 736,769 ->
+802,321. Both restarts, the delete's and the put's, take their pairs from
+outside the arena when the map outlives the loop it changes in, and which of
+the two phases accounts for the perm rows is not isolated here. The runtime's machine code
+grows by `k_b_delete_mut` and the searching persistent delete, 2,848 bytes in
+every benchmark binary: text 5,604,529 -> 5,646,113, emitted_other_lines
+165,000 -> 165,914 with the phases' own code, and work_oneshot 10,033,444 ->
+10,034,004 from the layout that moves with it. The front end's condition
+discount and the new builtin cost entry_instructions 72,875,969 ->
+72,875,974, emit_instructions 5,628,759 -> 5,636,850 and
+codegen_instructions_dev 116,458,530 -> 116,477,304, where
+codegen_instructions_release falls 370,260,066 -> 370,206,363. Welfare rises
+94.49 -> 94.83 and the rise is banked.
