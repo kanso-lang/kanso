@@ -1733,7 +1733,7 @@ native moved. Welfare fell by less than a hundredth, and the floor follows
 under the language exception: the ruling asks for index reads to be proven,
 and this proves more of them.
 
-## 2026-10-25 — the run program reads a name handed to a call before a put
+## 2026-10-25 — the run program reads a name handed to a call, and a guarded record's list
 
 #2089's first item, entered in the corpus before its fix under the
 2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
@@ -1746,6 +1746,20 @@ against 0.012 with the read written inline.
 
 The run program gains a `handed` phase: 380 updates over 100 keys through
 such a name. Built alone on main it costs 41,508,775 instructions above the
-empty program, 5.00% of the whole program's 830,558,275 on this container,
-where main reads 788,981,054. The phase prints the same total on both
-engines. The fix follows in its own pull request and will score as a rise.
+empty program. The phase prints the same total on both engines.
+
+#2089's second item joins it. markdown's port pushed onto a list held in a
+record under a guard, `return st if i > n` above `loop (state (push
+st.events i) i) (i + 1) n`, and natively 64,000 pushes took 8.9 seconds.
+kanso#1926 moves such a list out of its record only when every mention of the
+record is a field read, and the guard's `return st` is a mention that is not,
+though it runs instead of the push. The same loop written as two arms grows
+the list in place. The `guarded` phase pushes 3,050 times. Its cost is a
+cliff whose knee depends on what the arena already holds: built alone the
+knee is at 4,096 elements and the phase costs 746,860 instructions, while
+inside the run program the knee falls between 2,000 and 3,000 and the phase
+costs 43,734,573, the whole program with it less the whole without.
+
+On this container the whole program reads 874,292,848, where main reads
+788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
+in their own pull requests and will score as rises.

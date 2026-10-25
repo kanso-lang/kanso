@@ -127,22 +127,35 @@
 # slice and the box between the two steps. It adds 25 bytes to the peak, the
 # line it reads.
 #
-# A tenth joined on 2026-10-25, from #2089's first item, measured on main at
-# kanso#2092 before its fix: built alone, less the empty program's 329,467,
-# and shared of the whole program on that compiler, 830,558,275.
+# Two more joined on 2026-10-25, from #2089's first two items, measured on
+# main at kanso#2092 before their fixes and shared of the whole program on
+# that compiler, 874,292,848.
 #
-#   handed   380 updates through a read handed to a call  41,508,775  5.00%
+#   handed   380 updates through a read handed to a call  41,508,775  4.75%
+#   guarded  3,050 pushes onto a record's list, guarded   43,734,573  5.00%
+#
+# `handed`'s column is built alone, less the empty program's 329,467.
+# `guarded`'s is not, and cannot be: its cost is a cliff whose knee depends
+# on what the arena already holds. Built alone, 3,050 pushes sit below the
+# knee and cost 746,860; the knee there is at 4,096 elements. Inside this
+# program the knee falls between 2,000 and 3,000, so its column is the whole
+# program with it less the whole program without it.
 #
 # `handed` is `bump` with the name passed to a function inside the put,
 # `seen = m[i]` then `put m i (counted seen)`, which toml, datalog, diff, bc
 # and inflate all wrote. kanso#1822 discounts the name only when it reaches
 # the write through arithmetic, so every put here copies the map, and the
 # phase is superlinear in its count like `bump` was.
+# `guarded` is `bag` written the way markdown's port wrote it, under a
+# `return st if i > n` guard. kanso#1926 moves the list out of the record
+# only when every mention of the record is a field read, and the guard's
+# early answer is a mention that is not, so every lap copies the list.
 import "./bag"
 import "./bump"
 import "./deep"
 import "./escape"
 import "./fold"
+import "./guarded"
 import "./handed"
 import "./index"
 import "./insist"
@@ -192,6 +205,8 @@ bag_items = 4300
 
 handed_steps = 380
 
+guarded_pushes = 3050
+
 insist_laps = 5000
 
 fn decoded _ 0 sofar
@@ -233,8 +248,9 @@ fn tally raw doc a b
   ported3 = ported2 + restate/total restate_passes
   ported4 = rewind/total rewind_laps + stack/total stack_laps
   ported5 = ported3 + ported4 + bag/total bag_items + handed/total handed_steps
+  ported6 = ported5 + guarded/total guarded_pushes
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported5 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported6 + rest))
   bulk .> on
 
 fn shaped raw doc a
