@@ -1717,3 +1717,8 @@ discount and the new builtin cost entry_instructions 72,875,969 ->
 codegen_instructions_dev 116,458,530 -> 116,477,304, where
 codegen_instructions_release falls 370,260,066 -> 370,206,363. Welfare rises
 94.49 -> 94.83 and the rise is banked.
+
+The interpreter's in-place delete takes a value on the holder count as push
+and put do, so the ratchet's row "a shared seed copied every lap" now finds
+five such sites in `src/eval/builtins.rs` where it found four, and disables
+the delete's with the others. Its spec still turns red under it.
