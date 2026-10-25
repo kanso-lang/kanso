@@ -13,7 +13,7 @@
 # some layout pairs it answered a byte from the middle of a codepoint. The
 # store below is the whole fix; deleting it restores the defect.
 #
-# Under the mutation the beat sweep reports 16 of its 96 layout pairs
+# Under the mutation the beat sweep reports 20 of its 96 layout pairs
 # disagreeing. It is caught by the micro corpus too — one golden pins one
 # shape — which is what a mutation should be: proof this gate runs and
 # reddens, not a claim that only it can see the defect.
@@ -25,6 +25,12 @@
 # than quietly deleting half of it. Both have to go: leaving either standing
 # means the path that runs still resets the cursor and the defect never
 # appears.
+#
+# Each store becomes an empty statement rather than a deleted line. The fast
+# path's store is the body of an unbraced `if`, and deleting it made the
+# arena's own rewind conditional: the sweep then died on "a beat mark and the
+# arena disagree", which is red for a reason that has nothing to do with the
+# cursor.
 set -e
 before=$(grep -cE '^ +k_seek_str = NULL;$' src/runtime/core.c)
 if [ "$before" -lt 2 ]; then
@@ -32,7 +38,7 @@ if [ "$before" -lt 2 ]; then
   echo "the reset moved again and this mutation needs rewriting" >&2
   exit 1
 fi
-sed -i '/^ *k_seek_str = NULL;$/d' src/runtime/core.c
+sed -i 's/^\( *\)k_seek_str = NULL;$/\1(void)0;/' src/runtime/core.c
 if grep -qE '^ +k_seek_str = NULL;$' src/runtime/core.c; then
   echo "a cursor reset is still there; the mutation did nothing" >&2
   exit 1
