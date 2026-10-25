@@ -18,7 +18,7 @@ fn empty? row
 
 fn parsed row
   fields = text/split row " "
-  return err "a lock row is name sha tag, and a protocol" if length fields < 3
+  return err "a lock row is name tag sha, and a protocol" if length fields < 3
   pin fields[1] (protocol_of fields) fields[3] fields[2]
 
 fn protocol_of fields

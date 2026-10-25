@@ -293,7 +293,7 @@ cannot pin a rewindable region.
 So the baseline is **beats + static reuse**. Both sides of the ledger are
 weighed now: `evac_allocs` and `evac_bytes` count what a value outliving its
 beat costs to move, and the answer is that decode pays 11 allocations out of
-7.6 million while the one-shot shelf pays half of everything it allocates. See
+7.6 million and one-shot pays 3, as the 2026-08-24 recheck above found. See
 "What the evacuation counter changed" above.
 
 ## 1. Is beats the frontier?

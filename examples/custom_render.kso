@@ -1,7 +1,6 @@
 type money
   cents
 
-
 fn to_string (money cents)
   "${cents / 100}.{cents - cents / 100 * 100}"
 
