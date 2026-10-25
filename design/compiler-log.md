@@ -1860,5 +1860,24 @@ copied for every number. The lists are not copied: on its own the shape
 stays linear as they grow, at about 8,300 instructions a number. It keeps
 2,000 numbers; the run program reads 847,407,464 with both phases, a column
 of 18,693,839 (2.21%), and the interpreted corpus keeps 1,500. With both, the
-interpreted corpus reads 515,277,561 → 567,834,663 on this container. CI's
-rows and the re-based welfare baselines follow in this pull request.
+interpreted corpus reads 515,277,561 → 567,834,663 on this container.
+
+CI's rows, against #2126. The run program reads work_runbench 814,679,425 →
+847,302,475, run_allocs 1,447,392 → 1,585,686, run_alloc_bytes 216,354,904 →
+224,179,080, run_push_mut_slow 1,580,216 → 1,644,216, run_beat_iters 113,323
+→ 177,323, run_sh_buf 87,169,488 → 89,503,776, run_sh_map 12,160 → 76,160,
+run_sh_rec 3,905,056 → 4,034,336, run_bytes_malloc 7,910 → 7,919 and
+run_bytes_freed 7,768 → 7,777. Its memory rows read run_arena_blocks 4 → 5,
+run_arena_peak_bytes 4,718,608 → 5,767,184, run_held_peak_bytes 248,688 →
+1,863,712, run_perm_peak_bytes 810,225 → 1,858,817 and run_spare_peak_bytes
+2,621,456 → 3,670,032. The interpreter
+reads interp_instructions 473,127,289 → 525,831,073, interp_allocs 507,913 →
+585,540 and interp_peak_bytes 1,263,998 → 1,281,294. The tab reads
+browser_run_instructions 47,716,164 → 107,399,948, browser_run_peak_bytes
+1,376,256 → 3,866,624, browser_compile_instructions 324,458,065 →
+334,007,116 and browser_compile_peak_bytes 728,260 → 743,930. The two
+modules add machine code and emitted lines: text 5,649,809 → 5,652,977,
+emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
+17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
+2,222. Each welfare term these move is re-based to keep its ratio to its
+baseline, so the score stays 95.15.
