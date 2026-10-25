@@ -1769,7 +1769,7 @@ emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
 2,214. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.01.
 
-## 2026-10-25 — a list built by concat joins the corpus
+## 2026-10-25 — a list built by concat, and a map of records, join the corpus
 
 A list built one number at a time with `list/concat acc [i]` costs about ten
 times what `push` costs natively. The concat is made in place, but each lap's
@@ -1786,4 +1786,14 @@ the run program it grows linearly at about 224 instructions a number. On
 this container the run program reads 866,203,703 with it and 851,886,947
 without it, a column of 14,316,756 (1.65%). The interpreted corpus keeps
 6,000 numbers, 520,130,058 → 543,327,698, and the tab runs the same corpus.
-CI's rows and the re-based welfare baselines follow in this pull request.
+
+`bucketed` joins beside it: numbers filed into a map of records, each a count
+and a list, `b = or_bucket m[k]` then `put m k (bucket (b.hits + 1) (push
+b.items i))`. Both puts are the persistent `k_b_put`. The record reaches the
+put only through its fields, and the read discount accepts a name that
+reaches the write through arithmetic or a nested write into it, so the map is
+copied for every number. The lists are not copied: on its own the shape
+stays linear as they grow, at about 8,300 instructions a number. It keeps 2,000 numbers; the run program reads
+885,012,611 with both phases, a column of 18,808,908 (2.13%), and the
+interpreted corpus keeps 1,500, 543,327,698 → 572,349,665. CI's rows and the
+re-based welfare baselines follow in this pull request.

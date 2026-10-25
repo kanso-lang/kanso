@@ -255,10 +255,21 @@
 # carries, and natively each stage copied the accumulator. Here it costs about
 # 224 instructions a number, where `push` costs about 20; on its own, at
 # 128,000 numbers, it took 156 million instructions.
+#
+# Another joined beside it, measured on the same main. Its column is the
+# whole program with both, 885,012,611, less the whole with `appended`
+# alone, 866,203,703, and its share is of the former.
+#
+#   bucketed  2,000 numbers filed into a map of records   18,808,908  2.13%
+#
+# `bucketed` keeps a record per key, a count and a list. The record is read
+# out of the map and reaches the put only through its fields, so natively
+# every number copied the map.
 import "./admitted"
 import "./appended"
 import "./bag"
 import "./branched"
+import "./bucketed"
 import "./bump"
 import "./counted"
 import "./deduped"
@@ -344,6 +355,8 @@ nested_counts = 1700
 
 appended_numbers = 64000
 
+bucketed_numbers = 2000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -394,8 +407,9 @@ fn tally raw doc a b
   ported14 = ported13 + deduped/total deduped_words
   ported15 = ported14 + nested/total nested_counts
   ported16 = ported15 + appended/total appended_numbers
+  ported17 = ported16 + bucketed/total bucketed_numbers
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported16 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported17 + rest))
   bulk .> on
 
 fn shaped raw doc a
