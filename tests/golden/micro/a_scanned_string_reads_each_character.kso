@@ -18,9 +18,12 @@ fn edges s
   "{n} {text/slice s n n} {text/slice s 2 4} [{text/slice s (n + 1) n}]"
 
 plain = "the quick brown fox jumps over the lazy dog"
+
 wide = "thé quick brown fox jumps över the lazy dög"
+
 other = "ñandú, ñandú, ñandú and ñandú"
-print (picked plain 1 (length plain) "")
+
+pub play = print (picked plain 1 (length plain) "")
   .> (_ -> print (picked wide 1 (length wide) ""))
   .> (_ -> print (edges plain))
   .> (_ -> print (edges wide))

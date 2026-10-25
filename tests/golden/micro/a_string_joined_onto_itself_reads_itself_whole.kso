@@ -20,6 +20,6 @@ fn grown s 0
 fn grown s i
   grown "{s}{i}," (i - 1)
 
-print (doubled "abcdefghijklmnop" 2)
+pub play = print (doubled "abcdefghijklmnop" 2)
   .> (_ -> print (tagged "abcdefghijklmnop" 3))
   .> (_ -> print (grown "abcdefghijklmnop" 3))

@@ -2897,13 +2897,6 @@ impl<'a> Interp<'a> {
         sites.contains(&(span.line as usize, span.col as usize))
     }
 
-    /// Whether a write whose value has exactly one other holder may take it.
-    ///
-    /// Asked only where `writes_in_place` said no and the count says the
-    /// argument and one binding hold the value. `linear::moved_writes` proves
-    /// that binding is the name this write moves, which nothing reads again,
-    /// so the count is the rest of the proof `in_place_pushes` could not make
-    /// from the callers.
     /// The byte where character `n` (counted from 0) of `text` starts, or the
     /// string's length when `n` is its count, walking on from `text_cursor`
     /// when it holds the same string at or before `n`. `None` is past the end.
@@ -2921,6 +2914,7 @@ impl<'a> Interp<'a> {
         Some(b)
     }
 
+    /// The sets `linear::for_the_interpreter` answers, built on first use.
     fn linearity(&self) -> &(Sites, Sites) {
         self.linearity.get_or_init(|| crate::linear::for_the_interpreter(self.program))
     }
@@ -2939,6 +2933,13 @@ impl<'a> Interp<'a> {
         sites.contains(&(span.line as usize, span.col as usize))
     }
 
+    /// Whether a write whose value has exactly one other holder may take it.
+    ///
+    /// Asked only where `writes_in_place` said no and the count says the
+    /// argument and one binding hold the value. `linear::moved_writes` proves
+    /// that binding is the name this write moves, which nothing reads again,
+    /// so the count is the rest of the proof `in_place_pushes` could not make
+    /// from the callers.
     fn moved_here(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.moved.get_or_init(|| {
