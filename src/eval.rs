@@ -3407,6 +3407,14 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
                 None => Value::NoneV,
             })
         }
+        // An ASCII string answers by byte; one with a wider character walks.
+        (Value::Str(text), Value::Int(i)) if text.is_ascii() => {
+            let idx = usize::try_from(i).ok().and_then(|i| i.checked_sub(1));
+            Ok(match idx.filter(|i| *i < text.len()) {
+                Some(i) => Value::Str(Text::from(&text[i..i + 1])),
+                None => Value::NoneV,
+            })
+        }
         (Value::Str(text), Value::Int(i)) => {
             let idx = usize::try_from(i).ok();
             Ok(match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
