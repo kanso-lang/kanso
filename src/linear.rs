@@ -640,41 +640,39 @@ impl<'a> Analysis<'a> {
     /// One round of the map parameters' greatest fixpoint: drop each whose
     /// callers or arms no longer prove it. True when something was dropped.
     fn drop_elems(&mut self) -> bool {
-        let drop: Vec<_> = self
-            .elems_params
-            .iter()
-            .filter(|(name, arity, j)| {
-                !self.group(name, *arity).all(|d| match &d.params[*j] {
-                    Pattern::Var(p, _) => d.body.iter().enumerate().all(|(n, stmt)| {
-                        let tail = n + 1 == d.body.len();
-                        match stmt {
-                            Stmt::Bind { expr, .. } => self.elems_stay(p, expr, d, Kept::Held),
-                            Stmt::Expr(e) if tail => self.elems_stay(p, e, d, Kept::Answer),
-                            Stmt::Expr(e) => self.elems_stay(p, e, d, Kept::Held),
-                        }
-                    }),
-                    _ => true,
-                }) || !self.elems_handed_over(name, *arity, *j)
-            })
-            .cloned()
-            .collect();
-        for k in &drop {
-            self.elems_params.remove(k);
+        // Each entry goes as soon as its check fails, as in `field_fixpoint`.
+        let mut changed = false;
+        let params: Vec<_> = self.elems_params.iter().cloned().collect();
+        for k in params {
+            let (name, arity, j) = &k;
+            let stays = self.group(name, *arity).all(|d| match &d.params[*j] {
+                Pattern::Var(p, _) => d.body.iter().enumerate().all(|(n, stmt)| {
+                    let tail = n + 1 == d.body.len();
+                    match stmt {
+                        Stmt::Bind { expr, .. } => self.elems_stay(p, expr, d, Kept::Held),
+                        Stmt::Expr(e) if tail => self.elems_stay(p, e, d, Kept::Answer),
+                        Stmt::Expr(e) => self.elems_stay(p, e, d, Kept::Held),
+                    }
+                }),
+                _ => true,
+            }) && self.elems_handed_over(name, *arity, *j);
+            if !stays {
+                self.elems_params.remove(&k);
+                changed = true;
+            }
         }
-        let drop_returns: Vec<_> = self
-            .returns_elems
-            .iter()
-            .filter(|(name, arity)| {
-                !self
-                    .group(name, *arity)
-                    .all(|d| matches!(d.body.last(), Some(Stmt::Expr(e)) if self.elems_alone(e, d)))
-            })
-            .cloned()
-            .collect();
-        for k in &drop_returns {
-            self.returns_elems.remove(k);
+        let returns: Vec<_> = self.returns_elems.iter().cloned().collect();
+        for k in returns {
+            let (name, arity) = &k;
+            let alone = self
+                .group(name, *arity)
+                .all(|d| matches!(d.body.last(), Some(Stmt::Expr(e)) if self.elems_alone(e, d)));
+            if !alone {
+                self.returns_elems.remove(&k);
+                changed = true;
+            }
         }
-        !drop.is_empty() || !drop_returns.is_empty()
+        changed
     }
 
     /// Every call to the group hands in, at `j`, a map whose values only the
