@@ -1791,3 +1791,56 @@ pins its stderr. On main it prints the run-time error above.
 CI's rows: library_instructions 72,011,050 -> 72,011,043, which is the
 binary's layout. A library compile takes the path it took before, and the
 test verb has no row.
+
+## 2026-10-24 — a module's own function beats an imported constant of its name
+
+#2090's first item, from the kv port. A module that imports std/io and
+declares `fn read_line acc x`, then hands `read_line` to `list/fold`, stopped
+on every engine with "`<io>` is not callable". #2084 fixed the play-file form
+of this in the interpreter's `resolve`. A module takes another path.
+
+`qualify` gives a name the module declares and an import also enrols a
+spelling of its own, the shared bare space (`m/~read_line`), where the
+module's own arms join the import's twin as synthetic clones. #2084's test
+for an arm the author wrote finds only clones there, so it never fires, and
+std/io's `read_line` is a constant, which answers any mention of the name
+read as a value. A constant has no arity a call could dispatch on, so it
+cannot share a name with a function by overloading. `qualify` now drops an
+import's constant twin wherever the module declares the name, and the name
+takes its plain qualified spelling. A module that declares no `read_line`
+still reads std/io's bare.
+
+`micro/a_modules_function_named_like_an_imported_constant` prints `6` on
+every engine, and main stops it with "`<io>` is not callable".
+
+CI's rows. `qualify` asks each dependency which names its module declares,
+and the tab compiles with the same front end: compile_instructions
+24,230,258 -> 24,304,388, entry_instructions 71,606,414 -> 71,823,177,
+library_instructions 71,254,677 -> 71,474,194, emit_instructions 5,606,408
+-> 5,607,046, compile_allocs 13,789 -> 13,810, interp_allocs 401,539 ->
+401,562 and browser_compile_instructions 216,735,256 -> 216,952,734. The
+first cut cloned every declared name into a set, 305 allocations; the set
+now borrows them. Nothing native moved. Welfare fell by less than a
+hundredth, and the floor follows: the 2026-10-12 ruling says the author's
+own name wins.
+
+## 2026-10-25 — a module's own type beats an imported function of its name
+
+From #2090, mal's port. A module declared `type tally` beside
+`import "std/list"`, which exports a one-argument `list/tally`. Every
+construction `tally a b` was refused with "no 2-argument arm of `tally`
+(arms take 1)": the import's function, enrolled under its bare name, took
+the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
+shape. diff's `drop` is a record in std/list too, and main built std/list's
+record for `drop 3 4`, whose field `d.a` the run then could not read.
+
+`own_types_beat_twins` already let a module's own type beat an import's type
+of the same name. It now does the same for an import's function: a
+synthetic bare function named like a type the module declares is dropped,
+at any arity. A module cannot declare a function and a type of one name, so
+such a function can only be an import's twin. The import's function stays
+reachable as `list/tally`.
+
+`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
+`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
+refuses it.
