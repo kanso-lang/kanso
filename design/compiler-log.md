@@ -1752,3 +1752,31 @@ native tiers; 15 of them write in place. Making every bare arm count as
 unique leaves all of these green, because a field moves only when every
 other mention of the record is a field read, so the arm's discount alone
 cannot reach a record something else holds.
+
+CI's rows, against #2120's corpus: the run program 855,535,787 ->
+810,657,719 (-5.2%), the interpreted corpus 469,727,924 -> 455,385,272
+(-3.1%), and the tab's run 280,790,947 -> 44,919,990, with
+browser_run_peak_bytes 2,097,152 -> 1,310,720. Against main, which holds
+neither the phase nor the fix: work_runbench 809,823,849 -> 810,657,719,
+run_peak_bytes 5,737,009 -> 5,744,913, interp_instructions 430,978,258 ->
+455,385,272, interp_peak_bytes 765,587 -> 1,222,789, interp_allocs 461,292
+-> 490,981, browser_run_instructions 42,417,870 -> 44,919,990,
+browser_compile_instructions 273,807,879 -> 308,823,716 and
+browser_compile_peak_bytes 715,283 -> 722,756, each the phase less what the
+fix takes back. The interpreter's peak stays where the phase put it, and
+moves 1,203,737 -> 1,222,789 against #2120; nothing here isolates why. The
+run
+program's allocation vein against main: run_alloc_bytes 215,868,632 ->
+215,955,960, run_put_mut_grow 48 -> 55, run_push_mut_slow 1,579,791 ->
+1,580,216, run_sh_buf 86,960,912 -> 86,961,200, run_bytes_malloc 7,901 ->
+7,910, run_perm_live_bytes 32,049 -> 48,273 and run_perm_peak_bytes 802,321
+-> 810,225. The phase's code is in the corpus entry above: text 5,646,113 ->
+5,647,825 and emitted_other_lines 165,914 -> 166,508 with it.
+
+The analysis costs the front end more. `records_handed` is now settled over
+rounds rather than in one pass, and every bare arm counts the other arm:
+compile_instructions 24,695,561 -> 24,731,131 (+0.14%), entry_instructions
+72,875,974 -> 72,970,344, library_instructions 72,547,701 -> 72,642,115 and
+emit_instructions 5,636,850 -> 5,641,862, and the tab's compile
+browser_compile_instructions 303,782,324 -> 308,823,716 against #2120.
+Welfare rises 94.83 -> 95.01 and the rise is banked.
