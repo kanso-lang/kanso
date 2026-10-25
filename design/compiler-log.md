@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-24 — the tab leaves its tail calls as written
-
-`Written::finish_pieces`, which hands the tab its module, ran the same
-tail-call narrowing as `finish`, which writes a native one. The narrowing
-keeps `tailcc` only on the functions a `musttail` reaches and sends a call to
-a function that spills its arguments through a trampoline. Both work around
-an arm64 miscompile. The tab's translator skips `tailcc` and `ccc` as words,
-so the pass searched the module for nothing it lowers. `finish_pieces` now
-stops before it, and `finish` narrows what `assembled` gives it.
-
-On `bench/interp_corpus`, in this container at the golden's rustc, the tab's
-compile fell from 235,063,784 to 227,562,045 instructions (-3.2%). Its peak
-and the run did not move, since the corpus's module holds no trampoline.
-Native IR is unchanged. The ratchet row `the_tab_narrowing_its_tail_calls`
-narrows the tab's pieces again. On CI, emit_instructions read 5,864,154
-against the 5,863,976 the assume change left it, a move of 178; the dev
-build that row counts still narrows its module, and writes the same text.
-CI's browser rows matched this container's.
-
 ## 2026-10-24 — a short float written in one pass
 
 `render_ryu`'s short path wrote a float from its scaled decimal m and place
@@ -1585,3 +1566,51 @@ run_push_mut_slow 1,579,785 -> 1,579,791, run_put_mut_grow 22 -> 30,
 run_sh_buf 86,615,200 -> 86,746,592, run_sh_rec 3,906,672 -> 3,906,784 and
 run_sh_str 16,642,592 -> 16,769,952. Welfare re-bases the six terms the phase
 moves, each keeping its ratio to its baseline, and the floor stays at 94.33.
+
+## 2026-10-25 — an overwrite leaves the log a duplicate
+
+A native map keeps an append log of every put and, once something reads it,
+a sorted view holding each key's last value. An in-place put of a key the
+view already held set the view's slot and then walked the log back from its
+end to set that key's entry too, so the second sighting of a word in a word
+count cost the number of words counted so far. #2115 put the shape in the
+corpus.
+
+The put now sets the view's slot and appends the pair to the log, which is
+the state a persistent put already leaves: the log may hold a key more than
+once, and the view decides. A log that has to grow starts again from the
+view. Copied in order it holds each key once, sorted, so it becomes the
+map's view and the old view is freed; overwrites after that are set in the
+log itself. The restart takes room for as many keys again, because a key
+arriving out of order gives the map a separate view back and the overwrites
+after it append, so the next restart is that many puts away. Without that
+room a restart could follow on the very next put.
+
+Two smaller changes came out of measuring it. #2112's compare tested for
+two machine ints before anything else, and kq's keys are strings, so every
+compare in kq paid the test. Keys of one kind now compare directly, two
+ints or two strings. On this container kq's print_small reads 24,631,248,
+against 24,695,778 on main and 24,648,174 on main with the int test taken
+out. A search of
+the view tests an int key's kind once rather than at every probe, which
+took the scattered-key tally under main again after the restart had moved
+`k_map_find` out of line.
+
+Probes at two sizes, natively, instructions:
+- `list/tally` over 20,000 ints each seen twice: 1,193,001,970 → 42,779,901.
+- The same over 20,000 strings: 3,829,711,628 → 76,451,701.
+- 5,000 strings over 500 keys: 93,576,007 → 9,291,779.
+
+The mem vein moves where maps are overwritten. tally_shape reads
+put_mut_grow 3 -> 5, alloc_bytes 133,280 -> 139,456. The log restarts twice
+and keeps the room it takes. a_read_handed_to_a_call_stays_in_place frees
+every view it allocates, 17 of 17 where main freed 7 of 9, and its
+held_peak_bytes falls 7,184 -> 6,112. Every fixture that moved runs in fewer
+instructions than on main.
+
+A differential over 120 generated programs builds maps by in-place puts in
+four key orders, with ints and strings and from one key to every key
+distinct. It reads each map back by length, keys, values, a persistent put,
+a delete and equality, on the interpreter and on both native tiers: 0 of
+120 disagree. With the restart copying from the log instead of the view,
+30 of 120 disagree.
