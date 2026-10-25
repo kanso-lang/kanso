@@ -585,6 +585,9 @@ fn in_slice(at: usize) -> u64 {
     (at & 0xFFFF) as u64
 }
 
+/// Call sites keyed as the linearity analysis keys them: file, line, column.
+type Sites = crate::hash::Set<(std::sync::Arc<str>, usize, usize)>;
+
 /// Slots in `Interp::recent_callees`. The table lives for the whole run, so
 /// its size sits under the interpreted run's peak memory. At 1,024 slots,
 /// with the frames' 512 beside it, the two held 32,768 bytes; at 256 each
@@ -711,24 +714,20 @@ pub struct Interp<'a> {
     /// at construction, because `kanso check` makes an `Interp` and never
     /// evaluates a constant, and that route is a weighed welfare term.
     cycles: std::cell::OnceCell<crate::hash::Set<String>>,
-    /// The push, put and append sites the linearity analysis proves extend a
-    /// container nothing else will read -- the same set, by the same key,
-    /// that the emitter consults before it writes `push_mut_fast`. The
-    /// compiled engine has mutated at these sites since kanso#1359; until now
-    /// the interpreter cloned at every one of them.
+    /// What the linearity analysis proves, from `linear::for_the_interpreter`:
+    /// the push, put and append sites that extend a container nothing else
+    /// will read, which is the set the emitter consults before it writes
+    /// `push_mut_fast`, and the templates that join onto a string nothing
+    /// reads afterwards. The compiled engine has mutated at these sites since
+    /// kanso#1359; until then the interpreter cloned at every one of them.
     ///
     /// A `OnceCell` for the reason `cycles` above is one: `kanso check` makes
     /// an `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term. The analysis is not cheap and must not run for a check.
-    in_place: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
+    linearity: std::cell::OnceCell<(Sites, Sites)>,
     /// `linear::moved_writes`, built the first time a write's value has no
-    /// holder but the name that moves it. Lazy for the reason `in_place` is.
+    /// holder but the name that moves it. Lazy for the reason `linearity` is.
     moved: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
-    /// The joins of `linear::string_builders`, built the first time a template
-    /// opens with a name. Lazy for the reason `in_place` is.
-    joins: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
-    /// The one whole-program analysis `in_place` and `joins` are read from.
-    linearity: crate::linear::ForTheInterpreter<'a>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
@@ -850,10 +849,8 @@ impl<'a> Interp<'a> {
             spare_binds: RefCell::new(Vec::new()),
             entries_at: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
-            in_place: std::cell::OnceCell::new(),
+            linearity: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
-            joins: std::cell::OnceCell::new(),
-            linearity: crate::linear::ForTheInterpreter::new(program),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
             fixed: RefCell::new(Vec::new()),
@@ -2887,7 +2884,7 @@ impl<'a> Interp<'a> {
     fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.in_place.get_or_init(|| {
-            let all = self.in_place.get_or_init(|| self.linearity.in_place_pushes());
+            let all = &self.linearity().0;
             all.iter()
                 .filter(|(file, _, _)| **file == *site.file)
                 .map(|(_, l, c)| (*l, *c))
@@ -2903,12 +2900,16 @@ impl<'a> Interp<'a> {
     /// that binding is the name this write moves, which nothing reads again,
     /// so the count is the rest of the proof `in_place_pushes` could not make
     /// from the callers.
+    fn linearity(&self) -> &(Sites, Sites) {
+        self.linearity.get_or_init(|| crate::linear::for_the_interpreter(self.program))
+    }
+
     /// Whether `linear::string_builders` licensed this template to join onto
     /// the string its first part names. Keyed as `writes_in_place` is.
     fn joins_here(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.joins.get_or_init(|| {
-            let all = self.joins.get_or_init(|| self.linearity.string_joins());
+            let all = &self.linearity().1;
             all.iter()
                 .filter(|(file, _, _)| **file == *site.file)
                 .map(|(_, l, c)| (*l, *c))
