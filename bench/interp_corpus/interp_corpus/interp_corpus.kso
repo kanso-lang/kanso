@@ -8,8 +8,13 @@ type bag
   items
   n
 
+# A set and the list of what it admitted, which `deduped` carries.
+type uniq
+  seen
+  out
+
 pub play =
-  maps = "{counted 1000} {drained 600} {admitted 500}"
+  maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps}"
 
 fn rounds n
@@ -91,3 +96,16 @@ fn let_in m n i
 
 fn admitted n
   length (let_in {} n n)
+
+# The distinct words of a text in first order, the set of them kept in a
+# record beside the list.
+fn kept st _ 0
+  st
+
+fn kept st n i
+  x = i * 7919 % (n / 2)
+  next = if (st.seen[x] == none) (uniq (put st.seen x true) (push st.out x)) st
+  kept next n (i - 1)
+
+fn deduped n
+  length (kept (uniq {} []) n n).out

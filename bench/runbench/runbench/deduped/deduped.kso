@@ -1,0 +1,20 @@
+# The distinct words of a text in the order they first appear: a record that
+# carries a set of the words seen so far and the list of them, admitting a
+# word only when the set does not hold it. The read of the set in the
+# condition, and the arm that hands the record back unchanged, each counted
+# as another holder, so both the set and the list were copied for every
+# word. 20,000 words took 44.7 billion instructions natively.
+type words
+  seen
+  out
+
+fn step st _ 0
+  st
+
+fn step st n i
+  x = i * 7919 % (n / 2)
+  next = if (st.seen[x] == none) (words (put st.seen x true) (push st.out x)) st
+  step next n (i - 1)
+
+pub fn total n
+  length (step (words {} []) n n).out

@@ -23,43 +23,6 @@
 
 
 
-## 2026-10-24 — a pair of leaves held in place
-
-The tab's translator asks a type for its scalar leaves, with their byte
-offsets, at every load, store, call and return of an aggregate. A scalar
-answered in place, and every struct built a vector, so each `%KValue`, two
-`i64`s, cost an allocation and a free. `Ty::leaves` now answers a struct of
-two scalars in place too. The tab's compile of its corpus fell from
-223,778,736 to 222,368,963 instructions (-0.63%) in this container, and the
-wasm it wrote is byte-identical. A spec holds `leaves` to the list `scalars`
-writes for scalars, pairs, a nested pair, a triple and arrays; giving the
-second leaf a fixed offset of 8 turned it red on `{i1, i16}`. The ratchet row
-`pair_leaves` lists pairs in a vector again and reads 223,694,975.
-
-**CI's rows for the three.** The run program fell from 815,624,816 to
-813,606,641, and the other benchmarks that render floats with it:
-encodebench 2,362,394,628 -> 2,353,427,661, livebench 970,491,700 ->
-961,524,285, widebench 28,539,533 -> 28,476,897 and oneshot 10,278,879 ->
-10,256,694. Every binary's text is 688 bytes smaller, the renderer's. The
-browser rows matched this container's. emit_instructions fell from 5,864,154
-to 5,690,029 (-3.0%), since `finish` runs `assembled` on every build and
-reads the module once where it read it three times. compile_instructions
-25,205,087 -> 25,172,884, entry_instructions 74,523,222 -> 74,435,723 and
-library_instructions 74,183,641 -> 74,096,953 count `kanso check`, which
-reaches none of the three changes, so I read them as the binary's layout.
-codegen_instructions_dev moved 116,219,760 -> 116,218,430 and
-codegen_instructions_release 425,504,448 -> 425,508,082; I have not isolated
-either. Welfare rose from 93.12 to 93.14 and is banked.
-
-Measured and set aside while looking: stripping the comment lines DECLARES
-carries from dev and tab modules, 11,317 of the corpus module's 327,126
-bytes, saved 85,914 instructions of the tab's compile (0.04%); and summing
-short integer literals in an `i64` rather than an `i128` in the translator's
-tokenizer saved 308,791 (0.14%). The wasm-side profile behind both is a
-per-function count of `docs/kanso.wasm` built with its names: the tokenizer
-was 6.6% of the compile and `bcmp` 4.2%, where natively they were 2.9% and
-2.2%.
-
 ## 2026-10-24 — the tab's bcmp answers equality alone
 
 The tab links its own `memcmp` and `bcmp` (`src/main.rs`), and both were
@@ -1722,3 +1685,26 @@ The interpreter's in-place delete takes a value on the holder count as push
 and put do, so the ratchet's row "a shared seed copied every lap" now finds
 five such sites in `src/eval/builtins.rs` where it found four, and disables
 the delete's with the others. Its spec still turns red under it.
+
+## 2026-10-25 — a deduped list joins the corpus
+
+The same probe timed three more record and map shapes. A map of lists grown
+by pushing onto `m[k]` scales linearly. A set kept in a record beside the
+list of what it admitted does not: `if (st.seen[x] == none) (words (put
+st.seen x true) (push st.out x)) st`, the distinct words of a text in the
+order they first appear. 5,000 words took 2.22 billion instructions
+natively and 20,000 took 44.7 billion; the interpreter took 0.13 s and
+1.52 s. Two counts refused it. The read of the set in the condition counted
+as a second read of the field the put moves, and the arm that hands the
+record back unchanged counted the busier arm's two field reads against it,
+so neither the record nor its fields were handed over and the set and the
+list were copied for every word. A map of maps counted in place is the third
+shape, and it is quadratic natively only; it waits for its own corpus
+phase.
+
+Under the 2026-09-05 corpus-first gavel `deduped` joins the corpus here,
+measured on #2119's tree before its fix. It keeps 850 words once each. On
+this container the run program reads 855,640,794 with it and 809,929,455
+without it, a column of 45,711,339 (5.34%). The interpreted corpus keeps 800
+words, 485,629,040 → 511,418,942. CI's rows and the re-based welfare
+baselines follow in this pull request.
