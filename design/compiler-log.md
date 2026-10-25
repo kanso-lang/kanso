@@ -1814,4 +1814,32 @@ interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
 phase's 40.8 million instructions natively, and all but 1.7 million of its
 34 million interpreted.
 
-CI's rows: ROWS.
+CI's rows, against #2156's phase. The run program reads work_runbench
+869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
+-> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
+20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
+run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
+1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
+list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
+27,272 -> 27,249. The interpreter reads interp_instructions 554,451,443 ->
+523,165,714, interp_allocs 623,573 -> 581,304 and interp_peak_bytes
+1,288,124 -> 1,296,485. The tab's run reads browser_run_instructions
+63,054,006 -> 54,171,024 and browser_run_peak_bytes 2,490,368 -> 1,507,328.
+
+The longer std/list and the builtin cost every compile: compile_instructions
+24,735,836 -> 25,145,388, entry_instructions 72,954,229 -> 73,775,544,
+library_instructions 72,625,200 -> 73,444,678, compile_allocs 13,836 ->
+14,025, module_visits 1,368 -> 1,460, emit_instructions 5,655,925 ->
+5,698,157, codegen_instructions_dev 116,477,304 -> 116,483,659,
+codegen_instructions_release 370,206,363 -> 370,222,776,
+browser_compile_instructions 344,866,301 -> 349,801,935 and
+browser_compile_peak_bytes 806,972 -> 813,673. Every benchmark's machine
+code carries the new runtime function, about 704 bytes each: text
+5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
+two programs that never drop read work_encodebench 2,327,386,052 ->
+2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
+emitted lines of the drop's new arms land at emitted_other_lines 168,907,
+emitted_other_branches 17,946, emitted_other_calls 20,494 and
+emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
+list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
+Welfare rises 95.22 -> 95.35 and the rise is banked.

@@ -13,7 +13,7 @@
 # regenerate.
 encodebench defines=142 calls=1236 branches=917 lines=10556
 oneshot defines=176 calls=1644 branches=1392 lines=15124
-basket defines=128 calls=1117 branches=1032 lines=9273
+basket defines=132 calls=1144 branches=1052 lines=9476
 widebench defines=158 calls=1393 branches=1035 lines=11647
 deepbench defines=50 calls=242 branches=250 lines=2378
 escapebench defines=20 calls=88 branches=92 lines=1026
@@ -23,4 +23,4 @@ scanbench defines=323 calls=3054 branches=2947 lines=25214
 digestbench defines=117 calls=872 branches=919 lines=7915
 readbench defines=22 calls=70 branches=44 lines=776
 livebench defines=177 calls=1683 branches=1435 lines=15447
-runbench defines=824 calls=8477 branches=7397 lines=64724
+runbench defines=828 calls=8507 branches=7407 lines=64867
