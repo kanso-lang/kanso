@@ -109407,3 +109407,20 @@ reachable as `list/tally`.
 `tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
 `tally` and `drop` and calls `list/drop` beside them, on every engine. Main
 refuses it.
+
+## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
+
+From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
+int[]`, and the 2026-10-12 entry made `list/concat` read a bytes value as its
+byte values on both engines. `push` was left out: `push (text/bytes "a") 2`
+stopped with "push takes a list and a value" on the interpreter and natively,
+and `kanso check` passed it. A push onto bytes now answers the list of their
+values with the item after them, on both engines. The bytes it came from are
+unchanged, and a list is still never read as bytes.
+
+Native code takes this path out of line, behind the tag test the push already
+made, so a push onto a list runs the instructions it ran before.
+
+`tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
+`text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
+the first line.

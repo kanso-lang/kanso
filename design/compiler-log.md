@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
-
-From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
-int[]`, and the 2026-10-12 entry made `list/concat` read a bytes value as its
-byte values on both engines. `push` was left out: `push (text/bytes "a") 2`
-stopped with "push takes a list and a value" on the interpreter and natively,
-and `kanso check` passed it. A push onto bytes now answers the list of their
-values with the item after them, on both engines. The bytes it came from are
-unchanged, and a list is still never read as bytes.
-
-Native code takes this path out of line, behind the tag test the push already
-made, so a push onto a list runs the instructions it ran before.
-
-`tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
-`text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
-the first line.
-
 ## 2026-10-25 — a test that fails inside a library names the library's line
 
 From #2091's sixth item, chip8's port. A test whose helper handed
@@ -1873,3 +1856,23 @@ unboxed err behaving as a value on every engine, with goldens; the ports'
 hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
+
+## 2026-10-26 — the runtime's tags and doors are read from its C
+
+Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
+the tag enum and the functions defined with `K_DOORCC` out of the joined
+text into `$OUT_DIR/runtime_abi.rs`. The seven tags `codegen.rs` restated,
+`K_ERR_TAG`, the door list in `codegen/module.rs`, and the two specs that
+held those copies to the C are gone. A door the reader cannot parse stops
+the build, since a door missing from the list would be called on the C
+convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
+watches `cargo build` go red.
+
+CI's rows, against main at #2162. The derived door list is in the runtime's
+include order, and `through_doors` checks doors in list order, so
+`emit_instructions` reads 5,725,239, 224 fewer. Compiling the runtime reads
+the edited comment in `core.c`, which moves `codegen_instructions_dev` to
+116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
+fewer). Both read as layout of the clang input, since the program's code
+is unchanged, and no runtime row moved.
+
