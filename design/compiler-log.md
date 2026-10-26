@@ -1807,7 +1807,10 @@ The longer std/list and the builtin cost every compile. Against main at
 compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
 emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
 116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
-370,222,776. The tab compiles the corpus with `rested` in it as well, so
+370,222,776. The front end visits compile_corpus more often and holds more
+while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
+598,984 -> 607,213, read on this container, whose rustc is the one the
+golden names. The tab compiles the corpus with `rested` in it as well, so
 its compile rows carry the phase too: browser_compile_instructions
 344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
 839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
@@ -1819,4 +1822,4 @@ emitted lines of the drop's new arms land at emitted_other_lines 168,907,
 emitted_other_branches 17,946, emitted_other_calls 20,494 and
 emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
 list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
-Welfare rises 95.24 -> 95.37 and the rise is banked.
+Welfare rises 95.24 -> 95.36 and the rise is banked.
