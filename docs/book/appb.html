@@ -363,7 +363,7 @@ missing: index out of range</code></pre>
 <p>a new map without <code>key</code>. a key that is not there answers a map equal to the one given, and the map you handed in is never changed. like <code>put</code> it needs no import, and the keys it accepts are the ones <code>put</code> accepts: ints and strings.</p>
 
 <h3 id="b-put"><code>put</code></h3>
-<p class="builtin-sig"><code>put map key value → map</code></p>
+<p class="builtin-sig"><code>put map key value → map</code><br><code>put list position value → list | none</code></p>
 <p>a new map with <code>key</code> set to <code>value</code>, replacing any previous binding. keys are ints or strings. like <code>push</code> it is functional and made in-place by the runtime when the map is uniquely owned. building a map from nothing starts at the empty-map literal <code>{}</code>; a literal with known keys is written <code>{ "a":1 "b":2 }</code>.</p>
 
 <div class="code-panel">
@@ -390,6 +390,23 @@ keys ["a" "b" "c"]
 values [1 2 3]
 length 3
 empty {}</code></pre>
+  </div>
+</div>
+
+<p>on a list, <code>put</code> answers a new list with the element at <code>position</code> replaced. positions count from 1, as <code>xs[i]</code> reads them, and a position outside the list answers <code>none</code>, as a read there does. a position that is not an int stops the run. the list you handed in is never changed, and a list nothing else holds is written where it stands, so a loop that rewrites a vector copies nothing.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">positions.kso</div>
+  <pre><code>cells <span class="o">=</span> [<span class="n">0</span> <span class="n">0</span> <span class="n">0</span> <span class="n">0</span>]
+marked <span class="o">=</span> <span class="f">put</span> cells <span class="n">2</span> <span class="n">7</span>
+<span class="f">print</span> <span class="s">"put <span class="i">{marked}</span>"</span>
+<span class="f">print</span> <span class="s">"kept <span class="i">{cells}</span>"</span>
+<span class="f">print</span> <span class="s">"outside <span class="i">{put cells 5 1}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run positions.kso</div>
+    <pre><code>put [0 7 0 0]
+kept [0 0 0 0]
+outside &lt;none&gt;</code></pre>
   </div>
 </div>
 

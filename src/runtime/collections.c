@@ -1180,9 +1180,31 @@ static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
     k_map_view_insert_built(m, key, val);
 }
 
+/* `put xs i v` on a list (ruled 2026-10-25, kanso#2086): the list with
+   element i replaced, 1-based as `xs[i]` reads it, and none for a position
+   outside the list, as a read there answers. In place where the linearity
+   analysis proved nothing else holds the list, as for a push. */
+static __attribute__((noinline)) KValue k_list_put(KValue lv, KValue at, KValue val, int mutate) {
+    if (at.tag == K_BIG) return k_none();
+    if (at.tag != K_INT) k_die("put writes a list at an int position");
+    KList* l = k_as_list(lv);
+    long long i = at.payload;
+    if (i < 1 || i > l->len) return k_none();
+    if (!mutate) {
+        KValue v = k_mklist(l->len, l->items);
+        k_as_list(v)->items[i - 1] = val;
+        return v;
+    }
+    val = k_big_kept(val, l);
+    l->items[i - 1] = val;
+    k_note_if_carried(val);
+    return lv;
+}
+
 KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key) || !k_not_failure(val), 0)) return k_failed3(mv, key, val);
-    if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
+    if (mv.tag == K_LIST) return k_list_put(mv, key, val, 1);
+    if (mv.tag != K_MAP) k_die("put writes a map at a key or a list at a position");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
     val = k_big_kept(val, m);
@@ -1262,7 +1284,8 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
 
 KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key) || !k_not_failure(val), 0)) return k_failed3(mv, key, val);
-    if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
+    if (mv.tag == K_LIST) return k_list_put(mv, key, val, 0);
+    if (mv.tag != K_MAP) k_die("put writes a map at a key or a list at a position");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
     /* the answer may share these pairs, and a header that shares them must

@@ -408,10 +408,13 @@ impl<'a> Interp<'a> {
             }
             b"put" => {
                 let [map, key, value] = arity(args, name, span)?;
+                if let Value::List(items) = map {
+                    return self.put_in_list(items, key, value, span, frame);
+                }
                 let Value::Map(entries) = map else {
                     return Err(RuntimeError {
                         at: None,
-                        message: "put takes a map, a key, and a value".to_string(),
+                        message: "put writes a map at a key or a list at a position".to_string(),
                         span,
                     });
                 };

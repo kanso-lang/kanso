@@ -2998,6 +2998,37 @@ impl<'a> Interp<'a> {
         unsafe { std::mem::take(&mut *slot) }
     }
 
+    /// `put xs i v` on a list (ruled 2026-10-25, kanso#2086): the list with
+    /// element `i` replaced, 1-based as `xs[i]` reads it, and none outside
+    /// the list. A list nobody else holds is written where it stands.
+    fn put_in_list(
+        &self,
+        items: Rc<Vec<Value>>,
+        at: Value,
+        value: Value,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let Value::Int(i) = &at else {
+            return Err(RuntimeError {
+                at: None,
+                message: "put writes a list at an int position".to_string(),
+                span,
+            });
+        };
+        let Some(i) = usize::try_from(i).ok().filter(|i| *i >= 1 && *i <= items.len()) else {
+            return Ok(Value::NoneV);
+        };
+        let alone = Rc::strong_count(&items) == 2;
+        if self.writes_in_place(span, frame) || (alone && self.moved_here(span, frame)) {
+            Self::written_in_place(&items)[i - 1] = value;
+            return Ok(Value::List(items));
+        }
+        let mut next = taken(items);
+        next[i - 1] = value;
+        Ok(Value::List(Rc::new(next)))
+    }
+
     /// The same proof, used to write through the pointer instead of taking
     /// the contents out of it. The container stays in the allocation it was
     /// born in, so a push hands back the `Rc` it was given rather than boxing
