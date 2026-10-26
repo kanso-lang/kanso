@@ -1,2 +1,3 @@
 error[runtime]: from_code takes an int
   failed in text/from_code at std/text/text.kso:20
+  called from from_code_takes_an_int.kso:3
