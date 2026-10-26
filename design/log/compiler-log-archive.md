@@ -109061,3 +109061,24 @@ Measured and set aside: an unchecked `u64` sum for the tab translator's
 integers of eighteen digits or fewer, ahead of the checked `i128` loop.
 `browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
 ratchet row of its own.
+
+## 2026-10-24 — kq under the pin to 29dafd0f
+
+kq's instruction rows rose when its pin moved to 29dafd0f, the string index
+and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
+path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
+CI runs on two different CPUs read the same four rows, and building kq here
+with kanso before and after #2077 gives the same rise within a few hundred.
+
+The rise is in kq's decoder, around the string scan. `Flat3_string_end`
+keeps an overflow-checked increment the earlier build folded into a `lea`,
+and `parse_string` keeps the same check and a test of a constant zero. The
+IR kanso emits for kq is the same under both pins, apart from the
+declarations #2077 retyped, so the folds are lost in the hot unit or at the
+link. Every `find2` site in kq is inlined since #2077, where 13 were calls
+before.
+
+Measured and set aside: the two scanners without `always_inline`. The link
+then left 6 calls, and kq read print_small 26,132,733 and path_small
+10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
+forced inlining is not what costs kq. The cause is not isolated.

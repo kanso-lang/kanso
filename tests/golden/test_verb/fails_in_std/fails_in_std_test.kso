@@ -1,5 +1,6 @@
 # `parts?` hands text/split a none, a slice that starts past the end, and the
-# split fails inside std/text. The report names std/text's file and line.
+# split fails inside std/text. The report names std/text's file and line,
+# and under it the line of this file that called in.
 import "std/list"
 import "std/text"
 

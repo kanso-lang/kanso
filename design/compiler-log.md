@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-24 — kq under the pin to 29dafd0f
-
-kq's instruction rows rose when its pin moved to 29dafd0f, the string index
-and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
-path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
-CI runs on two different CPUs read the same four rows, and building kq here
-with kanso before and after #2077 gives the same rise within a few hundred.
-
-The rise is in kq's decoder, around the string scan. `Flat3_string_end`
-keeps an overflow-checked increment the earlier build folded into a `lea`,
-and `parse_string` keeps the same check and a test of a constant zero. The
-IR kanso emits for kq is the same under both pins, apart from the
-declarations #2077 retyped, so the folds are lost in the hot unit or at the
-link. Every `find2` site in kq is inlined since #2077, where 13 were calls
-before.
-
-Measured and set aside: the two scanners without `always_inline`. The link
-then left 6 calls, and kq read print_small 26,132,733 and path_small
-10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
-forced inlining is not what costs kq. The cause is not isolated.
-
 ## 2026-10-24 — a chain built from the left runs past the beat stack
 
 The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
@@ -1787,3 +1766,62 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-26 — a failure inside the library names the program line that called in
+
+The 2026-10-26 gavel on #2099 keeps a library failure's own line and adds,
+under it, the nearest line of the program's own files that called in:
+
+```
+error[runtime]: split takes two strings
+  failed in text/split at std/text/text.kso:38
+  called from g.kso:11
+```
+
+A file is the library's when it is under `std/` or fetched under `.hako/`,
+which `provenance::is_library_file` says and the runtime's
+`k_library_place` repeats for a site's file. The line is added only under a
+library line, so a failure in the program's own code reads as before.
+
+The interpreter adds it as a failure leaves a call written by name, in a
+program file, of a group the library declares. The first such call the
+failure passes out of is the nearest, and the line rides in the place string
+`failed in` already prints, so none of the 108 places that build a
+`RuntimeError` changed. Natively the emitter saves `k_from` before each such
+call, stores the call's `<file>:<line>`, and puts the saved one back when the
+call returns; `k_died` prints it when the failing site's file is the
+library's. A program function the library calls back sets and restores its
+own, so a failure after the callback names the line that called the library
+function, as the interpreter's frames do. The two fused slice doors, which
+call no wrapper, save and restore around the door.
+
+A call into the library in tail position is made rather than looped on, on
+both engines, as an insisting form already is: a looped call would leave no
+program frame to name in the interpreter and nothing to restore natively. A
+call to a flattened twin is not counted as one. `flat` copies `text/span_to`
+into a twin that carries the program's own continuation, so the twin can be a
+step of the program's loop; the first draft made that call an ordinary one,
+and `a_span_handed_on_is_never_built` read beat_iters 26 -> 17, the loop no
+longer rewinding. Both engines skip twins, and it reads 26 again.
+
+The emitted lines move by the store and its restore: the compile samples
+read recursion 470 -> 471, dispatch 370 -> 371, guards 327 -> 328 and
+records 426 -> 427 lines, and the module 1,181 -> 1,186.
+Calls through a function value and steps a chain word runs are not counted on
+either engine. A step that `.>` hands a box is run by the executor after the
+line that wrote it has finished.
+
+`a_library_failure_names_the_line_that_called_in` reaches `text/split`
+through two program functions, the inner one calling it in tail position.
+`a_library_failure_after_a_callback_names_the_outer_line` has `group_by` call
+a key function that calls `text/trim`, and then fail inside the library's
+own `list/file_under`. `an_operator_failing_in_the_library_names_the_line_that_called_in`
+hands `pad_start` a width it subtracts from. Between them they cover the
+ruling's three kinds of failure born in the library, a builtin's, a library
+function's and an operator's, and all three are in the runtime corpus, which
+every engine runs. Nineteen runtime goldens whose
+failure is inside the library, and `test_verb/fails_in_std`, gain the line.
+Four mutations turn the corpus red: the native restore made a no-op, the
+interpreter's addition taken out, and the tail call kept on either engine.
+
+CI's rows: ROWS.

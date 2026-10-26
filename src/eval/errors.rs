@@ -111,6 +111,27 @@ fn placed(mut e: RuntimeError, frame: &Frame) -> RuntimeError {
     e
 }
 
+/// The place a failure that left the library through a call this program
+/// wrote by name prints: the library's own line, and under it the program's
+/// line that called in (ruled on #2099). `RuntimeError::place` prints `at`
+/// after "failed in", so the second line rides in the same string. Only the
+/// innermost such call names itself; a failure that already carries one, or
+/// whose place is not a library's, passes through unchanged.
+fn called_from(mut e: RuntimeError, frame: &Frame, span: Span) -> RuntimeError {
+    let Some(site) = frame else { return e };
+    if crate::provenance::is_library_file(&site.file) {
+        return e;
+    }
+    if let Some(at) = &e.at {
+        let file = at.rsplit_once(" at ").and_then(|(_, rest)| rest.rsplit_once(':'));
+        let library = file.is_some_and(|(file, _)| crate::provenance::is_library_file(file));
+        if library && !at.contains("\n  called from ") {
+            e.at = Some(Rc::from(format!("{at}\n  called from {}:{}", site.file, span.line)));
+        }
+    }
+    e
+}
+
 /// Whether a call's head names an insisting form, a function spelled with
 /// `!` (ruled on #1975: such a form names its caller's line).
 fn insists(head: &Expr) -> bool {
