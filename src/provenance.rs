@@ -60,3 +60,12 @@ fn after_hako(file: &str) -> Option<&str> {
     }
     None
 }
+
+/// Whether a file belongs to a library rather than to the program being run:
+/// the standard library's `std/` modules and every hako fetched under
+/// `.hako/`. A failure in one of these names the program line that called
+/// into it as well as its own (ruled on #2099); the runtime's `k_died` asks
+/// the same question of a site's file.
+pub fn is_library_file(file: &str) -> bool {
+    file.starts_with("std/") || after_hako(file).is_some()
+}

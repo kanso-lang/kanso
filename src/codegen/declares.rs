@@ -29,6 +29,7 @@ done:
 @k_site = external global ptr
 @k_site_id = external global i32
 @k_deep_site = external global ptr
+@k_from = external global ptr
 @k_arena_left = external global i64
 @k_stats_on = external global i32
 @k_token_store = external global i8
