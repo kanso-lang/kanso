@@ -1727,4 +1727,8 @@ sequence, a string, bytes and a map. Its output is main's interpreter, and
 both engines on main and on this branch print it. Reading one before the end
 turns the micro corpus red.
 
+The new arm moves std/list's lines below it down by four, so
+`runtime/tie_takes_a_list_of_ids` names `list/tie` at line 602 where it named
+598.
+
 CI's rows: ROWS.
