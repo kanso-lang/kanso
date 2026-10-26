@@ -1909,14 +1909,16 @@ three loops in `relayed` took between 2.3 and 13.9 seconds at 80,000 steps and
 takes under 0.01.
 
 Three mem fixtures pin the copies, each red with its own change undone and
-green with the other two undone: `a_join_handed_on_as_an_argument_is_still_a_builder`
-and `a_join_below_a_guard_is_still_a_builder` read 198 bytes where main reads
-5,337, and `a_name_at_two_counts_keeps_its_builder` 196 where main reads 1,936.
-`a_digest_holds_every_block_it_walked` hands a join on as an argument too, and
-its vein falls: `allocs` 266 -> 123, `alloc_bytes` 18,657 -> 14,090,
-`bytes_malloc` 81 -> 10 and `sh_str` 1,344 -> 192. Three regexp fixtures move
-too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes` 106,537 (from
-108,672) and `a_scan_that_finds_nothing_keeps_nothing` 2,781,801 (from
-2,783,936), both with the argument change alone; `a_split_stops_where_the_separator_does`
-reads 24,487 (from 24,639), and undoing either the argument change or the
-count change puts part of that back.
+green with the other two undone:
+`a_join_handed_on_as_an_argument_is_still_a_builder` and
+`a_join_below_a_guard_is_still_a_builder` read 198 bytes where main reads
+5,337, and `a_name_at_two_counts_keeps_its_builder` 196 where main reads
+1,936. `a_digest_holds_every_block_it_walked` hands a join on as an argument
+too, and its vein falls: `allocs` 266 -> 123, `alloc_bytes` 18,657 ->
+14,090, `bytes_malloc` 81 -> 10 and `sh_str` 1,344 -> 192. Three regexp
+fixtures move too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes`
+106,537 (from 108,672) and `a_scan_that_finds_nothing_keeps_nothing`
+2,781,801 (from 2,783,936), both with the argument change alone;
+`a_split_stops_where_the_separator_does` reads 24,487 (from 24,639), and
+undoing either the argument change or the count change puts part of that
+back.
