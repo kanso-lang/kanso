@@ -23,38 +23,6 @@
 
 
 
-## 2026-10-24 — a field read is asked the none question the same way on every route
-
-`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
-inflate's port has the shape: `fn go (req none)` answers a request whose
-path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
-test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
-split, and toml's had it between `check lib` and `check main.kso`.
-
-The none question in `after_infer.rs` asks whether an argument can be a none.
-It answers no for a field read, so a none carried in a field stays the
-runtime's sentence. But the module and play routes run the check before
-field reads are rewritten into getter calls, and the entry and test routes
-run it after. On those two the argument was a call to `Get_path`, whose
-return set is every value the field was built from, and the first arm's
-claim on the none never reaches that set. The question now answers no for a
-getter call too, so all four routes give a field read the same answer.
-
-`tests/golden/test_verb/claims_a_field` is inflate's shape, and
-`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
-it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
-in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
-what `check lib` passed.
-
-Whether a none carried in a field should be refused at check is #2088's
-question, for every route at once.
-
-CI's rows. A getter call now answers the none question before the table
-lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
-entry_instructions 72,335,545 -> 72,317,212, library_instructions
-72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
-218,016,527. Welfare rose, and the rise is banked.
-
 ## 2026-10-24 — a test file's helper is checked like its constants
 
 Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
@@ -1743,3 +1711,28 @@ emitted_other_branches 17,946, emitted_other_calls 20,494 and
 emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
 list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
 Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-26 — a list read for its last element joins the corpus
+
+A battery of list shapes, each run at 5,000 and 20,000 elements on both
+engines, found `list/last` read in a loop quadratic on both. `last` folds
+the whole collection to find its last element, so each read costs the
+length of the list: 5,000 reads of a 5,000-element list took 0.38 seconds
+natively and 17.7 on the interpreter, and at 20,000 they took 4.6 seconds
+natively, where the interpreter ran past two minutes. The other shapes,
+`text/join`, `list/zip`, `list/count`, `list/reverse`, `list/sort_by`,
+`list/tally`, `list/to_h`, `text/to_int` over a list and floats rendered by
+interpolation, grow linearly or by n log n on both.
+
+Under the 2026-09-05 corpus-first gavel `lasted` joins the run program with
+800 reads and the interpreted corpus with 70, measured on main at #2158
+before its fix. On this container the run program reads 865,303,604 with it
+and 828,684,309 with it reading nothing, a column of 36,619,295 (4.23%), and
+the interpreted corpus reads 565,857,214 -> 593,093,849. Both engines print
+the same line for it.
+
+The battery also found a field read that the engines disagree on: native
+reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
+Clay which way it goes.
+
+CI's rows: ROWS.

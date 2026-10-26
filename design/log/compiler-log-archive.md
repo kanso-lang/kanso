@@ -109277,3 +109277,35 @@ corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
 native moved. Welfare fell by less than a hundredth, and the floor follows
 under the language exception: the ruling asks for index reads to be proven,
 and this proves more of them.
+
+## 2026-10-24 — a field read is asked the none question the same way on every route
+
+`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
+inflate's port has the shape: `fn go (req none)` answers a request whose
+path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
+test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
+split, and toml's had it between `check lib` and `check main.kso`.
+
+The none question in `after_infer.rs` asks whether an argument can be a none.
+It answers no for a field read, so a none carried in a field stays the
+runtime's sentence. But the module and play routes run the check before
+field reads are rewritten into getter calls, and the entry and test routes
+run it after. On those two the argument was a call to `Get_path`, whose
+return set is every value the field was built from, and the first arm's
+claim on the none never reaches that set. The question now answers no for a
+getter call too, so all four routes give a field read the same answer.
+
+`tests/golden/test_verb/claims_a_field` is inflate's shape, and
+`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
+it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
+in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
+what `check lib` passed.
+
+Whether a none carried in a field should be refused at check is #2088's
+question, for every route at once.
+
+CI's rows. A getter call now answers the none question before the table
+lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
+entry_instructions 72,335,545 -> 72,317,212, library_instructions
+72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
+218,016,527. Welfare rose, and the rise is banked.
