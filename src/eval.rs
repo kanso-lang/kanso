@@ -136,7 +136,14 @@ pub enum Value {
     /// What a succeeded effect yields. `none` is absence and nothing else,
     /// so a print, a write or a sleep that finished answers this instead.
     Done,
+    /// A boxed failure: what `err` makes, a strict read's miss, a failed
+    /// effect. It passes every arm and every operator untouched until a
+    /// chain word opens its box or it reaches the endpoint.
     ErrV(Rc<ErrInfo>),
+    /// An err taken out of its box by `rescue` or `annotate`'s callback. It
+    /// is an ordinary value: arms written `(err r)` take it, a catch-all
+    /// binds it, and `effect` puts it back in a box. Ruled on #2087.
+    Unboxed(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
     /// Byte data, as `text/bytes` and the scanner produce it. Distinct from
     /// a list of small ints on every engine: native has had the tag since it
@@ -1511,12 +1518,13 @@ impl<'a> Interp<'a> {
                 let container = self.force_thunk(self.eval(base, env, frame)?)?;
                 let key = self.force_thunk(self.eval(index, env, frame)?)?;
                 // the sigil is the choice of channel (ruled 2026-09-16): the
-                // read settles a box holding the element or the miss
+                // read settles a box holding the element, or the miss, which
+                // is a failure and so a box already (#2087)
                 match index_value(container, key.clone(), *span)? {
-                    Value::NoneV if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(err_value(
+                    Value::NoneV if *strict => Ok(err_value(
                         Value::Str(format!("missing index {}", render(self, &key, true)).into()),
                         origin_at(frame, *span),
-                    ))))),
+                    )),
                     found if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(found)))),
                     found => Ok(found),
                 }
@@ -2559,7 +2567,7 @@ impl<'a> Interp<'a> {
                 if let [arg] = args.as_mut_slice() {
                     let taken = std::mem::replace(arg, Value::NoneV);
                     *arg = self.force_thunk(taken)?;
-                    if let Value::ErrV(info) = arg {
+                    if let Value::Unboxed(info) = arg {
                         return Ok(err_read(info, field));
                     }
                 }
@@ -2882,21 +2890,25 @@ impl<'a> Interp<'a> {
             // the callback; a failure nobody can be held responsible for —
             // no frame, or merged out of several — passes the test.
             Word::Rescue if own_failure(&cause, raised) => Ok(yielded),
-            Word::Rescue => self.call_decided(callee, yielded, span),
-            Word::Annotate => match self.call_decided(callee, yielded, span)? {
-                // the callback failed on its own account, and that err
-                // already carries what it was told; wrapping it again would
-                // report the same failure twice
-                answer if is_failure(&answer) => Ok(answer),
-                reason => Ok(Value::ErrV(Rc::new(ErrInfo {
-                    reason,
-                    origin: raised.at.clone(),
-                    hako: raised.hako.clone(),
-                    hops: Vec::new(),
-                    cause: Some(cause),
-                    merged: false,
-                }))),
-            },
+            // the callback is handed the err out of its box, an ordinary
+            // value from here on (#2087)
+            Word::Rescue => self.call_decided(callee, Value::Unboxed(cause), span),
+            Word::Annotate => {
+                match self.call_decided(callee, Value::Unboxed(cause.clone()), span)? {
+                    // the callback failed on its own account, and that err
+                    // already carries what it was told; wrapping it again would
+                    // report the same failure twice
+                    answer if is_failure(&answer) => Ok(answer),
+                    reason => Ok(Value::ErrV(Rc::new(ErrInfo {
+                        reason,
+                        origin: raised.at.clone(),
+                        hako: raised.hako.clone(),
+                        hops: Vec::new(),
+                        cause: Some(cause),
+                        merged: false,
+                    }))),
+                }
+            }
         }
     }
 
@@ -3612,7 +3624,8 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         return type_match_depth(ty, inner).map(|d| d.saturating_add(1));
     }
     if crate::ast::is_effect_type(ty) {
-        return matches!(arg, Value::Desc(_)).then_some(0);
+        // `err` makes a box (#2087), so a failure is one as much as an io is
+        return matches!(arg, Value::Desc(_) | Value::ErrV(_)).then_some(0);
     }
     if ty.ends_with("[]") {
         return matches!(arg, Value::List(_)).then_some(0);
@@ -3636,7 +3649,7 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         ("false", Value::False) => true,
         ("none", Value::NoneV) => true,
         ("done", Value::Done) => true,
-        ("err", Value::ErrV(_)) => true,
+        ("err", Value::Unboxed(_)) => true,
         (name, Value::Record { ty, .. }) => name == &**ty,
         _ => false,
     };

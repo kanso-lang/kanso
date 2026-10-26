@@ -202,7 +202,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             None => None,
         },
         (Pattern::Keyed { .. }, _) => None,
-        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info)) if ty == "err" => {
+        (Pattern::Ctor { ty, fields, whole }, Value::Unboxed(info)) if ty == "err" => {
             match fields.len() == 1 {
                 true => {
                     let inner = match_one(&fields[0], &info.reason, binds)?;

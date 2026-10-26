@@ -114,12 +114,8 @@ no_hit = hit 0 0 []
 pub fn find pattern s
   taken s (found pattern s)
 
-# A pattern that does not compile answers an err, and the checker wants the
-# arm that hands it on written down: an err is a value here, and a group
-# with no arm for one does not compile.
-fn taken _ e@(err _)
-  e
-
+# A pattern that does not compile is a failure, a box that passes every arm
+# here on its way to whoever called.
 fn taken _ (hit 0 _ _)
   none
 
@@ -128,9 +124,6 @@ fn taken s m
 
 pub fn groups pattern s
   named (found pattern s)
-
-fn named e@(err _)
-  e
 
 fn named (hit 0 _ _)
   none
@@ -143,11 +136,6 @@ fn named m
 pub fn find_all pattern s
   gathered (compiled pattern) s
 
-# The err arm sits on a wrapper rather than on the walk itself, so the walk
-# is not asked at every position whether its program is an err.
-fn gathered e@(err _) _
-  e
-
 fn gathered prog s
   gathering prog s 1 []
 
@@ -156,9 +144,6 @@ fn gathered prog s
 # the answer decides what the character at this position is.
 pub fn match_at pattern s at
   anchored (compiled pattern) s at
-
-fn anchored e@(err _) _ _
-  e
 
 fn anchored prog s at
   fitting prog s at (at > length s + 1)
@@ -179,9 +164,6 @@ fn reached_at prog at end
 # needs the position to name a line, which the text alone cannot give back.
 pub fn matches pattern s
   located (compiled pattern) s
-
-fn located e@(err _) _
-  e
 
 fn located prog s
   spotting prog s 1 []
@@ -232,9 +214,6 @@ fn moved m false
 pub fn replace_all pattern s repl
   replaced (compiled pattern) s repl
 
-fn replaced e@(err _) _ _
-  e
-
 fn replaced prog s repl
   rebuilt prog s 1 "" repl
 
@@ -277,9 +256,6 @@ fn remaining s at false
 pub fn split pattern s
   divided (compiled pattern) s
 
-fn divided e@(err _) _
-  e
-
 fn divided prog s
   cut prog s 1 1 []
 
@@ -310,9 +286,6 @@ fn divided prog s from _ acc m false
 # The leftmost match of the whole pattern, tried at each start in turn.
 fn found pattern s
   begun (compiled pattern) s
-
-fn begun e@(err _) _
-  e
 
 fn begun prog s
   scanned prog s 1
@@ -448,8 +421,8 @@ fn compiled pattern
   ended parsed_body.node flags.node over
 
 # A lookbehind has to know how far back to stand, so one whose width varies is
-# refused rather than quietly never matching. Answering an err here reaches
-# whoever called find or match?, which is where a broken pattern belongs.
+# refused rather than quietly never matching. The failure reaches whoever
+# called find or match?, which is where a broken pattern belongs.
 fn settled node wanted
   refused node wanted (loose_behind? node)
 
@@ -860,9 +833,8 @@ fn at_quantifier? chars at
 # it, so a hit is that character and nothing else. Splitting the set on the
 # character built a list and two pieces to answer the same question, once per
 # position a class is asked at. A wider character walks the set's characters:
-# splitting on it would have asked `text/split` a question it answers with an
-# err for an empty separator, and the checker cannot see that `c` is never
-# empty here.
+# splitting on it would have asked `text/split` a question it answers with a
+# failure for an empty separator, and `c` is never empty here.
 fn in? set c
   cb = text/bytes c
   bs = text/bytes set

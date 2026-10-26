@@ -144,12 +144,21 @@ fn args_for 0
 fn args_for n
   "{args_for (n - 1)} bad"
 
+fn arity_of text
+  read_arity (text/to_int text) text
+
+fn read_arity none text
+  err "\"{text}\" is not an arity"
+
+fn read_arity n _
+  n
+
 fn program_for line
   parts = text/split line " "
   return "" if length parts < 3
   module = parts[1]
   name = parts[2]
-  arity = text/to_int parts[3]
+  arity = arity_of parts[3]
   call = "{module}/{name}{args_for arity}"
   """
     import "std/{module}"

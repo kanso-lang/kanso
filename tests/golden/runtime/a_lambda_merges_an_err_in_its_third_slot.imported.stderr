@@ -1,1 +1,1 @@
-error[endpoint]: unhandled err reached the entry: ["not a unicode scalar value" ""x55296" is not an integer"]
+error[endpoint]: unhandled err reached the entry: ["not a unicode scalar value" "to_bytes takes byte values (0-255)"]

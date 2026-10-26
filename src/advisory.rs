@@ -202,8 +202,9 @@ fn expr_types<'a>(
                     set.extend(expr_types(&args[2], type_names, groups, returns, env, reads));
                     return set;
                 }
-                // an err carries its payload; the payload's type is what leaks
-                if name == "err" && args.len() == 1 {
+                // an err carries its payload; the payload's type is what leaks,
+                // and `effect` boxes a failure it is handed with that payload
+                if (name == "err" || name == "effect") && args.len() == 1 {
                     return expr_types(&args[0], type_names, groups, returns, env, reads);
                 }
                 return name_types(name, type_names, groups, returns, env, reads);

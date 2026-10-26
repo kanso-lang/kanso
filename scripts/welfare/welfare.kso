@@ -761,7 +761,7 @@ fn gauge run w ir ca held ent st ii im cd cr em br
     .> (_ -> floored (measured (counters run) work veins vbr))
 
 fn floored now
-  os/read_file! floor_path .> (f -> against now (json/decode f))
+  os/read_file! floor_path .> json/decode! .> (floor -> against now floor)
 
 # THE PIN. Every counter the objective weighs is read from a golden by name,
 # and a golden that lost one of those rows would otherwise score as nothing

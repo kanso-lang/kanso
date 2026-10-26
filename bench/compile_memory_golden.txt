@@ -22,6 +22,6 @@
 # welfare floor with --set in the same pull request.
 # measured-on rustc=1.98.1
 front_end_rounds=19
-front_end_visits=7373
+front_end_visits=7397
 
-compile_peak_bytes=607213
+compile_peak_bytes=598492

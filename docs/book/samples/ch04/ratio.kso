@@ -1,5 +1,4 @@
 import "std/text"
 
 word = text/trim " many "
-ratio = text/to_int word
-print "ratio: {ratio}"
+text/to_int! word .> (ratio -> print "ratio: {ratio}")

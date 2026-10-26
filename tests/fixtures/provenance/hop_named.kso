@@ -3,8 +3,17 @@ import "std/text"
 fn label dish cents
   "{dish}: {cents} cents"
 
+fn price text
+  cents_of (text/to_int text) text
+
+fn cents_of none text
+  err "\"{text}\" is not an integer"
+
+fn cents_of cents _
+  cents
+
 fn lab dish cents
   label dish cents
 
-seasonal = text/to_int (text/join ["fl" "an"] "")
+seasonal = price (text/join ["fl" "an"] "")
 print (lab "flan" seasonal)

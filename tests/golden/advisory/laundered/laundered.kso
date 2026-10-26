@@ -1,7 +1,7 @@
 import "std/json"
 
 pub fn go _
-  unwrap (mine 0)
+  mine 0 .? unwrap
 
 fn mine _
   err (json/parse_failure 1 "raised here, not by json")

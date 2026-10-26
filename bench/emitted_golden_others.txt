@@ -11,16 +11,16 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move, and
 # regenerate.
-encodebench defines=142 calls=1236 branches=917 lines=10627
-oneshot defines=176 calls=1644 branches=1392 lines=15137
+encodebench defines=141 calls=1198 branches=870 lines=10355
+oneshot defines=178 calls=1610 branches=1353 lines=14960
 basket defines=132 calls=1144 branches=1052 lines=9539
-widebench defines=158 calls=1393 branches=1035 lines=11718
+widebench defines=158 calls=1365 branches=1005 lines=11547
 deepbench defines=50 calls=242 branches=250 lines=2376
 escapebench defines=20 calls=88 branches=92 lines=1027
 pendbench defines=72 calls=491 branches=414 lines=3984
 indexbench defines=22 calls=70 branches=42 lines=779
-scanbench defines=323 calls=3054 branches=2947 lines=25219
+scanbench defines=322 calls=3052 branches=2945 lines=25201
 digestbench defines=117 calls=872 branches=919 lines=7924
 readbench defines=22 calls=70 branches=44 lines=788
-livebench defines=177 calls=1685 branches=1435 lines=15459
-runbench defines=837 calls=8579 branches=7476 lines=66006
+livebench defines=179 calls=1645 branches=1385 lines=15227
+runbench defines=830 calls=8464 branches=7352 lines=65169

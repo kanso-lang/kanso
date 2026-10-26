@@ -16,7 +16,7 @@ nested = "\"nested\":\{\"abcd\":[\{\"wxyz\":9}]}"
 
 doc = "\{{short},{wide},{nested}}"
 
-fn encoded (err _)
+fn encoded none
   "refused"
 
 fn encoded v

@@ -1,22 +1,14 @@
 import "std/os"
 import "std/text"
 
-fn banner e@(err _)
-  e
-
 fn banner line
   "== {line} =="
 
 fn check text
-  version = major_of text
-  summary = describe version
-  print (banner summary)
+  major_of text .> (v -> print (banner (describe v)))
 
 fn chosen argv
   if (length argv == 0) "examples/trace_demo/VERSION" argv[1]
-
-fn describe e@(err _)
-  e
 
 fn describe v
   "major version {v} detected"
@@ -35,8 +27,7 @@ fn dot_hunt cs i
 
 fn major_of text
   cs = text/chars text
-  digits = dot_hunt cs 1 .> (dot -> text/join (leading cs (dot - 1)) "")
-  text/to_int digits
+  dot_hunt cs 1 .> (dot -> text/to_int! (text/join (leading cs (dot - 1)) ""))
 
 # The dot was found inside `cs`, so the slice before it is never none; the arm
 # is there because the checker cannot see that.

@@ -2,4 +2,4 @@ import "std/text"
 
 word = text/trim " seven "
 
-print "parsed {text/to_int word}"
+text/to_int! word .> (n -> print "parsed {n}")

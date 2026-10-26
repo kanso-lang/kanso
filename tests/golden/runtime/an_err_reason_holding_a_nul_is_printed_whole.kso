@@ -4,4 +4,4 @@
 # by a generated program on 2026-09-28.
 import "std/text"
 
-pub play = print "{text/to_int (text/from_code 0)}"
+pub play = text/to_int! (text/from_code 0) .> (n -> print "{n}")

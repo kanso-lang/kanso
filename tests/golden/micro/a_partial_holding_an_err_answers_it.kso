@@ -25,18 +25,18 @@ fn said n
 fn held p
   v = text/to_bytes [999 19]
   h = &g p v
-  said (h 1)
+  said (h 1 .? (u -> u))
 
 fn over p
   v = text/to_bytes [999 19]
-  said (list/to_list (list/map [1 2] (&g p v)))
+  said (list/to_list (list/map [1 2] (&g p v)) .? (u -> u))
 
 fn fine p
   v = text/to_bytes [9 19]
-  said (list/to_list (list/map [1 2] (&g p v)))
+  said (list/to_list (list/map [1 2] (&g p v)) .? (u -> u))
 
 fn wide p
   v = text/to_bytes [999 19]
-  said (&g9 p v 1 2 3)
+  said (&g9 p v 1 2 3 .? (u -> u))
 
 pub play = print "{held 2}\n{over 2}\n{fine 2}\n{wide 2}"

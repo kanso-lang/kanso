@@ -3,8 +3,8 @@ import "std/json"
 pub fn report text
   held (json/decode text)
 
-fn held e@(err _)
-  e
+fn held none
+  print "not json"
 
 fn held doc
   out = json/encode doc
