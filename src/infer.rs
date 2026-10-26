@@ -724,10 +724,18 @@ fn facts_when<'a>(cond: &'a Expr, holds: bool, out: &mut Vec<Fact<'a>>) {
                 (">" | ">=", Some(xs), None) => out.push(Fact::Upper(r, xs)),
                 _ => {}
             }
-            // `index <= n`, where a parameter `n` may be some list's length
+            // `index <= n`, where the arm already knows `n` is a list's
+            // length; most comparisons against a name are not, and a fact
+            // nobody can use is one more for every read to scan
+            let known =
+                |n: &str| out.iter().any(|f| matches!(f, Fact::NamedLength(m, _) if *m == n));
             match (op, l, r) {
-                ("<" | "<=", _, Expr::Ident(n, _, _)) => out.push(Fact::UpperName(l, n)),
-                (">" | ">=", Expr::Ident(n, _, _), _) => out.push(Fact::UpperName(r, n)),
+                ("<" | "<=", _, Expr::Ident(n, _, _)) if known(n) => {
+                    out.push(Fact::UpperName(l, n))
+                }
+                (">" | ">=", Expr::Ident(n, _, _), _) if known(n) => {
+                    out.push(Fact::UpperName(r, n))
+                }
                 _ => {}
             }
             // `length xs >= n`, in its spellings, and `length xs != 0`; the
@@ -844,18 +852,35 @@ fn handed_lengths<'p>(
         crate::for_each_child(e, |c| found = found || passes_own(c, d));
         found
     }
+    // ... and reads one of them by index, which is the only read the fact
+    // can bound. Most loops pass two parameters on unchanged; few of them
+    // index one, and only those are worth a walk of their callers.
+    fn indexes_own(e: &Expr, d: &crate::ast::FnDecl) -> bool {
+        if let Expr::Index { base, .. } = e {
+            if let Expr::Ident(n, _, _) = base.as_ref() {
+                if d.params.iter().any(|p| matches!(p, Pattern::Var(own, _) if own == n)) {
+                    return true;
+                }
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || indexes_own(c, d));
+        found
+    }
     let mentioned = |i: usize| &mentions[starts[i] as usize..starts[i + 1] as usize];
+    let in_body = |d: &crate::ast::FnDecl, test: fn(&Expr, &crate::ast::FnDecl) -> bool| {
+        d.body.iter().any(|stmt| {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            test(expr, d)
+        })
+    };
     let candidates: crate::hash::Set<&str> = program
         .fns
         .iter()
         .enumerate()
-        .filter(|(_, d)| !(d.is_pub || d.written_pub) && d.params.len() >= 2)
+        .filter(|(_, d)| !(d.is_pub || d.written_pub) && d.params.len() >= 3)
         .filter(|&(i, d)| {
-            mentioned(i).contains(&i)
-                && d.body.iter().any(|stmt| {
-                    let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
-                    passes_own(expr, d)
-                })
+            mentioned(i).contains(&i) && in_body(d, indexes_own) && in_body(d, passes_own)
         })
         .map(|(_, d)| d.name.as_str())
         .collect();
