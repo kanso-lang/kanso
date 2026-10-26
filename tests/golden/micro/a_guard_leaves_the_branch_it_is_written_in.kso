@@ -1,0 +1,20 @@
+# A guard inside an `if` branch bound to a name leaves that branch: its early
+# answer is what the name is bound to, and the function goes on from there.
+# The interpreter read it that way, and the native backend refused to build
+# it with "a return guard sits only in tail position" (#2166).
+fn share cents people
+  return 0 if people == 0
+  cents / people
+
+fn tipped cents people split
+  owed = if split
+    return 0 if cents < 0
+    each = share cents people
+    each + 1
+  else
+    whole = cents
+    whole + 1
+  owed + 10
+
+pub play = print "{tipped 100 0 true} {tipped (0 - 5) 2 true}"
+  .> (_ -> print "{tipped 100 4 true} {tipped 7 4 false}")
