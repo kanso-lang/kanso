@@ -109200,3 +109200,30 @@ emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
 Nothing at run time moved. Welfare fell by less than a hundredth, and the
 floor follows: this makes the engines agree, which the welfare script's own
 header puts ahead of the score.
+
+## 2026-10-24 — a record returned by value keeps its shape across a pipe
+
+#2091's first item, from the mustache port. `half` answers a two-field
+record or an err, and escape analysis returns a record of that shape by
+value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
+of the value's tag, a call of `shown` on the success path, and a phi joining
+the two paths as `%KValue`s. The failure edge named the value as it came,
+three words, and clang refused the module: "'%t1' defined with type
+'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
+
+The boxing rewrite that turns a by-value record into a `%KValue` wherever a
+line names it as one reads `%KValue %t1`, and a phi's operand list names its
+values bare, so the rewrite never reached this line. The pipe now boxes the
+value for the failure edge before it branches, and boxes the call's answer
+when that comes back by value too. The call itself still takes the three
+words, since `shown` takes them by value.
+
+`micro/a_record_returned_by_value_is_piped_on` runs the success and the
+failure paths. Main stops it in clang; every engine now prints `4/2` and
+`failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.

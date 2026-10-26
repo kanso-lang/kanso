@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-24 — a record returned by value keeps its shape across a pipe
-
-#2091's first item, from the mustache port. `half` answers a two-field
-record or an err, and escape analysis returns a record of that shape by
-value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
-of the value's tag, a call of `shown` on the success path, and a phi joining
-the two paths as `%KValue`s. The failure edge named the value as it came,
-three words, and clang refused the module: "'%t1' defined with type
-'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
-
-The boxing rewrite that turns a by-value record into a `%KValue` wherever a
-line names it as one reads `%KValue %t1`, and a phi's operand list names its
-values bare, so the rewrite never reached this line. The pipe now boxes the
-value for the failure edge before it branches, and boxes the call's answer
-when that comes back by value too. The call itself still takes the three
-words, since `shown` takes them by value.
-
-`micro/a_record_returned_by_value_is_piped_on` runs the success and the
-failure paths. Main stops it in clang; every engine now prints `4/2` and
-`failed: zero`.
-
-CI's rows: the emitter writes the box where it wrote nothing, so
-emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
-emits the same way, takes browser_compile_instructions from 216,735,094 to
-216,735,256. No benchmark builds a pipe of that shape, and nothing at run
-time moved.
-
 ## 2026-10-24 — a loop counter knows where it starts
 
 The ports' re-sit counted the same complaint in about ten journals: a guard
@@ -1707,3 +1680,22 @@ Owes, on #2087: the ports' cascades rewritten to box the failures that should
 propagate, where the arms only hand an err back; #2088's migration choosing
 a box at sites whose read must succeed; the book's ch04 checked for prose
 that still describes an err passing through a function with no arm.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
