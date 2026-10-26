@@ -3611,11 +3611,29 @@ static long long k_itoa(char* buf, long long v);
 const char* k_site;
 int k_site_id;
 const char* k_deep_site;
+/* The program line that last called into the library and has not returned:
+   "<file>:<line>", set and put back around each such call (ruled on #2099). */
+const char* k_from;
+
+/* Whether "<fn> at <file>:<line>" names a library's file: the standard
+   library's `std/` or a hako fetched under `.hako/`, as
+   provenance::is_library_file says. */
+static int k_library_place(const char* spelled) {
+    const char* at = NULL;
+    for (const char* p = strstr(spelled, " at "); p; p = strstr(p + 1, " at ")) at = p;
+    if (!at) return 0;
+    const char* file = at + 4;
+    return strncmp(file, "std/", 4) == 0 || strstr(file, ".hako/") != NULL;
+}
 
 __attribute__((noreturn, noinline)) void k_died(void) {
     const char* site = k_site_now();
-    if (site)
-        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), site + strlen(site) + 1, k_c_off());
+    if (site) {
+        const char* spelled = site + strlen(site) + 1;
+        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), spelled, k_c_off());
+        if (k_from && k_library_place(spelled))
+            fprintf(stderr, "%s  called from %s%s\n", k_c_dim(), k_from, k_c_off());
+    }
     exit(1);
 }
 

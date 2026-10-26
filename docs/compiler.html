@@ -1193,7 +1193,7 @@ sequenced: a              listed:    [err "a" 2]
 mapped:    { "k":err "a" } reached:  a
 indexed:   a              sized:     a</code></pre>
 
-<p>the second says what each pattern form does with a failure. a failure is born in a box (section 260), so every form lets it pass whoever raised it, and an effect annotation, which takes the box unopened, is the one row that fires. three forms&#8212;the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members&#8212;match the err a rescue takes out of its box, which is a value like any other. the foreign-only licence lives at the rescue word, where a <code>.?</code> written in the package that raised the failure hands it on.</p>
+<p>the second says what each pattern form does with a failure. a failure is born in a box (section 262), so every form lets it pass whoever raised it, and an effect annotation, which takes the box unopened, is the one row that fires. three forms&#8212;the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members&#8212;match the err a rescue takes out of its box, which is a value like any other. the foreign-only licence lives at the rescue word, where a <code>.?</code> written in the package that raised the failure hands it on.</p>
 
 <pre><code>pattern   own   foreign
 _         past  past
@@ -2013,7 +2013,7 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <h2 id="explicitbox"><span class="sec-num">71</span>the box is explicit, and a bare err is a value</h2>
 
-<p><strong>the bare err <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; an err is born in a box now, and section 260 has the design that replaced what this section says about a bare err, the check that came with it, and the check of section 189. the box itself stands as written.</p>
+<p><strong>the bare err <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; an err is born in a box now, and section 262 has the design that replaced what this section says about a bare err, the check that came with it, and the check of section 189. the box itself stands as written.</p>
 
 <p>a call that can fail used to hand its caller a value or a failure, and the caller found out which by looking. the box is written now. <code>&lt;t&gt;effect</code> is a type a signature can name, the three chain words are the only doors into it, and nothing lifts a value into one behind your back. an err that is not in a box is data: it can sit in a list, ride through a constructor, match an <code>(err _)</code> arm anywhere, and be handed from one function to the next without ceremony.</p>
 
@@ -3776,7 +3776,7 @@ welfare                      77.37         82.09</code></pre>
 
 <h2 id="anyvalueraise"><span class="sec-num">189</span>a raise beside an answer that can be anything</h2>
 
-<p><strong>this check <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; it went with the bare err, and section 260 has the check that replaced it.</p>
+<p><strong>this check <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; it went with the bare err, and section 262 has the check that replaced it.</p>
 
 <p>The check that refuses a bare err where a value is wanted finds the groups that can raise by their inferred answer. An answer holding the raised bit counts, and one that also holds the description bit was skipped, because a box that fails is not a bare err. But inference gives a group that hands on a field of a record the runtime built every value it knows, the description bit among them. So <code>fn pick (entry k v)</code>, which raises for one key and otherwise answers <code>v</code>, was read as a box, and <code>consume (pick es[1])</code> checked clean although <code>consume</code> has arms for ints only. The check now skips an answer only when it holds the description bit and does not hold every value. A group that raises beside an answer that can be anything is refused where its answer arrives. An answer with no raised bit stays lenient, as the none check is. Four of the tree's own scripts moved: three hand on std/regexp's answer for a pattern that does not compile, and one splits on a separator the check cannot prove non-empty. They gained arms that hand the err on, or stopped splitting, and each prints the same output as before. No file in kq, vse or kanso-json changed answer. <code>json/encode (json/decode s)</code> was already refused and now has a fixture of its own.</p>
 
@@ -4244,7 +4244,11 @@ welfare                      77.37         82.09</code></pre>
 
 <p><code>put xs i v</code> answers the list with element <code>i</code> replaced, 1-based as <code>xs[i]</code> reads it, and <code>none</code> for a position outside the list. The ports that needed a vector used maps with integer keys, which pay for a sorted structure a dense table does not need. The write is in place where the linearity analysis proves the list unique, the same proof that licenses an in-place push. The analysis never calls a list unique when it came from a push onto a list someone still holds, and that is the case where two lists share one buffer, so the in-place write never reaches a list another binding can see. A vector of 4,000 elements rewritten by position allocates nothing past the pushes that built it.</p>
 
-<h2 id="bornboxed"><span class="sec-num">260</span>an err is born boxed</h2>
+<h2 id="calledfrom"><span class="sec-num">261</span>a library failure names the line that called in</h2>
+
+<p>A failure inside the standard library names its own line, which is true but rarely where the mistake is. Under it the report now names the nearest line of the program's own files that called in: <code>called from g.kso:11</code>. The interpreter adds it as the failure leaves a call into the library. Natively the emitter keeps the line in a global, saved before each call from a program file into the library and put back when the call returns, so a program function the library calls back leaves the outer line in place. A call into the library in tail position is made rather than jumped to, so the line is still there to name.</p>
+
+<h2 id="bornboxed"><span class="sec-num">262</span>an err is born boxed</h2>
 
 <p>Every way of making an err makes a failure in a box: <code>err "…"</code> answers one, and so does a builtin that fails. The box passes every function it reaches without entering it, and every arm too, a catch-all, an <code>(err _)</code> arm and an <code>:err</code> annotation alike. It ends at a rescue written in another package or at the endpoint. What a rescue hands its callback is the err out of its box, an ordinary value: it can be stored, passed and dispatched on, the three err patterns match it, and <code>effect</code> puts it back in a box.</p>
 

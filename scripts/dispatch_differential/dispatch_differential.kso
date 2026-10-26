@@ -228,7 +228,9 @@ pp = arm
   "which (point 0 9)"
   "axis"
 
-bad_utf8 = "which (text/utf8 [255])"
+# A failure passes every arm (#2087), so the err the arm waits for is one a
+# rescue took out of std/text's box.
+bad_utf8 = "which (text/utf8 [255] .? (e -> e))"
 
 pq = arm decls10 "an err arm beside a value arm" bad_utf8 "failed"
 

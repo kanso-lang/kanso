@@ -580,7 +580,8 @@ fn a_lazy_binding_nobody_reads_never_runs() {
 /// operation's site on the merge.
 #[test]
 fn a_merged_err_reports_no_birth_site() {
-    let defs = "import \"std/text\"\n\nfn shown z\n  v = text/to_float \"{z}x\"\n";
+    let defs = "fn bad z\n  return z if z > 9\n  err \"\\\"{z}x\\\" is not a number\"\n\n\
+                fn shown z\n  v = bad z\n";
     let reason = "\"\"0x\" is not a number\"";
     for (name, body, want) in [
         (
@@ -593,7 +594,7 @@ fn a_merged_err_reports_no_birth_site() {
             "  v + 1\n",
             format!(
                 "error[endpoint]: unhandled err reached the entry: {reason}\n  \
-                 born in text/to_float at std/text/text.kso:86\n"
+                 born in bad at single.kso:3\n"
             ),
         ),
     ] {

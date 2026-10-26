@@ -1103,6 +1103,12 @@ impl<'a> Interp<'a> {
                 return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
             }
             return match (group_of(&callee), callee) {
+                (Some((_, group)), callee) if self.enters_library(frame, &group, args) => {
+                    let answer = self
+                        .call(callee, values, *span, frame)
+                        .map_err(|e| called_from(e, frame, *span))?;
+                    Ok(Flow::Done(answer))
+                }
                 (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
                 (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
                 (None, callee) => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
@@ -1132,10 +1138,48 @@ impl<'a> Interp<'a> {
             return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
         }
         match (group_of(&callee), callee) {
+            (Some((_, group)), callee) if self.enters_library(frame, &group, args) => {
+                let answer = self
+                    .call(callee, values, *span, frame)
+                    .map_err(|e| called_from(e, frame, *span))?;
+                Ok(Flow::Done(answer))
+            }
             (Some((name, group)), _) => Ok(Flow::Tail(name, group, values, *span)),
             (None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),
             (None, callee) => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
         }
+    }
+
+    /// Whether a call's head names a group the library declares, so that a
+    /// failure leaving it through a program's call names that call's line
+    /// (ruled on #2099). Asked on the way out of a failed call only.
+    fn library_call(&self, head: &Expr, args: &[Expr]) -> bool {
+        let Expr::Ident(name, _, _) = head else { return false };
+        if crate::flat::made(name.as_str()) {
+            return false;
+        }
+        // a step a chain word runs is called by the executor, as natively,
+        // where the line that wrote it has finished by then
+        if matches!(args.first(), Some(Expr::Ident(n, _, _)) if n.as_str() == "__piped") {
+            return false;
+        }
+        self.fns
+            .get(name.as_str())
+            .and_then(|group| group.first())
+            .is_some_and(|d| crate::provenance::is_library_file(&d.file))
+    }
+
+    /// Whether a tail call from `frame` crosses from the program into the
+    /// library. Such a call is made rather than looped on, so the program's
+    /// frame is still there to name its line if the library fails, as it is
+    /// natively, where the same call is not a tail call either.
+    fn enters_library(&self, frame: &Frame, group: &[&'a FnDecl], args: &[Expr]) -> bool {
+        frame.as_ref().is_some_and(|site| !site.library)
+            && group.first().is_some_and(|d| {
+                self.frame_for(d).is_some_and(|callee| callee.library)
+                    && !crate::flat::made(&d.name)
+            })
+            && !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n.as_str() == "__piped")
     }
 
     /// A zero divisor's answer as the program can see it; see `bare_math`.
@@ -1534,7 +1578,12 @@ impl<'a> Interp<'a> {
                     for arg in &args[1..] {
                         values.push(self.eval(arg, env, frame)?);
                     }
-                    let answer = self.call(callee, values, *span, frame)?;
+                    let answer = self.call(callee, values, *span, frame).map_err(|e| match self
+                        .library_call(head, args)
+                    {
+                        true => called_from(e, frame, *span),
+                        false => e,
+                    })?;
                     return Ok(self.insisted(head, answer, *span, frame));
                 }
                 let callee = self.eval(head, env, frame)?;
@@ -1584,7 +1633,12 @@ impl<'a> Interp<'a> {
                         false => values.push(self.eval(arg, env, frame)?),
                     }
                 }
-                let answer = self.call(callee, values, *span, frame)?;
+                let answer = self.call(callee, values, *span, frame).map_err(|e| {
+                    match self.library_call(head, args) {
+                        true => called_from(e, frame, *span),
+                        false => e,
+                    }
+                })?;
                 Ok(self.insisted(head, answer, *span, frame))
             }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
