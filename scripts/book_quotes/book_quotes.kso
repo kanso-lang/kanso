@@ -77,9 +77,6 @@ fn plain body
   untagged = regexp/replace_all "<[^>]+>" body ""
   unescaped untagged
 
-fn unescaped e@(err _)
-  e
-
 fn unescaped s
   regexp/replace_all "&lt;" s "<"
     .> (lt -> regexp/replace_all "&gt;" lt ">")
@@ -111,9 +108,6 @@ fn exported name
 fn heads_in body pattern
   head_loop (lines_of body) 1 [] pattern
 
-fn head_loop _ _ e@(err _) _
-  e
-
 fn head_loop ls at acc pattern
   heading ls at acc pattern (at > length ls)
 
@@ -129,9 +123,6 @@ fn with_head acc line pattern
   hits = regexp/matches pattern line
   first_group acc hits
 
-fn first_group _ e@(err _)
-  e
-
 fn first_group acc hits
   taken acc hits (length hits == 0)
 
@@ -143,15 +134,9 @@ fn taken acc hits false
 
 # The identifier pattern captures nothing, so each hit is read back off the
 # body by the span it matched.
-fn idents_in e@(err _)
-  e
-
 fn idents_in body
   hits = regexp/matches ident_pattern body
   ident_loop body hits 1 []
-
-fn ident_loop _ e@(err _) _ _
-  e
 
 fn ident_loop body hits at acc
   identing body hits at acc (at > length hits)
@@ -166,15 +151,6 @@ fn identing body hits at acc false
 
 fn holds? names name
   length (list/to_list (list/select names (n -> n == name))) > 0
-
-fn missing e@(err _) (err _)
-  e
-
-fn missing e@(err _) _
-  e
-
-fn missing _ e@(err _)
-  e
 
 fn missing names got
   list/to_list (list/select got (n -> not holds? names n))
@@ -202,15 +178,9 @@ fn reachable bodies
   code = code_only (joined bodies)
   idents_in code .> (names -> list/to_list (list/concat literals names))
 
-fn shown e@(err _)
-  e
-
 fn shown panel
   heads_in panel decl_head
     .> (heads -> list/to_list (list/map heads (n -> exported n)))
-
-fn named_in e@(err _)
-  e
 
 fn named_in panel
   code = code_only panel
@@ -277,10 +247,6 @@ fn found_for q file bodies
   named = as_findings q lead "names" loose []
   named .> (acc -> as_findings q lead "declares" gone acc)
 
-# A pattern that does not compile answers an err, and these hand it on.
-fn leading e@(err _)
-  e
-
 fn leading names
   first names (length names == 0)
 
@@ -289,15 +255,6 @@ fn first _ true
 
 fn first names false
   "`{names[1]}`"
-
-fn as_findings _ e@(err _) _ (err _) _
-  e
-
-fn as_findings _ e@(err _) _ _ _
-  e
-
-fn as_findings _ _ _ e@(err _) _
-  e
 
 fn as_findings q lead kind names acc
   finding_loop q lead kind names 1 acc
@@ -331,9 +288,6 @@ fn quotes_in name raw
   hits = regexp/matches quote_pattern raw
   quote_loop_of name hits 1 []
 
-fn quote_loop_of _ e@(err _) _ _
-  e
-
 fn quote_loop_of name hits at acc
   quoting_at name hits at acc (at > length hits)
 
@@ -344,9 +298,6 @@ fn quoting_at name hits at acc false
   m = hits[at]
   one = quote name (samples_of name) m.groups[1] m.groups[2]
   quote_loop_of name hits (at + 1) (push acc one)
-
-fn checked e@(err _) _ _ _
-  e
 
 fn checked qs at found after
   checking qs at found after (at > length qs)
