@@ -23,28 +23,6 @@
 
 
 
-## 2026-10-25 — a function's arms split across files are counted together
-
-From #2090, toml's port. A module's files share their declarations, and
-toml's `lookup` had a 2-argument arm in one file that called a 3-argument
-arm in the next. The per-file check counted only the arms in the file it was
-reading and refused the call with "no 3-argument arm of `lookup` (arms take
-2)". The same two arms in one file ran.
-
-The module path now records, for each function its files declare, whether
-more than one file declares arms of it, and the per-file arity check leaves
-such a name to the merged check, which sees every arm. A count no file's arms
-take is still refused there, and the message names every arity: "no
-4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
-said "arms take 2".
-
-`tests/arms_split_across_files.rs` runs toml's shape on both engines and
-pins the refusal; main fails both.
-
-The module path now counts, per name, which files declare it. The rows are
-counted with the batch this landed in, at the end of "an import stays in the
-file that writes it".
-
 ## 2026-10-25 — a field is read without importing its owner, on every path
 
 From #2090, regex's port. Chapter 03 says nothing has to be imported to read
@@ -1903,3 +1881,42 @@ module into the run program: `emitted_other_defines` 2,253,
 `emitted_other_calls` 20,692, `emitted_other_branches` 18,040,
 `emitted_other_lines` 171,030, and `text` 5,701,471, the run program's own
 819,681.
+
+## 2026-10-26 — a builder handed on round a cycle is still a builder
+
+The fix for the corpus phase above. A string joined onto itself is a builder,
+and the emitter converts a seed where it enters the group from outside, which
+copies it. Three hops counted as entering when the string they carried was
+the builder the join had just made:
+
+- A join handed straight to the next group as an argument. The emitter knew
+  a name bound to a join was carrying the builder, and asked nothing of the
+  join itself.
+- A join bound below a `return … if` guard. The guard holds the statements
+  after it, and the walk for names bound to a join read only the function's
+  own list.
+- A group whose name is also declared at another count. A call at another
+  count read as the group handed on as a value, called from somewhere no call
+  site describes, so no caller could be proved to hand the string over. A
+  call whose count is another declared group's calls that group, and only a
+  count no group has still counts as the group escaping.
+
+regexp's `replace_all` also handed `stepped_over` its accumulator beside the
+join made from it, so the accumulator was read twice and could not be joined
+in place; `stepped_over` never read it, and the argument is gone. Over 64,000
+words `replace_all` took 49.8 seconds natively and takes 0.15. Each of the
+three loops in `relayed` took between 2.3 and 13.9 seconds at 80,000 steps and
+takes under 0.01.
+
+Three mem fixtures pin the copies, each red with its own change undone and
+green with the other two undone: `a_join_handed_on_as_an_argument_is_still_a_builder`
+and `a_join_below_a_guard_is_still_a_builder` read 198 bytes where main reads
+5,337, and `a_name_at_two_counts_keeps_its_builder` 196 where main reads 1,936.
+`a_digest_holds_every_block_it_walked` hands a join on as an argument too, and
+its vein falls: `allocs` 266 -> 123, `alloc_bytes` 18,657 -> 14,090,
+`bytes_malloc` 81 -> 10 and `sh_str` 1,344 -> 192. Three regexp fixtures move
+too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes` 106,537 (from
+108,672) and `a_scan_that_finds_nothing_keeps_nothing` 2,781,801 (from
+2,783,936), both with the argument change alone; `a_split_stops_where_the_separator_does`
+reads 24,487 (from 24,639), and undoing either the argument change or the
+count change puts part of that back.
