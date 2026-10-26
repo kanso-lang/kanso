@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "chapter 08—a json library"
-description: "a close reading of kanso-json: six files, parsing by byte dispatch, the escape path, numbers, failure positions, the sixteen-test suite, encode and a pretty-printer."
+description: "a close reading of kanso-json: six files, parsing by byte dispatch, the escape path, numbers, failure positions, the test suite, encode and a pretty-printer."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 08</span>
@@ -15,18 +15,18 @@ extra_css: /book/book.css
 <span class="k">import</span> <span class="s">"std/testing"</span>
 
 ok <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}</span>"</span>
-bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": nope}</span>"</span>
+bad <span class="o">=</span> <span class="f">decode!</span> <span class="s">"\<span class="i">{\"name\": nope}</span>"</span>
 <span class="f">ok</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> v) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode v}</span>"</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> bad told))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run using</div>
-    <pre><code>decoded: { "name": "kanso" "tags": ["fast" "simple"] }
+    <pre><code>decoded: { "name":"kanso" "tags":["fast" "simple"] }
 recoded: {"name":"kanso","tags":["fast","simple"]}
 parse failed at byte 10: invalid literal</code></pre>
   </div>
 </div>
 
-<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in twelve lines: <code>decode</code> returns a value or an <code>err</code>, dispatch pulls the failure apart in <code>describe</code>, and the happy path never checks anything. <code>ok</code> reaches <code>describe</code> and <code>encode</code> through <code>.&gt;</code>, because neither has an arm for an err and the checker knows <code>decode</code> can answer one. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
+<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in a few lines. <code>decode!</code> insists the text is json and answers a box: the value, or a failure carrying where the parser stopped. <code>ok</code> is opened with <code>.&gt;</code>, and the happy path never checks anything. <code>bad</code> is read through <code>std/testing</code>'s <code>when_failed</code>, which hands <code>told</code> the reason record; a rescue opens only a failure another package raised, and the sample links json into its own module. plain <code>decode</code> asks instead of insisting, and answers <code>none</code> for text that is not json. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
 
 <h2>six files, one namespace</h2>
 
@@ -132,7 +132,7 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="f">value_for</span> cs[<span class="n">1</span>] cs <span class="n">1</span>
 
 <span class="k">fn</span> <span class="f">fail</span> p reason
-  <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
+  <span class="f">parse_failure</span> p reason
 
 <span class="k">fn</span> <span class="f">rue?</span> cs p
   cs[p <span class="o">+</span> <span class="n">1</span>] <span class="o">==</span> <span class="n">114</span> and cs[p <span class="o">+</span> <span class="n">2</span>] <span class="o">==</span> <span class="n">117</span> and cs[p <span class="o">+</span> <span class="n">3</span>] <span class="o">==</span> <span class="n">101</span>
@@ -159,15 +159,15 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="f">fail</span> p <span class="s">"unexpected character `<span class="i">{text/utf8 [c]}</span>`"</span>
 
 <span class="k">fn</span> <span class="f">word</span> true _ v
-  v
+  <span class="f">v</span>
 
 <span class="k">fn</span> <span class="f">word</span> false p _
   <span class="f">fail</span> p <span class="s">"invalid literal"</span>
 
-<span class="c"># `show` sits one package over from the raising: the decoder refuses a</span>
-<span class="c"># document and says nothing about what a caller does with that. A foreign</span>
-<span class="c"># reason is named, never destructured.</span>
-<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> r:parse_failure)
+<span class="c"># `show` sits one package over from the decoder, which refuses a document and</span>
+<span class="c"># says nothing about what a caller does with that. A foreign type is named,</span>
+<span class="c"># never destructured.</span>
+<span class="k">fn</span> <span class="f">show</span> r:parse_failure
   <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
@@ -186,7 +186,7 @@ err at 1: unexpected character `?`</code></pre>
   </div>
 </div>
 
-<p>the tail predicates read the spellings a byte at a time—<code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8—and each comparison is an <code>==</code> against a byte the input already holds. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." a bad literal becomes an <code>err</code> deep inside, and it comes back out with its position intact. chapter 04's rule decides which callers pay for that: the ones the checker can see have to name the err, which is where <code>finish</code>, <code>array_step</code>, <code>obj_key</code>, <code>obj_value</code> and <code>str_low</code> get their <code>e@(err _)</code> arms. through the rest it still costs nothing to write.</p>
+<p>the tail predicates read the spellings a byte at a time—<code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8—and each comparison is an <code>==</code> against a byte the input already holds. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." in the library a bad literal becomes an <code>err</code> deep inside, and it comes back out with its position intact, past every function between, without one of them naming it. the sample answers the record instead, the shape chapter 04 gives an outcome the caller handles, and its caller reads the position off it.</p>
 
 <p>arrays and objects follow the same discipline one level up. <code>_array_delim</code> dispatches on the byte after an element—comma means more items, <code>93</code> (a closing bracket) means done, <code>none</code> means the input ended mid-array—and the object path adds only a key: <code>_obj_key_start</code> insists on a quote, <code>_expect_char</code> demands the colon, and <code>_obj_value</code> folds each pair into a map with <code>put</code>. there is no recursion <em>limit</em> to manage and no parser state to restore, because every step passes its whole world—the bytes and a position—forward as arguments.</p>
 
@@ -456,7 +456,7 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">if</span> (<span class="f">_ws?</span> cs[p]) (<span class="f">_skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p</code></pre>
 </div>
 
-<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_ws?</code> and <code>_skip_ws</code> byte for byte:</p>
+<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. <code>decode!</code> hands that failure to its caller, and <code>decode</code> answers <code>none</code> in its place. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_ws?</code> and <code>_skip_ws</code> byte for byte. its caller reads the position, so the sample answers the record itself, the shape for an outcome the caller handles:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">positions.kso</div>
@@ -470,21 +470,28 @@ err at 1: unexpected character `?`</code></pre>
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
   p <span class="o">=</span> <span class="f">skip_ws</span> cs <span class="n">1</span>
   q <span class="o">=</span> <span class="f">digits_end</span> cs p
-  v <span class="o">=</span> <span class="f">digits_value</span> (<span class="f">text/slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
+  v <span class="o">=</span> <span class="f">digits_value</span> p (<span class="f">text/slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
   <span class="f">trailing</span> cs (<span class="f">skip_ws</span> cs q) v
 
 <span class="k">fn</span> <span class="f">digits_end</span> cs p
   <span class="f">if</span> (<span class="f">digit?</span> cs[p]) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
-<span class="c"># the run stops where the digits do, inside `cs`, so it is never none</span>
-<span class="k">fn</span> <span class="f">digits_value</span> none
+<span class="c"># the run stops where the digits do, inside `cs`, so it is never none; it is</span>
+<span class="c"># empty when no digit came first, and `to_int` answers none for that</span>
+<span class="k">fn</span> <span class="f">digits_value</span> _ none
   <span class="n">0</span>
 
-<span class="k">fn</span> <span class="f">digits_value</span> run
-  <span class="f">text/to_int</span> run
+<span class="k">fn</span> <span class="f">digits_value</span> p run
+  <span class="f">number_at</span> p (<span class="f">text/to_int</span> run)
+
+<span class="k">fn</span> <span class="f">number_at</span> p none
+  <span class="f">fail</span> p <span class="s">"expected a digit"</span>
+
+<span class="k">fn</span> <span class="f">number_at</span> _ n
+  <span class="f">n</span>
 
 <span class="k">fn</span> <span class="f">fail</span> p reason
-  <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
+  <span class="f">parse_failure</span> p reason
 
 <span class="k">fn</span> <span class="f">digit?</span> none
   <span class="f">false</span>
@@ -510,10 +517,10 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">ws?</span> _
   <span class="f">false</span>
 
-<span class="c"># `show` sits one package over from the raising: the decoder refuses a</span>
-<span class="c"># document and says nothing about what a caller does with that. A foreign</span>
-<span class="c"># reason is named, never destructured.</span>
-<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> r:parse_failure)
+<span class="c"># `show` sits one package over from the decoder, which refuses a document and</span>
+<span class="c"># says nothing about what a caller does with that. A foreign type is named,</span>
+<span class="c"># never destructured.</span>
+<span class="k">fn</span> <span class="f">show</span> r:parse_failure
   <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
@@ -522,63 +529,61 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">skip_ws</span> cs p
   <span class="f">if</span> (<span class="f">ws?</span> cs[p]) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
+<span class="k">fn</span> <span class="f">trailing</span> _ _ f:parse_failure
+  <span class="f">f</span>
+
 <span class="k">fn</span> <span class="f">trailing</span> cs p v
   <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)
 
 <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>)))
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>)))</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>)))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  ;"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run positions.kso</div>
     <pre><code>ok: 42
 err at 3: unexpected trailing characters
-err at 5: unexpected trailing characters</code></pre>
+err at 5: unexpected trailing characters
+err at 3: expected a digit</code></pre>
   </div>
 </div>
 
-<p>positions point at the first byte the parser could not accept: the <code>x</code> in <code>1 x</code> sits at byte 3, the <code>;</code> at byte 5. the policy choice that rounds the failure story out is not json's to make, and the panel below is a caller's file rather than the library's:</p>
+<p>positions point at the first byte the parser could not accept: the <code>x</code> in <code>1 x</code> sits at byte 3, the <code>;</code> at byte 5, and a document with no digit in it is refused where the digit should have been.</p>
 
-<div class="code-panel">
-  <div class="code-panel-title">app/config.kso &mdash; the caller's package, not json's</div>
-  <pre><code><span class="k">type</span> <span class="t">defect</span>
-  reason:<span class="t">string</span>
-
-<span class="k">fn</span> <span class="f">must</span> (<span class="t">err</span> reason)
-  <span class="t">err</span> (<span class="t">defect</span> <span class="s">"<span class="i">{reason}</span>"</span>)
-
-<span class="k">fn</span> <span class="f">must</span> v
-  v</code></pre>
-</div>
-
-<p>chapter 04 drew the line: an <code>err</code> a caller might reasonably handle is a value to dispatch on; an <code>err</code> nobody should handle rises to the endpoint. <code>decode</code> hands back the first kind, because malformed input is the caller's business—maybe it retries, maybe it reports byte 10 to a user. converting to the second kind—a failure on input you <em>control</em>, a config file baked into the program, a fixture, where a parse failure is a bug with your name on it—is the caller's move to make, and it has to be, because json cannot make it. json could write an arm for its own <code>err</code>, since an arm names a failure wherever it is written, and it does not: the library has nothing to say about a document it has already refused, and an arm inside it would decide for every caller at once. the suite reads the position from outside, through <code>std/testing</code>, and a caller who wants the defect conversion writes it in their own package.</p>
+<p>chapter 04 drew the line: a failure a caller might reasonably handle is a value to dispatch on, and a failure nobody should handle rises to the endpoint. json offers both, and the caller picks one by the name it calls. <code>decode</code> answers <code>none</code> for text that is not json, because malformed input is often the caller's business: maybe it retries, maybe it asks a user again. <code>decode!</code> is for input you <em>control</em>, a config file baked into the program or a fixture, where a parse failure is a bug with your name on it, and its failure carries the position and the reason to the endpoint. json does not rescue its own failures. the library has nothing to say about a document it has already refused, and a rescue inside it would decide for every caller at once. the suite reads the position from outside, through <code>std/testing</code>.</p>
 
 <h2>the suite</h2>
 
-<p>nineteen booleans pin the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, and a round trip:</p>
+<p>a file of booleans pins the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, and a round trip:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json_test.kso</div>
-  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> <span class="f">decode</span> <span class="s">"\"\\u00e9\""</span> <span class="o">==</span> <span class="s">"é"</span>
+  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> <span class="f">decodes?</span> <span class="s">"\"\\u00e9\""</span> <span class="s">"é"</span>
 
 <span class="f">test_error_position</span> <span class="o">=</span>
-  decoded <span class="o">=</span> <span class="f">decode</span> <span class="s">"[1, nope]"</span>
+  decoded <span class="o">=</span> <span class="f">decode!</span> <span class="s">"[1, nope]"</span>
   <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">5</span>)
 
 <span class="f">test_error_trailing</span> <span class="o">=</span>
-  decoded <span class="o">=</span> <span class="f">decode</span> <span class="s">"1 x"</span>
+  decoded <span class="o">=</span> <span class="f">decode!</span> <span class="s">"1 x"</span>
   <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">3</span>)
 
+<span class="f">test_plain_decode_answers_none</span> <span class="o">=</span> <span class="f">decode</span> <span class="s">"[1, nope]"</span> <span class="o">==</span> none
 
 <span class="f">test_roundtrip</span> <span class="o">=</span>
   text <span class="o">=</span> <span class="s">"\{\"a\":[1,2.5,\"x\"],\"b\":null}"</span>
-  <span class="f">encode</span> (<span class="f">decode</span> text) <span class="o">==</span> text</code></pre>
+  <span class="f">encodes_back?</span> (<span class="f">decode</span> text) text</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test lib/json</div>
     <pre><code>test_decode_array ... ok
 test_decode_bool ... ok
 test_decode_escapes ... ok
 test_decode_float ... ok
+test_decode_exponent ... ok
+test_decode_exponent_upper ... ok
+test_decode_exponent_signed ... ok
 test_decode_int ... ok
+test_decode_negative ... ok
 test_decode_nested ... ok
 test_decode_object ... ok
 test_decode_string ... ok
@@ -592,12 +597,13 @@ test_encode_shorthands ... ok
 test_encode_nested ... ok
 test_error_position ... ok
 test_error_trailing ... ok
+test_plain_decode_answers_none ... ok
 test_roundtrip ... ok
-19 passed, 0 failed</code></pre>
+24 passed, 0 failed</code></pre>
   </div>
 </div>
 
-<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison. it goes through <code>std/testing</code>, which hands the reason record to a continuation, because json may not reach into an <code>err</code> json raised. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
+<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison. it goes through <code>std/testing</code>, which hands the reason record to a continuation, because a rescue opens only a failure another package raised and the suite sits inside json. <code>test_plain_decode_answers_none</code> pins the other half: the plain form answers <code>none</code> for the same document. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
 
 <h2>encode and pretty-printing</h2>
 

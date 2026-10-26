@@ -1,9 +1,16 @@
-import "std/text"
-
-board = ["450" "seasonal"]
-soup = text/to_int board[1]
-flan = text/to_int board[2]
+board = { "soup":450 }
+soup = price board "soup"
+flan = price board "flan"
 print (label "soup" soup) .> (_ -> print (label "flan" flan))
+
+fn price menu dish
+  listed menu[dish] dish
+
+fn listed none dish
+  err "{dish} is not on the board"
+
+fn listed cents _
+  cents
 
 fn label dish cents
   "{dish}: {cents} cents"
