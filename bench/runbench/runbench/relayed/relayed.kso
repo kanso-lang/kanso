@@ -6,8 +6,9 @@
 # counts read as a group handed on as a value. Natively each step copies the
 # string it has built so far, so each loop costs the square of its length:
 # 80,000 steps of `built` took 13.9 seconds, of `marked` 11.4 and of
-# `tagged` 2.3. `regexp/replace_all` has the third shape, and over 64,000
-# words it took 49.8 seconds.
+# `tagged` 2.3. The interpreter has the third cliff too: `tagged` took 1.57
+# seconds for 80,000 steps. `regexp/replace_all` has the third shape, and over
+# 64,000 words it took 49.8 seconds natively.
 fn built s at acc n
   building s at acc n (at > n)
 

@@ -1883,8 +1883,12 @@ first group and hands it to the second:
 
 Natively, each hop copies the string built so far, so each loop costs the
 square of its length: 80,000 steps of `built` took 13.9 seconds, of `marked`
-11.4 and of `tagged` 2.3. The interpreter is linear on all three. The module
-is `bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
+11.4 and of `tagged` 2.3. The interpreter asks the same analysis and has the
+third cliff too, at 1.57 seconds for 80,000 steps of `tagged` against 0.10
+for 20,000, so `relayed 1500` joins the interpreted corpus: on this
+container it reads 580,418,637 with it and 563,943,189 with it reading
+nothing, a column of 16,475,448 (2.84%). The run program's module is
+`bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
 1,500 for the third. On this container the run program reads 837,824,222
 with it and 822,287,654 with it reading nothing, a column of 15,536,568
 (1.85%). The run program's allocation vein moves with it. Welfare re-bases
