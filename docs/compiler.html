@@ -1193,19 +1193,20 @@ sequenced: a              listed:    [err "a" 2]
 mapped:    { "k":err "a" } reached:  a
 indexed:   a              sized:     a</code></pre>
 
-<p>the second says which patterns can hold an err at all. three can—the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members—and the other seven decline one. that is ten pattern forms against two origins, and the two columns read the same: since the 2026-09-15 ruling made a bare err data, an arm takes a failure whoever raised it. until that day the own column was <code>past</code> in every row, which was what "your own failures only bubble" meant when written out; the licence that sentence named now lives at the rescue word, where a <code>.?</code> written in the package that raised the failure hands it on.</p>
+<p>the second says what each pattern form does with a failure. a failure is born in a box (section 260), so every form lets it pass whoever raised it, and an effect annotation, which takes the box unopened, is the one row that fires. three forms&#8212;the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members&#8212;match the err a rescue takes out of its box, which is a value like any other. the foreign-only licence lives at the rescue word, where a <code>.?</code> written in the package that raised the failure hands it on.</p>
 
 <pre><code>pattern   own   foreign
 _         past  past
 v         past  past
-v:err     took  took
-(err r)   took  took
-v:maybe   took  took
+v:err     past  past
+(err r)   past  past
+v:maybe   past  past
 v:some    past  past
 v:int     past  past
 v:string  past  past
 v:none    past  past
-1         past  past</code></pre>
+1         past  past
+v:effect  took  took</code></pre>
 
 <p><code>took</code> means the arm fired; <code>past</code> means the failure went by as though the arm were not written. two of the five disagreements were cells of this table. <code>_:some</code> took a foreign failure on two engines and was refused outright at build time on the third, which made an arm that names no err anywhere into an unmarked rescue. a typeset arm took its own package's failure on native alone, because the typeset branch of the emitter returned before it asked whether the annotation admitted err.</p>
 
@@ -1217,9 +1218,9 @@ v:none    past  past
 
 <p>every language with tracked effects and carried failures meets the same fork: either the programmer writes the plumbing&#8212;<code>bind</code>, <code>rescue</code>, <code>await</code>, <code>?</code>, a do-block&#8212;or the compiler does. kanso's answer took three decisions that arrived separately and only work together. each of them was nearly reversed at least once, and the argument for the whole has already been lost and reconstructed from the log once, so this entry is where it lives now.</p>
 
-<p>the first: your own failures only bubble. as built on 2026-08-24, no arm could take an err its own hako raised&#8212;dispatch passed it as though the arm were not written&#8212;so the interior of a program had no use for a rescue keyword: there was nothing it would be allowed to catch. the 2026-09-15 ruling moved the line: a bare err is data and an arm names it anywhere, and what stays foreign-only is the rescue word, which hands on a failure its own package raised. this is also what cleared the road for the third decision. the standing objection to automatic lifting had been that it would coexist badly with hand-written local handling, and the first decision removes local handling from the language entirely.</p>
+<p>the first: your own failures only bubble. as built on 2026-08-24, no arm could take an err its own hako raised&#8212;dispatch passed it as though the arm were not written&#8212;so the interior of a program had no use for a rescue keyword: there was nothing it would be allowed to catch. the 2026-09-15 ruling let an arm name a bare err anywhere, and the 2026-10-26 ruling took the bare err away: an err is born in a box, no arm opens one, and the rescue word is foreign-only, so it hands on a failure its own package raised. this is also what cleared the road for the third decision. the standing objection to automatic lifting had been that it would coexist badly with hand-written local handling, and the first decision removes local handling from the language entirely.</p>
 
-<p>the second: at a boundary, handling is dispatch. a foreign failure is a value that arrives at your arms, and an arm that names it&#8212;<code>fn verdict (err e)</code>&#8212;receives it the way any arm receives anything. a value arm converts; an err arm annotates. <code>rescue</code> did later become a word, and the arm is still what does the handling &#8212; the word routes a failure to a group and the group's arms decide, so what arrived was a way to say which channel you meant rather than a second way to handle. it is a library function and not a keyword.</p>
+<p>the second: at a boundary, handling is dispatch. a rescue hands its callback the foreign err out of its box, a value, and an arm that names it&#8212;<code>fn verdict (err e)</code>&#8212;receives it the way any arm receives anything. a value arm converts; an err arm annotates. <code>rescue</code> did later become a word, and the arm is still what does the handling &#8212; the word routes a failure to a group and the group's arms decide, so what arrived was a way to say which channel you meant rather than a second way to handle. it is a library function and not a keyword.</p>
 
 <p><strong>the third decision was reversed on 2026-08-29, and section 32 has the ruling that replaced it.</strong> what it said: elaboration is signature-directed. the compiler tracks which values are plans, and the receiving position decides what happens&#8212;a position that demands a value gets the bind inserted, and a position that takes a plan receives the plan itself. <code>retry (fetch url)</code> hands retry the plan with no mark, because retry's signature says it takes one; <code>parse (fetch url)</code> becomes a plan whose parse step runs on the fetched body, because parse's signature says it takes the value. nothing runs at either call: plans only collapse when demand reaches them from io. the two classic objections dissolve under the rest of the language rather than under this feature. a plan you forgot to run is an unused value, and an unused value is a compile error. a plan that runs later than you intended cannot happen, because where order matters you wrote <code>.&gt;</code>, and where you did not, there was no order to violate.</p>
 
@@ -2011,6 +2012,8 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 <p>this decision is made once per identifier per body, which puts the scan on the front end&#39;s hottest path at import-check time. the first shape of the fix built a split iterator for every name and cost the compile corpus 1.23 per cent. the overwhelming majority of names hold no slash and so can hold no qualifier anywhere inside them; answering those on one scan, before the iterator exists, takes about eighty per cent of that back. the residue is what a slash-bearing name costs to scan properly.</p>
 
 <h2 id="explicitbox"><span class="sec-num">71</span>the box is explicit, and a bare err is a value</h2>
+
+<p><strong>the bare err <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; an err is born in a box now, and section 260 has the design that replaced what this section says about a bare err, the check that came with it, and the check of section 189. the box itself stands as written.</p>
 
 <p>a call that can fail used to hand its caller a value or a failure, and the caller found out which by looking. the box is written now. <code>&lt;t&gt;effect</code> is a type a signature can name, the three chain words are the only doors into it, and nothing lifts a value into one behind your back. an err that is not in a box is data: it can sit in a list, ride through a constructor, match an <code>(err _)</code> arm anywhere, and be handed from one function to the next without ceremony.</p>
 
@@ -3773,6 +3776,8 @@ welfare                      77.37         82.09</code></pre>
 
 <h2 id="anyvalueraise"><span class="sec-num">189</span>a raise beside an answer that can be anything</h2>
 
+<p><strong>this check <span class="status status-declined">retired 2026-10-26</span></strong> &mdash; it went with the bare err, and section 260 has the check that replaced it.</p>
+
 <p>The check that refuses a bare err where a value is wanted finds the groups that can raise by their inferred answer. An answer holding the raised bit counts, and one that also holds the description bit was skipped, because a box that fails is not a bare err. But inference gives a group that hands on a field of a record the runtime built every value it knows, the description bit among them. So <code>fn pick (entry k v)</code>, which raises for one key and otherwise answers <code>v</code>, was read as a box, and <code>consume (pick es[1])</code> checked clean although <code>consume</code> has arms for ints only. The check now skips an answer only when it holds the description bit and does not hold every value. A group that raises beside an answer that can be anything is refused where its answer arrives. An answer with no raised bit stays lenient, as the none check is. Four of the tree's own scripts moved: three hand on std/regexp's answer for a pattern that does not compile, and one splits on a separator the check cannot prove non-empty. They gained arms that hand the err on, or stopped splitting, and each prints the same output as before. No file in kq, vse or kanso-json changed answer. <code>json/encode (json/decode s)</code> was already refused and now has a fixture of its own.</p>
 
 <h2 id="shortrecords"><span class="sec-num">190</span>an import's record by its short name</h2>
@@ -4235,6 +4240,16 @@ welfare                      77.37         82.09</code></pre>
 <h2 id="restofalist"><span class="sec-num">259</span>the rest of a list, in one copy</h2>
 
 <p>Most of this repository's own scripts walk a list by reading its first element and handing on <code>list/to_list (list/drop xs 1)</code>. Each rest was built a step at a time, a step record and an advanced cursor per element, so walking 5,000 elements took 6.5 seconds natively and 23 on the interpreter. The rest of a list is now one copy of its tail, made by an internal builtin both engines share, and anything else a cursor walks, a string or bytes or a map, keeps its step walk. The same 5,000 elements take 0.125 and 0.15 seconds. The walk still copies each rest, so it stays quadratic, at about two seconds for 20,000 elements. A rest that shared its list's storage would need a list that can point into another list's items, and a push onto a list finds its buffer's header through that pointer.</p>
+
+<h2 id="bornboxed"><span class="sec-num">260</span>an err is born boxed</h2>
+
+<p>Every way of making an err makes a failure in a box: <code>err "…"</code> answers one, and so does a builtin that fails. The box passes every function it reaches without entering it, and every arm too, a catch-all, an <code>(err _)</code> arm and an <code>:err</code> annotation alike. It ends at a rescue written in another package or at the endpoint. What a rescue hands its callback is the err out of its box, an ordinary value: it can be stored, passed and dispatched on, the three err patterns match it, and <code>effect</code> puts it back in a box.</p>
+
+<p>An outcome the caller is expected to handle is a value instead. <code>text/to_int</code> and <code>text/to_float</code> answer <code>none</code> for text that is not a number, and <code>json/decode</code> answers <code>none</code> for text that is not json. Each has a <code>!</code> form, <code>to_int!</code>, <code>to_float!</code> and <code>decode!</code>, that answers the box with the reason. <code>text/utf8</code> keeps its failure, because bytes that are not text are a mistake rather than an outcome.</p>
+
+<p>The check refuses a box where a value is read: an operand, an index, an interpolation, or an argument at a position no arm takes an effect at. It proves a box from a group whose every answer is a failure or from a tail that calls <code>err</code>, and lets a group that can also answer a value through, as it does for a none. This replaces the raise analysis of sections 71 and 189, which followed a bare err into every call it could reach and asked for an <code>(err _)</code> arm there. The ports had written hundreds of those arms only to hand the err back.</p>
+
+<p>Natively the err out of its box has a tag of its own beside the failure's, and the interpreter a value of its own. A slot that can hold one beside a two-field record is passed boxed, so a scanner that answered its end of input with an unboxed err would build a record per answer where one that answers a failure builds none.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

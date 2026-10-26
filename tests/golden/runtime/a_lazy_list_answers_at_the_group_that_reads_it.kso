@@ -4,10 +4,10 @@
 # interpreter. Native narrowed `xs` inside `pick` to a value that cannot be an
 # err, so `iter` kept no guard for one and the trace skipped it.
 import "std/list"
-import "std/text"
 
 fn bad x
-  text/to_int "{x}a"
+  return x if x > 9
+  err "\"{x}a\" is not an integer"
 
 fn look xs
   list/first xs

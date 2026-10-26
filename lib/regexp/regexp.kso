@@ -125,7 +125,6 @@ fn taken s m
 pub fn groups pattern s
   named (found pattern s)
 
-
 fn named (hit 0 _ _)
   none
 
@@ -146,7 +145,6 @@ fn gathered prog s
 pub fn match_at pattern s at
   anchored (compiled pattern) s at
 
-
 fn anchored prog s at
   fitting prog s at (at > length s + 1)
 
@@ -166,7 +164,6 @@ fn reached_at prog at end
 # needs the position to name a line, which the text alone cannot give back.
 pub fn matches pattern s
   located (compiled pattern) s
-
 
 fn located prog s
   spotting prog s 1 []
@@ -217,7 +214,6 @@ fn moved m false
 pub fn replace_all pattern s repl
   replaced (compiled pattern) s repl
 
-
 fn replaced prog s repl
   rebuilt prog s 1 "" repl
 
@@ -260,7 +256,6 @@ fn remaining s at false
 pub fn split pattern s
   divided (compiled pattern) s
 
-
 fn divided prog s
   cut prog s 1 1 []
 
@@ -291,7 +286,6 @@ fn divided prog s from _ acc m false
 # The leftmost match of the whole pattern, tried at each start in turn.
 fn found pattern s
   begun (compiled pattern) s
-
 
 fn begun prog s
   scanned prog s 1

@@ -5,7 +5,7 @@ import "std/text"
 
 fn go n
   bad = text/from_code n
-  worse = text/to_int "x{n}"
+  worse = text/to_bytes [n]
   f = (p q r -> "{p}{q}{r}")
   f bad 1 worse
 

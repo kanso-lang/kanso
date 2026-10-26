@@ -15,4 +15,4 @@ fn hop_two text
   hop_three text
 
 fn hop_three text
-  json/decode text
+  json/decode! text
