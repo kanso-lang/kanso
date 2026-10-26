@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-25 — a field is read without importing its owner, on every path
-
-From #2090, regex's port. Chapter 03 says nothing has to be imported to read
-a field, and the 2026-10-12 gavel on #1894 says a value carries the arms its
-type's owner wrote, a field of a parameter included. A module `u` that
-imports nothing and reads `h.start` and `h.end` on a value module `m` built
-was refused on check, run and run --interp with "no record type has a field
-`start` (module u)": the module was checked alone before the program that
-imports it, and no type it could see declares the field.
-
-A library compile now leaves to the program a field read on one of the
-function's parameters when no type the library can see declares the field,
-as it leaves a call on a handed value that only another module writes. The
-same holds for two fields read on one parameter when one of them is unseen.
-A read on any other value, a local built from a visible type say, is refused
-where it is written, as before, and so is a parameter read for fields that
-visible types each declare but none holds together. The root (an entry, a
-play file, a test file) refuses a field no type in the whole program
-declares.
-
-`tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
-(main refuses it) and pins the root's refusal of a misspelt field.
-
-A library's field reads reach the root already rewritten into calls on their
-readers, so the root now asks a reader's call the same question.
-`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
-file and line, now said by the root. The root quotes no line from another
-file, as it does for every diagnostic about one, and the dependency's
-`(module deep)` suffix goes with the dependency's check.
-
 ## 2026-10-25 — an import stays in the file that writes it
 
 From #2090, xsv's port. A module's file `join.kso` declared a private
@@ -1844,6 +1814,26 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
 
 ## 2026-10-26 — a list read for its last element joins the corpus
 
