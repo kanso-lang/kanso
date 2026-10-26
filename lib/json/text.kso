@@ -1,21 +1,5 @@
 import "std/text"
 
-# A string goes out with what JSON's string syntax cannot hold escaped: a
-# quote, a backslash, and every byte below a space. The scan finds the first;
-# a string with none is appended as it stands, and one with any goes through
-# `append_escaped`, which writes it in the forms this writer has always used:
-# the five one-letter escapes for 8, 9, 10, 12 and 13, and `\u00` with two
-# lowercase hex digits for the other bytes below a space.
-fn escape_split acc s _ n len
-  if (len < n) (text/append acc s) (builtin_append_escaped acc s)
-
-fn escape_clean acc s bs n
-  escape_split acc s bs n (length bs)
-
-pub fn escape_onto acc s
-  bs = text/bytes s
-  escape_clean acc s bs (text/find2_below bs 1 34 92 32)
-
 fn hex_alpha c
   if (96 < c and c < 103) (c - 87) (hex_upper c)
 
