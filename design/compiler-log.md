@@ -23,24 +23,6 @@
 
 
 
-## 2026-10-25 — a test that fails inside a library names the library's line
-
-From #2091's sixth item, chip8's port. A test whose helper handed
-`text/split` a none failed inside std/text, and `kanso test` printed
-"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
-number under the test file's path. In the port, line 38 of the test file was
-a different test, one that had passed. The runner rendered every failure's
-span against the test file's own source.
-
-A failure that knows its place now prints it the way `run` and `play` do,
-`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
-(#1975) that a failure names the line it happened on. A failure with no place
-keeps the rendered span.
-
-`tests/golden/test_verb/fails_in_std` is the reduction, and
-`a_test_failing_inside_a_library_names_the_librarys_line` in
-`tests/test_verb.rs` pins both streams.
-
 ## 2026-10-25 — a binding refused for another file's name says which file
 
 #2085 asks whether a local may reuse a name declared only in another file of
@@ -1944,3 +1926,41 @@ read its own failure, and the import costs six allocations of 32 bytes:
 `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
 `an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
 and reads 3 allocs and 112 bytes.
+
+## 2026-10-26 — a none carried through a name is checked
+
+#2088. A none handed straight to a call is refused at check when the
+receiver has no arm for it, and the same none bound to a name first passed
+check and stopped at run time. Since #1890 a slice past the end answers none,
+so the ports hit the hole wherever they slice: regex broke 42 of 43 fixtures
+at run time through one named slice. A name bound once to something that
+provably answers none now carries the none into the check, so binding a
+value never changes what compiles. A builtin has no arms to give a none to,
+so the positions its demand table constrains refuse one: `length`, `push`,
+`print`, the os builtins and the rest of the table, called directly or
+through a name.
+
+The tree had about 130 reads the checker cannot bound, most of them a bound
+decided in one function and handed to the next as a boolean, the shape the
+house rule asks a branch to take. Each read must succeed, so each now goes
+through a `none` arm that answers an err. Since #2087 that err is a box that
+passes everything above it, so no caller gains an arm. Most scripts take one
+helper, `present`, and the library, the book's escapes sample and five
+benchmarks each take a small arm beside the read. A default value in the arm
+would have hidden the bug the check exists to catch, and no site takes one.
+Where a none was an expected outcome, welfare_rescore and grammar_check name
+it with a marker or keep its arm. kq and kanso-json carry the same change on
+branches of this name.
+
+Six error fixtures pin the refusal, named and inline, for a group with no
+arm, `length`, `push` and `list/concat`, each seen passing check on the
+#2087 tree.
+
+The test corpora read the same way. Nine micro samples and nine mem
+fixtures route a read through a none arm, and none of their outputs or
+counters moved. `a_box_where_a_value_is_expected` gains one leading
+diagnostic, since `print os/args[1]` hands `print` a none. The test verb's
+`fails_in_std` carries its slice in a record field so the none still reaches
+`text/split` at run time, and its called-from line moves from 13 to 18. The
+last item on #2088, bc's slice edges, was built on 2026-10-25: a start before
+1 answers none, as a range past the end does.
