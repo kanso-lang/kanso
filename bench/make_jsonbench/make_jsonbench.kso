@@ -32,7 +32,13 @@ bench_text = """
     acc
 
   fn loop cs n acc
-    loop cs (n - 1) (acc + length (json/decode cs))
+    loop cs (n - 1) (acc + sized (json/decode cs))
+
+  fn sized none
+    err "bench/large.json does not decode"
+
+  fn sized doc
+    length doc
 """
 
 main_text = """
