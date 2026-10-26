@@ -23,24 +23,6 @@
 
 
 
-## 2026-10-25 — a test that fails inside a library names the library's line
-
-From #2091's sixth item, chip8's port. A test whose helper handed
-`text/split` a none failed inside std/text, and `kanso test` printed
-"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
-number under the test file's path. In the port, line 38 of the test file was
-a different test, one that had passed. The runner rendered every failure's
-span against the test file's own source.
-
-A failure that knows its place now prints it the way `run` and `play` do,
-`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
-(#1975) that a failure names the line it happened on. A failure with no place
-keeps the rendered span.
-
-`tests/golden/test_verb/fails_in_std` is the reduction, and
-`a_test_failing_inside_a_library_names_the_librarys_line` in
-`tests/test_verb.rs` pins both streams.
-
 ## 2026-10-25 — a binding refused for another file's name says which file
 
 #2085 asks whether a local may reuse a name declared only in another file of
@@ -1879,3 +1861,26 @@ interpreter runs the analysis before each program, so interp_instructions
 falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
 the lists of entries a drop collects while it walks a set it is changing.
 Welfare rises 95.38 -> 95.40 and the rise is banked.
+
+## 2026-10-26 — a string handed on round a cycle joins the corpus
+
+The corpus phase for the next fix, under the 2026-09-05 corpus-first gavel.
+A battery of core-library shapes at 4,000 and 16,000 elements on both engines
+found one cliff: natively, `regexp/replace_all` over 64,000 words took 49.8
+seconds, where the interpreter took 4.8. Three separate causes sit under it,
+each reduced to a loop of two groups that joins onto a string in place in the
+first group and hands it to the second:
+
+- `built` hands the join straight on, `built s (at + 1) "{acc}{s}x" n`.
+- `marked` binds the join below a `return acc if …` guard, and the guard holds
+  the statements after it.
+- `tagging` is also declared with one parameter, as regexp's `swapped` is.
+
+Natively, each hop copies the string built so far, so each loop costs the
+square of its length: 80,000 steps of `built` took 13.9 seconds, of `marked`
+11.4 and of `tagged` 2.3. The interpreter is linear on all three. The module
+is `bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
+1,500 for the third. On this container the run program reads 837,824,222
+with it and 822,287,654 with it reading nothing, a column of 15,536,568
+(1.85%). The run program's allocation vein moves with it. Welfare re-bases
+each moved term once CI's rows are in, so the fix scores as a rise.

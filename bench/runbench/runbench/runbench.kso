@@ -276,6 +276,16 @@
 # xs 1)`, the walk most of this repository's scripts use. Each rest is built
 # afresh by stepping a cursor through the list one record at a time, about
 # 260 instructions an element, so the walk costs the square of the list.
+#
+# One more joined on 2026-10-26, measured on main at kanso#2154 before its
+# fix. Its column is the whole program with it, 837,824,222, less the whole
+# with it reading nothing, 822,287,654, and its share is of the former.
+#
+#   relayed   three strings of 3,000 steps or fewer       15,536,568  1.85%
+#
+# `relayed` builds three strings by joining onto each one round a cycle of
+# two groups. Natively each hop to the second group copies the string, so
+# each loop costs the square of its length.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -298,6 +308,7 @@ import "./overwrite"
 import "./padded"
 import "./pend"
 import "./reentered"
+import "./relayed"
 import "./restate"
 import "./rested"
 import "./rewind"
@@ -371,6 +382,8 @@ bucketed_numbers = 2000
 
 rested_items = 500
 
+relayed_steps = 3000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -423,8 +436,9 @@ fn tally raw doc a b
   ported16 = ported15 + appended/total appended_numbers
   ported17 = ported16 + bucketed/total bucketed_numbers
   ported18 = ported17 + rested/total rested_items
+  ported19 = ported18 + relayed/total relayed_steps
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported18 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported19 + rest))
   bulk .> on
 
 fn shaped raw doc a

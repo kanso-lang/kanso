@@ -1,0 +1,44 @@
+# Three strings built by joining onto themselves round a cycle of two groups,
+# each joined in place by its first group and copied whole by the hop to the
+# second. `built` hands the join straight on as an argument. `marked` binds
+# it below a `return … if` guard, which holds the statements after it.
+# `tagging` is also declared with one parameter, and a name called at two
+# counts read as a group handed on as a value. Natively each step copies the
+# string it has built so far, so each loop costs the square of its length:
+# 80,000 steps of `built` took 13.9 seconds, of `marked` 11.4 and of
+# `tagged` 2.3. `regexp/replace_all` has the third shape, and over 64,000
+# words it took 49.8 seconds.
+fn built s at acc n
+  building s at acc n (at > n)
+
+fn building _ _ acc _ true
+  acc
+
+fn building s at acc n false
+  built s (at + 1) "{acc}{s}x" n
+
+fn marked s at acc n
+  return acc if at > n
+  kept = "{acc}{s}y"
+  handed s (at + 1) kept n
+
+fn handed s at acc n
+  marked s at acc n
+
+fn tagged s at acc n
+  tagging s at acc n (at > n)
+
+fn tagging _ _ acc _ true
+  acc
+
+fn tagging s at acc n false
+  kept = "{acc}{tagging s}"
+  tagged s (at + 1) kept n
+
+fn tagging s
+  "[{s}]"
+
+pub fn total n
+  b = length (built "ab" 1 "" n)
+  m = length (marked "ab" 1 "" n)
+  b + m + length (tagged "ab" 1 "" (n / 2))
