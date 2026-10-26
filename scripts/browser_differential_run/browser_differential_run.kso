@@ -82,9 +82,6 @@ fn either? true _
 fn either? _ answer
   answer
 
-fn door_of e@(err _)
-  e
-
 fn door_of src
   chosen src (library? src)
 
@@ -142,9 +139,6 @@ fn with_page progs
   page = page_for progs
   on = (w -> with_runtime progs page w)
   os/read_bytes! "docs/kanso.wasm" .> on
-
-fn with_runtime _ e@(err _) _
-  e
 
 fn with_runtime progs page w
   on = (r -> with_engine progs page w r)
@@ -213,9 +207,6 @@ fn more_files paths at acc book false
   return more_files paths at acc book true if at < 1 or length paths < at
   on = (src -> one_file paths at acc book src)
   os/read_file! paths[at] .> on
-
-fn book_read _ _ e@(err _)
-  e
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
@@ -373,9 +364,6 @@ fn unescaped raw
   once = replaced raw "\\\\" "\\"
   twice = replaced once "\\`" "`"
   replaced twice "\\$" "$"
-
-fn replaced e@(err _) _ _
-  e
 
 fn replaced text from to
   text/split text from .> (parts -> text/join parts to)
@@ -803,9 +791,6 @@ fn filed progs seen gaps at bad agreed skipped p r said false
   theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (list/concat bad [why]) agreed skipped
-
-fn filed _ _ _ _ _ _ _ _ _ _ e@(err _)
-  e
 
 # A crashed case answers no code and no text, so the ordinary line reads
 # `tab <none> <none>` and throws away the reason the tab already captured.

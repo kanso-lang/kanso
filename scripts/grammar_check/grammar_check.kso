@@ -170,9 +170,6 @@ fn trying line rules i at acc false
 fn landed line rules i at acc _ none
   tried line rules (i + 1) at acc
 
-fn landed _ _ _ _ _ _ e@(err _)
-  e
-
 fn landed line rules _ at acc one m
   spanned line rules at acc one m (one.ends == none)
 
@@ -202,9 +199,6 @@ fn seeking ends line at false
 
 fn reached ends line at none
   closing ends line (at + 1)
-
-fn reached _ _ _ e@(err _)
-  e
 
 fn reached _ _ _ m
   m.to
@@ -305,9 +299,6 @@ fn noted acc _ _ _ true
 fn noted acc one want seen false
   said = "'{one.line}': '{want}' is not painted {one.scope}"
   push acc "{said} (painted: {seen})"
-
-fn reported e@(err _)
-  e
 
 fn reported faults
   clean faults (length faults == 0)
