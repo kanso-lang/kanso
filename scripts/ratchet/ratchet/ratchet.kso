@@ -339,7 +339,7 @@ fn applied dir _ _ acc true
   os/run "git" ["worktree" "remove" "--force" dir] .> (_ -> intact acc)
 
 fn applied dir list at acc false
-  r = list[at]
+  r = present list[at]
   shell dir r.mutation .> (m -> after_try dir list at acc r m.status)
 
 # The worktree is restored between rows so one stale mutation cannot make the
@@ -441,7 +441,7 @@ fn winnowed mode _ _ _ acc true
   handful mode acc
 
 fn winnowed mode files list at acc false
-  r = list[at]
+  r = present list[at]
   os/read_file! (script_of r) .> (s -> read_it mode files list at acc r s)
 
 # A row's mutation is a shell command and its script is the word after `sh `.
@@ -537,8 +537,8 @@ fn cut words acc false
 # `touched_mode` writes all four words, so the guard is for the reader.
 fn cut words acc true
   return cutting 0 0 "prove" acc true if length words < 4
-  k = text/to_int words[2]
-  n = text/to_int words[3]
+  k = shard_number (text/to_int words[2])
+  n = shard_number (text/to_int words[3])
   cutting k n words[4] acc (k < 1 or n < k)
 
 fn cutting k n _ _ true
@@ -628,7 +628,7 @@ fn pair_seen _ _ acc true
   acc
 
 fn pair_seen list at acc false
-  r = list[at]
+  r = present list[at]
   same? = (p -> p.gate == r.gate and p.setup == r.setup)
   kept list at acc r (list/any? acc same?)
 
@@ -655,7 +655,7 @@ fn greened picked pairs _ acc true
     .> (_ -> unmutated picked pairs acc)
 
 fn greened picked pairs at acc false
-  p = pairs[at]
+  p = present pairs[at]
   shell base_dir p.setup .> (s -> base_setup picked pairs at acc p s.status)
 
 fn base_setup picked pairs at acc p 0
@@ -808,7 +808,7 @@ fn proven list _ acc true
 # tell a slow row from a stuck one. The line names the row, so the last one
 # printed is the one that was running.
 fn proven list at acc false
-  r = list[at]
+  r = present list[at]
   said = "ratchet: row {at} of {length list}, {r.job} — {r.claim}\n"
   io/write_err said .> (_ -> started list at acc r)
 
@@ -959,8 +959,8 @@ fn chosen "select" given
 # appended as they are written, so a block would give the last shard every row
 # added since the split and leave it to outgrow its job again on its own.
 fn chosen "shard" given
-  k = text/to_int (second given "0")
-  n = text/to_int (third given "0")
+  k = shard_number (text/to_int (second given "0"))
+  n = shard_number (text/to_int (third given "0"))
   sharding k n (fourth given "prove") (k < 1 or n < k)
 
 fn sharding k n _ true
@@ -1023,3 +1023,16 @@ fn arg_at _ _ fallback false
   fallback
 
 pub play = os/args .> (given -> asked given)
+
+fn shard_number none
+  err "a shard is `shard K N` with K and N numbers"
+
+fn shard_number n
+  n
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a row the walk had counted answered none"
+
+fn present x
+  x

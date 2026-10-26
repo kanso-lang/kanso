@@ -108,7 +108,7 @@ fn reading _ _ acc after true
   after acc
 
 fn reading pages at acc after false
-  page = pages[at]
+  page = present pages[at]
   os/read_file! page .> (raw -> scanned_page pages at acc after page raw)
 
 fn scanned_page pages at acc after page raw
@@ -156,12 +156,12 @@ fn told_all page text family found
   list/to_list (list/map found (m -> told page text family m))
 
 fn told page text family m
-  whole = text/slice text m.from (m.to - 1)
+  whole = present (text/slice text m.from (m.to - 1))
   quote = regexp/replace_all "\\s+" whole " " .> text/trim
   finding page (line_of text m.from) family quote
 
 fn line_of text at
-  before = text/slice text 1 (at - 1)
+  before = present (text/slice text 1 (at - 1))
   length (text/split before "\n")
 
 fn reported pages found
@@ -206,3 +206,10 @@ fn ending false
   os/exit 1
 
 pub play = os/list_dir "docs" .> (top -> with_book top)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

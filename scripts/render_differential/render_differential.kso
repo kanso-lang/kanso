@@ -191,7 +191,7 @@ fn onward _ _ found true
 
 fn onward shape exprs found false
   rest = list/to_list (list/drop exprs 1)
-  expr = exprs[1]
+  expr = present exprs[1]
   ran (shape expr) .> (verdict -> swept shape rest (noted found expr verdict))
 
 fn noted found _ ""
@@ -254,3 +254,10 @@ fn sound _
   1
 
 pub play = begun (plain "1" == sample)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost a probe it had counted"
+
+fn present x
+  x

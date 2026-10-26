@@ -116,7 +116,7 @@ fn reading _ _ acc after true
   after acc
 
 fn reading wanted at acc after false
-  path = wanted[at]
+  path = present wanted[at]
   on = (body -> read_next wanted at acc after path body)
   os/read_file! path .> on
 
@@ -140,7 +140,7 @@ fn walking _ _ drift write true
   reported drift write
 
 fn walking names at drift write false
-  name = names[at]
+  name = present names[at]
   on = (raw -> one_chapter names at drift write name raw)
   os/read_file! "{chapters}/{name}" .> on
 
@@ -305,7 +305,7 @@ fn smaller _ b false
   b
 
 fn fixed raw m name dir files write 1
-  sample = m.groups[2]
+  sample = present m.groups[2]
   found = sample_at (path_list files) dir sample
   no_sample raw m sample name files write found (found == "")
 
@@ -774,3 +774,10 @@ fn ending false
   os/exit 1
 
 pub play = os/args .> (given -> over_chapters (writing? given))
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

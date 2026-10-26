@@ -379,7 +379,7 @@ fn onward _ count true
 
 fn onward arms count false
   rest = list/to_list (list/drop arms 1)
-  a = arms[1]
+  a = present arms[1]
   ran (source_for a) .> (v -> reported a rest count v)
 
 fn reported a rest count v
@@ -441,3 +441,10 @@ fn finished n
   io/write "{n} wrong\n" .> (_ -> os/exit 1)
 
 pub play = begun (source_for check == sample)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost an arm it had counted"
+
+fn present x
+  x

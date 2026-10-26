@@ -77,6 +77,12 @@ pub type splice
   counters
   target
 
+# no row to splice onto, so the run term is left as the rows have it
+type no_anchor
+
+# a side nothing was measured for, which the meta leaves out
+type unmeasured
+
 pub play = io/stdin .> (model -> with_model model)
 
 fn with_model model
@@ -309,11 +315,11 @@ fn measured_run? row phases
 # No all-phase row, or no measured row to calibrate against. Nothing to
 # reconstruct and nothing wrong: every row keeps what it carries.
 fn calibrated _ _ _ true
-  none
+  no_anchor
 
 fn calibrated eights runs phases false
-  last = eights[length eights]
-  first = runs[1]
+  last = bounded eights[length eights]
+  first = bounded runs[1]
   both = list/to_list (list/select phases (p -> first[p[1]] != none))
   agreed = list/to_list (list/select both (p -> last[p[1]] == first[p[1]]))
   checked last first (length agreed == length both)
@@ -330,7 +336,7 @@ fn checked last first true
 # one run's arithmetic outlive the reasoning behind it. Recomputing also
 # repairs a file that already carries the rebuilt counts, with no hand edit.
 fn wants_run? row a phases
-  a != none and carries_all? row phases
+  a != no_anchor and carries_all? row phases
 
 # A row's run count is either this tool's arithmetic or somebody's
 # measurement, and until now the file did not say which. That is not a nicety:
@@ -543,9 +549,14 @@ fn epoch_value v f
   math/round (1.0 * v / f)
 
 fn at_row m divs row
-  found = divs[row["commit"]]
   whole = scoring m.terms m.base m.formula m.meta
-  return whole if found == none or length found < 2
+  epoch_scoring m whole divs[row["commit"]]
+
+fn epoch_scoring _ whole none
+  whole
+
+fn epoch_scoring m whole found
+  return whole if length found < 2
   scoring m.terms (rebased m.base found[1]) m.formula m.meta
 
 # --- the rewrite ------------------------------------------------------------
@@ -579,7 +590,7 @@ fn chosen given false
 
 fn written m phases epochs raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
-  decoded = list/to_list (list/map lines json/decode)
+  decoded = list/to_list (list/map lines row_of)
   a = anchor decoded phases
   scored_rows m phases decoded a (epoch_divisors decoded epochs)
 
@@ -596,14 +607,29 @@ fn scored_rows _ _ _ _ e@(err _)
   e
 
 fn scored_rows m phases decoded a epoch_divs
-  divs = epoch_divs[2]
+  divs = bounded epoch_divs[2]
   built = list/map decoded (r -> scored_row m divs r a phases)
   rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
 
+# The rows are this tool's own output, so a line that is not json is a bug.
+fn row_of line
+  read_row (json/decode line)
+
+fn read_row none
+  err "a row of the perf record is not json"
+
+fn read_row row
+  row
+
 fn scored_row m divs r a phases
-  found = divs[r["commit"]]
-  rescored_at m divs r a phases found (found == none or length found < 2)
+  rescored_from m divs r a phases divs[r["commit"]]
+
+fn rescored_from m divs r a phases none
+  rescored (at_row m divs r) (reconstructed r a phases) "as measured"
+
+fn rescored_from m divs r a phases found
+  rescored_at m divs r a phases found (length found < 2)
 
 fn rescored_at m divs r a phases _ true
   rescored (at_row m divs r) (reconstructed r a phases) "as measured"
@@ -682,7 +708,7 @@ fn side_fraction row ts base
   fractioned row ts base held (held == 0.0)
 
 fn fractioned _ _ _ _ true
-  none
+  unmeasured
 
 fn fractioned row ts base held false
   shares = list/to_list (list/map ts (t -> share row base t))
@@ -706,7 +732,7 @@ fn combined m p d b
 
 # A side's contribution and the share it holds, or nothing for either when the
 # row carries nothing that side weighs.
-fn part _ _ none
+fn part _ _ unmeasured
   [0.0 0.0]
 
 fn part k portion f
@@ -799,5 +825,12 @@ fn fixed_of units scale places
 
 fn fixed x places
   scale = pow10 places
-  units = math/round (x * scale)
+  units = bounded (math/round (x * scale))
   fixed_of units scale places
+
+# A read the code around it has bounded, so a none here is a bug.
+fn bounded none
+  err "a reading the rescore needs is missing"
+
+fn bounded x
+  x
