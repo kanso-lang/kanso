@@ -1746,4 +1746,20 @@ puts beside the maps they copy. Three mutations turn it red: a search that
 answers a dead pair, a persistent put that shares dead pairs, and gaps
 closed as though nothing had been appended.
 
-CI's rows: ROWS.
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.
