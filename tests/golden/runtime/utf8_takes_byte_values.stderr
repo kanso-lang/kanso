@@ -1,2 +1,3 @@
 error[runtime]: utf8 takes a list of byte values
   failed in text/utf8 at std/text/text.kso:92
+  called from utf8_takes_byte_values.kso:3

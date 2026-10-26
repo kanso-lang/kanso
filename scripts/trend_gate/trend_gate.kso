@@ -196,6 +196,8 @@ higher = [
   # simplification is the shape to watch for.
   "push_mut_fast"
   "put_mut_fast"
+  # A pair the in-place delete marked dead where it stands.
+  "delete_marks"
   "bytes_freed"
   "carry_dedup"
   # What stays unclassified, and why each one is not an oversight.

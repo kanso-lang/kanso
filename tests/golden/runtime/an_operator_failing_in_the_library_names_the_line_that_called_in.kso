@@ -1,0 +1,9 @@
+# An operator inside the library fails on what the program handed it: the
+# width `pad_start` subtracts from is a string. The report names the
+# library's line and, under it, the program's (ruled on #2099).
+import "std/text"
+
+pub fn opaque x
+  x
+
+pub play = print (text/pad_start "a" (opaque "x") " ")

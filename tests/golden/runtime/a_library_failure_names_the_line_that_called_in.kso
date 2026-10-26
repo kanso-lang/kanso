@@ -1,0 +1,17 @@
+# A failure inside the library keeps its library line and names, under it,
+# the nearest line of the program's own files that called in (ruled on
+# #2099). `words` makes the call in tail position, and the call is still the
+# line named, on every engine.
+import "std/text"
+
+pub fn opaque x
+  x
+
+fn words line
+  text/split line " "
+
+fn first_word line
+  ws = words line
+  ws[1]
+
+pub play = print (first_word (opaque 7))
