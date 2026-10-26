@@ -65,8 +65,8 @@ expectations = [e1 e2 e3 e4 e5 e6 e7 e8 e9]
 fn read_grammar raw
   checked (json/decode raw)
 
-fn checked (err reason)
-  io/write "the grammar does not parse: {reason}\n" .> (_ -> os/exit 1)
+fn checked none
+  io/write "the grammar is not json\n" .> (_ -> os/exit 1)
 
 fn checked grammar
   rules = rules_of grammar
@@ -77,8 +77,8 @@ fn checked grammar
 # Three shapes reach a reader: a rule that matches text, a rule that opens and
 # closes around it, and a rule that is only a list of the other two.
 fn rules_of grammar
-  named = grammar["patterns"]
-  repo = grammar["repository"]
+  named = present grammar["patterns"]
+  repo = present grammar["repository"]
   gathered named repo 1 []
 
 fn gathered named repo at acc
@@ -88,14 +88,14 @@ fn gathering _ _ _ acc true
   acc
 
 fn gathering named repo at acc false
-  one = named[at]
+  one = present named[at]
   carried named repo at acc one (one["include"] == none)
 
 fn carried named repo at acc _ true
   gathered named repo (at + 1) acc
 
 fn carried named repo at acc one false
-  found = repo[without_hash one["include"]]
+  found = present repo[without_hash one["include"]]
   gathered named repo (at + 1) (kept acc found)
 
 fn kept acc found
@@ -163,7 +163,7 @@ fn trying line rules _ at acc true
   paint line rules (at + 1) acc
 
 fn trying line rules i at acc false
-  one = rules[i]
+  one = present rules[i]
   m = regexp/match_at one.pattern line at
   landed line rules i at acc one m
 
@@ -177,7 +177,7 @@ fn landed line rules _ at acc one m
   spanned line rules at acc one m (one.ends == none)
 
 fn spanned line rules at acc one m true
-  whole = text/slice line at (m.to - 1)
+  whole = present (text/slice line at (m.to - 1))
   grown = with_captures (with_whole acc one whole) one m
   paint line rules (past at m) grown
 
@@ -247,9 +247,15 @@ fn capturing acc _ _ _ true
   acc
 
 fn capturing acc caps groups at false
-  text = groups[at]
-  found = caps["{at}"]
-  named_capture acc caps groups at text found (text == "" or found == none)
+  text = present groups[at]
+  capture_named acc caps groups at text caps["{at}"]
+
+# a capture the grammar gives no name is not painted
+fn capture_named acc caps groups at _ none
+  each_capture acc caps groups (at + 1)
+
+fn capture_named acc caps groups at text found
+  named_capture acc caps groups at text found (text == "")
 
 fn named_capture acc caps groups at _ _ true
   each_capture acc caps groups (at + 1)
@@ -265,7 +271,7 @@ fn walking _ _ acc true
   acc
 
 fn walking rules at acc false
-  one = expectations[at]
+  one = present expectations[at]
   out = paint one.line rules 1 []
   out .> (o -> walked rules at acc one o)
 
@@ -287,7 +293,7 @@ fn checking _ _ _ acc true
   acc
 
 fn checking one seen at acc false
-  want = one.wanted[at]
+  want = present one.wanted[at]
   missing one seen (at + 1) (noted acc one want seen (has? seen want))
 
 fn has? seen want
@@ -322,3 +328,10 @@ fn telling faults at acc false
   spelled faults (at + 1) "{acc}FAIL  {faults[at]}\n"
 
 pub play = os/read_file! grammar_path .> (raw -> read_grammar raw)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the grammar or its walk answered none where a rule must be"
+
+fn present x
+  x

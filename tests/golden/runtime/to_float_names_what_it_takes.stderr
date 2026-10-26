@@ -1,3 +1,3 @@
 error[runtime]: to_float takes a string, bytes, or number, not <none>
-  failed in text/to_float at std/text/text.kso:86
+  failed in text/to_float at std/text/text.kso:87
   called from to_float_names_what_it_takes.kso:18

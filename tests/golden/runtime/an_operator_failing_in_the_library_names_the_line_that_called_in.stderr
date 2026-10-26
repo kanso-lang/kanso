@@ -1,3 +1,3 @@
 error[runtime]: `-` is not defined for these values
-  failed in text/pad_start at std/text/text.kso:143
+  failed in text/pad_start at std/text/text.kso:173
   called from an_operator_failing_in_the_library_names_the_line_that_called_in.kso:9

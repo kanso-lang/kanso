@@ -1,0 +1,8 @@
+# The inline form of a_none_bound_to_a_name_reaches_length: a builtin has no
+# arms to give a none to, so the position it constrains refuses one (#2088).
+import "std/text"
+
+fn size_of t
+  length (text/slice t 2 9)
+
+pub play = print "{size_of "abc"}"

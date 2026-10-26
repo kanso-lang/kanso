@@ -22,11 +22,9 @@
 //! said that question "belongs to a gavel rather than to an optimization's side
 //! effects", and it still does.
 //!
-//! The fixtures first handed `label` an err that `price` raised. Since #1884 a
-//! name bound to a raising call carries that err into the check, and `label`
-//! with no err arm is refused before it runs, so the fixtures now hand it the
-//! err `text/to_int` answers for computed text, which nothing raises and which
-//! still rides into the call.
+//! The fixtures hand `label` an err that `price` raises for text that is not
+//! a number. `price` can answer a number, so the checker lets the call stand
+//! and the err rides into it.
 //!
 //! The fixtures are here rather than in the commit message because a bug that
 //! had no home in the corpus is a gap in the corpus.

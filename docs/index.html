@@ -125,7 +125,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
       <div class="feature">
         <span class="feature-num">02</span>
         <h3>failure is a value</h3>
-        <p>no exceptions, no panics—and no ok/some wrappers either. success is the bare value; <code>err reason</code> and <code>none</code> are ordinary types that propagate on their own. an <code>err</code> reaching <code>main</code> unhandled is a compile error, not a crash.</p>
+        <p>no exceptions, no panics—and no ok/some wrappers either. success is the bare value. an outcome the caller handles is an ordinary value, <code>none</code> or a marker, and a failure is an <code>err</code> that rides past every function to the endpoint, which reports where it was born and everywhere it passed.</p>
       </div>
       <div class="feature">
         <span class="feature-num">03</span>
@@ -180,28 +180,33 @@ description: "kanso (簡素): a pure language where effects are values, failure 
     <div class="showcase-featured">
       <div class="feature">
         <span class="feature-num">errors.kso</span>
-        <h3>failure propagates; dispatch handles it</h3>
-        <p><code>safe_ratio 10 0</code> returns an <code>err</code>—division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
+        <h3>an outcome is a value; dispatch handles it</h3>
+        <p><code>safe_ratio 10 0</code> answers <code>divide_by_zero</code>—division by zero is a value, not a panic. <code>describe</code> dispatches on it: one overload for that type, one for its parent <code>math_failure</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
       </div>
       <div class="code-panel">
         <div class="code-panel-title">examples/errors.kso</div>
-        <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
-  <span class="s">"failed: <span class="i">{reason}</span>"</span>
+        <pre><code><span class="c"># Division by zero answers a value you dispatch on rather than a failure you</span>
+<span class="c"># catch. The specific type is `divide_by_zero`; its parent `math_failure` is</span>
+<span class="c"># there for a handler that does not care which kind it was.</span>
+<span class="k">fn</span> <span class="f">describe</span> f:<span class="t">divide_by_zero</span>
+  <span class="s">"no divisor: <span class="i">{f}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> f:<span class="t">math_failure</span>
+  <span class="s">"some math failure: <span class="i">{f}</span>"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> n
   <span class="s">"result: <span class="i">{n}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">2</span>
-  bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad))
-
 <span class="k">fn</span> <span class="f">safe_ratio</span> a b
-  a <span class="o">/</span> b</code></pre>
+  a <span class="o">/</span> b
+
+good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">2</span>
+bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">0</span>
+<span class="f">print</span> (<span class="f">describe</span> good) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad))</code></pre>
         <div class="code-output">
           <div class="code-panel-title">output</div>
           <pre><code>result: 5
-failed: division by zero</code></pre>
+no divisor: division by zero</code></pre>
         </div>
       </div>
     </div>

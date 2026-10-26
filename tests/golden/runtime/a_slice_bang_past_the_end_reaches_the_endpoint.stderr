@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the executor: "slice! takes a range inside the value, got 2 to 9"
-  born in a_slice_bang_past_the_end_reaches_the_endpoint/play at a_slice_bang_past_the_end_reaches_the_endpoint.kso:5
+error[endpoint]: unhandled err reached the entry: "slice! takes a range inside the value, got 2 to 9"
+  born in play at a_slice_bang_past_the_end_reaches_the_endpoint.kso:5

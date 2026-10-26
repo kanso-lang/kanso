@@ -220,7 +220,7 @@ fn named_in panel
 
 fn dir_of path
   parts = text/split path "/"
-  last = parts[length parts]
+  last = present parts[length parts]
   or_empty (text/slice path 1 (length path - length last - 1))
 
 # The slices in this file stay inside their value, so they are never none; the
@@ -361,7 +361,7 @@ fn checking _ _ found after true
 # sample directory one level in (ch07 writes `teahouse/menu.kso` for
 # `samples/ch07/teahouse/teahouse/menu.kso`, ch09 the same shape for `vse`).
 fn checking qs at found after false
-  q = qs[at]
+  q = present qs[at]
   on = (there -> as_file qs at found after q there)
   os/exists q.title .> on
 
@@ -430,7 +430,7 @@ fn rooted qs at found after q roots n false
   try_roots qs at found after q roots (n + 1)
 
 fn rooted qs at found after q roots n true
-  path = roots[n]
+  path = present roots[n]
   on = (names -> beside_root qs at found after q path names)
   os/list_dir (dir_of path) .> on
 
@@ -548,3 +548,10 @@ fn walk_kid path names at acc after kid false
 
 fn merged a b
   list/to_list (list/concat a b)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

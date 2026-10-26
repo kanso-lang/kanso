@@ -98,9 +98,9 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
   </div>
 </div>
 
-<p>the rule underneath it is structural, and it needed no law at all. an arm that claims an <code>err</code>—<code>fn describe (err reason)</code>—is ordinary dispatch, writable anywhere. what keeps errors honest is what a handler can and cannot <em>do</em>. functions are pure and nothing is nil, so a handler that catches an err and cannot genuinely continue has nowhere to hide: it must return something, it cannot conjure a valid value from nothing, so it returns another err. the exception re-raises itself through the value model. the only handlers that can terminate a failure are the ones holding a real alternative—a default, a retry, a degraded answer—which is precisely the set of handlers that should exist. write the arm where you have one; where you don't, the err rides on without a line of plumbing.</p>
+<p>the rule underneath it is structural. a failure is born in a box, and an arm reads values, so a failure rides past every arm. what ends it is a rescue, <code>.?</code>, written in a package other than the one that raised it, and the callback receives the err out of its box as an ordinary value. what keeps errors honest is what a rescue can and cannot <em>do</em>. functions are pure and nothing is nil, so a rescue that cannot genuinely continue has nowhere to hide: it must return something, it cannot conjure a valid value from nothing, so it puts the err back in a box. the only rescues that can end a failure are the ones holding a real alternative—a default, a retry, a degraded answer—which is precisely the set that should exist. write the rescue where you have one; where you don't, the err rides on without a line of plumbing.</p>
 
-<p>compare the language that made "ignored the error" famous. go returns a pair, <code>(value, error)</code>—a product type, so four states exist, and two of them are lies. the idiomatic lie is <code>("", err)</code>: the error is right there beside a perfectly usable zero value, the caller grabs the value half, and the type system waves it through. <code>errcheck</code> exists because go's types can't say "you got one or the other." one channel dissolves this: when a kanso function fails, the err isn't <em>beside</em> your value, it's <em>instead of</em> it. there is no valid half to grab. using the result means scrutinizing it, and scrutiny has exactly two outcomes—an arm you deliberately wrote, or the ride continuing. ignoring an error is unspellable here.</p>
+<p>compare the language that made "ignored the error" famous. go returns a pair, <code>(value, error)</code>—a product type, so four states exist, and two of them are lies. the idiomatic lie is <code>("", err)</code>: the error is right there beside a perfectly usable zero value, the caller grabs the value half, and the type system waves it through. <code>errcheck</code> exists because go's types can't say "you got one or the other." one channel dissolves this: when a kanso function fails, the err isn't <em>beside</em> your value, it's <em>instead of</em> it. there is no valid half to grab. using the result means scrutinizing it, and scrutiny has exactly two outcomes—a rescue you deliberately wrote, or the ride continuing. ignoring an error is unspellable here.</p>
 
 <p>an err nobody claims rides to the <strong>endpoint</strong>—the executor, the top of <code>main</code>—and ends the program with its receipts: where it was born, everywhere it passed. that is the default fate of every unhandled failure, and it costs nothing to arrange because it's what happens when you write nothing.</p>
 
@@ -121,7 +121,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 <div class="fk-twocol">
   <div class="code-panel">
     <div class="code-panel-title">a value</div>
-    <pre><code>n <span class="o">=</span> <span class="f">to_int</span> <span class="s">"abc"</span></code></pre>
+    <pre><code>n <span class="o">=</span> <span class="f">to_int!</span> <span class="s">"abc"</span></code></pre>
   </div>
   <div class="code-panel">
     <div class="code-panel-title">an event</div>
@@ -129,7 +129,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
   </div>
 </div>
 
-<p><code>to_int "abc"</code> does not <em>sometimes</em> fail. it <strong>equals</strong> an err, the way <code>2 + 2</code> equals <code>4</code>. it is a constant. re-evaluating it is meaningless—you can't retry a value into being a different value, any more than you can retry <code>4</code> into being <code>5</code>. <code>get url</code> is the opposite: it doesn't <em>equal</em> anything until it runs, and running it again is a genuinely new occurrence with a possibly different result. one is a value; the other is an event.</p>
+<p><code>to_int! "abc"</code> does not <em>sometimes</em> fail. it <strong>equals</strong> a failure, the way <code>2 + 2</code> equals <code>4</code>. it is a constant. re-evaluating it is meaningless—you can't retry a value into being a different value, any more than you can retry <code>4</code> into being <code>5</code>. <code>get url</code> is the opposite: it doesn't <em>equal</em> anything until it runs, and running it again is a genuinely new occurrence with a possibly different result. one is a value; the other is an event.</p>
 
 <p class="fk-pull">a failure's kind is fixed by where it is <em>born</em>—not by where its inputs <em>came from</em>.</p>
 
@@ -161,7 +161,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
   <div class="code-panel-title">retry only means something for events<span class="fk-tag fk-proposed">proposed</span></div>
   <pre><code><span class="f">get</span> <span class="s">"https://api/rows"</span> <span class="o">.</span> <span class="f">retry</span> <span class="n">3</span>   <span class="c"># retrying an event — the only place the word means anything</span>
 
-<span class="f">to_int</span> x <span class="o">.</span> <span class="f">retry</span> <span class="n">3</span>                 <span class="c"># retrying a value — a no-op the compiler is entitled to reject</span></code></pre>
+<span class="f">to_int!</span> x <span class="o">.</span> <span class="f">retry</span> <span class="n">3</span>                <span class="c"># retrying a value — a no-op the compiler is entitled to reject</span></code></pre>
 </div>
 
 <p>and <code>retry</code> is a policy on the event, not a rescue: it re-runs on a not-yet, and lets a permanent failure rise. it never turns a failure into an unrelated value, so it needs no rescue authority—which is exactly why a library can hand it to you. it can only re-attempt and then get out of the way. the one care it demands is idempotency: re-running a <code>get</code> is free; re-running a charge is not, so the library retries safe methods by default and makes you assert the rest.</p>

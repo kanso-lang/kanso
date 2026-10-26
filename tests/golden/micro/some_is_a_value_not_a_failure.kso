@@ -10,18 +10,13 @@
 # with nothing behind it.
 #
 # So: a failure never reaches the `some` arm. A value still does, which is
-# what the annotation is for. A raised err handed to a group with no arm for
-# it does not compile, bound to a name or not (#1884), so `taken` names the
-# failure in an arm of its own and hands it on; the `some` arm beside it is
-# the one that must refuse it.
-import "std/json"
+# what the annotation is for. A failure passes every arm (#2087), and the
+# `some` arm is the one this pins.
 import "std/testing"
+import "std/text"
 
 fn as_text reason
   "{reason}"
-
-fn taken e@(err _)
-  e
 
 fn taken _:some
   "the some arm took it"
@@ -29,9 +24,12 @@ fn taken _:some
 fn taken v
   "a value: {v}"
 
-decoded = json/decode "[1, 2"
+fn bytes_of n
+  text/to_bytes [(n + 300)]
 
-broken = taken decoded
+refused = bytes_of 1
+
+broken = taken refused
 
 fine = taken 7
 

@@ -40,7 +40,15 @@ fn wider s _ false
 fn wider s n true
   doubled (text/join [s s] "") n
 
+# `doubled` answers at least `n` characters, so the slice is inside it and a
+# none is a bug
+fn whole none
+  err "a slice inside the subject answered none"
+
+fn whole s
+  s
+
 pub fn total n
-  subject = text/slice (doubled alphabet n) 1 n
+  subject = whole (text/slice (doubled alphabet n) 1 n)
   hits = regexp/find_all pattern subject
   length hits

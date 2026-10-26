@@ -375,7 +375,14 @@ fn decoded _ 0 sofar
   sofar
 
 fn decoded raw n sofar
-  decoded raw (n - 1) (sofar + length (json/decode raw))
+  decoded raw (n - 1) (sofar + size_of (json/decode raw))
+
+# the document is this file's own, so text that is not json is a bug here
+fn size_of none
+  err "the benchmark's document is not json"
+
+fn size_of v
+  length v
 
 fn encoded _ 0 sofar
   sofar

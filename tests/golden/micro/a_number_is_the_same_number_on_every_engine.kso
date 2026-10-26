@@ -2,24 +2,32 @@
 # number is. Native parses in a digit loop and hands everything else to libc,
 # which reads more than the interpreter does: leading space, a hex float and
 # a nan with a payload. The interpreter read `_` as a digit separator in
-# `to_int` alone. Each line is asked of a string, of its bytes, and of a
-# range cut out of longer bytes, so the three doors are held to one answer.
+# `to_int` alone. Text that is not a number answers none. Each line is asked
+# of a string, of its bytes, and of a range cut out of longer bytes, so the
+# three doors are held to one answer.
 import "std/text"
 
-fn shown (err reason)
-  "err {reason}"
+fn shown none
+  "none"
 
 fn shown other
   "{other}"
 
+# each cut stops a byte short of bytes it was cut from
+fn present none
+  err "a cut inside the bytes answered none"
+
+fn present cut
+  cut
+
 fn fl s
-  cut = text/slice (text/bytes "{s}9") 1 (length (text/bytes s))
+  cut = present (text/slice (text/bytes "{s}9") 1 (length (text/bytes s)))
   a = shown (text/to_float s)
   b = shown (text/to_float (text/bytes s))
   "{a} | {b} | {shown (text/to_float cut)}"
 
 fn it s
-  cut = text/slice (text/bytes "{s}7") 1 (length (text/bytes s))
+  cut = present (text/slice (text/bytes "{s}7") 1 (length (text/bytes s)))
   a = shown (text/to_int s)
   b = shown (text/to_int (text/bytes s))
   "{a} | {b} | {shown (text/to_int cut)}"

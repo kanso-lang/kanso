@@ -1862,6 +1862,9 @@ impl<'a> P<'a> {
                 Some(Tok::Pipe) => {
                     let span = self.span_here();
                     self.pos += 1;
+                    // a step binds looser than anything, so `g (x . f)` keeps
+                    // its parentheses: without them it is `f (g x)`
+                    self.consumed(LOOSEST);
                     let target = self.parse_app()?;
                     // in chain position a combinator has one spelling, the
                     // fused one; the word stays a prefix function elsewhere
@@ -1899,6 +1902,7 @@ impl<'a> P<'a> {
                     let word: &'static str = word;
                     let span = self.span_here();
                     self.pos += 1;
+                    self.consumed(LOOSEST);
                     // the right-hand side is one function — a lambda, a name
                     // or a group — so the common case needs no wrapper lambda
                     let callee = self.parse_atom()?;

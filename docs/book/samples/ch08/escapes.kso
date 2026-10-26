@@ -35,7 +35,14 @@ fn escape_str s
 hex_byte_table = text/bytes "0123456789abcdef"
 
 fn hex_code n
-  hex_byte_table[n + 1]
+  hex_digit_of hex_byte_table[n + 1]
+
+# `n` is a nibble, so the read is inside the table and a none is a bug
+fn hex_digit_of none
+  err "a nibble outside 0 to 15"
+
+fn hex_digit_of b
+  b
 
 pub play =
   bell = text/from_code 7

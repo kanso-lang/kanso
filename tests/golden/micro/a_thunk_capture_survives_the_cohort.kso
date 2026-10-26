@@ -131,8 +131,15 @@ fn arrow_of true
 fn arrow_of false
   "improved"
 
+# `bench_memory` is written above with one row
+fn present none
+  err "the first golden is not there"
+
+fn present g
+  g
+
 fn started _
-  g = bench_memory[1]
+  g = present bench_memory[1]
   against g held [] .> (ms -> priced "" ms)
 
 fn priced _ ms

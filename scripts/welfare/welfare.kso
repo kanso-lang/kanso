@@ -688,7 +688,7 @@ fn negated units scale places false
 # needs; a report wants a column.
 fn fixed x places
   scale = pow10 places
-  units = math/round (x * scale)
+  units = present (math/round (x * scale))
   negated units scale places (units < 0)
 
 fn grouped s
@@ -761,7 +761,7 @@ fn gauge run w ir ca held ent st ii im cd cr em br
     .> (_ -> floored (measured (counters run) work veins vbr))
 
 fn floored now
-  os/read_file! floor_path .> (f -> against now (json/decode f))
+  os/read_file! floor_path .> json/decode! .> (floor -> against now floor)
 
 # THE PIN. Every counter the objective weighs is read from a golden by name,
 # and a golden that lost one of those rows would otherwise score as nothing
@@ -836,7 +836,7 @@ fn against _ e@(err _)
   e
 
 fn against now held
-  base = held["baseline"]
+  base = present held["baseline"]
   missing = unbaselined base
   scored now held base missing (length missing == 0)
 
@@ -1036,7 +1036,7 @@ fn why h false
   latest["why"]
 
 fn reported now base held value
-  floor = held["floor"]
+  floor = present held["floor"]
   head = "welfare {fixed value 2}   floor {fixed floor 2}"
   reason = clipped (last_why held) 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
@@ -1070,8 +1070,8 @@ fn moved? now base c
   base[c] != now[c]
 
 fn line_for now base name
-  b = base[name]
-  c = now[name]
+  b = present base[name]
+  c = present now[name]
   pct = 100.0 * (as_ratio b (live c) - 1)
   cols = "{spaced (commas b) 12} -> {spaced (commas c) 12}"
   "  {left name 22} {cols}   {signed pct}\n"
@@ -1112,8 +1112,8 @@ fn costed now base worse
 # dimension actually reads, so one counter carries its share of the move.
 fn cost_line now base name
   d = dimension_of name
-  b = base[name]
-  c = now[name]
+  b = present base[name]
+  c = present now[name]
   gap = satisfaction 1.0 d.satiation - satisfaction (as_ratio b c) d.satiation
   lost = 100.0 * d.weight * gap / (1.0 * length d.counters)
   cols = "{spaced (commas b) 12} -> {spaced (commas c) 12}"
@@ -1224,3 +1224,10 @@ fn with_emit run w ir ca held e st ii im cd cr em
     .> (br -> gauge run w ir ca held e st ii im cd cr em br)
 
 pub play = asked "bench/cost_golden_run.txt" .> (r -> with_run r)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a reading the score needs is missing"
+
+fn present x
+  x
