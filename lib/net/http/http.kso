@@ -25,6 +25,11 @@ pub type response
   headers
   body
 
+# What a handler is handed for bytes that are not a request: a client sending
+# garbage is an outcome the server handles, so it is a value (#2087).
+pub type bad_request
+  reason
+
 pub fn ok body
   response 200 "OK" [] body
 
@@ -56,11 +61,12 @@ pub fn stop value
 # are; the body is whatever the read brought with it.
 pub fn parsed raw
   head = text/split raw "\r\n\r\n"
-  return err "an empty request" if length head < 1
+  return bad_request "an empty request" if length head < 1
   lines = text/split head[1] "\r\n"
-  return err "an empty request" if length lines < 1
+  return bad_request "an empty request" if length lines < 1
   start = text/split lines[1] " "
-  return err "a request line without a method and a path" if length start < 2
+  unstarted = "a request line without a method and a path"
+  return bad_request unstarted if length start < 2
   request start[1] start[2] (body_of head)
 
 fn body_of head
@@ -188,7 +194,14 @@ fn counted parts true
   return 0 if length parts < 2
   digits = text/split parts[2] "\r\n"
   return 0 if length digits < 1
-  text/to_int (text/trim digits[1])
+  promised_or_none (text/to_int (text/trim digits[1]))
+
+# A length that is not a number promises no body, as an absent one does.
+fn promised_or_none none
+  0
+
+fn promised_or_none n
+  n
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried

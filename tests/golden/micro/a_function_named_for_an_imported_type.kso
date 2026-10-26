@@ -14,7 +14,13 @@
 # file reaches the import path the bug lived on.
 import "std/json"
 
-pub play = print "{entry 1} {length (json/decode "[1]")}"
+pub play = print "{entry 1} {size_of (json/decode "[1]")}"
 
 fn entry i
   i + 1
+
+fn size_of none
+  err "the document is not json"
+
+fn size_of v
+  length v

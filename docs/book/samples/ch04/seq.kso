@@ -2,6 +2,5 @@ import "std/text"
 
 sencha = text/trim " one "
 hojicha = text/trim " two "
-
-print "sencha: {text/to_int sencha} steeps left"
-  .> (_ -> print "hojicha: {text/to_int hojicha} steeps left")
+text/to_int! sencha .> (n -> print "sencha: {n} steeps left")
+  .> (_ -> text/to_int! hojicha .> (n -> print "hojicha: {n} steeps left"))

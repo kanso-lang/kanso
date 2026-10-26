@@ -175,11 +175,11 @@ fn rounds_from given
   asked_for given (length given == 0)
 
 fn asked_for _ true
-  200
+  effect 200
 
 fn asked_for given false
-  return 200 if length given < 1
-  text/to_int given[1]
+  return effect 200 if length given < 1
+  text/to_int! given[1]
 
 fn started rounds
   fixed = every_edge_case
@@ -194,7 +194,7 @@ fn onward_batch _ _ suspect true
   suspect
 
 fn onward_batch batches at suspect false
-  here = batches[at]
+  here = present batches[at]
   ran (program here) .> (r -> kept batches at suspect here r)
 
 fn kept batches at suspect here r
@@ -217,7 +217,7 @@ fn onward_one _ _ bad true
   bad
 
 fn onward_one suspect at bad false
-  c = suspect[at]
+  c = present suspect[at]
   ran (program [c]) .> (r -> judged suspect at bad c r)
 
 fn judged suspect at bad c r
@@ -262,8 +262,8 @@ fn more_findings bad at upto acc false
 
 fn finding b
   c = b[1]
-  n = b[2]
-  i = b[3]
+  n = present b[2]
+  i = present b[3]
   said = "  print ({c[1]} {c[2]} {c[3]})\n"
   "{said}{engine "native" n}{engine "interp" i}"
 
@@ -297,4 +297,11 @@ fn closed _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
     .> (_ -> os/exit 1)
 
-pub play = os/args .> (given -> started (rounds_from given))
+pub play = os/args .> (given -> rounds_from given .> started)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

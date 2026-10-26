@@ -16,6 +16,13 @@ fn grouped m n i
   xs = or_list m[k]
   grouped (put m k (push xs i)) n (i - 1)
 
+# every key below 20 is grouped
+fn width none
+  err "a group answered none"
+
+fn width x
+  length x
+
 pub play =
   g = grouped {} 8000 8000
-  print "{length g} {length g[3]} {g[3][1]} {g[19][400]}"
+  print "{length g} {width g[3]} {g[3][1]} {g[19][400]}"

@@ -64,7 +64,14 @@ fn usage true _
   io/write_err "usage: stale_a_panel <chapter.html>\n" .> (_ -> os/exit 2)
 
 fn usage false given
-  chapter = given[1]
+  chapter = present given[1]
   os/read_file! chapter .> (src -> onto chapter src)
 
 pub play = os/args .> with_args
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the arguments lost the chapter they had"
+
+fn present x
+  x

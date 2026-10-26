@@ -12,11 +12,15 @@
 # side of this — the same refusal reaching the endpoint when nobody asks.
 import "std/text"
 
-fn told (err _)
+type refused
+
+fn told bs
+  verdict (text/utf8 bs .? (_ -> refused))
+
+fn verdict refused
   "refused"
 
-fn told _
+fn verdict _
   "ok"
 
-pub play = print "{told (text/utf8 [104 105])}"
-  .> (_ -> print "{told (text/utf8 [255])}")
+pub play = print "{told [104 105]}" .> (_ -> print "{told [255]}")

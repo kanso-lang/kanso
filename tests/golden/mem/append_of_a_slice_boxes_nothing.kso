@@ -16,4 +16,11 @@ fn escaped acc 0
 fn escaped acc n
   escaped "{acc}cde\\u0041" (n - 1)
 
-pub play = print (length (json/decode "\"{escaped "" 40}\""))
+# the document is this file's own
+fn size_of none
+  err "the document is not json"
+
+fn size_of v
+  length v
+
+pub play = print (size_of (json/decode "\"{escaped "" 40}\""))

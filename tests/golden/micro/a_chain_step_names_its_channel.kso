@@ -1,10 +1,10 @@
 # The three chain words have fused spellings in chain position: `.>` is
 # `bind`, `.!` is `annotate` and `.?` is `rescue`, the chain dot plus one
-# character of channel. Each desugars to its word, so the subjects here are
-# settled failures, which is what lets the page run this one: no world has to
-# refuse anything for a channel to carry something. `told` is a group handed
-# over as a bare right-hand side; the lambdas are the other bare form, and
-# `settled` chains two of the words with a group between them.
+# character of channel. Each desugars to its word, and the subjects here are
+# boxes `json/decode!` settled, which is what lets the page run this one: no
+# world has to refuse anything for a channel to carry something. `told` is a
+# group handed over as a bare right-hand side; the lambdas are the other bare
+# form, and `settled` chains two of the words with a group between them.
 #
 # `settled` ends at its `.!`. The err that step builds is this module's own,
 # and a `.?` written here would hand it on rather than enter its callback —
@@ -26,13 +26,13 @@ fn count_of xs
   length xs
 
 fn settled text
-  json/decode text .> count_of .! (e -> "settled: {e.reason.reason}")
+  json/decode! text .> count_of .! (e -> "settled: {e.reason.reason}")
 
-pub play = print (json/decode "[1, 2" .? told)
-  .> (_ -> print (json/decode "[1, 2]" .> told))
-  .> (_ -> print (json/decode "[1, 2]" .? told))
+pub play = json/decode! "[1, 2" .? told .> print
+  .> (_ -> json/decode! "[1, 2]" .> told .> print)
+  .> (_ -> json/decode! "[1, 2]" .? told .> print)
   .> (_ -> print (3 .> add_one .> (x -> x * 2)))
-  .> (_ -> print (settled "[1, 2, 3]"))
+  .> (_ -> settled "[1, 2, 3]" .> print)
   .> (_ -> print (testing/when_failed unclosed (r -> "annotated: {r}")))
 
 unclosed = settled "[1, 2"

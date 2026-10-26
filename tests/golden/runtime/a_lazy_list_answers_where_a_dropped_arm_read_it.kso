@@ -4,10 +4,10 @@
 # so the err inside answers at `find`. Native passed the cell on unforced and
 # it failed two frames later, in `next`, under `found_in`.
 import "std/list"
-import "std/text"
 
 fn bad x
-  text/to_int "{x}a"
+  return x if x > 9
+  err "\"{x}a\" is not an integer"
 
 fn pick 1 _
   0

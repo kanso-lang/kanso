@@ -9,7 +9,7 @@
 import "std/json"
 import "std/testing"
 
-bad = json/decode "[1, nope]"
+bad = json/decode! "[1, nope]"
 
 pub play = print "{testing/failed? 42}"
   .> (_ -> print "{testing/failed? bad}")

@@ -290,6 +290,10 @@ pub fn iterate seed stretch
 fn join_parts before x after
   fold after (push before x) (acc y -> push acc y)
 
+# A list is read at its end; anything else is walked to it.
+pub fn last xs:[]some
+  xs[length xs]
+
 pub fn last coll
   unwrap_found (fold coll (missing true) (_ x -> x))
 

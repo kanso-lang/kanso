@@ -23,6 +23,13 @@ fn counted m n i
   inner = or_map m[a]
   counted (put m a (put inner b (or_zero inner[b] + 1))) n (i - 1)
 
+# every key below 20 is counted
+fn width none
+  err "an inner map answered none"
+
+fn width x
+  length x
+
 pub play =
   tally = counted {} 2000 2000
-  print "{length tally} {length tally[0]} {tally[3][3 * 7919 % 2000]}"
+  print "{length tally} {width tally[0]} {tally[3][3 * 7919 % 2000]}"

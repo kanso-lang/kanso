@@ -1,3 +1,3 @@
-rescued: unexpected end of input
+rescued: to_bytes takes byte values (0-255)
 decoded 2 values
 [1 2]

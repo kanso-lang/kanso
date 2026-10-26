@@ -1,12 +1,13 @@
 import "std/json"
 
-# json's failure is foreign here, so an ordinary arm may name it. The reason
-# arrives as a value and answers the questions its own type declares.
+# json's failure is foreign here, so a rescue may take it out of its box, and
+# an ordinary arm names the err it hands over. The reason arrives as a value
+# and answers the questions its own type declares.
 fn told (err r)
   "failed at {r.position}: {r.reason}"
 
 fn told v
   "decoded {v}"
 
-print (told (json/decode "[1, 2"))
-print (told (json/decode "[1, 2]"))
+json/decode! "[1, 2" .> told .? told .> print
+json/decode! "[1, 2]" .> told .? told .> print

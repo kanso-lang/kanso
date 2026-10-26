@@ -21,7 +21,7 @@
 # is smaller; it is stated here because a number carried forward unexamined
 # is how this file goes stale.
 set -e
-grep -q '^    let any_boxed = groups.values().any(|(s, _, _)| s & DESC != 0);$' src/check/after_infer.rs || {
+grep -q '^    let any_boxed = groups.values().any(|(s, _, _)| s & (DESC | FAIL) != 0);$' src/check/after_infer.rs || {
   echo "the box check's any_boxed hoist changed shape; this needs rewriting" >&2
   exit 1
 }

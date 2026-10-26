@@ -1,0 +1,10 @@
+# `length` takes a string, a list, bytes or a map, and never a none. A slice
+# past the end answers none (#1890), and bound to a name it is refused as it
+# is written in place (#2088).
+import "std/text"
+
+fn size_of t
+  rest = text/slice t 2 9
+  length rest
+
+pub play = print "{size_of "abc"}"

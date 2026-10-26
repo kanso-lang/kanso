@@ -36,7 +36,7 @@ fn an_object_of_300_000_keys_decodes() {
     std::fs::write(dir.join("big.json"), json).expect("the document writes");
     std::fs::write(
         dir.join("main.kso"),
-        "import \"std/json\"\nimport \"std/os\"\n\nos/read_file \"big.json\" .> (raw -> print \"keys {length (json/decode raw)}\")\n",
+        "import \"std/json\"\nimport \"std/os\"\n\nos/read_file \"big.json\" .> json/decode! .> (doc -> print \"keys {length doc}\")\n",
     )
     .expect("the program writes");
     let build = Command::new(env!("CARGO_BIN_EXE_kanso"))

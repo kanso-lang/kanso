@@ -1,13 +1,12 @@
-# A rescue or annotate callback is entered with the err itself, so a group
-# the callback hands that err to sees a failure and refuses it, the way a
-# bare binder refuses every failure. The interpreter always did this. Native
-# trusted inference, which seeded every lambda parameter as never failing
-# because an ordinary call refuses to hand a closure a failure, and the
-# words are the two callers that hand one over on purpose. So `lam`'s entry
-# guard was left out and the err walked into its body.
+# A rescue or annotate callback is handed the err out of its box (#2087), an
+# ordinary value, so a group the callback hands it to takes it like any
+# other: `lam` reads its reason. The rescue below is written in the package
+# that raised the failure, so it hands the failure on without entering its
+# callback, and the annotate builds a failure of its own from what `lam`
+# answered.
 #
-# `when_failed` is std's arm, so it reads what came out of each chain: the
-# failure that passed through `lam`, on every engine.
+# `when_failed` is std's arm, so it reads what came out of each chain, on
+# every engine.
 import "std/testing"
 
 fn mine _

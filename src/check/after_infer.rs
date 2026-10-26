@@ -66,263 +66,6 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
     }
 }
 
-/// Whether `e` can answer a bare err the program raised: a call to `err`, a
-/// call some raising arm of can be the one that runs, or a name bound to
-/// one. A call raises when some arm that can raise can be the one that runs.
-/// The arms are read one at a time rather than as the group's joined answer
-/// because a literal argument settles a literal pattern here and now:
-/// `text/split s "\n"` cannot reach `split _ ""`, the only arm of that group
-/// that raises, so the call is not a raise. What a literal cannot match is
-/// decided by shape alone — a string is never a record and never a none — and
-/// every other pattern is taken to match.
-///
-/// A name carries its call (#1884): `h = half 3` and then `h + 1` is refused
-/// as `half 3 + 1` is, so binding a value never changes what compiles. A
-/// local is one `raising_names` found, and a use counts only after its
-/// binding, which keeps a same-spelled outer name read earlier out of it. A
-/// name the declaration does not bind is a constant, which raises when its
-/// own body does, the way a call of it would.
-fn raises(
-    e: &Expr,
-    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-    consts: &crate::infer::Consts<'_>,
-    named: &BoundRaises<'_>,
-) -> bool {
-    match e {
-        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-            Expr::Ident(name, _, _) if name == "err" => true,
-            Expr::Ident(name, _, _) => {
-                raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
-                    arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
-                })
-            }
-            _ => false,
-        },
-        Expr::Ident(name, at, _)
-            if !named.local.is_empty() && named.local.contains(name.as_str()) =>
-        {
-            named.raising.iter().any(|(n, bound)| {
-                *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)
-            })
-        }
-        Expr::Ident(name, _, _) => named.constants && raisers.contains_key(&(name.as_str(), 0)),
-        _ => false,
-    }
-}
-
-/// What `raises` needs to know about one declaration's own names: the ones
-/// bound once to a raise, with where, and every name it binds at all.
-#[derive(Default)]
-struct BoundRaises<'a> {
-    raising: Vec<(&'a str, crate::diag::Span)>,
-    local: crate::hash::Set<&'a str>,
-    /// Some constant's body raises, so a name read as a value may be one.
-    constants: bool,
-}
-
-/// The names in `decl` bound to a call that can raise, with where each is
-/// bound. A name the declaration binds more than once — a parameter, a
-/// second binding, a lambda's parameter — is left out, because the check
-/// cannot tell which binding a use reads and under-refuses rather than guess.
-/// Bindings are read in order, so a name bound to a name bound to a raise
-/// carries it too.
-fn raising_names<'a>(
-    decl: &'a crate::ast::FnDecl,
-    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-    consts: &crate::infer::Consts<'_>,
-    constants: bool,
-) -> BoundRaises<'a> {
-    fn binds_in_stmts<'a>(
-        body: &'a [Stmt],
-        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
-    ) {
-        for stmt in body {
-            match stmt {
-                Stmt::Bind { pattern: Pattern::Var(n, at), expr } => {
-                    out.push((n.as_str(), Some((*at, expr))));
-                    binds_in_expr(expr, out);
-                }
-                Stmt::Bind { pattern, expr } => {
-                    for_each_param_name(pattern, &mut |n| out.push((n, None)));
-                    binds_in_expr(expr, out);
-                }
-                Stmt::Expr(expr) => binds_in_expr(expr, out),
-            }
-        }
-    }
-    fn binds_in_expr<'a>(
-        e: &'a Expr,
-        out: &mut Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>,
-    ) {
-        if let Expr::Lambda { params, .. } = e {
-            out.extend(params.iter().map(|(n, _)| (n.as_str(), None)));
-        }
-        if let Expr::Guard { rest, .. } = e {
-            binds_in_stmts(rest, out);
-        }
-        // a branch of an `if` is a block with bindings of its own
-        if let Expr::Block(stmts, _) = e {
-            return binds_in_stmts(stmts, out);
-        }
-        crate::for_each_child(e, |c| binds_in_expr(c, out));
-    }
-    // Most declarations bind nothing to a raise, and for them the answer is
-    // empty: a name can only carry an err that some binding was handed first.
-    // Asking that before collecting keeps the common case free of the two
-    // tables below.
-    // It walks the statements `binds_in_stmts` walks, a guard's rest and a
-    // branch's block included wherever they sit, so it misses no binding
-    // that collection would record with its expression.
-    fn bound_to_a_raise(
-        body: &[Stmt],
-        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-        consts: &crate::infer::Consts<'_>,
-        none: &BoundRaises<'_>,
-    ) -> bool {
-        body.iter().any(|stmt| match stmt {
-            Stmt::Bind { pattern: Pattern::Var(..), expr } => {
-                raises(expr, raisers, consts, none) || nested_binds(expr, raisers, consts, none)
-            }
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => nested_binds(expr, raisers, consts, none),
-        })
-    }
-    fn nested_binds(
-        e: &Expr,
-        raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-        consts: &crate::infer::Consts<'_>,
-        none: &BoundRaises<'_>,
-    ) -> bool {
-        if let Expr::Guard { rest, .. } = e {
-            if bound_to_a_raise(rest, raisers, consts, none) {
-                return true;
-            }
-        }
-        if let Expr::Block(stmts, _) = e {
-            return bound_to_a_raise(stmts, raisers, consts, none);
-        }
-        let mut found = false;
-        crate::for_each_child(e, |c| found = found || nested_binds(c, raisers, consts, none));
-        found
-    }
-    let none = BoundRaises { constants, ..BoundRaises::default() };
-    if !bound_to_a_raise(&decl.body, raisers, consts, &none) {
-        return none;
-    }
-    let mut binds = Vec::new();
-    for param in &decl.params {
-        for_each_param_name(param, &mut |n| binds.push((n, None)));
-    }
-    binds_in_stmts(&decl.body, &mut binds);
-    let mut named = BoundRaises {
-        raising: Vec::new(),
-        local: binds.iter().map(|(n, _)| *n).collect(),
-        constants,
-    };
-    for (i, (name, at)) in binds.iter().enumerate() {
-        let Some((at, expr)) = at else { continue };
-        if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
-            continue;
-        }
-        if raises(expr, raisers, consts, &named) {
-            named.raising.push((name, *at));
-        }
-    }
-    named
-}
-
-/// The 2026-09-15 ruling's third part: a bare err a program raised, arriving
-/// where a value is wanted, does not compile. The sites are the ruling's
-/// three — an operator's operand, an index's base or key, and a call at a
-/// position no arm names an err at — and the proof is `RAISED`, the bit
-/// infer sets only where a program spells an err. A strict index's miss and
-/// a division's zero divisor answer ERR without it, because what the checker
-/// should make of those is the ledger's open question and not this rule's.
-/// A description is skipped: a boxed failure is not a bare one, and the
-/// three words are its doors. An answer that can be any value is not known
-/// to be a description, so an arm that spells an err beside it still counts
-/// (ruled 2026-09-30).
-fn raised_err_at(
-    e: &Expr,
-    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-    consts: &crate::infer::Consts<'_>,
-    err_arms: &crate::hash::Map<(&str, usize), u64>,
-    named: &BoundRaises<'_>,
-    owner: &str,
-    diags: &mut Vec<Diagnostic>,
-) {
-    let raised = |e: &Expr| raises(e, raisers, consts, named);
-    let short = |owner: &str| -> String {
-        owner
-            .rsplit_once("/lib/")
-            .map(|(_, m)| m)
-            .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
-            .unwrap_or(owner)
-            .to_string()
-    };
-    match e {
-        Expr::BinOp { op, lhs, rhs, .. } => {
-            for side in [lhs.as_ref(), rhs.as_ref()] {
-                if raised(side) {
-                    diags.push(Diagnostic::new(
-                        "exhaustive",
-                        format!(
-                            "this can be an err and `{op}` wants a value — dispatch on it \
-                             first with an `(err _)` arm (in {})",
-                            short(owner)
-                        ),
-                        side.span(),
-                    ));
-                }
-            }
-        }
-        Expr::Index { base, index, .. } => {
-            for side in [base.as_ref(), index.as_ref()] {
-                if raised(side) {
-                    diags.push(Diagnostic::new(
-                        "exhaustive",
-                        format!(
-                            "this can be an err and an index wants a value — dispatch on \
-                             it first with an `(err _)` arm (in {})",
-                            short(owner)
-                        ),
-                        side.span(),
-                    ));
-                }
-            }
-        }
-        Expr::App { head, args, piped: false, .. } => {
-            let Expr::Ident(name, _, _) = head.as_ref() else { return };
-            // A getter is synthesized from a field read, so nobody can give it
-            // an arm, and the two routes check on opposite sides of the
-            // rewrite that makes one: refusing here would refuse `xs[i].x`
-            // through an import and run it direct. A field read of an err
-            // stays the runtime's sentence on every route, as a none's does.
-            if crate::ast::getter_field(name).is_some() {
-                return;
-            }
-            if !args.iter().any(&raised) {
-                return;
-            }
-            let Some(&named) = err_arms.get(&(name.as_str(), args.len())) else { return };
-            for (pos, arg) in args.iter().enumerate() {
-                if named & (1u64 << pos.min(63)) != 0 || !raised(arg) {
-                    continue;
-                }
-                diags.push(Diagnostic::new(
-                    "exhaustive",
-                    format!(
-                        "this can be an err and `{name}` has no arm for it — dispatch on \
-                         it here, or give `{name}` an `(err _)` arm (in {})",
-                        short(owner)
-                    ),
-                    arg.span(),
-                ));
-            }
-        }
-        _ => {}
-    }
-}
-
 /// A lazy sequence handed where a builtin takes a list. `list/map` answers a
 /// record of std/list's that walks its source on demand, and a builtin whose
 /// demand holds a list refuses that record on every engine, at run time and
@@ -581,11 +324,150 @@ fn wrong_kind_at_an_operator(
     }
 }
 
+/// Every name `decl` binds, in order, with where and to what for a plain
+/// `name = expr` binding. A parameter, a destructured name and a lambda's
+/// parameter carry no expression.
+type Binds<'a> = Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>;
+
+fn binds_in_stmts<'a>(body: &'a [Stmt], out: &mut Binds<'a>) {
+    for stmt in body {
+        match stmt {
+            Stmt::Bind { pattern: Pattern::Var(n, at), expr } => {
+                out.push((n.as_str(), Some((*at, expr))));
+                binds_in_expr(expr, out);
+            }
+            Stmt::Bind { pattern, expr } => {
+                for_each_param_name(pattern, &mut |n| out.push((n, None)));
+                binds_in_expr(expr, out);
+            }
+            Stmt::Expr(expr) => binds_in_expr(expr, out),
+        }
+    }
+}
+
+fn binds_in_expr<'a>(e: &'a Expr, out: &mut Binds<'a>) {
+    if let Expr::Lambda { params, .. } = e {
+        out.extend(params.iter().map(|(n, _)| (n.as_str(), None)));
+    }
+    if let Expr::Guard { rest, .. } = e {
+        binds_in_stmts(rest, out);
+    }
+    // a branch of an `if` is a block with bindings of its own
+    if let Expr::Block(stmts, _) = e {
+        return binds_in_stmts(stmts, out);
+    }
+    crate::for_each_child(e, |c| binds_in_expr(c, out));
+}
+
+fn binds_of(decl: &crate::ast::FnDecl) -> Binds<'_> {
+    let mut binds = Vec::new();
+    for param in &decl.params {
+        for_each_param_name(param, &mut |n| binds.push((n, None)));
+    }
+    binds_in_stmts(&decl.body, &mut binds);
+    binds
+}
+
+/// Whether `e` provably answers a none: a lenient read, a literal none, a
+/// call whose group's return set carries one, or a name bound to one of
+/// these. A set holding every value bit is the unknown, and the unknown
+/// carries the none bit with the rest: a field read through a variable (`m.to`
+/// is TOP in infer) and a strict index (`xs[i]!` is every value but a thunk)
+/// both answer it, so a group that hands either back would read as proof of a
+/// none it never produces. Unknown is not proof.
+///
+/// A name carries its none into the check (#2088): `s = text/slice t 2 9` and
+/// then `length s` is refused as `length (text/slice t 2 9)` is, so binding a
+/// value never changes what compiles.
+fn yields_none(e: &Expr, tables: &AfterInfer, named: &BoundNones<'_>) -> bool {
+    use crate::infer::NONE;
+    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
+    let unknown = |s: crate::infer::Set| s & values == values;
+    match e {
+        Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
+        Expr::Ident(name, at, _) if named.local.contains(name.as_str()) => named
+            .none
+            .iter()
+            .any(|(n, bound)| *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)),
+        Expr::Ident(name, _, _) => name == "none",
+        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
+            // A field read is a getter call on the routes that check after
+            // the rewrite and a field expression on the others, which this
+            // match answers no. `kanso test` refused a module `kanso check`
+            // passed over `os/read_bytes r.path`.
+            Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
+            Expr::Ident(name, _, _) => tables
+                .nones
+                .get(&(name.as_str(), args.len()))
+                .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// The names one declaration binds once to something that provably answers
+/// a none, with where, and every name it binds at all. A name bound twice is
+/// left out, and a name bound to such a name carries the none too.
+#[derive(Default)]
+struct BoundNones<'a> {
+    none: Vec<(&'a str, crate::diag::Span)>,
+    local: crate::hash::Set<&'a str>,
+}
+
+fn none_names<'a>(decl: &'a crate::ast::FnDecl, tables: &AfterInfer) -> BoundNones<'a> {
+    // A name can only carry a none some binding was handed directly, so a
+    // declaration with no such binding answers empty without collecting.
+    fn direct(body: &[Stmt], tables: &AfterInfer, empty: &BoundNones<'_>) -> bool {
+        body.iter().any(|stmt| match stmt {
+            Stmt::Bind { pattern: Pattern::Var(..), expr } => {
+                yields_none(expr, tables, empty) || nested(expr, tables, empty)
+            }
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => nested(expr, tables, empty),
+        })
+    }
+    fn nested(e: &Expr, tables: &AfterInfer, empty: &BoundNones<'_>) -> bool {
+        if let Expr::Guard { rest, .. } = e {
+            if direct(rest, tables, empty) {
+                return true;
+            }
+        }
+        if let Expr::Block(stmts, _) = e {
+            return direct(stmts, tables, empty);
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || nested(c, tables, empty));
+        found
+    }
+    let empty = BoundNones::default();
+    if !direct(&decl.body, tables, &empty) {
+        return empty;
+    }
+    let binds = binds_of(decl);
+    let mut named = BoundNones { none: Vec::new(), local: binds.iter().map(|(n, _)| *n).collect() };
+    for (i, (name, at)) in binds.iter().enumerate() {
+        let Some((at, expr)) = at else { continue };
+        if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
+            continue;
+        }
+        if yields_none(expr, tables, &named) {
+            named.none.push((name, *at));
+        }
+    }
+    named
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
-fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Vec<Diagnostic>) {
-    use crate::infer::NONE;
+fn none_exhaustive_at(
+    e: &Expr,
+    tables: &AfterInfer,
+    named: &BoundNones<'_>,
+    owner: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
     let Expr::App { head, args, piped: false, .. } = e else { return };
     let Expr::Ident(name, _, _) = head.as_ref() else { return };
     // A getter is synthesized from a field read, so nobody can give it
@@ -596,35 +478,7 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     if crate::ast::getter_field(name).is_some() {
         return;
     }
-    // only what is provable: a lenient read, a literal none, or a call whose
-    // group's return set carries one. A set holding every value bit is the
-    // unknown, and the unknown carries the none bit with the rest: a field
-    // read through a variable (`m.to` is TOP in infer) and a strict index
-    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
-    // hands either back would read as proof of a none it never produces.
-    // Unknown is not proof.
-    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
-    let unknown = |s: crate::infer::Set| s & values == values;
-    let yields_none = |e: &Expr| -> bool {
-        match e {
-            Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
-            Expr::Ident(name, _, _) => name == "none",
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
-                // A field read is a getter call on the routes that check after
-                // the rewrite and a field expression on the others, which this
-                // match answers no. `kanso test` refused a module `kanso check`
-                // passed over `os/read_bytes r.path`.
-                Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
-                Expr::Ident(name, _, _) => tables
-                    .nones
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
-                _ => false,
-            },
-            _ => false,
-        }
-    };
+    let yields_none = |e: &Expr| yields_none(e, tables, named);
     // THE CHEAP TESTS COME FIRST, and asking the table is not one of
     // them: the lookup hashes the callee's name, where a none question
     // about an argument is a match on the argument's own shape. A call
@@ -635,12 +489,25 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     if !args.iter().any(&yields_none) {
         return;
     }
-    let Some(&(_, named)) = tables.nones.get(&(name.as_str(), args.len())) else { return };
+    // A builtin has no arms to give a none to. The positions its demand table
+    // constrains take the kinds it lists and never a none, which is checked
+    // there by running each wrong kind, so a none reaching one is refused as
+    // a group's would be. sat's `push` and kv's `length` of a slice past the
+    // end passed check and stopped at run time.
+    let group = tables.nones.get(&(name.as_str(), args.len())).map(|&(_, named)| named);
+    let builtin = group.is_none() && crate::check::BUILTINS.contains(&name.as_str());
+    if group.is_none() && !builtin {
+        return;
+    }
     for (pos, arg) in args.iter().enumerate() {
         if !yields_none(arg) {
             continue;
         }
-        if named & (1u64 << pos.min(63)) != 0 {
+        if let Some(named) = group {
+            if named & (1u64 << pos.min(63)) != 0 {
+                continue;
+            }
+        } else if builtin_demand(name, pos).is_none() {
             continue;
         }
         // an absolute path built from the binary's location tells a
@@ -654,14 +521,14 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
             .map(|(_, m)| m)
             .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
             .unwrap_or(owner);
-        diags.push(Diagnostic::new(
-            "exhaustive",
-            format!(
+        let message = match builtin {
+            true => format!("this can be a none and `{name}` does not take one — resolve it here"),
+            false => format!(
                 "this can be a none and `{name}` has no arm for it — resolve it \
                  here, or give `{name}` a `none` arm (in {short})"
             ),
-            arg.span(),
-        ));
+        };
+        diags.push(Diagnostic::new("exhaustive", message, arg.span()));
     }
 }
 
@@ -716,58 +583,6 @@ fn check_after_infer<'p>(
         entry.1 |= named;
     }
 
-    // The positions some arm names an err at, one bit each, keyed like
-    // `nones`. An arm names an err with `(err _)`, with `x:err`, or with a
-    // typeset that holds `err` — `type maybe err int` is an arm for one, and
-    // a typeset naming such a typeset is too, so the set is closed first.
-    let mut err_typesets: crate::hash::Set<&str> = crate::hash::Set::default();
-    loop {
-        let before = err_typesets.len();
-        for t in program.types.iter().filter(|t| !t.members.is_empty()) {
-            if t.members.iter().any(|m| m == "err" || err_typesets.contains(m.as_str())) {
-                err_typesets.insert(t.name.as_str());
-            }
-        }
-        if err_typesets.len() == before {
-            break;
-        }
-    }
-    let mut err_arms: crate::hash::Map<(&str, usize), u64> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for d in program.fns.iter() {
-        let mut named = 0u64;
-        for (pos, param) in d.params.iter().enumerate() {
-            let names_err = match param {
-                Pattern::Ctor { ty, .. } => ty == "err",
-                Pattern::Annotated { ty, .. } => ty == "err" || err_typesets.contains(ty.as_str()),
-                _ => false,
-            };
-            if names_err {
-                named |= 1u64 << pos.min(63);
-            }
-        }
-        *err_arms.entry((d.name.as_str(), d.params.len())).or_insert(0) |= named;
-    }
-    // The arms that can raise, keyed like `nones`: each one's patterns, for
-    // the literal test `raised_err_at` makes at a call. An arm raises when
-    // its answer carries RAISED, the bit infer sets only where a program
-    // spells an err. An answer known to be a box is skipped, since a boxed
-    // failure is not a bare one. An answer that can be ANY value is not known
-    // to be one: its description bit is inference not knowing, and an arm
-    // that hands on a field of a record the runtime built answers exactly
-    // that beside its own err (ruled 2026-09-30). An answer with no RAISED
-    // stays lenient either way, since unknown is not proof.
-    let mut raisers: crate::hash::Map<(&str, usize), Vec<&[Pattern]>> = crate::hash::Map::default();
-    let any = crate::infer::TOP & !crate::infer::FAIL;
-    for (i, d) in program.fns.iter().enumerate() {
-        let r = inference.returns[i];
-        let boxed = r & crate::infer::DESC != 0 && r & any != any;
-        if r & crate::infer::RAISED != 0 && !boxed {
-            raisers.entry((d.name.as_str(), d.params.len())).or_default().push(&d.params);
-        }
-    }
-    // The module's constants that are one string literal, for the same test.
-    let consts = crate::infer::literal_consts(program);
     let tables = AfterInfer {
         discarded,
         nones,
@@ -814,8 +629,9 @@ fn check_after_infer<'p>(
             }
         }
     }
+    // a failure is a box too, since `err` makes one (#2087)
     let values = TOP & !FAIL & !THUNK & !DESC;
-    let boxed = |s: Set| s & DESC != 0 && s & values == 0;
+    let boxed = |s: Set| s & (DESC | FAIL) != 0 && s & values == 0;
     // WHETHER ANY NAME IN THE PROGRAM COULD ANSWER A BOX. When none could, a
     // name and a call can never be one, so the two arms below that ask the
     // table answer no without asking -- and the binder set those arms consult
@@ -829,7 +645,7 @@ fn check_after_infer<'p>(
     // walk on `boxed` would hide every such group behind the short circuit.
     // Asking for the bit alone admits a superset of what `boxed` admits, so no
     // refusal is lost, and a program with no io at all still pays nothing.
-    let any_boxed = groups.values().any(|(s, _, _)| s & DESC != 0);
+    let any_boxed = groups.values().any(|(s, _, _)| s & (DESC | FAIL) != 0);
     // a name the declaration binds itself — a parameter, a binding, a
     // lambda's parameter — is that binding, whatever declaration shares
     // its spelling; `fn either ... args` reads its own list, not `os/args`
@@ -860,7 +676,7 @@ fn check_after_infer<'p>(
             Expr::App { head, args, piped: false, .. }
                 if args.len() == 1
                     && matches!(head.as_ref(), Expr::Ident(name, _, _)
-                        if name == "effect" || name == "print") =>
+                        if name == "effect" || name == "print" || name == "err") =>
             {
                 matches!(head.as_ref(), Expr::Ident(name, _, _) if !shadows(name.as_str()))
             }
@@ -1252,7 +1068,6 @@ fn check_after_infer<'p>(
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
     // Asked once: a name read as a value can raise only if some constant does.
-    let constants_raise = raisers.keys().any(|(_, arity)| *arity == 0);
     // every group position a box was let into, with the declaration whose call
     // let it in, for the pass after this walk
     let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
@@ -1263,7 +1078,7 @@ fn check_after_infer<'p>(
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
         let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
-        let named = raising_names(decl, &raisers, &consts, constants_raise);
+        let nones = none_names(decl, &tables);
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -1272,8 +1087,7 @@ fn check_after_infer<'p>(
             stack.push(e);
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
-                none_exhaustive_at(cur, &tables, &decl.file, none_diags);
-                raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);
+                none_exhaustive_at(cur, &tables, &nones, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);

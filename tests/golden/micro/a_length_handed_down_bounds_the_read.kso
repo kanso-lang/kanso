@@ -1,0 +1,14 @@
+# A loop that walks a list by index hands its bound down once, as the list's
+# length, and its guard `i > n` keeps every read `xs[i]` inside the list: the
+# outside call passes `length xs` beside `xs`, and the loop passes both on
+# unchanged. So the read cannot answer none, and `twice` needs no arm for one.
+fn twice x
+  x * 2
+
+fn walk xs i n acc
+  if (i > n) acc (walk xs (i + 1) n (acc + twice xs[i]))
+
+fn total xs
+  walk xs 1 (length xs) 0
+
+pub play = print "{total [1 2 3 4]} {total []}"

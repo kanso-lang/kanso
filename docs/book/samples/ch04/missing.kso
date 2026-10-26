@@ -2,9 +2,9 @@ import "std/os"
 import "std/text"
 
 fn announce text
-  print "major version {major_of text}"
+  major_of text .> (n -> print "major version {n}")
 
 fn major_of text
-  text/to_int text
+  text/to_int! text
 
 pub play = os/read_file! "no-such-file.txt" .> announce
