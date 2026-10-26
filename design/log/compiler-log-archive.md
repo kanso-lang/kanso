@@ -109336,3 +109336,145 @@ pins its stderr. On main it prints the run-time error above.
 A library compile takes the path it took before, and the test verb has no
 row. The rows this moved are counted with the batch it landed in, at the end
 of "an import stays in the file that writes it".
+
+## 2026-10-24 — a module's own function beats an imported constant of its name
+
+#2090's first item, from the kv port. A module that imports std/io and
+declares `fn read_line acc x`, then hands `read_line` to `list/fold`, stopped
+on every engine with "`<io>` is not callable". #2084 fixed the play-file form
+of this in the interpreter's `resolve`. A module takes another path.
+
+`qualify` gives a name the module declares and an import also enrols a
+spelling of its own, the shared bare space (`m/~read_line`), where the
+module's own arms join the import's twin as synthetic clones. #2084's test
+for an arm the author wrote finds only clones there, so it never fires, and
+std/io's `read_line` is a constant, which answers any mention of the name
+read as a value. A constant has no arity a call could dispatch on, so it
+cannot share a name with a function by overloading. `qualify` now drops an
+import's constant twin wherever the module declares the name, and the name
+takes its plain qualified spelling. A module that declares no `read_line`
+still reads std/io's bare.
+
+`micro/a_modules_function_named_like_an_imported_constant` prints `6` on
+every engine, and main stops it with "`<io>` is not callable".
+
+`qualify` asks each dependency which names its module declares. The first
+cut cloned every declared name into a set, 305 allocations; the set now
+borrows them. The rows are counted with the batch this landed in, at the end
+of "an import stays in the file that writes it".
+
+## 2026-10-24 — an arm names only a type its file can see
+
+mal's port wrote `shown (held v)` in a module that cannot see `held`, a type
+private to another module (#2091, item 4; raytracer F15 is the same shape).
+`kanso check` passed it. The interpreter passed the arm over and printed "got
+nothing", and native stopped with "native backend: unknown type `held`", with
+no file or line.
+
+`patterns()` in `check_annotation_names` left this case to dispatch on
+purpose. Its comment said the obvious check, a constructor pattern whose type
+`program.types` does not hold, calls `std/list`'s `(entry k v)` wrong. Two
+more sets turned out to be needed. A type an import exports is named bare
+(`(file_not_found _)` from std/os in bc and datalog), and the file's imported
+globals hold it by its constructor. A type whose bare name a function of the
+file takes, as `fn step` beside std/list's `step` record, stays a type in a
+pattern; the import's enrolled twins hold that one. `unseen_ctor` now refuses
+a parameter pattern whose type is in none of those, is not built in, is not
+qualified, and is not `entry`. The caret sits on the first field, as the
+other constructor diagnostics' do.
+
+`errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
+`errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
+main passes both. The stdlib, the twenty ports and kq check as before.
+
+## 2026-10-25 — a module's own type beats an imported function of its name
+
+From #2090, mal's port. A module declared `type tally` beside
+`import "std/list"`, which exports a one-argument `list/tally`. Every
+construction `tally a b` was refused with "no 2-argument arm of `tally`
+(arms take 1)": the import's function, enrolled under its bare name, took
+the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
+shape. diff's `drop` is a record in std/list too, and main built std/list's
+record for `drop 3 4`, whose field `d.a` the run then could not read.
+
+`own_types_beat_twins` already let a module's own type beat an import's type
+of the same name. It now does the same for an import's function: a
+synthetic bare function named like a type the module declares is dropped,
+at any arity. A module cannot declare a function and a type of one name, so
+such a function can only be an import's twin. The import's function stays
+reachable as `list/tally`.
+
+`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
+`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
+refuses it.
+
+## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
+
+From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
+int[]`, and the 2026-10-12 entry made `list/concat` read a bytes value as its
+byte values on both engines. `push` was left out: `push (text/bytes "a") 2`
+stopped with "push takes a list and a value" on the interpreter and natively,
+and `kanso check` passed it. A push onto bytes now answers the list of their
+values with the item after them, on both engines. The bytes it came from are
+unchanged, and a list is still never read as bytes.
+
+Native code takes this path out of line, behind the tag test the push already
+made, so a push onto a list runs the instructions it ran before.
+
+`tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
+`text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
+the first line.
+
+## 2026-10-25 — a test that fails inside a library names the library's line
+
+From #2091's sixth item, chip8's port. A test whose helper handed
+`text/split` a none failed inside std/text, and `kanso test` printed
+"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
+number under the test file's path. In the port, line 38 of the test file was
+a different test, one that had passed. The runner rendered every failure's
+span against the test file's own source.
+
+A failure that knows its place now prints it the way `run` and `play` do,
+`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
+(#1975) that a failure names the line it happened on. A failure with no place
+keeps the rendered span.
+
+`tests/golden/test_verb/fails_in_std` is the reduction, and
+`a_test_failing_inside_a_library_names_the_librarys_line` in
+`tests/test_verb.rs` pins both streams.
+
+## 2026-10-25 — a binding refused for another file's name says which file
+
+#2085 asks whether a local may reuse a name declared only in another file of
+its module, and notes that the message is cloud's to fix whatever the
+ruling. rg's port had `` `escaped` is already a declaration; rename the
+binding `` with the caret in `m/a.kso` and the declaration in `b.kso`, which
+the message did not name. The module path now looks the name up in the
+module's other files when it reports one of these, and says where it is:
+`` `escaped` is already a declaration, in m/b.kso at line 1; rename the
+binding ``. The lookup runs only on a refused compile.
+
+`errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
+shape, and main prints the message without the place.
+
+## 2026-10-25 — a function's arms split across files are counted together
+
+From #2090, toml's port. A module's files share their declarations, and
+toml's `lookup` had a 2-argument arm in one file that called a 3-argument
+arm in the next. The per-file check counted only the arms in the file it was
+reading and refused the call with "no 3-argument arm of `lookup` (arms take
+2)". The same two arms in one file ran.
+
+The module path now records, for each function its files declare, whether
+more than one file declares arms of it, and the per-file arity check leaves
+such a name to the merged check, which sees every arm. A count no file's arms
+take is still refused there, and the message names every arity: "no
+4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
+said "arms take 2".
+
+`tests/arms_split_across_files.rs` runs toml's shape on both engines and
+pins the refusal; main fails both.
+
+The module path now counts, per name, which files declare it. The rows are
+counted with the batch this landed in, at the end of "an import stays in the
+file that writes it".

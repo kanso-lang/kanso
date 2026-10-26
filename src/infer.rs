@@ -2223,7 +2223,13 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"
         | "filter" => LIST | fails,
         "map" => LIST | fails,
-        "put" | "delete" => MAP | fails,
+        // a list written at a position answers none outside it (kanso#2086)
+        "put" => match args[0] & (MAP | LIST) {
+            LIST => LIST | NONE | fails,
+            0 | MAP => MAP | fails,
+            _ => MAP | LIST | NONE | fails,
+        },
+        "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,
         "to_int" => ANY_INT | ERR | fails,

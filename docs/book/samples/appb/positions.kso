@@ -1,0 +1,5 @@
+cells = [0 0 0 0]
+marked = put cells 2 7
+print "put {marked}"
+print "kept {cells}"
+print "outside {put cells 5 1}"

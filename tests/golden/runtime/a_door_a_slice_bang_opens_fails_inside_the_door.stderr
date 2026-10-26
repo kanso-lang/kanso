@@ -1,2 +1,3 @@
 error[runtime]: utf8 takes a list of byte values
   failed in text/utf8 at std/text/text.kso:92
+  called from a_door_a_slice_bang_opens_fails_inside_the_door.kso:8
