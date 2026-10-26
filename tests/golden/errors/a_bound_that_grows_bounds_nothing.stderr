@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `twice` has no arm for it — resolve it here, or give `twice` a `none` arm (in a_bound_that_grows_bounds_nothing.kso)
+  --> tests/golden/errors/a_bound_that_grows_bounds_nothing.kso:7:58
+   7 |   if (i > n) acc (walk xs (i + 1) (n + 1) (acc + twice xs[i]))
+                                                                ^
