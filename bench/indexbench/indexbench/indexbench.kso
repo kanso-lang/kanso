@@ -24,7 +24,14 @@ fn wider s n true
   doubled (text/join [s s] "") n
 
 fn walk s i n acc
-  if (i > n) acc (walk s (i + 1) n (acc + length s[i]))
+  if (i > n) acc (walk s (i + 1) n (acc + width s[i]))
+
+# `walk` reads at most `n` characters of a string of `n`, so a none is a bug
+fn width none
+  err "a character inside the string answered none"
+
+fn width c
+  length c
 
 pub fn total n
   walk (inside (text/slice (doubled alphabet n) 1 n)) 1 n 0
