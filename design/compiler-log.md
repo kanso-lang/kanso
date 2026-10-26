@@ -23,6 +23,33 @@
 
 
 
+## 2026-10-24 — a record returned by value keeps its shape across a pipe
+
+#2091's first item, from the mustache port. `half` answers a two-field
+record or an err, and escape analysis returns a record of that shape by
+value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
+of the value's tag, a call of `shown` on the success path, and a phi joining
+the two paths as `%KValue`s. The failure edge named the value as it came,
+three words, and clang refused the module: "'%t1' defined with type
+'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
+
+The boxing rewrite that turns a by-value record into a `%KValue` wherever a
+line names it as one reads `%KValue %t1`, and a phi's operand list names its
+values bare, so the rewrite never reached this line. The pipe now boxes the
+value for the failure edge before it branches, and boxes the call's answer
+when that comes back by value too. The call itself still takes the three
+words, since `shown` takes them by value.
+
+`micro/a_record_returned_by_value_is_piped_on` runs the success and the
+failure paths. Main stops it in clang; every engine now prints `4/2` and
+`failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.
+
 ## 2026-10-24 — a loop counter knows where it starts
 
 The ports' re-sit counted the same complaint in about ten journals: a guard
@@ -1657,29 +1684,6 @@ Owes, on #2086: `put` on a list on every engine; the in-place write under
 the existing uniqueness analysis; the checker accepting a list for `put`, and
 refusing at check what it refuses at run time (diff F9, inflate F8); micro and
 mem goldens; appendix B.
-
-## 2026-10-25 — gavel: a bare err is handled where it lands, and propagation is the box's job
-
-Clay ruled #2087. Since #1884 a name bound to a call that can fail carries
-the err into the check, and every function it can reach needs an `(err _)`
-arm or the call is refused. The ports added dozens of arms that only hand the
-err back (site 68, toml 37, bc 22). The issue proposed letting a function
-with no err arm pass an err through untouched.
-
-**The ruling.** The 2026-09-15 gavel stands. Clay: "there is a difference
-between ordinary objects and effects." A bare err is data, like `none`, and
-is handled where it lands. A failure meant to travel up without every
-function handling it is boxed, with `effect` or a `!` form, because bubbling
-is what the box is (2026-09-16, "gavel, reversed the same day"). The arms the
-ports added mark places where a bare err was used for a failure that should
-have been boxed. Passing a bare err through was declined, since it would bring
-back the railway the 2026-09-15 gavel retired and would make an err differ
-from `none`.
-
-Owes, on #2087: the ports' cascades rewritten to box the failures that should
-propagate, where the arms only hand an err back; #2088's migration choosing
-a box at sites whose read must succeed; the book's ch04 checked for prose
-that still describes an err passing through a function with no arm.
 
 ## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
 
