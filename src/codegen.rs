@@ -19,6 +19,8 @@ const K_NONE: i64 = 4;
 const K_DONE: i64 = 16;
 /// An int past a machine word, in the arena. Ruled 2026-10-07.
 const K_BIG: i64 = 17;
+/// An err out of its box, an ordinary value (#2087). The runtime's last tag.
+const K_ERRV: i64 = 18;
 const K_ERR: i64 = 5;
 const K_DESC: i64 = 8;
 

@@ -156,7 +156,7 @@ pub fn err_read(info: &ErrInfo, field: &str) -> Value {
     match field {
         "reason" => info.reason.clone(),
         "cause" => match &info.cause {
-            Some(cause) => Value::ErrV(cause.clone()),
+            Some(cause) => Value::Unboxed(cause.clone()),
             None => Value::NoneV,
         },
         _ => match &info.origin {

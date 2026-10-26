@@ -333,7 +333,8 @@ impl<'a> Backend<'a> {
             }
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
-                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
+                    // an arm sees an err out of its box, never the box (#2087)
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERRV})"));
                     let inner = f.tmp();
                     f.line_fmt(format_args!(
                         "{inner} = call %KValue @k_err_inner(%KValue {value})"
@@ -1200,7 +1201,7 @@ impl<'a> Backend<'a> {
                 // element, or the missing-index err, settles into a box
                 let boxed = f.tmp();
                 f.line_fmt(format_args!("{boxed} = call %KValue @k_b_effect(%KValue {read})"));
-                f.record(&boxed, DESC);
+                f.record(&boxed, DESC | ERR);
                 Ok(boxed.to_string())
             }
             Expr::Join { lhs, rhs, span } => {

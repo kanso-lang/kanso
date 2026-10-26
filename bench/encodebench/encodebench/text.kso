@@ -127,20 +127,8 @@ fn str_unicode cs p acc
 fn hex_three cs p
   hex_on (hex_on (hex_digit cs[p]) (hex_digit cs[p + 1])) (hex_digit cs[p + 2])
 
-fn hex_on e@(err _) (err _)
-  e
-
-fn hex_on e@(err _) _
-  e
-
-fn hex_on _ e@(err _)
-  e
-
 fn hex_on n d
   n * 16 + d
-
-fn unicode_at _ _ _ e@(err _)
-  e
 
 fn unicode_at cs p acc code
   str_chars cs (p + 6) (list/concat acc (text/bytes (text/from_code code)))
@@ -171,7 +159,7 @@ fn begun none
 fn begun run
   list/concat [] run
 
-fn string_ok p (err _)
+fn string_ok p none
   err (parse_failure p "invalid utf-8 in string")
 
 fn string_ok _ v

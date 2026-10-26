@@ -308,7 +308,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const 
                                                                           uint64_t key, unsigned slot) {
     long long chars;
     KValue bad = k_utf8_bad(data, len, origin, &chars);
-    if (bad.tag == K_ERR) return bad;
+    if (bad.tag == K_ERR) return k_none();
     if (k_token_key[slot] != 0) slot ^= 1;
     if (k_token_key[slot] == 0) {
         /* Its bytes count as permanent the moment the slot is filled, and so
@@ -369,7 +369,7 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
        the whole-string doors below save. */
     if (len >= 4 && len <= 7) return k_token_of(data, len, origin);
     KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
-    if (bad.tag == K_ERR) return bad;
+    if (bad.tag == K_ERR) return k_none();
     return k_str_n(data, len);
 }
 
@@ -404,7 +404,7 @@ K_DOORCC KValue k_b_utf8(KValue lv, const char* origin) {
     s->data[l->len] = 0;
     long long chars;
     KValue bad = k_utf8_bad(s->data, l->len, origin, &chars);
-    if (bad.tag == K_ERR) return bad;
+    if (bad.tag == K_ERR) return k_none();
     k_str_seed_count(s, chars);
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
@@ -639,7 +639,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
     if (b->len >= 4 && b->len <= 7) return k_token_of((const char*)b->data, b->len, origin);
     long long chars;
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
-    if (bad.tag == K_ERR) return bad;
+    if (bad.tag == K_ERR) return k_none();
     return k_utf8_take(b, chars);
 }
 

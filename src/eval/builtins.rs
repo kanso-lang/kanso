@@ -36,7 +36,7 @@ impl<'a> Interp<'a> {
             if is_failure(&reason) {
                 return Ok(reason);
             }
-            let Value::ErrV(cause) = original else {
+            let Value::Unboxed(cause) = original else {
                 return Err(RuntimeError {
                     at: None,
                     message: "wrap_err takes a reason and the err it wraps".to_string(),
@@ -75,6 +75,12 @@ impl<'a> Interp<'a> {
         // content, so it is the second hole in err's infectiousness
         if name == "effect" {
             let [v] = arity(args, name, span)?;
+            // an err out of its box goes back into one, and a failure is a
+            // box already (#2087)
+            match v {
+                Value::Unboxed(info) | Value::ErrV(info) => return Ok(Value::ErrV(info)),
+                _ => {}
+            }
             return Ok(Value::Desc(Rc::new(Desc::Settled(v))));
         }
         if args.iter().any(is_failure) {
@@ -653,12 +659,11 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
+                // bytes that are not text are an outcome the caller handles,
+                // and `utf8!` is the insisting form (#2087)
                 match String::from_utf8(raw) {
                     Ok(text) => Ok(Value::Str(Text::from(text))),
-                    Err(_) => Ok(err_value(
-                        Value::Str(Text::from("invalid utf-8".to_string())),
-                        origin_at(frame, span),
-                    )),
+                    Err(_) => Ok(Value::NoneV),
                 }
             }
             // Bytes the standard library assembled from text and ascii bytes
@@ -1419,12 +1424,7 @@ impl<'a> Interp<'a> {
                     Value::Str(s) => s.clone(),
                     Value::Bytes(items) => Text::from(match bytes_to_str(items) {
                         Some(s) => s,
-                        None => {
-                            return Ok(err_value(
-                                Value::Str(Text::from("bytes are not an integer".to_string())),
-                                origin_at(frame, span),
-                            ))
-                        }
+                        None => return Ok(Value::NoneV),
                     }),
                     Value::Int(_) => return Ok(value),
                     _ => {
@@ -1445,12 +1445,11 @@ impl<'a> Interp<'a> {
                     true => None,
                     false => text.parse::<BigInt>().ok(),
                 };
+                // text that is not a number answers none, and `to_int!` is
+                // the insisting form (#2087)
                 Ok(match parsed {
                     Some(n) => Value::int(n),
-                    None => err_value(
-                        Value::Str(format!("\"{text}\" is not an integer").into()),
-                        origin_at(frame, span),
-                    ),
+                    None => Value::NoneV,
                 })
             }
             b"to_float" => {
@@ -1459,12 +1458,7 @@ impl<'a> Interp<'a> {
                     Value::Str(s) => s.clone(),
                     Value::Bytes(items) => Text::from(match bytes_to_str(items) {
                         Some(s) => s,
-                        None => {
-                            return Ok(err_value(
-                                Value::Str(Text::from("bytes are not a number".to_string())),
-                                origin_at(frame, span),
-                            ))
-                        }
+                        None => return Ok(Value::NoneV),
                     }),
                     Value::Int(n) => {
                         let approx = n.to_string().parse::<f64>().unwrap_or(f64::INFINITY);
@@ -1484,10 +1478,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(match text.parse::<f64>() {
                     Ok(x) => Value::Float(x),
-                    Err(_) => err_value(
-                        Value::Str(format!("\"{text}\" is not a number").into()),
-                        origin_at(frame, span),
-                    ),
+                    Err(_) => Value::NoneV,
                 })
             }
             b"is_desc" => {

@@ -31,20 +31,14 @@ pub const DONE: Set = 1 << 14;
 pub const BIG: Set = 1 << 16;
 /// Every int, of either kind: what an `int` annotation admits.
 pub const ANY_INT: Set = INT | BIG;
-pub const TOP: Set = ((1 << 15) - 1) | BIG;
-/// An err the PROGRAM raised, as opposed to one an operation answered on its
-/// own: `err reason`, or an err bound by name and handed on. The bit rides
-/// with ERR everywhere ERR goes and is set at the two places a program
-/// spells one, so a set carrying it is proof of a bare err at that site.
-/// A strict index's miss and a division's zero divisor carry ERR alone,
-/// because what the checker should make of those is the ledger's open
-/// question, and the 2026-09-15 ruling refuses only what a program raised.
-/// It sits above TOP on purpose: TOP is "any value", and a proof is not a
-/// value.
-pub const RAISED: Set = 1 << 15;
+/// An err out of its box (#2087): what a rescue or an annotate hands its
+/// callback, an ordinary value that `(err r)` arms take. ERR is the box.
+pub const UNBOXED: Set = 1 << 17;
+pub const TOP: Set = ((1 << 15) - 1) | BIG | UNBOXED;
 /// What propagates on its own. A none is a value and stays where it is put;
-/// only an err abandons the computation that produced it.
-pub const FAIL: Set = ERR | RAISED;
+/// only a failure, the box `err` makes (#2087), abandons the computation
+/// that produced it.
+pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {
@@ -544,9 +538,7 @@ pub fn infer(program: &Program) -> Inference {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
                 // A parameter can hold a cell nobody has forced, and the
                 // guard ahead of the arm sees the cell rather than what is
-                // in it, so a failure the cell holds survives the guard. It
-                // is kept as an err the runtime met, never as a raise: the
-                // checker reads RAISED, and a cell raises nothing here.
+                // in it, so a failure the cell holds survives the guard.
                 if let Pattern::Var(name, _) = pattern {
                     if joined & FAIL != 0 && cells.contains(&(i, at)) {
                         env.insert(name, (joined & !FAIL) | ERR);
@@ -1213,10 +1205,10 @@ fn bind_pattern<'a>(
         // int-ness instead of TOP, which is what unblocks the scanner's hot path
         Pattern::Ctor { ty, fields, whole } => {
             // the as-pattern's name is the value that matched, so it carries
-            // the set the pattern caught: `e@(err _) = e` hands on a RAISED err
-            // and a caller that reads it is refused like the raise itself
+            // the set the pattern caught: `e@(err _)` binds an err out of
+            // its box, the only kind an arm sees (#2087)
             if let Some(whole) = whole {
-                let matched = if ty == "err" { ERR | (joined & RAISED) } else { REC };
+                let matched = if ty == "err" { UNBOXED } else { REC };
                 env.insert(&whole.0, matched);
             }
             let field_sets = type_names.get(ty.as_str()).map(|i| &type_fields[*i]);
@@ -1237,7 +1229,9 @@ fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
         Pattern::Nullary(name, _) if name == "done" => DONE,
-        Pattern::Ctor { ty, .. } if ty == "err" => ERR | RAISED,
+        Pattern::Ctor { ty, .. } if ty == "err" => UNBOXED,
+        // a box is what the annotation takes, and `err` makes one (#2087)
+        Pattern::Annotated { ty, .. } if is_effect_type(ty) => ERR,
         _ => 0,
     }
 }
@@ -1368,7 +1362,8 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             // the index in range, in which case the miss cannot happen and
             // the read is its element
             if *strict {
-                return (b & FAIL) | (k & FAIL) | DESC;
+                // and the miss is a failure, a box already (#2087)
+                return (b & FAIL) | (k & FAIL) | DESC | ERR;
             }
             let proven = match base.as_ref() {
                 Expr::Ident(xs, _, _) => in_range(&ctx.facts, index, xs.as_str()),
@@ -1697,9 +1692,7 @@ pub fn literal_consts(program: &Program) -> Consts<'_> {
 /// declarations read an element is not tracked, so the widening wakes them
 /// all; it can happen at most twice in a program, once per failure bit.
 fn store_fails(ctx: &mut Ctx<'_>, item: Set) {
-    // Read back out, the item is an err value rather than a raise: the
-    // literal ended the raise by keeping it, and the per-call check reads
-    // RAISED, which a read of a list the program built must not answer.
+    // Read back out, the item is the failure the literal kept.
     let fails = match item & FAIL {
         0 => 0,
         _ => ERR,
@@ -1806,8 +1799,9 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
 /// A chain word's callback, walked with its parameter holding the failure
 /// the word hands it. The Lambda arm of `eval_expr` seeds every parameter
 /// as never failing, because an ordinary call refuses to hand a closure a
-/// failure; `rescue` and `annotate` are the two callers that do it on
-/// purpose, so their callback's parameter can be anything, an err included.
+/// failure; `rescue` and `annotate` are the two callers that hand it the
+/// failure on purpose, out of its box (#2087), so their callback's parameter
+/// can be anything, an unboxed err included.
 /// A callback that is not a lambda literal is a value, walked as one.
 fn eval_callback<'a>(ctx: &mut Ctx<'a>, callee: &'a Expr, env: &mut Env<'a>) -> Set {
     let Expr::Lambda { body, params, .. } = callee else {
@@ -1897,7 +1891,7 @@ fn eval_call<'a>(
         return arg_sets[1] | arg_sets[2] | cond_fail | piped_bits;
     }
     if name == "err" {
-        return ERR | RAISED | piped_bits;
+        return ERR | piped_bits;
     }
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL) | piped_bits;
@@ -2164,8 +2158,8 @@ pub fn annotated_set(ty: &str) -> Set {
         "float64" => FLOAT,
         "string" => STR,
         "bool" => BOOL,
-        "err" => ERR | RAISED,
-        t if is_effect_type(t) => DESC,
+        "err" => UNBOXED,
+        t if is_effect_type(t) => DESC | ERR,
         t if t.ends_with("[]") => LIST,
         t if t.contains('[') => MAP,
         _ => REC,
@@ -2178,7 +2172,12 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
     match name {
         // the box built by hand. What goes in is the box's content, value or
         // err, so the argument's failure bits are held rather than carried
-        "effect" => DESC,
+        // an err out of its box goes back into one, and a failure is a box
+        // already (#2087)
+        "effect" => match args[0] & (UNBOXED | FAIL) != 0 {
+            true => DESC | ERR,
+            false => DESC,
+        },
         "at" => {
             let mut out = fails | NONE;
             if args[0] & BYTES != 0 {
@@ -2216,7 +2215,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         // std's own measured ranges (#1890): a range the library took from a
         // scan of the same value never leaves it, so it answers no none.
         "slice_in" => (args[0] & (BYTES | LIST | STR)) | fails,
-        "utf8" => STR | ERR | fails,
+        // bytes that are not text answer none; a value that is not a byte is
+        // a mistake, and a box
+        "utf8" => STR | NONE | ERR | fails,
         "built_text" => STR | fails,
         "render_value" => STR | fails,
         "length" => INT | fails,
@@ -2226,8 +2227,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "put" | "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,
-        "to_int" => ANY_INT | ERR | fails,
-        "to_float" => FLOAT | ERR | fails,
+        "to_int" => ANY_INT | NONE | fails,
+        "to_float" => FLOAT | NONE | fails,
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => ANY_INT | fails,

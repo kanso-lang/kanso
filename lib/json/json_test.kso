@@ -1,8 +1,8 @@
 import "std/testing"
 import "std/text"
 
-# `when_failed` hands back the bare reason, so this names a reason type and
-# never an err — json cannot rescue what json raised.
+# `when_failed` hands back the reason out of the box, so this names a reason
+# type and never an err — json cannot rescue what json raised.
 test_decode_array = decodes? "[1, 2, 3]" [1 2 3]
 
 test_decode_bool = decode "true"
@@ -52,29 +52,31 @@ test_encode_nested =
   encode value == "\{\"a\":true,\"b\":[1,2]}"
 
 test_error_position =
-  decoded = decode "[1, nope]"
+  decoded = decode! "[1, nope]"
   testing/when_failed decoded (r -> r.position == 5)
 
 test_error_trailing =
-  decoded = decode "1 x"
+  decoded = decode! "1 x"
   testing/when_failed decoded (r -> r.position == 3)
+
+test_plain_decode_answers_none = decode "[1, nope]" == none
 
 test_roundtrip =
   text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"
   encodes_back? (decode text) text
 
-# `decode` answers an err for bad input and `==` wants a value, so a test
-# dispatches on what it decoded before comparing it.
+# `decode` answers none for bad input, so a test dispatches on what it
+# decoded before comparing it.
 fn decodes? text want
   same? (decode text) want
 
-fn same? (err _) _
+fn same? none _
   false
 
 fn same? got want
   got == want
 
-fn encodes_back? (err _) _
+fn encodes_back? none _
   false
 
 fn encodes_back? v text

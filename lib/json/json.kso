@@ -10,9 +10,27 @@ type parsed
   pos
   value
 
+# Text that is not JSON answers none, an outcome the caller handles. The
+# decoder's failure is a box, and `plain` takes the box itself rather than
+# opening it, so what went wrong is left to `decode!`.
 pub fn decode s
+  plain (document s)
+
+# `decode!` insists the text is JSON. Like every `!` name it answers a box:
+# the value, or a failure that bubbles carrying a `parse_failure`, which says
+# where the decoder stopped and why.
+pub fn decode! s
+  effect (document s)
+
+fn document s
   cs = text/bytes s
   finish cs (parse_value cs 1)
+
+fn plain _:<some>effect
+  none
+
+fn plain v
+  v
 
 # one byte accumulator threads the whole tree, so every emitted byte is
 # copied once into the builder and once into the final string
@@ -90,9 +108,3 @@ fn finish _ none
 fn finish cs (parsed p v)
   p2 = skip_ws cs p
   if (p2 > length cs) v (fail p2 "unexpected trailing characters")
-
-# A failure inside the value is handed on as it is. The arm is written down
-# because the checker asks for it: an err is a value, and a group with no arm
-# for one where one can arrive does not compile.
-fn finish _ e@(err _)
-  e

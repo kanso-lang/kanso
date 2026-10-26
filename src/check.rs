@@ -3285,15 +3285,16 @@ fn decidable_failure_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// `to_int` and `to_float` given a literal that will not parse.
+/// `to_int!` and `to_float!` given a literal that will not parse. The plain
+/// forms answer none for it, an outcome rather than a failure (#2087).
 fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>) {
     let bare = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
     let Some(Expr::Str(parts, span)) = args.first() else { return };
     let [TemplatePart::Lit(text)] = parts.as_slice() else { return };
     let refuses = match bare {
         // An int has no ceiling, so a literal past a word still parses.
-        "to_int" => text.contains('_') || text.trim().parse::<num_bigint::BigInt>().is_err(),
-        "to_float" => text.trim().parse::<f64>().is_err(),
+        "to_int!" => text.contains('_') || text.trim().parse::<num_bigint::BigInt>().is_err(),
+        "to_float!" => text.trim().parse::<f64>().is_err(),
         _ => return,
     };
     if refuses {
@@ -3302,7 +3303,7 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
             format!(
                 "{text:?} is not {}",
                 match bare {
-                    "to_int" => "an integer",
+                    "to_int!" => "an integer",
                     _ => "a number",
                 }
             ),

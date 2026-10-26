@@ -71,7 +71,7 @@ impl<'a> Backend<'a> {
                 // These answer before the guard and typeset logic below
                 // them in the cascade, so they answer before it here too.
                 if crate::ast::is_effect_type(ty) {
-                    return Some(ArmCase::Tags(vec![K_DESC]));
+                    return Some(ArmCase::Tags(vec![K_DESC, K_ERR]));
                 }
                 if ty.ends_with("[]") {
                     return Some(ArmCase::Tags(vec![9]));
@@ -616,9 +616,8 @@ impl<'a> Backend<'a> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
             // a box is a box whatever it yields, and never a subtype
-            t if crate::ast::is_effect_type(t) => {
-                format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DESC})")
-            }
+            // and a failure is a box too, since `err` makes one (#2087)
+            t if crate::ast::is_effect_type(t) => format!("call i64 @k_check_box(%KValue {value})"),
             "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_int_type(%KValue {value})"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
@@ -627,7 +626,7 @@ impl<'a> Backend<'a> {
             "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
             "bool" if subs => format!("call i64 @k_check_sub_bool(%KValue {value})"),
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
-            "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
+            "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERRV})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
             "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),
             "done" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DONE})"),
@@ -663,7 +662,7 @@ impl<'a> Backend<'a> {
             "int" => -1,
             "float64" => -2,
             "string" => -7,
-            "err" => -(K_ERR + 1),
+            "err" => -(K_ERRV + 1),
             "done" => -(K_DONE + 1),
             // the runtime's K_WANT_BOOL and K_WANT_SOME: neither is one tag
             "bool" => -100,

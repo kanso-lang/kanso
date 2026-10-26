@@ -69,7 +69,10 @@ __attribute__((noreturn)) static void k_ahead_exit(int code) {
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB, K_DONE, K_BIG };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB, K_DONE, K_BIG, K_ERRV };
+/* K_ERRV is an err out of its box (#2087): the same KErrBox as K_ERR, retagged
+   by rescue and annotate as they hand it to a callback, and retagged back by
+   `effect`. Only K_ERR is a failure; this one is an ordinary value. */
 /* An int of either kind: a word, or a bignum past one. */
 #define K_IS_INT(v) ((v).tag == K_INT || (v).tag == K_BIG)
 
@@ -2410,7 +2413,8 @@ static size_t k_copy_size(KValue v, KMark* m) {
             if (k_worth_sizing(d->y)) n += k_copy_size(d->y, m);
             break;
         }
-        case K_ERR: {
+        case K_ERR:
+        case K_ERRV: {
             KErrBox* e = (KErrBox*)p;
             n += k_copy_size_ptr(e, sizeof(KErrBox), m);
             n += k_copy_size(e->reason, m);
@@ -2773,7 +2777,8 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             out.payload = k_ptr(nd);
             break;
         }
-        case K_ERR: {
+        case K_ERR:
+        case K_ERRV: {
             KErrBox* e = (KErrBox*)p;
             KErrBox* ne = k_copy_alloc(cp, sizeof(KErrBox));
             k_copy_map_put(p, ne);
@@ -3552,8 +3557,9 @@ KValue k_caf_complete(KValue built, KValue seeded) {
    and giving `k_slots_survive` its own copy of the switch reads exactly what
    the shared switch does. */
 static int k_is_heap(long long tag) {
-    /* bit 17 is K_BIG, whose limbs sit in the arena like bytes do */
-    return (int)((0x2AFE0U >> (tag & 31)) & 1U);
+    /* bit 17 is K_BIG, whose limbs sit in the arena like bytes do, and bit 18
+       K_ERRV, an err out of its box */
+    return (int)((0x6AFE0U >> (tag & 31)) & 1U);
 }
 
 /* stdout is written through stdio's buffer and stderr is not. Text a program
