@@ -1795,6 +1795,7 @@ layout: compile_instructions 25,156,620 -> 25,156,569, entry_instructions
 73,811,997 -> 73,811,949, library_instructions 73,482,762 -> 73,482,714,
 codegen_instructions_dev 116,504,899 -> 116,505,396,
 codegen_instructions_release 370,158,521 -> 370,153,673, and among the
-benchmarks basket 18,266,806, runbench 822,288,845, encodebench
-2,327,387,586, livebench 936,013,844, oneshot 10,034,013 and readbench
-4,581,975. Welfare holds at 95.38 and is banked.
+benchmarks work_basket 18,278,697 -> 18,266,806, work_runbench
+822,295,072 -> 822,288,845, work_encodebench 2,327,387,236 ->
+2,327,387,586, work_livebench 936,013,522 -> 936,013,844, work_oneshot
+10,033,523 -> 10,034,013 and work_readbench 4,581,973 -> 4,581,975. Welfare holds at 95.38 and is banked.
