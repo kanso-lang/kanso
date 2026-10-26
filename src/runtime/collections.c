@@ -1390,6 +1390,21 @@ KValue k_b_delete_mut(KValue mv, KValue key) {
     return mv;
 }
 
+/* `builtin_rest_from xs at`, std/list's rest after a drop: a list's elements
+   from position `at` on, copied in one move, and none for anything that is
+   not a list or a position that is not a word of at least 1, which std then
+   walks a step at a time as it always did. Walking
+   a list by `list/to_list (list/drop xs 1)` built each rest a step record and
+   an advanced cursor per element: 5,000 elements took 6.5 seconds. */
+KValue k_b_rest_from(KValue coll, KValue atv) {
+    if (__builtin_expect(!k_not_failure(coll) || !k_not_failure(atv), 0)) return k_failed2(coll, atv);
+    if (coll.tag != K_LIST || atv.tag != K_INT || atv.payload < 1) return k_none();
+    KList* l = k_as_list(coll);
+    long long at = atv.payload;
+    if (at > l->len) return k_mklist(0, NULL);
+    return k_mklist(l->len - at + 1, l->items + (at - 1));
+}
+
 /* A failing field is the rare arm of `entries`, and k_rec is a plain call
    that would cost the hot arm its frame. */
 static __attribute__((noinline, cold, preserve_most)) KValue k_rec_cold(long long t, long long n, KValue* f) {

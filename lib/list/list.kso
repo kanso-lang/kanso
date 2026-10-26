@@ -200,6 +200,11 @@ pub fn fold (repeated value) init f
 pub fn fold (sifted keep source test) init f
   fold_go (next (sifted keep source test)) init f
 
+# A drop over a cursor is a range too, from the element after the ones
+# dropped to the end, and is read by index as a capped cursor is.
+pub fn fold (skipped burn (cursor at source)) init f
+  bounded_flat source init f (at + burn) (length source)
+
 pub fn fold (skipped burn source) init f
   fold_go (next (skipped burn source)) init f
 
@@ -538,8 +543,24 @@ pub fn take coll n
 pub fn tally coll
   fold coll {} (m x -> put m x (bump m[x]))
 
+# The rest of a list after a drop is one copy of its tail. Built a step at a
+# time it cost a step record and an advanced cursor per element, and walking
+# 5,000 elements by `list/to_list (list/drop xs 1)` took 6.5 seconds.
+pub fn to_list (skipped burn (cursor at source))
+  rest_of source (at + burn)
+
 pub fn to_list coll
   fold coll [] (acc x -> push acc x)
+
+fn rest_of source from
+  rested (builtin_rest_from source from) source from
+
+# not a list: its elements a step at a time, as any cursor gives them
+fn rested none source from
+  fold (cursor from source) [] (acc x -> push acc x)
+
+fn rested xs _ _
+  xs
 
 fn underrank (missing _) x
   x

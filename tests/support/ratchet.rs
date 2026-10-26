@@ -1,6 +1,6 @@
 /// The ratchet's module, every file of it in name order, as one text. Rows
-/// live in `rows_a.kso`, `rows_b.kso` and `rows_c.kso` beside the runner in
-/// `ratchet.kso`, so a check over the rows reads them all.
+/// live in the `rows_*.kso` files beside the runner in `ratchet.kso`, so a
+/// check over the rows reads them all.
 pub fn ratchet_source() -> String {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/ratchet/ratchet");
     let mut files: Vec<_> = std::fs::read_dir(&dir)

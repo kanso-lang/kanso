@@ -54,6 +54,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/padded/padded.kso",
     "bench/runbench/runbench/reentered/reentered.kso",
     "bench/runbench/runbench/restate/restate.kso",
+    "bench/runbench/runbench/rested/rested.kso",
     "bench/runbench/runbench/rewind/rewind.kso",
     "bench/runbench/runbench/scatter/scatter.kso",
     "bench/runbench/runbench/stack/stack.kso",
