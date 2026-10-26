@@ -15,7 +15,7 @@ pub fn decode_literal s
   value_for cs[1] cs 1
 
 fn fail p reason
-  err (parse_failure p reason)
+  parse_failure p reason
 
 fn rue? cs p
   cs[p + 1] == 114 and cs[p + 2] == 117 and cs[p + 3] == 101

@@ -644,7 +644,7 @@ fn reported progs raw
   os/run "pkill" ["-f" "kanso-differential-profile"] .> on
 
 fn tallied progs raw
-  json/decode raw .> (read -> tallied_from progs read)
+  json/decode! raw .> (read -> tallied_from progs read)
 
 fn tallied_from progs read
   results = read["results"]

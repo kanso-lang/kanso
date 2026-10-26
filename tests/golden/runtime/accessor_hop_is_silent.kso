@@ -1,7 +1,10 @@
 type user
   name
 
-fn boom _
+fn boom 0
   err "gone"
+
+fn boom n
+  user "n{n}"
 
 pub play = print "{(boom 0).name}"

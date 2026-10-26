@@ -65,8 +65,8 @@ expectations = [e1 e2 e3 e4 e5 e6 e7 e8 e9]
 fn read_grammar raw
   checked (json/decode raw)
 
-fn checked (err reason)
-  io/write "the grammar does not parse: {reason}\n" .> (_ -> os/exit 1)
+fn checked none
+  io/write "the grammar is not json\n" .> (_ -> os/exit 1)
 
 fn checked grammar
   rules = rules_of grammar

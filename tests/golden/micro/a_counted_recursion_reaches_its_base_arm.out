@@ -3,5 +3,5 @@ step 3
 step -1
 step x
 step nothing
-the err arm handed it on: unexpected end of input
+the failure passed step: unexpected end of input
 55

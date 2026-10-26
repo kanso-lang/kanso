@@ -1,0 +1,13 @@
+import "./config"
+import "std/list"
+import "std/text"
+
+origin = config/read 4 .? (e -> e.origin)
+
+first_origin = config/read 5 .? (e -> e.cause.origin)
+
+print (config/read 1 .? (e -> e.reason))
+  .> (_ -> print (config/read 2 .? (e -> e.cause.reason)))
+  .> (_ -> print (config/read 3 .? (e -> e.cause.cause)))
+  .> (_ -> print (list/first (text/split origin " at ")))
+  .> (_ -> print (list/first (text/split first_origin " at ")))

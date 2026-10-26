@@ -23,91 +23,6 @@
 
 
 
-## 2026-10-25 — a field is read without importing its owner, on every path
-
-From #2090, regex's port. Chapter 03 says nothing has to be imported to read
-a field, and the 2026-10-12 gavel on #1894 says a value carries the arms its
-type's owner wrote, a field of a parameter included. A module `u` that
-imports nothing and reads `h.start` and `h.end` on a value module `m` built
-was refused on check, run and run --interp with "no record type has a field
-`start` (module u)": the module was checked alone before the program that
-imports it, and no type it could see declares the field.
-
-A library compile now leaves to the program a field read on one of the
-function's parameters when no type the library can see declares the field,
-as it leaves a call on a handed value that only another module writes. The
-same holds for two fields read on one parameter when one of them is unseen.
-A read on any other value, a local built from a visible type say, is refused
-where it is written, as before, and so is a parameter read for fields that
-visible types each declare but none holds together. The root (an entry, a
-play file, a test file) refuses a field no type in the whole program
-declares.
-
-`tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
-(main refuses it) and pins the root's refusal of a misspelt field.
-
-A library's field reads reach the root already rewritten into calls on their
-readers, so the root now asks a reader's call the same question.
-`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
-file and line, now said by the root. The root quotes no line from another
-file, as it does for every diagnostic about one, and the dependency's
-`(module deep)` suffix goes with the dependency's check.
-
-## 2026-10-25 — an import stays in the file that writes it
-
-From #2090, xsv's port. A module's file `join.kso` declared a private
-`matches` and imported nothing; its sibling `search.kso` imported std/regexp,
-which exports `matches` too. The module's merged program held std/regexp's
-bare twin of `matches` beside the private arms, so the call in `join.kso`
-dispatched over both, and the check refused `matches index k != []` because
-one of std/regexp's arms can answer an err. The 2026-10-12 gavel says a file
-names only what it can see, and `join.kso` never imported std/regexp.
-
-The 2026-08-29 ruling keeps the mixed group where it is asked for: a file
-that imports the module and writes the bare name dispatches over both the
-module's arms and the import's. So the module path now drops an import's bare
-twin of a name the module declares only when no file importing that module
-writes the bare name. The import's function stays reachable by its qualified
-spelling, `regexp/matches`. A module whose importing file does write the bare
-name keeps the mixed group, and a module of one file is unchanged.
-
-`tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
-beside it, on both engines; main refuses it.
-
-CI's rows, for the ten fixes that landed together (#2105). The front end
-asks more of every program: whether an arm's type is one its file can see,
-whether a module's own type or function shadows an import's twin, which
-files declare each name, which files import each exporter, and whether a
-field read stands at the root. compile_instructions 24,486,012 -> 24,681,406
-(+0.80%), entry_instructions 72,317,212 -> 72,814,555, library_instructions
-71,993,114 -> 72,478,036, compile_allocs 13,815 -> 13,836, emit_instructions
-5,637,678 -> 5,637,990, and in the tab browser_compile_instructions
-218,016,527 -> 218,660,965. The interpreter's rows, which count its run of
-the corpus front end included, move by less than a thousandth each:
-interp_instructions 385,499,694 -> 385,496,174 and interp_allocs 401,591 ->
-401,614. The runtime gains `k_push_onto_bytes`, so
-every benchmark's machine code grows 320 bytes, text 5,498,444 -> 5,502,924
-over the fourteen, and building compiles it: codegen_instructions_dev
-116,447,795 -> 116,453,133 and codegen_instructions_release 370,219,514 ->
-370,245,362. The run rows move with the layout around that code, by under
-a thousand each: work_runbench 788,981,005 -> 788,981,075, work_encodebench
-2,325,240,037 -> 2,325,240,758, work_livebench 936,030,078 -> 936,030,540 and
-work_oneshot 10,050,617 -> 10,050,106. Welfare falls by less than a hundredth, and
-the floor follows under the rule for the language doing what it says: the
-2026-10-12 ruling that a file names only what it can see and that a test
-file is an outside consumer, the 2026-08-29 ruling that the author's own
-name wins, and the 2026-08-03 ruling that a module's files share their
-declarations.
-
-Four ratchet mutations anchored on lines these fixes rewrote and no longer
-applied: `the_library_program_is_checked_twice` (the library body moved into
-`compile_library_beside`), `the_entry_program_is_checked_twice` and
-`an_entry_program_rewritten_twice_before_it_is_checked` (the entry check took
-a `root` argument and a line of its own), and
-`a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
-re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
-other mutation still applies to this tree.
-
 ## 2026-10-25 — four cliffs from the ports join the run program
 
 #2089's first item, entered in the corpus before its fix under the
@@ -1844,6 +1759,132 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
+
+## 2026-10-26 — an err is born boxed
+
+The build of the #2087 gavel. `err "…"` and every builtin that fails answer
+a failure in a box on all three engines. Natively the box is `K_ERR` and the
+err a rescue takes out of it is a new tag, `K_ERRV`; the interpreter has
+`Value::Unboxed` for the second. A failure passes every function it reaches
+and every arm, the three err patterns included, and the endpoint or a
+foreign rescue ends it. A rescue's callback and an annotate's are handed the
+unboxed err, which renders as `err <reason>`, compares by reason, and goes
+back in a box through `effect`. A parameter annotated with an effect type,
+`e:<some>effect`, takes the box itself, through `k_check_box`, which is how
+std/testing reads a package's own failures.
+
+The checker loses the raise analysis of #1884: the raised bit, `raised_err_at`,
+the raisers table and the err-arm requirement are gone. In their place a
+failure counts as a box, so a group whose every answer is a failure, or a
+tail that calls `err`, is refused where a value is read, as an io is. A group
+that can also answer a value passes, as one that can answer none does.
+
+The library classified its bare errs. `text/to_int` and `text/to_float`
+answer none for text that is not a number, and `to_int!` and `to_float!` in
+std/text answer the box with the reason they used to give. `json/decode`
+answers none and `json/decode!` the box carrying the `parse_failure`.
+`text/utf8` keeps its failure. The checker's refusal of a literal that is not
+a number moved to the bang forms. The hand-back arms in std/json, std/regexp
+and the frozen benchmark copies are gone, since a failure passes them anyway.
+std/testing's two functions take the box through an effect-annotated arm.
+
+The corpora followed. Error fixtures pinning the raise analysis were deleted
+and two moved to the runtime corpus, where the failure now passes the
+operator or group they named. A micro sample that leaned on a plain
+conversion failing uses the bang form, or a local function with a mixed arm
+so its reason is unchanged. `an_arm_sees_its_own_hakos_err` and
+`a_typeset_arm_sees_its_own_hakos_err` pinned the 2026-09-15 rule and now pin
+its reversal as `a_failure_passes_its_own_hakos_arm` and
+`a_failure_passes_its_own_hakos_typeset_arm`. `.cause` can be read only on an
+err another package annotated, so it moved to a two-module golden,
+`tests/golden/cause`. ch04, ch05, ch08 and appendix B were rewritten where
+they described a bare err as data, and ch08's mini decoders answer their
+`parse_failure` record as a value, the shape the ruling gives an outcome the
+caller handles. kq and kanso-json carry the same changes on branches of this
+name.
+
+`an_err_as_pattern_keeps_a_carried_slot_unboxed` lost its shape: its scanner's
+failure now passes the err arm, the loop becomes a beat, and the carry builds
+the records whatever the arm does, so the exemption's mutation survived. The
+fixture's walk now stops before the scanner fails, and the mutation reads
+sh_rec 0 -> 64,000 again. A slot that can hold an unboxed err beside a
+two-field record is passed boxed: answering a scanner's end with
+`text/to_bytes [300] .? (e -> e)` reads sh_rec=64,064. Nothing in the tree
+answers that shape, and the two-word convention could carry `K_ERRV` as it
+carries `K_ERR`, which is an open lead.
+
+Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
+that no longer fire; the ports carry hundreds; #2088's migration can now use
+the bang forms at reads that must succeed.
+
+CI's rows, against main at #2168. The checker loses the raise analysis, so
+compiling gets cheaper: `compile_instructions` reads 24,604,939,
+`entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
+`compile_allocs` 13,930, and the front end holds less while it checks:
+`compile_peak_bytes` 607,213 -> 598,492, and `front_end_visits` reads 7,397
+where it read 7,373. The interpreter no longer carries the raised bit:
+`interp_instructions` 560,993,797, `interp_allocs` 630,584 and
+`interp_peak_bytes` 1,306,819. In the tab, `browser_compile_instructions`
+reads 339,964,747, `browser_compile_peak_bytes` 832,433 and
+`browser_run_instructions` 61,425,132. The decoders lost their hand-back
+arms, so the emitter writes less: `emitted_lines` 14,150, `emitted_calls`
+1,519, `emitted_branches` 1,293, `emitted_other_lines` 168,876,
+`emitted_other_calls` 20,311, `emitted_other_branches` 17,723 and `text`
+5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,865
+and `codegen_instructions_release` to 371,551,519. `emit_instructions` rises
+to 5,689,859, 1,722 more; against main at #2162 it fell 491, and #2154's
+fixpoints, which drop an entry as its check fails, sit between the two
+readings, so the rise is recorded unisolated. `emitted_defines` rises to 160
+and `emitted_other_defines` to 2,243 because `json/decode!` and the bang
+conversions are functions of their own beside the plain forms; encodebench
+and scanbench each lose one define with their hand-back helper. The run
+rows: `work_jsonbench` 549,333,568, `work_runbench` 819,572,053,
+`work_oneshot` 9,978,432, `work_livebench` 938,653,995 and `work_scanbench`
+274,243 fall. `work_widebench` rises to 28,685,100, 80,002 more: five for
+each element of its 16,000, and two besides, for the `written` arm the chunk
+now passes, since `text/utf8` can answer none. `work_encodebench` rises to
+2,335,339,266 (143,306 more, 0.006%) and `work_readbench` to 4,583,165 (7
+more); nothing has isolated either, and they are recorded as moves of that
+size. The mem sample `a_failure_crosses_a_beat_carry_in_two_words` imports
+std/testing to read its own failure, and the import costs six allocations of
+32 bytes: `a_failure_crosses_a_beat_carry_in_two_words_allocs` reads 1,009
+and `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
+`an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
+and reads 3 allocs and 112 bytes.
+
+The ratchet found two rows that prove nothing. `a chain callback's parameter
+seeded as never failing` made inference seed a rescue or annotate callback's
+parameter without the failure bit; a callback is now handed the err out of
+its box, an ordinary value, so the seed protects nothing and the row and its
+mutation are gone. Seeding the parameter as never failing is now correct,
+and is an open lead. `an encoder that hands a clean string to the escape
+path anyway` repointed `escape_onto`'s clean-string arm, which lib/json's
+encoder has not called since strings went out through `append_string` in one
+call (197f172b), so the row was blind on main too and was only rerun here
+because this branch touches lib/json. Its mutation now makes the encoder
+copy each string before it writes it: livebench writes the same bytes and
+the live vein reads 858,314 allocations where it reads 8,314. `escape_onto`
+and its two helpers are dead in the library.
 
 ## 2026-10-26 — a string handed on round a cycle joins the corpus
 

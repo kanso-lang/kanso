@@ -55,9 +55,12 @@ fn a_literal_modulo_by_zero_is_refused() {
 }
 
 /// Watched red: `one.kso: ok`, then `"two" is not an integer` at run time.
+/// The plain `to_int` answers none for it (#2087), so the insisting form is
+/// the one whose failure can be decided.
 #[test]
 fn a_literal_that_is_not_a_number_is_refused() {
-    let said = checked("toint", "import \"std/text\"\n\nprint \"{text/to_int \"two\"}\"\n");
+    let said =
+        checked("toint", "import \"std/text\"\n\ntext/to_int! \"two\" .> (n -> print \"{n}\")\n");
 
     assert!(said.contains("not an integer"), "not refused: {said}");
     assert!(!said.contains("endpoint"), "refused at run time, not compile time: {said}");

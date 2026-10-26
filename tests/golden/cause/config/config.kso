@@ -1,0 +1,4 @@
+import "std/text"
+
+pub fn read n
+  annotate (text/to_bytes [(n + 300)]) (e -> "config: {e.reason}")

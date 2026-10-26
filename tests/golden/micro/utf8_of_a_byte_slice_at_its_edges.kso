@@ -17,7 +17,7 @@ w = text/bytes "hé"
 fn told none
   "none"
 
-fn told (err _)
+fn told _:<some>effect
   "refused"
 
 fn told s

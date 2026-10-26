@@ -20,5 +20,6 @@ test_encode_shorthands ... ok
 test_encode_nested ... ok
 test_error_position ... ok
 test_error_trailing ... ok
+test_plain_decode_answers_none ... ok
 test_roundtrip ... ok
-23 passed, 0 failed
+24 passed, 0 failed

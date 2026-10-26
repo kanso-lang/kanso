@@ -1,11 +1,12 @@
 pattern   failure
 _         past
 v         past
-v:err     took
-(err r)   took
-v:maybe   took
+v:err     past
+(err r)   past
+v:maybe   past
 v:some    past
 v:int     past
 v:string  past
 v:none    past
 1         past
+v:effect  took

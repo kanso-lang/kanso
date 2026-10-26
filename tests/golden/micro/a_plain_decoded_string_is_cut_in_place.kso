@@ -6,7 +6,7 @@
 # strings in this corpus carry escapes and are built a piece at a time.
 import "std/json"
 
-fn shown (err _)
+fn shown none
   print "refused"
 
 fn shown v

@@ -8,15 +8,13 @@
 # `when_failed` is std's, foreign to this program, so it is the licensed party
 # that separates the reason from the failure and lets the count be printed.
 #
-# A raised err handed to an operator or to a group with no arm for it does
-# not compile, bound to a name or not (#1884), so the failures here are the
-# runtime's: `text/to_int` refusing text it cannot read. What the runtime does
-# with a failure the checker was not warned about is what these lines pin.
+# `boom` can answer a number, so the checker cannot prove any of the three is
+# a failure and lets the operators read them.
 import "std/testing"
-import "std/text"
 
 fn boom n
-  text/to_int "e{n}"
+  return n if n > 100
+  err "e{n}"
 
 fn through 0
   "zero"

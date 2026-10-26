@@ -109479,24 +109479,87 @@ The module path now counts, per name, which files declare it. The rows are
 counted with the batch this landed in, at the end of "an import stays in the
 file that writes it".
 
-## 2026-10-25 — a function's arms split across files are counted together
+## 2026-10-25 — a field is read without importing its owner, on every path
 
-From #2090, toml's port. A module's files share their declarations, and
-toml's `lookup` had a 2-argument arm in one file that called a 3-argument
-arm in the next. The per-file check counted only the arms in the file it was
-reading and refused the call with "no 3-argument arm of `lookup` (arms take
-2)". The same two arms in one file ran.
+From #2090, regex's port. Chapter 03 says nothing has to be imported to read
+a field, and the 2026-10-12 gavel on #1894 says a value carries the arms its
+type's owner wrote, a field of a parameter included. A module `u` that
+imports nothing and reads `h.start` and `h.end` on a value module `m` built
+was refused on check, run and run --interp with "no record type has a field
+`start` (module u)": the module was checked alone before the program that
+imports it, and no type it could see declares the field.
 
-The module path now records, for each function its files declare, whether
-more than one file declares arms of it, and the per-file arity check leaves
-such a name to the merged check, which sees every arm. A count no file's arms
-take is still refused there, and the message names every arity: "no
-4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
-said "arms take 2".
+A library compile now leaves to the program a field read on one of the
+function's parameters when no type the library can see declares the field,
+as it leaves a call on a handed value that only another module writes. The
+same holds for two fields read on one parameter when one of them is unseen.
+A read on any other value, a local built from a visible type say, is refused
+where it is written, as before, and so is a parameter read for fields that
+visible types each declare but none holds together. The root (an entry, a
+play file, a test file) refuses a field no type in the whole program
+declares.
 
-`tests/arms_split_across_files.rs` runs toml's shape on both engines and
-pins the refusal; main fails both.
+`tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
+(main refuses it) and pins the root's refusal of a misspelt field.
 
-The module path now counts, per name, which files declare it. The rows are
-counted with the batch this landed in, at the end of "an import stays in the
-file that writes it".
+A library's field reads reach the root already rewritten into calls on their
+readers, so the root now asks a reader's call the same question.
+`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
+file and line, now said by the root. The root quotes no line from another
+file, as it does for every diagnostic about one, and the dependency's
+`(module deep)` suffix goes with the dependency's check.
+
+## 2026-10-25 — an import stays in the file that writes it
+
+From #2090, xsv's port. A module's file `join.kso` declared a private
+`matches` and imported nothing; its sibling `search.kso` imported std/regexp,
+which exports `matches` too. The module's merged program held std/regexp's
+bare twin of `matches` beside the private arms, so the call in `join.kso`
+dispatched over both, and the check refused `matches index k != []` because
+one of std/regexp's arms can answer an err. The 2026-10-12 gavel says a file
+names only what it can see, and `join.kso` never imported std/regexp.
+
+The 2026-08-29 ruling keeps the mixed group where it is asked for: a file
+that imports the module and writes the bare name dispatches over both the
+module's arms and the import's. So the module path now drops an import's bare
+twin of a name the module declares only when no file importing that module
+writes the bare name. The import's function stays reachable by its qualified
+spelling, `regexp/matches`. A module whose importing file does write the bare
+name keeps the mixed group, and a module of one file is unchanged.
+
+`tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
+beside it, on both engines; main refuses it.
+
+CI's rows, for the ten fixes that landed together (#2105). The front end
+asks more of every program: whether an arm's type is one its file can see,
+whether a module's own type or function shadows an import's twin, which
+files declare each name, which files import each exporter, and whether a
+field read stands at the root. compile_instructions 24,486,012 -> 24,681,406
+(+0.80%), entry_instructions 72,317,212 -> 72,814,555, library_instructions
+71,993,114 -> 72,478,036, compile_allocs 13,815 -> 13,836, emit_instructions
+5,637,678 -> 5,637,990, and in the tab browser_compile_instructions
+218,016,527 -> 218,660,965. The interpreter's rows, which count its run of
+the corpus front end included, move by less than a thousandth each:
+interp_instructions 385,499,694 -> 385,496,174 and interp_allocs 401,591 ->
+401,614. The runtime gains `k_push_onto_bytes`, so
+every benchmark's machine code grows 320 bytes, text 5,498,444 -> 5,502,924
+over the fourteen, and building compiles it: codegen_instructions_dev
+116,447,795 -> 116,453,133 and codegen_instructions_release 370,219,514 ->
+370,245,362. The run rows move with the layout around that code, by under
+a thousand each: work_runbench 788,981,005 -> 788,981,075, work_encodebench
+2,325,240,037 -> 2,325,240,758, work_livebench 936,030,078 -> 936,030,540 and
+work_oneshot 10,050,617 -> 10,050,106. Welfare falls by less than a hundredth, and
+the floor follows under the rule for the language doing what it says: the
+2026-10-12 ruling that a file names only what it can see and that a test
+file is an outside consumer, the 2026-08-29 ruling that the author's own
+name wins, and the 2026-08-03 ruling that a module's files share their
+declarations.
+
+Four ratchet mutations anchored on lines these fixes rewrote and no longer
+applied: `the_library_program_is_checked_twice` (the library body moved into
+`compile_library_beside`), `the_entry_program_is_checked_twice` and
+`an_entry_program_rewritten_twice_before_it_is_checked` (the entry check took
+a `root` argument and a line of its own), and
+`a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
+re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
+other mutation still applies to this tree.

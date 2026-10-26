@@ -2,7 +2,7 @@
 # it only by its qualified name.
 import "std/regexp"
 
-pub fn found p s
+pub fn found? p s
   regexp/match? p s
 
 pub fn whole p s

@@ -6,19 +6,18 @@
 # with such an arm is passed boxed for every arm, and the scanner builds a
 # record per answer.
 #
-# `e@(err _)` is not that arm. The dispatcher reads the first two words as one
-# value before it matches, and on the failure path that value is the failure
-# that arrived, so the name binds to exactly what the caller sent and nothing
-# has to be built. The 2026-09-15 ruling asks every consumer of a fallible
-# scanner for an arm like this one, and until 2026-09-16 the arm turned the
-# register convention off: the json decoder built 253,968,000 bytes of
-# records it had built none of the day before.
+# `e@(err _)` is not that arm. It matches only an err a rescue took out of
+# its box (#2087), and a failure passes it, so at a slot the two words carry
+# it never fires and no record is wanted. Under the 2026-09-15 ruling every
+# consumer of a fallible scanner wrote an arm like this one, and until
+# 2026-09-16 the arm turned the register convention off: the json decoder
+# built 253,968,000 bytes of records it had built none of the day before.
+# Programs written then still carry such arms.
 #
-# Every group in this loop hands back a `parsed`, so the loop is not a beat
-# and nothing crosses a carry; the only record this program could build is
-# the one the as-pattern would ask for. `sh_rec` is the pin: 0 with the arm
-# read as the failure case it is, 64,000 with it read as an ordinary
-# as-pattern, a record for each of the thousand scans.
+# The walk stops at the first position, so the scanner's failure is never
+# reached and the loop hands back a number all the way up. `sh_rec` is the
+# pin: 0 with the arm read as the err case it is, 64,000 with it read as an
+# ordinary as-pattern, a record for each of the thousand scans.
 type parsed
   pos
   val
@@ -29,16 +28,16 @@ fn scan 0
 fn scan n
   parsed n (n * 2)
 
-fn step (parsed p v) acc
-  walk (p - 1) (acc + v)
+fn step (parsed 1 v)
+  v
 
-fn step e@(err _) acc
-  parsed acc (length e.reason)
+fn step (parsed p v)
+  v + total (p - 1)
 
-fn walk n acc
-  step (scan n) acc
+fn step e@(err _)
+  length e.reason
 
-fn report (parsed total reason_length)
-  "total {total}, stopped by a reason {reason_length} characters long"
+fn total n
+  step (scan n)
 
-pub play = print (report (walk 1000 0))
+pub play = print "total {total 1000}"

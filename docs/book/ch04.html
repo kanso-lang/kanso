@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 04</span>
 <h1>failure is a value</h1>
 
-<p>kanso has no exceptions and no panics. it also has no <code>Ok</code>, no <code>Some</code>, no <code>.unwrap()</code>—none of the wrapper ceremony that result types usually charge. success is the bare value. failure is <code>err</code>, an ordinary value carrying a reason. absence is <code>none</code>, a different ordinary value. the two are not interchangeable, and most of this chapter is about the line between them: <code>none</code> is the failure you handle, <code>err</code> is the failure you don't—can't, in fact, and that inability turns out to be the design.</p>
+<p>kanso has no exceptions and no panics. it also has no <code>Ok</code>, no <code>Some</code>, no <code>.unwrap()</code>—none of the wrapper ceremony that result types usually charge. success is the bare value. absence is <code>none</code>, an ordinary value. failure is <code>err</code>, which is born in a box: it rides past every function it reaches until a rescue in another package takes it out or the endpoint reports it. the two are not interchangeable, and most of this chapter is about the line between them: <code>none</code> is the failure you handle, <code>err</code> is the failure you don't—can't, in fact, inside the package that raised it, and that inability turns out to be the design.</p>
 
 <p>start by breaking something:</p>
 
@@ -16,63 +16,89 @@ extra_css: /book/book.css
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" many "</span>
-ratio <span class="o">=</span> <span class="f">text/to_int</span> word
-<span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
+<span class="f">text/to_int!</span> word <span class="o">.&gt;</span> (ratio <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""many" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in the entry at ratio.kso:4</code></pre>
   </div>
 </div>
 
-<p>this is not a crash. <code>to_int</code> produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, here a line of the standard library, and we will read longer versions of that receipt shortly.</p>
+<p>this is not a crash. <code>to_int!</code> is the conversion for a caller who insists the text is a number. it could not read "many" as one, so it answered a failure; the failure went past the <code>.&gt;</code> step without running it and reached the top of the program, where the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a failure arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the err itself—every err carries its birthplace, here the line that asked for the number, and we will read longer versions of that receipt shortly.</p>
+
+<p>drop the <code>!</code> and the same conversion asks instead of insisting. <code>text/to_int</code> answers <code>none</code> for text that is not a number, and the program prints what it got:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">asked.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" many "</span>
+ratio <span class="o">=</span> <span class="f">text/to_int</span> word
+<span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run asked.kso</div>
+    <pre><code>ratio: &lt;none&gt;</code></pre>
+  </div>
+</div>
+
+<p>every conversion in the standard library that can refuse comes in this pair. the plain form answers an outcome for the caller to handle, and the <code>!</code> form answers a failure for nobody to handle. we come back to <code>none</code> below.</p>
 
 <h2>the railway</h2>
 
-<p>this is what deletes error handling from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
+<p>this is what deletes error handling from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the failure passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
-
-total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="s">"nobody"</span>
+  <pre><code>total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
 <span class="f">print</span> (<span class="f">receipt</span> total)
 
 <span class="k">fn</span> <span class="f">receipt</span> total
   <span class="s">"order total: <span class="i">{total}</span>"</span>
 
-<span class="k">fn</span> <span class="f">subtotal</span> cents party
-  people <span class="o">=</span> <span class="f">text/to_int</span> party
-  <span class="f">with_tip</span> (cents <span class="o">/</span> people)
+<span class="k">fn</span> <span class="f">subtotal</span> cents people
+  <span class="f">with_tip</span> (<span class="f">share_of</span> cents people)
+
+<span class="k">fn</span> <span class="f">share_of</span> _ <span class="n">0</span>
+  <span class="f">err</span> <span class="s">"no one to share the bill with"</span>
+
+<span class="k">fn</span> <span class="f">share_of</span> cents people
+  cents <span class="o">/</span> people
 
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> share <span class="o">/</span> <span class="n">10</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play railway.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""nobody" is not an integer"
-  born in text/to_int at std/text/text.kso:89
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "no one to share the bill with"
+  born in share_of at railway.kso:11
   passed through receipt ← with_tip</code></pre>
   </div>
 </div>
 
-<p>count the lines of error handling in this program: zero. <code>text/to_int</code> cannot read "nobody" as a number and says so with an err; the err flows through the division, which hands it on; into <code>with_tip</code>, which never runs; back out to the top of the program; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and a station stops the train only where the checker can see it coming. functions state their happy-path logic and nothing else.</p>
+<p>count the lines of error handling in this program: zero. <code>share_of</code> has nobody to divide the bill among and says so with an err; the err passes <code>with_tip</code>, which never runs; back out to the top of the program; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and functions state their happy-path logic and nothing else.</p>
 
-<p>one rule sits beside this, and the checker enforces it. an err is data, and a function that is handed one either names it with an <code>(err _)</code> arm or does not take it. where the checker can see a raised err arriving, it refuses the program and names the function that has no arm. it sees one when the argument is a call to a function with an <code>err</code> arm, or a name bound to such a call. a <code>share_of</code> that answered <code>err "no one to share the bill with"</code> for a party of zero could not be handed to <code>with_tip</code> either way: <code>with_tip (share_of cents people)</code> and <code>share = share_of cents people</code> followed by <code>with_tip share</code> are refused alike. an operator and an index are held to the same rule: <code>share_of cents people + 1</code> does not compile, because <code>+</code> wants a value and an err is not one. <code>text/to_int</code> is different, because whether it fails depends on text the program has not seen yet, so the checker lets it through and the endpoint reports it. when a step should run only on a value, <code>.&gt;</code> says so: <code>share_of cents people .&gt; with_tip</code> calls <code>with_tip</code> with a share and steps past an err.</p>
+<p>one rule sits beside this, and the checker enforces it. a failure is a box, and a box is not a value. where the checker can prove an expression is only ever a failure, it refuses to let an operator, an index or an interpolation read it, the same way it refuses an io (chapter 05 has those): <code>err "closed" + 1</code> does not compile. <code>share_of</code> can answer a number, so the checker lets the call through and the endpoint reports the failure when one comes. when a step should run only on a value, <code>.&gt;</code> says so: <code>share_of cents people .&gt; with_tip</code> calls <code>with_tip</code> with a share and steps past a failure.</p>
 
 <p>the err built the report as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
 <h2>nothing is asked of the signature</h2>
 
-<p>readers arriving from languages with checked exceptions or result types usually ask the same question here: if a failure can show up in an argument, doesn't the function's signature have to say so? if i pass an err as one of five arguments, is the function now forced to return one? the answer is no. the signature says nothing, and the checker asks its question at the call instead: can this argument be an err the program raised? where it can prove one, the function needs an <code>(err _)</code> arm at that position, or the caller dispatches before calling, or the program does not compile. where it cannot prove one, the call short-circuits before the body runs, so the function never receives the failure&#8212;and a function that never receives one has no signature to infect. err-in, err-out is a fact about calls the checker cannot see into, not a contract anybody writes.</p>
+<p>readers arriving from languages with checked exceptions or result types usually ask the same question here: if a failure can show up in an argument, doesn't the function's signature have to say so? if i pass a failure as one of five arguments, is the function now forced to return one? the answer is no. a failure that reaches a call short-circuits it before the body runs, so the function never receives the failure&#8212;and a function that never receives one has no signature to infect. failure-in, failure-out is a fact about calls, not a contract anybody writes.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">unasked.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
-
-board <span class="o">=</span> [<span class="s">"450"</span> <span class="s">"seasonal"</span>]
-soup <span class="o">=</span> <span class="f">text/to_int</span> board[<span class="n">1</span>]
-flan <span class="o">=</span> <span class="f">text/to_int</span> board[<span class="n">2</span>]
+  <pre><code>board <span class="o">=</span> { <span class="s">"soup"</span>:<span class="n">450</span> }
+soup <span class="o">=</span> <span class="f">price</span> board <span class="s">"soup"</span>
+flan <span class="o">=</span> <span class="f">price</span> board <span class="s">"flan"</span>
 <span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> soup) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> flan))
+
+<span class="k">fn</span> <span class="f">price</span> menu dish
+  <span class="f">listed</span> menu[dish] dish
+
+<span class="k">fn</span> <span class="f">listed</span> none dish
+  <span class="f">err</span> <span class="s">"<span class="i">{dish}</span> is not on the board"</span>
+
+<span class="k">fn</span> <span class="f">listed</span> cents _
+  <span class="f">cents</span>
 
 <span class="k">fn</span> <span class="f">label</span> dish cents
   <span class="s">"<span class="i">{dish}</span>: <span class="i">{cents}</span> cents"</span></code></pre>
@@ -81,43 +107,45 @@ flan <span class="o">=</span> <span class="f">text/to_int</span> board[<span cla
 <div class="code-panel">
   <div class="code-panel-title">kanso play unasked.kso</div>
   <pre><code>soup: 450 cents
-<span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seasonal" is not an integer"
-  born in text/to_int at std/text/text.kso:89
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is not on the board"
+  born in listed at unasked.kso:10
   passed through label</code></pre>
 </div>
 
-<p><code>label</code> takes two arguments. on the first line both are values and it runs. on the second, one of the two is a failure: <code>text/to_int</code> could not read "seasonal" as a number. whether it fails depends on the text it is handed, which here comes out of a list, so the checker cannot prove the failure and the call compiles. the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. a failure the checker can prove is refused instead: a <code>price</code> with an arm answering <code>err "flan is seasonal"</code> could not be handed to <code>label</code>, whether the call to it is written in place or bound to a name first. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
+<p><code>label</code> takes two arguments. on the first line both are values and it runs. on the second, one of the two is a failure: <code>price</code> looked for flan and the board has none. the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
 
 <p>when more than one argument fails, a call keeps the first failure; an operator keeps both, because neither operand caused the other. the full accounting of what each construct does with an arriving failure&#8212;which merge, which take the first, which hold, which pass through&#8212;is a pinned table on the compiler page, and every row of it is a fixture that runs on all three engines.</p>
 
-<h2>an arm has to name it</h2>
+<h2>no arm takes it</h2>
 
-<p>chapter 03 taught you that dispatch is the only switch, so the first question is what an err does when it reaches a function with no arm written for it. it rides past the whole overload group, including the catch-all arm that answers for everything else in the language:</p>
+<p>chapter 03 taught you that dispatch is the only switch, so the first question is what an err does when it reaches a function with an arm for everything. it rides past the whole overload group, including the catch-all arm that answers for everything else in the language:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">unhandled.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
-
-<span class="k">fn</span> <span class="f">describe</span> none
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> none
   <span class="s">"nothing"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-steeps <span class="o">=</span> [<span class="s">"3"</span> <span class="s">"not yet"</span>]
-bad <span class="o">=</span> <span class="f">text/to_int</span> steeps[<span class="n">2</span>]
-<span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
+<span class="k">fn</span> <span class="f">steeps</span> <span class="s">"green"</span>
+  <span class="n">3</span>
+
+<span class="k">fn</span> <span class="f">steeps</span> leaf
+  <span class="f">err</span> <span class="s">"<span class="i">{leaf}</span> is not a tea we steep"</span>
+
+<span class="f">print</span> (<span class="f">describe</span> (<span class="f">steeps</span> <span class="s">"barley"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play unhandled.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""not yet" is not an integer"
-  born in text/to_int at std/text/text.kso:89
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "barley is not a tea we steep"
+  born in steeps at unhandled.kso:11
   passed through describe</code></pre>
   </div>
 </div>
 
-<p><code>describe x</code> answers for ints, strings, records, markers—anything. it still never sees the err: <code>passed through describe</code>, says the trace. a catch-all arm binds a value, and an err is the one thing it declines. that holds for an err the arm is handed. an argument the function never reads is never computed, so an err that would have come from it never happens. what claims an err is an arm written for it, <code>(err _)</code>, or <code>(err r)</code> to bind the reason, the same way an arm claims <code>none</code>. that arm is ordinary dispatch, and it works wherever it is written: in the module that raised the failure, or in one that imported it. <code>std/testing</code> asserts which failure a package produced with an <code>(err reason)</code> arm of its own. so an err rises carrying its receipts until it reaches an arm that names it, and if none does, the endpoint reports it.</p>
+<p><code>describe x</code> answers for ints, strings, records, markers—anything. it still never sees the err: <code>passed through describe</code>, says the trace. arms read values, and a failure is in a box, so no arm takes it: not a catch-all, and not an <code>(err _)</code> arm either. an argument the function never reads is never computed, so an err that would have come from it never happens. a failure ends one of two ways. a rescue in another package takes it out of its box, or the endpoint reports it.</p>
 
-<p>reading a failure that reached you from another module has a word, and chapter 05 introduces it properly: <code>rescue</code>, usually written <code>.?</code>. the word is licensed on foreign failures only. the same <code>.?</code> aimed at your own err does nothing at all, and one program shows both. <code>teahouse</code> raises; <code>kitchen</code> imports it, raises one of its own, and hands both to the same callback:</p>
+<p>taking a failure out of its box has a word, and chapter 05 introduces it properly: <code>rescue</code>, usually written <code>.?</code>. the word is licensed on foreign failures only. the same <code>.?</code> aimed at your own err does nothing at all, and one program shows both. <code>teahouse</code> raises; <code>kitchen</code> imports it, raises one of its own, and hands both to the same callback:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/teahouse.kso</div>
@@ -152,9 +180,9 @@ bad <span class="o">=</span> <span class="f">text/to_int</span> steeps[<span cla
   born in kitchen/scorched at kitchen/kitchen.kso:10</code></pre>
 </div>
 
-<p>one callback, two <code>.?</code> steps, opposite answers. an err carries where it was born, and a <code>.?</code> written in the module that raised it hands the failure on without entering the callback, which is why <code>apologise</code> is absent from the report. inside your own module the arm is the tool, and <code>.?</code> is for the failures that reach you from elsewhere.</p>
+<p>one callback, two <code>.?</code> steps, opposite answers. an err carries where it was born, and a <code>.?</code> written in the module that raised it hands the failure on without entering the callback, which is why <code>apologise</code> is absent from the report. what a rescue hands its callback is the err out of its box, and out of its box an err is an ordinary value: <code>apologise</code> names it with an <code>(err _)</code> arm, and it could as well store it, pass it along, or put it back in a box with <code>effect</code>. inside your own module there is nothing to rescue, because a failure you raise is one you decided nobody should handle.</p>
 
-<p>what the strictness buys shows up in the alternative. in languages with catchable exceptions, every failure is implicitly addressed to whoever catches it first, and you find out who that is at runtime. in kanso the addressing is decided in the kind of value you ship: if a failure is something callers should cope with, it travels as a value—<code>none</code>, a marker, a record that names the verdict, or a bare <code>err</code> an arm can name—and a failure nobody should cope with rides an effect, where only a <code>.?</code> in another module can end it. the language makes "handleable" and "value" the same word.</p>
+<p>what the strictness buys shows up in the alternative. in languages with catchable exceptions, every failure is implicitly addressed to whoever catches it first, and you find out who that is at runtime. in kanso the addressing is decided in the kind of value you ship: if a failure is something callers should cope with, it travels as a value—<code>none</code>, a marker, or a record that names the verdict—and a failure nobody should cope with is an <code>err</code>, which only a <code>.?</code> in another module can end. the language makes "handleable" and "value" the same word.</p>
 
 <h2>none is for asking</h2>
 
@@ -166,7 +194,7 @@ bad <span class="o">=</span> <span class="f">text/to_int</span> steeps[<span cla
 flavors[<span class="n">9</span>]! <span class="o">.&gt;</span> (f <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ninth: <span class="i">{f}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 9"
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index 9"
   born in the entry at ninth.kso:2</code></pre>
   </div>
 </div>
@@ -237,7 +265,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 menu[<span class="s">"pocky"</span>]! <span class="o">.&gt;</span> (yen <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pocky: <span class="i">{yen}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index "pocky""
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index "pocky""
   born in the entry at pocky.kso:2</code></pre>
   </div>
 </div>
@@ -282,7 +310,7 @@ not a flag</code></pre>
 
 <p><code>malformed</code> is a marker from chapter 03 doing failure work: it names the verdict, it dispatches like anything else, and no caller can forget it exists—an unclaimed marker rides to the endpoint just like an unclaimed none. this is the shape to reach for whenever bad input is an <em>answer</em> your callers care about.</p>
 
-<p>minting an err is the opposite declaration: my goal is unmet and i decline to make that my caller's chore. <code>err</code> takes a reason and builds the value by hand, and the natural place to write one is an arm that recognizes a state you refuse to continue from. here a none arrives where absence means the input itself is broken, and the function escalates it:</p>
+<p>minting an err is the opposite declaration: my goal is unmet and i decline to make that my caller's chore. <code>err</code> takes a reason and builds the failure by hand, and the natural place to write one is an arm that recognizes a state you refuse to continue from. here a none arrives where absence means the input itself is broken, and the function escalates it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">escalate.kso</div>
@@ -305,7 +333,7 @@ not a flag</code></pre>
   </div>
 </div>
 
-<p>notice the direction of that conversion. a none became an err—a question's answer became a broken contract—because <code>major_of</code> decided an absent version line is not a case anyone downstream should be coping with. the reverse direction does not exist: nothing turns an err back into a none, because that would be handling the unhandleable. escalation is a one-way door, so choose the floor you start on carefully: <code>none</code> and markers when callers should decide, <code>err</code> when there is nothing sensible for them to decide. and since no caller can catch your err, minting one is a real commitment—the failure will surface as <em>your</em> function's name in <em>their</em> report, with your reason attached. write the reason for the stranger who reads it at the endpoint.</p>
+<p>notice the direction of that conversion. a none became an err—a question's answer became a broken contract—because <code>major_of</code> decided an absent version line is not a case anyone downstream should be coping with. inside the package that raised it, nothing turns that err back into a none, because that would be handling the unhandleable. escalation is a one-way door, so choose the floor you start on carefully: <code>none</code> and markers when callers should decide, <code>err</code> when there is nothing sensible for them to decide. and since a caller can end your err only by rescuing it from another package, minting one is a real commitment—the failure will surface as <em>your</em> function's name in <em>their</em> report, with your reason attached. write the reason for the stranger who reads it at the endpoint.</p>
 
 <h2>the two failures</h2>
 
@@ -319,10 +347,10 @@ not a flag</code></pre>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
-  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+  <span class="f">major_of</span> text <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"major version <span class="i">{n}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">text/to_int</span> text
+  <span class="f">text/to_int!</span> text
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"version.txt"</span> <span class="o">.&gt;</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
@@ -339,16 +367,16 @@ not a flag</code></pre>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
-  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+  <span class="f">major_of</span> text <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"major version <span class="i">{n}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">text/to_int</span> text
+  <span class="f">text/to_int!</span> text
 
 <span class="f">os/read_file!</span> <span class="s">"garbage.txt"</span> <span class="o">.&gt;</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in major_of at garbage.kso:8</code></pre>
   </div>
 </div>
 
@@ -360,10 +388,10 @@ not a flag</code></pre>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
-  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+  <span class="f">major_of</span> text <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"major version <span class="i">{n}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">text/to_int</span> text
+  <span class="f">text/to_int!</span> text
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"no-such-file.txt"</span> <span class="o">.&gt;</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
@@ -373,7 +401,7 @@ not a flag</code></pre>
   </div>
 </div>
 
-<p>two failures from the same program shape, and each report names where its err was born. neither report says which kind of failure it is, and the kinds differ. the garbage failure is a <strong>wrong</strong>: <code>text/to_int</code>, called from <code>major_of</code>, turned a value into a verdict in pure code. <code>to_int "seven point four"</code> <strong>equals</strong> that err the way <code>2 + 2</code> equals <code>4</code>, and running it again computes the same err at the same line, every time. the missing-file failure is a <strong>not-yet</strong>: an io that could not complete, out in the world. no line of your code is wrong, and the world may have moved by the next attempt. to tell them apart, ask whether the step that failed touched the world.</p>
+<p>two failures from the same program shape, and each report names where its err was born. neither report says which kind of failure it is, and the kinds differ. the garbage failure is a <strong>wrong</strong>: <code>text/to_int!</code>, called from <code>major_of</code>, turned a value into a verdict in pure code. <code>to_int! "seven point four"</code> <strong>equals</strong> that err the way <code>2 + 2</code> equals <code>4</code>, and running it again computes the same err at the same line, every time. the missing-file failure is a <strong>not-yet</strong>: an io that could not complete, out in the world. no line of your code is wrong, and the world may have moved by the next attempt. to tell them apart, ask whether the step that failed touched the world.</p>
 
 <p>the trap most people fall into: "but the garbage <em>came from a file</em>—files can change, so isn't that failure contingent too?" trace it carefully. the read <strong>succeeded</strong>; it delivered <code>seven point four</code> intact, which is why execution ever reached <code>major_of</code>. the parse then failed in code that never touched the disk. a failure's kind is fixed by where it is <em>born</em>, not by where its inputs came from. the changeability you feel lives one step upstream, at the read—and re-running the read is a different event, not a retry of the parse. this is also why retry logic belongs only at the shell: retrying a not-yet is a genuinely new question to a world that may answer differently; retrying a wrong is asking the same arithmetic to come out different, three times, at three times the latency. when kanso grows a retry vocabulary for effects, this born-at-the-executor distinction is the fact it will stand on—the runtime already stamps it on every err.</p>
 
@@ -387,9 +415,8 @@ not a flag</code></pre>
 
 sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" one "</span>
 hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
-
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
-<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span></code></pre>
+<span class="f">text/to_int!</span> sencha <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"sencha: <span class="i">{n}</span> steeps left"</span>)
+<span class="f">text/to_int!</span> hojicha <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{n}</span> steeps left"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: [""one" is not an integer" ""two" is not an integer"]</code></pre>
@@ -404,13 +431,12 @@ hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s
 
 sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" one "</span>
 hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
-
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span>)</code></pre>
+<span class="f">text/to_int!</span> sencha <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"sencha: <span class="i">{n}</span> steeps left"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">text/to_int!</span> hojicha <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{n}</span> steeps left"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""one" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in the entry at seq.kso:5</code></pre>
   </div>
 </div>
 
@@ -467,11 +493,11 @@ hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">err</span>
-<p>an arm written for me claims me, in the module that raised me or any other; a catch-all does not, and i walk straight past it. put me on an effect and only a stranger's <code>.?</code> can end me: the module that raised me hands me on. if you ever wish you could catch me some other way, you wished for the wrong value: ship a none, or a marker that names the verdict. i exist for the failures you refused to plan for, and i always file a full report on the way out.</p>
+<p>i am born in a box, and no arm opens a box: i walk past a catch-all and past an arm written for me alike. only a stranger's <code>.?</code> can take me out, and what it takes out is a plain value; the module that raised me hands me on. if you ever wish you could catch me some other way, you wished for the wrong value: ship a none, or a marker that names the verdict. i exist for the failures you refused to plan for, and i always file a full report on the way out.</p>
 </div>
 </div>
 
-<p>you now hold the whole failure model. <code>err</code> for what broke: rising past every arm that does not name it, with its birthplace and its passed-through receipts, claimed by an <code>(err _)</code> arm or reported at the endpoint. <code>none</code> for what was merely absent: one more shape, claimed by one more arm, and just as impossible to silently ignore. access as a per-call-site decision between promising and asking; your own apis choosing between verdicts shipped as values and contracts broken with a minted err; the wrong/not-yet line that tells you whether a failure lives in your code or in the world; and short-circuit versus accumulate falling out of dependence rather than policy. chapter 05 turns the same instinct outward: if failure is just a value, so is talking to the world.</p>
+<p>you now hold the whole failure model. <code>err</code> for what broke: born in a box and rising past every arm, with its birthplace and its passed-through receipts, until a rescue in another package takes it out or the endpoint reports it. <code>none</code> for what was merely absent: one more shape, claimed by one more arm, and just as impossible to silently ignore. access as a per-call-site decision between promising and asking; your own apis choosing between verdicts shipped as values and contracts broken with a minted err; the wrong/not-yet line that tells you whether a failure lives in your code or in the world; and short-circuit versus accumulate falling out of dependence rather than policy. chapter 05 turns the same instinct outward: if failure is just a value, so is talking to the world.</p>
 
 <h2>exercises</h2>
 
