@@ -23,143 +23,6 @@
 
 
 
-## 2026-10-25 — a loop entered from its own lap stages by its own drift
-
-#2089's third item, the `reentered` phase. lox's statement loop re-enters
-itself when a Lox constructor builds a tree, and its reduction took 7.0
-seconds natively at depth 10, 4,094 writes, where the interpreter writes
-16,382 leaves in 0.4.
-
-Two things in the lap rule made every entry copy the whole tree. A loop
-measured its drift from the position the last stage at its depth had left,
-and when a fresh loop began, that position was below a rewind already. So
-the first lap of every entry staged. The push now records the loop's own
-entry position, and depth 10 fell to 0.099 seconds.
-
-That left a quadratic with a smaller constant: depth 12 took 0.80 seconds
-against the interpreter's 0.37. The wait between stages grows to twice what
-the last stage copied, but that size was read off the carry pair, which the
-push empties. Each fresh entry therefore waited the default quarter
-megabyte and then copied a tree of several megabytes. The size is now kept
-per depth, across loops, and depth 12 takes 0.28 seconds. Skipping a stage
-is always sound; what the longer wait costs is garbage held until the next
-stage, bounded by twice the depth's last copy.
-
-`a_loop_entered_from_its_own_lap_copies_its_tree_rarely` pins it in the mem
-vein at depth 8: evac_bytes 25,762,640 on main and 3,004,432 with the fix,
-evac_allocs 805,083 and 93,889, beat_iters 8,177 on both.
-
-Fourteen other mem goldens move. Eleven fall, because a fresh loop no longer
-stages on its first lap: `record_reuse_shape`, for one, evacuates 80 bytes
-where it evacuated 144. Three rise, the fixtures that pin a repaired node
-below a loop. A pop after a skipped lap walks its whole value, and these
-loops now skip where they used to stage, so they copy 160, 432 and 288 bytes
-more. `a_map_overwritten_each_lap_is_copied_without_its_dead_entries` holds
-32 bytes more at its peak. On this container the run program with the
-`reentered` phase reads 988,276,908 on main and 881,351,361 with this change
-alone. That is below the 917,694,203 main reads without the phase, because
-other phases' loops stopped staging on their first lap too.
-
-The ratchet's row "a thunk's captures unsized by the walk that evacuates
-survivors" reported BLIND on this branch's tree: its mutation, which stops
-the sizing walk looking inside a thunk, left its gate green. It is blind on
-main as well, at cdc6be5c and at a70d2458, and this branch is the first since
-then to touch `core.c` and so select the row. Its witness,
-`micro/a_thunk_capture_survives_the_cohort`, was written to grow past the
-cohort threshold and read its captures after the rewind; its program no
-longer grows that far (cohort_frees=0), and a read of reclaimed memory goes
-wrong only when something has written over it. Under the mutation the
-survivor copy writes past the end of the carry buffer the walk sized, and
-nothing reads the damage. `k_copy_alloc` now refuses a copy that outruns the
-walk, "a carry copied more than its sizing walk counted", and under the
-mutation `mem/work_ahead_pools_a_call_on_a_builtin_read`, whose pooled cell
-carries its captured list through a stage, dies with that message. The row's
-gate is the mem corpus now, and the mutation's comment names the new witness.
-No program reaches the refusal on an unmutated runtime, so
-tests/golden/unpinned_diagnostics.txt lists it with that reason.
-
-A second row went blind with this change: "a character read remembering a
-position into a string a beat has freed", gated by the beat differential.
-Its probe loop ran six small laps, and it found a string reusing a freed
-address only because every fresh loop staged on its first lap, which is the
-behaviour this entry removes. Each probe lap now leaves 3,000 short strings
-in the arena by a recursion that is not a loop, so every lap passes the
-wait and rewinds. Unmutated the sweep reads 0 of 96 disagreeing; under the
-mutation, 20. The mutation itself was red for the wrong reason on main: it
-deleted the reset lines, and the inline rewind's reset is the body of an
-unbraced `if`, so the arena's own rewind became conditional and the sweep
-died on "a beat mark and the arena disagree". It now blanks each store.
-
-The bound check is one compare and a cold call per carry allocation, and CI
-reads it on that head. Every benchmark's machine code grows 112 bytes, text
-5,521,457 -> 5,523,025 over the fourteen. work_runbench 797,618,426 ->
-797,623,329, work_deepbench 197,973,136 -> 197,978,249, work_encodebench
-2,327,444,715 -> 2,327,445,961, work_pendbench 155,737,782 -> 155,739,092,
-work_livebench 936,030,277 -> 936,030,663, work_widebench 28,445,045 ->
-28,445,165, work_digestbench 4,122,908 -> 4,122,953, work_indexbench
-1,837,223 -> 1,837,250, work_scanbench 274,291 -> 274,312, work_jsonbench
-557,386,421 -> 557,386,433, work_readbench 4,581,986 -> 4,581,998,
-work_escapebench 40,308,398 -> 40,308,401, work_basket 31,039,074 ->
-31,039,077 and work_oneshot 10,050,789 -> 10,050,755. The codegen rows
-move with the runtime's text: codegen_instructions_dev 116,452,600 ->
-116,456,350 and codegen_instructions_release 370,226,904 -> 370,087,521. The
-tab runs the same runtime compiled to wasm, so browser_run_instructions
-33,345,113 -> 33,345,263. No allocation counter or mem golden moves.
-
-CI's rows for the four fixes together (#2106), against the run program that
-already holds their shapes (#2104). work_runbench 988,172,222 -> 797,618,426,
-a 19.3% fall, which is the rise this pull request banks. The other run rows
-move by layout and by the carry change: work_deepbench 198,788,407 ->
-197,973,136, work_widebench 28,461,019 -> 28,445,045, work_basket 31,062,419
--> 31,039,074, work_encodebench 2,325,240,758 -> 2,327,444,715,
-work_oneshot 10,050,106 -> 10,050,789, work_livebench 936,030,540 ->
-936,030,277, work_digestbench 4,122,778 -> 4,122,908 and work_escapebench
-40,308,387 -> 40,308,398. The tab runs its corpus in
-browser_run_instructions 33,345,113. The linearity changes cost the front
-end little and the binary's layout moves the rest: compile_instructions
-24,681,406 -> 24,664,014, entry_instructions 72,814,555 -> 72,772,292,
-library_instructions 72,478,036 -> 72,435,518, emit_instructions 5,628,759,
-browser_compile_instructions 218,660,965 -> 218,703,716,
-codegen_instructions_dev 116,452,600 and codegen_instructions_release
-370,226,904. The runtime grows, so every benchmark's machine code does too,
-text 5,518,316 -> 5,521,457 over the fourteen, and the run program's emitted
-code loses three lines, emitted_other_lines 163,953 -> 163,950.
-
-The mem vein moves as the carry entry above says. The three fixtures that
-pin a repaired node copy a little more:
-- a_node_repaired_by_an_inner_pop_outlives_the_outer_stage_evac_allocs 165,
-  a_node_repaired_by_an_inner_pop_outlives_the_outer_stage_evac_bytes 5,728;
-- a_repaired_node_below_a_loop_that_copies_nothing_allocs 273,
-  a_repaired_node_below_a_loop_that_copies_nothing_alloc_bytes 7,058,721,
-  a_repaired_node_below_a_loop_that_copies_nothing_evac_allocs 157,
-  a_repaired_node_below_a_loop_that_copies_nothing_evac_bytes 5,440,
-  a_repaired_node_below_a_loop_that_copies_nothing_survive_slots 22;
-- a_repaired_node_below_a_loop_that_returns_a_number_allocs 115,
-  a_repaired_node_below_a_loop_that_returns_a_number_alloc_bytes 3,532,993,
-  a_repaired_node_below_a_loop_that_returns_a_number_evac_allocs 41,
-  a_repaired_node_below_a_loop_that_returns_a_number_evac_bytes 1,344,
-  a_repaired_node_below_a_loop_that_returns_a_number_survive_slots 10.
-
-a_long_chain_answers_survival_from_its_index_chain_finds 95,601 -> 95,597
-moves with one fewer stage.
-
-The run program's allocation vein, read by the counter sweep and matching CI's
-allocs and alloc_bytes: run_allocs 1,451,390 -> 1,444,950, run_alloc_bytes
-248,577,384 -> 213,685,416, run_evac_bytes 15,563,184 -> 4,822,160,
-run_evac_allocs 8,626, run_survive_slots 5,891, run_put_mut_grow 22,
-run_push_mut_slow 1,557,480, run_sh_buf 86,615,088, run_sh_rec 3,906,544,
-run_sh_map 12,160, run_bytes_malloc 7,885 and run_ten_blocks 1, with
-run_ten_frees 2 -> 1 and run_ten_handups 6 -> 1 for the block that is no
-longer taken. run_view_allocs and run_view_frees fall 769 -> 399 and
-run_cohort_frees 6 -> 5; which fix moves the map views is not isolated
-either. Of its peaks,
-run_held_peak_bytes falls 2,397,872 -> 233,760, while run_arena_peak_bytes
-rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
-212,465. Which of the four fixes moves the arena and permanent peaks is not
-isolated here. The basket vein loses two evacuations: basket_allocs 27,270,
-basket_alloc_bytes 6,162,417, basket_evac_allocs 3, basket_evac_bytes 192 and
-basket_sh_rec 130,112.
-
 ## 2026-10-25 — a slice that starts before the value answers none
 
 From #2088's last item, bc's port. Under the 2026-10-13 gavel on #1890, a
@@ -2026,3 +1889,24 @@ with the new module: emitted_other_defines 2,262 -> 2,276,
 emitted_other_calls 20,540 -> 20,700, emitted_other_branches 17,831 ->
 17,925, emitted_other_lines 170,150 -> 171,135 and text 5,622,043 ->
 5,624,571. Welfare rises 95.52 -> 95.55 and is banked.
+
+## 2026-10-26 — lib/json drops the escape its encoder stopped calling
+
+#2173. `escape_onto`, `escape_clean` and `escape_split` in lib/json had no
+caller once a string value went out through `builtin_append_string`, and
+nothing in this repository, kq or kanso-json calls `json/escape_onto`. They
+are gone. The two ratchet mutations that wrote a string and a key the old
+way now append the old escape to the library before calling it, and each
+still turns its row red. A codegen comment and a runtime fixture that named
+the escape describe what is still there.
+
+CI's rows, against main at #2172. The library every compile reads is
+smaller: compile_instructions 24,873,029 -> 24,871,095, entry_instructions
+73,712,018 -> 73,693,860, library_instructions 73,349,447 -> 73,331,088,
+compile_allocs 13,941 -> 13,940 and browser_compile_instructions
+353,650,925 -> 353,638,408, browser_compile_peak_bytes 847,746 -> 847,738.
+The interpreter does 62 instructions less, interp_instructions 577,237,254,
+and one allocation less, interp_allocs 653,377. work_runbench moves
+825,009,976 -> 825,010,172, 196 more; the run program never called the
+escape, and nothing here isolates what moved it. Welfare rises within its
+second decimal and is banked.
