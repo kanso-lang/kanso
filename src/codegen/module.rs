@@ -206,20 +206,6 @@ impl Written {
     }
 }
 
-/// The runtime functions the program calls that take `preserve_nonecc`
-/// wherever closures do. src/runtime.c defines each with `K_DOORCC`, which is
-/// the same attribute under the same probe, and says why these five;
-/// `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal,
-/// since a door on one convention called on the other passes its arguments
-/// in the wrong registers.
-pub const PRESERVE_NONE_DOORS: [&str; 5] = [
-    "k_b_append_rendered",
-    "k_b_entries",
-    "k_b_to_float_slice",
-    "k_b_utf8",
-    "k_b_append_string_mut",
-];
-
 /// Every declare of and call to a door, written with the convention.
 ///
 /// One pass over the module. Every door is spelled `k_b_...`, so the pass
