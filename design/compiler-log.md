@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
-
-From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
-int[]`, and the 2026-10-12 entry made `list/concat` read a bytes value as its
-byte values on both engines. `push` was left out: `push (text/bytes "a") 2`
-stopped with "push takes a list and a value" on the interpreter and natively,
-and `kanso check` passed it. A push onto bytes now answers the list of their
-values with the item after them, on both engines. The bytes it came from are
-unchanged, and a list is still never read as bytes.
-
-Native code takes this path out of line, behind the tag test the push already
-made, so a push onto a list runs the instructions it ran before.
-
-`tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
-`text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
-the first line.
-
 ## 2026-10-25 — a test that fails inside a library names the library's line
 
 From #2091's sixth item, chip8's port. A test whose helper handed
@@ -1873,3 +1856,23 @@ unboxed err behaving as a value on every engine, with goldens; the ports'
 hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2162. No program in the corpora has the shape, so
+nothing runtime moves. The emitter's new arm moves two compile rows:
+emit_instructions 5,725,463 -> 5,725,642 and browser_compile_instructions
+360,520,776 -> 360,529,640. Welfare falls by less than a hundredth, and the
+floor is lowered by exactly that, since this makes native build a program
+the language allows.
