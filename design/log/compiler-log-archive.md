@@ -109082,3 +109082,257 @@ Measured and set aside: the two scanners without `always_inline`. The link
 then left 6 calls, and kq read print_small 26,132,733 and path_small
 10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
 forced inlining is not what costs kq. The cause is not isolated.
+
+## 2026-10-24 — a chain built from the left runs past the beat stack
+
+The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
+stopped at its first compile error, under rulings made since, so each was
+migrated and its journal re-tested; the re-sit has its own entry. Two ports,
+rg and site, hit the same native crash, and this entry fixes it.
+
+rg walks a directory by folding `.>` onto an effect, once per entry:
+`list/fold entries (effect 0) added`, where `added` answers
+`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
+and native code runs it by entering `k_exec` for the inner chain from the
+outer one, a frame per link. The interpreter printed the sum at 100,000 links.
+Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
+
+Two faults were behind it, and both were in `k_exec`.
+
+- Each chain pushes a beat mark and then reads and writes
+  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
+  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
+  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
+  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
+  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
+  runs in `k_exec_unmarked`, which does what a beat past the stack has always
+  done: it keeps count and stages nothing, and its garbage waits for an outer
+  mark.
+- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
+  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
+  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
+  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
+  360 bytes a link.
+
+`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
+and prints `total 500500` on every engine. Main stops it with "ran out of
+stack". With the frame fix alone and the depth guard removed, it stops the
+same way. A chain of 100,000 links still runs out of native stack: the
+interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
+gives, as any deep recursion does. Running a left-built chain without
+recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
+there would lose the failure it is owed, so it is not attempted here.
+
+A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
+links one segfaults on main as well as on this branch, at 20 links, before
+printing anything. The sweep's own `--prove` was not run, and nothing here
+claims a clean sweep.
+
+CI's rows. Every benchmark does less work, because a frame that reserved
+64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
+work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
+28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
+2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
+work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
+4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
+4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
+and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
+274,348. Every binary's text grows 2,576 bytes for the two new functions,
+runbench's to 762,112, and text, the sum over fourteen binaries, from
+5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
+codegen_instructions_dev 116,426,119 -> 116,447,795 and
+codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
+
+## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
+
+The 2026-10-12 entry "a name the author declared wins over a builtin and an
+import" fixed three reductions from the ports. The re-sit found two more
+paths the rule did not reach, from three ports.
+
+- **Native code, a direct call.** ugit and sat declare `fn step a b` and
+  import std/list, which exports a record `step` and enrols it under the
+  bare name. Under `kanso play`, native code built the record:
+  `print "{step 1 2}"` printed `list/step 1 2`, where the interpreter
+  printed `3`. The 10-12 spec passed the function as a value
+  (`apply counting`), which already worked; a call named directly reached
+  `emit_call`'s constructor branch first. The branch now asks
+  `constructs`, which gives an enrolled type way to a group the program
+  declares, as the interpreter's `callee` does. std/list's own
+  constructions are unchanged: `iterate`, `naturals` and `fold`, which
+  build `step` and `counting` records, print the same on both engines
+  with a local `step` and `counting` in the file.
+- **The interpreter, a constant.** make declares `fn read_line at s`, and
+  std/io exports `read_line`, a constant over `builtin_read_line`. The
+  interpreter evaluates a call's head as a value, and `resolve` took the
+  enrolled constant, and behind it the described builtin of the same
+  name, before the file's own group. The call stopped with "`<io>` is not
+  callable", and 57 of make's 82 fixtures went red on that engine. A group
+  with an arm the program declares now wins both rungs.
+- **Both engines, a type.** mustache declares `type env` and imports std/os,
+  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
+  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
+  the bare name to `os/env`, because the only declarations it counted were
+  functions, and `apply_wrappers` sent that on to `builtin_env`. The
+  interpreter printed `<io>`; native code still built the record, by a path
+  this did not reach. Both passes now leave a name the program declares as a
+  type, and each alone leaves the interpreter printing `<io>`.
+
+`tests/golden/play/a_function_named_like_an_imported_type` gains the direct
+call, and main prints `2 list/counting 3 4` for it natively.
+`tests/golden/play/a_function_named_like_an_imported_constant` is make's
+shape; main stops it on the interpreter.
+`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
+main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
+on both engines, and the walk over the play corpus now reads twelve goldens.
+
+One shape from the same family is not fixed here. kv's module form, a
+function named `read_line` passed by value to `list/fold` in a module that
+imports std/io, stops every engine with "`<io>` is not callable", on main and
+on this branch. The module's own name is lost in `qualify`, a path none of
+these fixes touch.
+
+CI's rows. The front end asks the two new questions of every program it
+compiles, and the tab compiles with the same front end:
+compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
+-> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
+emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
+385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
+Nothing at run time moved. Welfare fell by less than a hundredth, and the
+floor follows: this makes the engines agree, which the welfare script's own
+header puts ahead of the score.
+
+## 2026-10-24 — a record returned by value keeps its shape across a pipe
+
+#2091's first item, from the mustache port. `half` answers a two-field
+record or an err, and escape analysis returns a record of that shape by
+value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
+of the value's tag, a call of `shown` on the success path, and a phi joining
+the two paths as `%KValue`s. The failure edge named the value as it came,
+three words, and clang refused the module: "'%t1' defined with type
+'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
+
+The boxing rewrite that turns a by-value record into a `%KValue` wherever a
+line names it as one reads `%KValue %t1`, and a phi's operand list names its
+values bare, so the rewrite never reached this line. The pipe now boxes the
+value for the failure edge before it branches, and boxes the call's answer
+when that comes back by value too. The call itself still takes the three
+words, since `shown` takes them by value.
+
+`micro/a_record_returned_by_value_is_piped_on` runs the success and the
+failure paths. Main stops it in clang; every engine now prints `4/2` and
+`failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.
+
+## 2026-10-24 — a loop counter knows where it starts
+
+The ports' re-sit counted the same complaint in about ten journals: a guard
+proves a list read only when it is written `i < 1 or length xs < i` (httpd
+F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
+its counter at one and only adds to it, and its author writes the guard on
+the far end alone: `return acc if length xs < at`. The checker read that as
+a bound above and none below, so `xs[at]` could be a none, and the read had
+to be resolved where it could not miss.
+
+Inference now gives a parameter a floor when every value it can hold is in
+sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
+outside the program exists. It is never named except as the head of a call
+with an arity it declares, so it never travels as a value or a partial.
+Every call from outside the group passes an integer literal at that position.
+Every call from inside passes the parameter itself plus a literal that is not
+negative, and no arm rebinds the parameter. The floor is the least literal,
+and it enters each arm as a fact beside the ones guards add, so `in_range`
+reads `at >= 1` from it and the guard on the far end finishes the proof.
+
+`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
+refuses it with "this can be a none and `double` has no arm for it". Two
+error goldens pin where the floor stops: a loop entered at zero
+(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
+the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
+lambda, whose arguments come from out of sight, is refused as before.
+
+A proven read carries no none in inference's sets, so inference settles
+sooner where std/text reads one: compiling `text/uppercase` alone now takes
+223 expression visits, one fewer, and
+`tests/an_import_reads_what_the_program_names.rs` says so.
+
+What it does not reach: the about 130 reads #2088's named-none check refuses
+in the tree. With the floor under that check the count is still 130. Most of
+them read behind a bound passed through a boolean, `applied dir list at acc
+(at > length list)` with the read in the `false` arm, where the fact lives in
+the caller and no floor on the counter covers it.
+
+CI's rows. Every compile asks the call graph where each counter starts, and
+the tab compiles with the same front end: compile_instructions 24,230,258 ->
+24,488,495, entry_instructions 71,606,414 -> 72,335,545,
+library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
+-> 5,637,678, compile_allocs 13,789 -> 13,815 and
+browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
+corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
+401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
+native moved. Welfare fell by less than a hundredth, and the floor follows
+under the language exception: the ruling asks for index reads to be proven,
+and this proves more of them.
+
+## 2026-10-24 — a field read is asked the none question the same way on every route
+
+`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
+inflate's port has the shape: `fn go (req none)` answers a request whose
+path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
+test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
+split, and toml's had it between `check lib` and `check main.kso`.
+
+The none question in `after_infer.rs` asks whether an argument can be a none.
+It answers no for a field read, so a none carried in a field stays the
+runtime's sentence. But the module and play routes run the check before
+field reads are rewritten into getter calls, and the entry and test routes
+run it after. On those two the argument was a call to `Get_path`, whose
+return set is every value the field was built from, and the first arm's
+claim on the none never reaches that set. The question now answers no for a
+getter call too, so all four routes give a field read the same answer.
+
+`tests/golden/test_verb/claims_a_field` is inflate's shape, and
+`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
+it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
+in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
+what `check lib` passed.
+
+Whether a none carried in a field should be refused at check is #2088's
+question, for every route at once.
+
+CI's rows. A getter call now answers the none question before the table
+lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
+entry_instructions 72,335,545 -> 72,317,212, library_instructions
+72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
+218,016,527. Welfare rose, and the rise is banked.
+
+## 2026-10-24 — a test file's helper is checked like its constants
+
+Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
+module beside it and nothing else. A test constant that names a private
+function is refused at check. A helper function in the test file that names
+one was not: xsv's port called the module's private `hidden` from a helper,
+`kanso check` passed it, and `kanso test` failed that test at run time with
+"error[runtime]: unknown name `~hidden`", a spelling the author never wrote.
+(#2091, item 2.)
+
+The check does refuse the name. It sends a call it cannot resolve inside a
+function to a traveling group, which the program's root fills from every
+module that writes the name for a type it owns, or refuses. A library
+compile leaves that to whatever imports it, so `compile_library_beside`
+dropped the shades and moved on. A test file is compiled on the same path,
+and nothing imports it. It now settles the groups where it is compiled, with
+`enroll_travelers`, as the entry and module paths do, and the helper's call
+is refused at check with the same `unknown name` error the constant gets.
+
+`tests/golden/test_verb/reaches` is the reduction, and
+`a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
+pins its stderr. On main it prints the run-time error above.
+
+A library compile takes the path it took before, and the test verb has no
+row. The rows this moved are counted with the batch it landed in, at the end
+of "an import stays in the file that writes it".

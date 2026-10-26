@@ -1179,6 +1179,23 @@ impl<'a> Interp<'a> {
             // `slice_in` is std's spelling for a range it measured (#1890). It
             // is renamed to `slice` after the check, before any engine runs, so
             // this arm only keeps the two names answering alike.
+            b"rest_from" => {
+                let [coll, at] = arity(args, name, span)?;
+                // std/list's rest after a drop: a list's elements from a
+                // position on, and none for anything else, which std then
+                // walks a step at a time
+                let from = match &at {
+                    Value::Int(at) => usize::try_from(at).ok().filter(|&n| n >= 1),
+                    _ => None,
+                };
+                Ok(match (&coll, from) {
+                    (Value::List(items), Some(from)) => {
+                        let rest = items.get(from - 1..).map(<[Value]>::to_vec);
+                        Value::List(Rc::new(rest.unwrap_or_default()))
+                    }
+                    _ => Value::NoneV,
+                })
+            }
             b"slice" | b"slice_in" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {

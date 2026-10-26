@@ -1,0 +1,31 @@
+import "std/list"
+import "std/text"
+
+# The rest of a list after a drop is one copy of its tail; anything else a
+# cursor walks keeps being walked a step at a time. Every edge of the range
+# is here: nothing dropped, the whole list, past the end, a negative count,
+# and a fold over the drop rather than a list made of it.
+type pair
+  name
+  n
+
+fn walked _ acc 0
+  acc
+
+fn walked xs acc n
+  walked (list/to_list (list/drop xs 1)) (acc + xs[1]) (n - 1)
+
+fn rest_of xs k
+  list/to_list (list/drop xs k)
+
+pub play =
+  xs = [10 20 30 40]
+  ps = [(pair "a" 1) (pair "b" 2) (pair "c" 3)]
+  rows = [[1 2] [3] []]
+  names = list/to_list (list/map (rest_of ps 1) (p -> p.name))
+  print "{rest_of xs 0} {rest_of xs 1} {rest_of xs 3} {rest_of xs 4}"
+  print "{rest_of xs 5} {rest_of xs -2} {rest_of [] 1} {rest_of rows 1}"
+  print "{names} {walked [1 2 3 4 5] 0 5}"
+  print "{rest_of "héllo" 2} {rest_of (text/bytes "abc") 1}"
+  print "{rest_of { 1:"a" 2:"b" 3:"c" } 1}"
+  print "{list/fold (list/drop xs 2) 0 (a x -> a + x)}"
