@@ -585,6 +585,9 @@ fn in_slice(at: usize) -> u64 {
     (at & 0xFFFF) as u64
 }
 
+/// Call sites keyed as the linearity analysis keys them: file, line, column.
+type Sites = crate::hash::Set<(std::sync::Arc<str>, usize, usize)>;
+
 /// Slots in `Interp::recent_callees`. The table lives for the whole run, so
 /// its size sits under the interpreted run's peak memory. At 1,024 slots,
 /// with the frames' 512 beside it, the two held 32,768 bytes; at 256 each
@@ -702,6 +705,11 @@ pub struct Interp<'a> {
     /// the cache names it. A put that writes in place regardless, at a site
     /// the linearity analysis proved unique, empties the cache first.
     entries_at: RefCell<Option<EntriesAt>>,
+    /// Where the last slice of a string with a wider character ended: the
+    /// string, a character's position and the byte it starts at. A scan asks
+    /// for each next character of one string in turn, so the walk to it goes
+    /// on from here; see `char_offset`.
+    text_cursor: RefCell<Option<(Text, usize, usize)>>,
     /// The constants that reach themselves through a chain of mentions --
     /// the same set the emitter computes, so the two engines count the same
     /// cells. Every constant goes through `knotted`, but only these are the
@@ -711,18 +719,19 @@ pub struct Interp<'a> {
     /// at construction, because `kanso check` makes an `Interp` and never
     /// evaluates a constant, and that route is a weighed welfare term.
     cycles: std::cell::OnceCell<crate::hash::Set<String>>,
-    /// The push, put and append sites the linearity analysis proves extend a
-    /// container nothing else will read -- the same set, by the same key,
-    /// that the emitter consults before it writes `push_mut_fast`. The
-    /// compiled engine has mutated at these sites since kanso#1359; until now
-    /// the interpreter cloned at every one of them.
+    /// What the linearity analysis proves, from `linear::for_the_interpreter`:
+    /// the push, put and append sites that extend a container nothing else
+    /// will read, which is the set the emitter consults before it writes
+    /// `push_mut_fast`, and the templates that join onto a string nothing
+    /// reads afterwards. The compiled engine has mutated at these sites since
+    /// kanso#1359; until then the interpreter cloned at every one of them.
     ///
     /// A `OnceCell` for the reason `cycles` above is one: `kanso check` makes
     /// an `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term. The analysis is not cheap and must not run for a check.
-    in_place: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
+    linearity: std::cell::OnceCell<(Sites, Sites)>,
     /// `linear::moved_writes`, built the first time a write's value has no
-    /// holder but the name that moves it. Lazy for the reason `in_place` is.
+    /// holder but the name that moves it. Lazy for the reason `linearity` is.
     moved: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
@@ -844,8 +853,9 @@ impl<'a> Interp<'a> {
             tie_serial: Cell::new(0),
             spare_binds: RefCell::new(Vec::new()),
             entries_at: RefCell::new(None),
+            text_cursor: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
-            in_place: std::cell::OnceCell::new(),
+            linearity: std::cell::OnceCell::new(),
             moved: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
@@ -1408,7 +1418,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Map(Rc::new(entries)))
             }
-            Expr::Str(parts, _) => self.eval_template(parts, env, frame),
+            Expr::Str(parts, span) => self.eval_template(parts, *span, env, frame),
             Expr::Ident(name, span, resolved) => self.eval_ident_at(name, *span, resolved, env),
             Expr::Partial(name, span) => {
                 let callee = self.eval_ident(name, *span, env)?;
@@ -1866,10 +1876,32 @@ impl<'a> Interp<'a> {
     fn eval_template(
         &self,
         parts: &[TemplatePart],
+        span: Span,
         env: &Option<Rc<Env>>,
         frame: &Frame,
     ) -> EvalResult {
+        if let [TemplatePart::Interp(Expr::Ident(name, _, _)), rest @ ..] = parts {
+            if !rest.is_empty() {
+                if let Some(joined) = self.join_onto(name, rest, span, env, frame)? {
+                    return Ok(joined);
+                }
+            }
+        }
         let mut out = String::new();
+        self.render_parts(parts, env, frame, &mut out).map(|failed| match failed {
+            Some(err) => err,
+            None => Value::Str(Text::from(out)),
+        })
+    }
+
+    /// Each part rendered onto `out`, or the err a part answered.
+    fn render_parts(
+        &self,
+        parts: &[TemplatePart],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+        out: &mut String,
+    ) -> Result<Option<Value>, RuntimeError> {
         for part in parts {
             match part {
                 TemplatePart::Lit(s) => out.push_str(s),
@@ -1878,16 +1910,55 @@ impl<'a> Interp<'a> {
                     // an err propagates (the whole string returns the err); a
                     // none is a value and renders its sentinel
                     if matches!(value, Value::ErrV(_)) {
-                        return Ok(value);
+                        return Ok(Some(value));
                     }
                     match self.render_interpolated(value)? {
                         Ok(rendered) => out.push_str(&rendered),
-                        Err(err) => return Ok(err),
+                        Err(err) => return Ok(Some(err)),
                     }
                 }
             }
         }
-        Ok(Value::Str(Text::from(out)))
+        Ok(None)
+    }
+
+    /// `"{s}..."` where `linear::string_builders` proved nothing reads `s`
+    /// after this join: the string comes out of the binding and the rest is
+    /// pushed onto it. Reading `s` would copy it, and a loop that grows a
+    /// string this way copied the whole string on every lap, 77 million
+    /// instructions for 3,000 pieces. Native and the tab join in place at the
+    /// same sites. `None` takes the ordinary path: a binding that holds
+    /// something other than a string, or a string short enough that copying
+    /// it costs less than asking. The analysis is only built once a long
+    /// string reaches a join.
+    fn join_onto(
+        &self,
+        name: &Name,
+        rest: &[TemplatePart],
+        span: Span,
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> Result<Option<Value>, RuntimeError> {
+        let Some(slot) = slot_of(env, name) else { return Ok(None) };
+        // SAFETY: the slot lives as long as `env`, which this call holds.
+        let long = matches!(unsafe { &*slot }, Value::Str(t) if t.len() > TEXT_INLINE);
+        if !long || !self.joins_here(span, frame) {
+            return Ok(None);
+        }
+        // The rest first: a later piece may read `s` as well, `"{s}{s}"`, and
+        // has to read the whole of it.
+        let mut tail = String::new();
+        if let Some(err) = self.render_parts(rest, env, frame, &mut tail)? {
+            return Ok(Some(err));
+        }
+        // SAFETY: as `written_in_place`. The analysis proved no later read of
+        // the binding exists, and nothing else refers into the slot across
+        // the replace. A string some other holder shares is copied once by
+        // `push_str` rather than written.
+        let Value::Str(text) = std::mem::replace(unsafe { &mut *slot }, Value::NoneV) else {
+            unreachable!("checked to be a string above")
+        };
+        Ok(Some(Value::Str(text.push_str(&tail))))
     }
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
@@ -2817,7 +2888,43 @@ impl<'a> Interp<'a> {
     fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
         let sites = site.in_place.get_or_init(|| {
-            let all = self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program));
+            let all = &self.linearity().0;
+            all.iter()
+                .filter(|(file, _, _)| **file == *site.file)
+                .map(|(_, l, c)| (*l, *c))
+                .collect()
+        });
+        sites.contains(&(span.line as usize, span.col as usize))
+    }
+
+    /// The byte where character `n` (counted from 0) of `text` starts, or the
+    /// string's length when `n` is its count, walking on from `text_cursor`
+    /// when it holds the same string at or before `n`. `None` is past the end.
+    fn char_offset(&self, text: &Text, n: usize) -> Option<usize> {
+        let mut cursor = self.text_cursor.borrow_mut();
+        let (mut k, mut b) = match &*cursor {
+            Some((held, k, b)) if held.same(text) && *k <= n => (*k, *b),
+            _ => (0, 0),
+        };
+        while k < n {
+            b += text[b..].chars().next()?.len_utf8();
+            k += 1;
+        }
+        *cursor = Some((text.clone(), k, b));
+        Some(b)
+    }
+
+    /// The sets `linear::for_the_interpreter` answers, built on first use.
+    fn linearity(&self) -> &(Sites, Sites) {
+        self.linearity.get_or_init(|| crate::linear::for_the_interpreter(self.program))
+    }
+
+    /// Whether `linear::string_builders` licensed this template to join onto
+    /// the string its first part names. Keyed as `writes_in_place` is.
+    fn joins_here(&self, span: Span, frame: &Frame) -> bool {
+        let Some(site) = frame else { return false };
+        let sites = site.joins.get_or_init(|| {
+            let all = &self.linearity().1;
             all.iter()
                 .filter(|(file, _, _)| **file == *site.file)
                 .map(|(_, l, c)| (*l, *c))
@@ -3299,6 +3406,14 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             let idx = usize::try_from(i).ok();
             Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
                 Some(i) => Value::int(items[i - 1]),
+                None => Value::NoneV,
+            })
+        }
+        // An ASCII string answers by byte; one with a wider character walks.
+        (Value::Str(text), Value::Int(i)) if text.is_ascii() => {
+            let idx = usize::try_from(i).ok().and_then(|i| i.checked_sub(1));
+            Ok(match idx.filter(|i| *i < text.len()) {
+                Some(i) => Value::Str(Text::from(&text[i..i + 1])),
                 None => Value::NoneV,
             })
         }

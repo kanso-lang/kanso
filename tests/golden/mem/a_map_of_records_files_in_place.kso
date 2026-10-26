@@ -1,0 +1,25 @@
+# 4,000 numbers filed into 20 buckets, a record of a count and a list per key
+# in a map. The record reached the put only through its fields, so the map
+# was copied for every number. A read that a sibling argument forces lets the
+# map go before the put, and the map is written in place.
+type bucket
+  hits
+  items
+
+fn or_bucket none
+  bucket 0 []
+
+fn or_bucket b
+  b
+
+fn filed m _ 0
+  m
+
+fn filed m n i
+  k = i % 20
+  b = or_bucket m[k]
+  filed (put m k (bucket (b.hits + 1) (push b.items i))) n (i - 1)
+
+pub play =
+  m = filed {} 4000 4000
+  print "{length m} {m[3].hits} {m[3].items[1]} {length m[19].items}"

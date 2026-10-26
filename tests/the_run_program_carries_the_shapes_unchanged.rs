@@ -1,17 +1,18 @@
-//! The run program the objective weighs carries a copy of each stress shape,
-//! and the benchmark it came from survives as a diagnostic golden. Two copies
-//! of one workload drift, and the drift is silent: `runbench` would go on
-//! reporting a shape that `escapebench` had stopped exercising, and the
-//! objective would be weighing something nobody is watching.
+//! The run program the objective weighs carries five of its stress shapes
+//! from the benchmarks that diagnose them, and the benchmark survives as a
+//! diagnostic golden. Two copies of one workload drift silently: `runbench`
+//! would go on reporting a shape that `escapebench` had stopped exercising.
 //!
-//! So the copies are byte-identical to their sources, and this says so.
+//! So the run program holds no copy. Each carried module is a symbolic link to
+//! the benchmark's file, which keeps the module where the run program imports
+//! it and its functions' names unchanged, and this says each one is a link.
 use std::path::PathBuf;
 
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// `(the copy under bench/runbench, the benchmark module it came from)`.
+/// `(the link under bench/runbench, the benchmark module it points at)`.
 ///
 /// A shape added to the run program without a line here is a shape nothing
 /// pins, which is why the count is asserted at the end rather than left to
@@ -65,20 +66,25 @@ fn read(rel: &str) -> String {
 
 #[test]
 fn the_run_program_carries_the_shapes_unchanged() {
-    for (copy, source) in CARRIED {
-        assert_eq!(
-            read(copy),
-            read(source),
-            "{copy} has drifted from {source}. The run program's shape and the \
-             benchmark that diagnoses it have to be the same program, or the \
-             objective weighs one workload and the golden watches another."
+    for (link, source) in CARRIED {
+        let path = manifest_dir().join(link);
+        let meta = std::fs::symlink_metadata(&path).unwrap_or_else(|e| panic!("{link}: {e}"));
+        assert!(
+            meta.file_type().is_symlink(),
+            "{link} is a file of its own, so it can drift from {source}. The run \
+             program's shape and the benchmark that diagnoses it have to be the \
+             same program; make it a link to {source}."
         );
+        let target = std::fs::canonicalize(&path).unwrap_or_else(|e| panic!("{link}: {e}"));
+        let want = std::fs::canonicalize(manifest_dir().join(source))
+            .unwrap_or_else(|e| panic!("{source}: {e}"));
+        assert_eq!(target, want, "{link} points somewhere other than {source}");
     }
     assert_eq!(CARRIED.len(), 5, "a shape joined or left the run program without a line here");
 }
 
 /// Every directory under `bench/runbench/runbench` that is not the driver
-/// holds exactly one carried module, and that module is named above. A copy
+/// holds exactly one carried module, and that module is named above. A module
 /// added and not listed would otherwise pass the loop by not being in it.
 #[test]
 fn every_carried_module_is_listed() {

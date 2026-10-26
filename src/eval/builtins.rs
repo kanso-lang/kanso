@@ -1194,7 +1194,8 @@ impl<'a> Interp<'a> {
                 let len = match &container {
                     Value::List(items) => Some(items.len()),
                     Value::Bytes(items) => Some(items.len()),
-                    Value::Str(text) => Some(text.chars().count()),
+                    Value::Str(text) if text.is_ascii() => Some(text.len()),
+                    // A string with a wider character answers below, by walking.
                     _ => None,
                 };
                 if let Some(len) = len {
@@ -1215,12 +1216,27 @@ impl<'a> Interp<'a> {
                             .unwrap_or_default();
                         Ok(Value::Bytes(Rc::new(sliced)))
                     }
+                    // A position is a byte's in an ASCII string, so a scan that
+                    // slices one character at a time reads only that character.
+                    Value::Str(text) if text.is_ascii() => {
+                        let sliced = slice_range(text.len(), from, to).map(|r| &text[r]);
+                        Ok(Value::Str(Text::from(sliced.unwrap_or_default())))
+                    }
+                    // A string with a wider character is walked to the range,
+                    // on from where the last slice of it ended, where it used to
+                    // be collected whole.
                     Value::Str(text) => {
-                        let all: Vec<char> = text.chars().collect();
-                        let sliced = slice_range(all.len(), from, to)
-                            .map(|r| all[r].iter().collect::<String>())
-                            .unwrap_or_default();
-                        Ok(Value::Str(Text::from(sliced)))
+                        if from == 0 {
+                            return Ok(Value::NoneV);
+                        }
+                        let start = self.char_offset(text, from - 1);
+                        match (start, self.char_offset(text, to)) {
+                            (Some(start), Some(end)) if start < end => {
+                                Ok(Value::Str(Text::from(&text[start..end])))
+                            }
+                            (Some(_), Some(_)) => Ok(Value::Str(Text::from(""))),
+                            _ => Ok(Value::NoneV),
+                        }
                     }
                     _ => Err(RuntimeError {
                         at: None,
@@ -1473,7 +1489,7 @@ impl<'a> Interp<'a> {
                 match list {
                     Value::List(items) => Ok(Value::int(items.len())),
                     Value::Bytes(items) => Ok(Value::int(items.len())),
-                    Value::Str(s) => Ok(Value::int(s.chars().count())),
+                    Value::Str(s) => Ok(Value::int(s.char_count())),
                     Value::Map(entries) => Ok(Value::int(entries.len())),
                     other => Err(RuntimeError {
                         at: None,
