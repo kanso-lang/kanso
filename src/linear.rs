@@ -359,6 +359,12 @@ impl<'a> Mentions<'a> {
         }
     }
 
+    /// Whether some application in the program calls `name` with `arity`
+    /// arguments, read off the heads already gathered.
+    fn called_at(&self, name: &str, arity: usize) -> bool {
+        self.heads.get(name).is_some_and(|ks| ks.contains(&arity))
+    }
+
     /// The declarations that could hold a call to `name`, and no others.
     fn mentioning(&self, name: &str) -> &[usize] {
         self.in_decl.get(name).map_or(&[], |v| v.as_slice())
@@ -2495,9 +2501,8 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
                 // Every arm of the group, not just this one: the set is keyed by
                 // group, so an arm that aliases the parameter or answers it as a
                 // plain string would inherit an exemption it cannot honour.
-                let arms: Vec<&FnDecl> = real_fns(program)
-                    .filter(|d| d.name == decl.name && d.params.len() == arity)
-                    .collect();
+                let arms: Vec<&FnDecl> =
+                    a.group(&decl.name, arity).filter(|d| !d.synthetic).collect();
                 let all = arms.iter().all(|d| match d.params.get(j) {
                     Some(Pattern::Var(n, _)) => forwards_into(&carrying, d, n),
                     _ => false,
@@ -2508,7 +2513,7 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
                 // twins share — so a grant made to the clone would reach the code
                 // the real name emits.
                 if all
-                    && called_somewhere(program, &decl.name, arity)
+                    && a.mentions.called_at(&decl.name, arity)
                     && a.callers_hand_over(&decl.name, arity, j)
                 {
                     carrying.insert((decl.name.clone(), arity, j));
@@ -2568,26 +2573,6 @@ fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
     let mut out = HashSet::default();
     in_stmts(joins, decl, &decl.body, &mut out);
     out
-}
-
-/// Does any call site in the program name this group?
-fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
-    fn in_expr(e: &Expr, name: &str, arity: usize) -> bool {
-        if let Expr::App { head, args, .. } = e {
-            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity {
-                return true;
-            }
-        }
-        child_exprs(e).any(|c| in_expr(c, name, arity))
-    }
-    program.fns.iter().any(|d| {
-        d.body.iter().any(|s| {
-            let e = match s {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-            };
-            in_expr(e, name, arity)
-        })
-    })
 }
 
 fn param_names(decl: &FnDecl) -> Vec<(usize, String)> {
