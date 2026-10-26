@@ -1,0 +1,4 @@
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>` (module a_failure_where_a_value_is_expected)
+  --> a_failure_where_a_value_is_expected.kso:7:20
+   7 | pub play = print "{closed 1 + 1}"
+                          ^

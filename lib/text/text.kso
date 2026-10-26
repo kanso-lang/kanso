@@ -110,25 +110,16 @@ fn not_a s:string kind
 fn not_a bs kind
   not_text (utf8 bs) kind
 
-fn not_text none kind
+# Bytes that are not utf-8 are a failure inside `utf8`, a box this arm takes
+# whole rather than opens.
+fn not_text _:<some>effect kind
   "bytes are not {kind}"
 
 fn not_text s kind
   "\"{s}\" is not {kind}"
 
-# Bytes that are not utf-8 answer none, an outcome the caller handles.
 pub fn utf8 codes
   builtin_utf8 codes
-
-# `utf8!` insists the bytes are text: a box holding the string, or a failure.
-pub fn utf8! codes
-  text_kept (utf8 codes)
-
-fn text_kept none
-  err "invalid utf-8"
-
-fn text_kept s
-  effect s
 
 # The first position at or after p whose byte cannot be part of a JSON
 # number, negated when a `.`, `e` or `E` went past; p itself when it lies

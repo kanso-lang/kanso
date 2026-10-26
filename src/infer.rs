@@ -2215,9 +2215,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         // std's own measured ranges (#1890): a range the library took from a
         // scan of the same value never leaves it, so it answers no none.
         "slice_in" => (args[0] & (BYTES | LIST | STR)) | fails,
-        // bytes that are not text answer none; a value that is not a byte is
-        // a mistake, and a box
-        "utf8" => STR | NONE | ERR | fails,
+        "utf8" => STR | ERR | fails,
         "built_text" => STR | fails,
         "render_value" => STR | fails,
         "length" => INT | fails,

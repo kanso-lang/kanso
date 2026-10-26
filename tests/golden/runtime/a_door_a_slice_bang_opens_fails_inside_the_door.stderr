@@ -1,2 +1,2 @@
 error[runtime]: utf8 takes a list of byte values
-  failed in text/utf8 at std/text/text.kso:92
+  failed in text/utf8 at std/text/text.kso:122

@@ -3,4 +3,4 @@
 # character machinery is ever asked
 import "std/json"
 
-pub play = print "{json/decode "\"\\ud83c\""}"
+pub play = json/decode! "\"\\ud83c\"" .> (v -> print "{v}")

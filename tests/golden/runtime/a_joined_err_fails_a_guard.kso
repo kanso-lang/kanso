@@ -7,7 +7,7 @@ import "std/os"
 import "std/text"
 
 pub fn shown z
-  bad = text/to_float "1 "
+  bad = text/to_bytes [(z + 300)]
   j = text/join ["{bad}" "{z}"] ","
   return 7 if length j > 0
   "no"

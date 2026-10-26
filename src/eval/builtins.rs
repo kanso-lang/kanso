@@ -659,11 +659,12 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
-                // bytes that are not text are an outcome the caller handles,
-                // and `utf8!` is the insisting form (#2087)
                 match String::from_utf8(raw) {
                     Ok(text) => Ok(Value::Str(Text::from(text))),
-                    Err(_) => Ok(Value::NoneV),
+                    Err(_) => Ok(err_value(
+                        Value::Str(Text::from("invalid utf-8".to_string())),
+                        origin_at(frame, span),
+                    )),
                 }
             }
             // Bytes the standard library assembled from text and ascii bytes

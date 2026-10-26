@@ -1,8 +1,7 @@
-# The book's menu sample at the ruling's third site: `base_price` raises for
-# an item off the menu, and `with_service` has arms for numbers only. The
-# check refuses the call where the raised err is provable, which is what the
-# 2026-09-15 ruling asks for: a bare err is data, and a group that is handed
-# one names it with an `(err _)` arm or does not take it.
+# The book's menu sample: `base_price` fails for an item off the menu, and
+# `with_service` has arms for numbers only. The failure is a box (#2087), so
+# it passes `with_service` without its body running, and the report names
+# the group it passed through.
 fn base_price "dango"
   350
 

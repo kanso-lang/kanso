@@ -159,7 +159,9 @@ fn begun none
 fn begun run
   list/concat [] run
 
-fn string_ok p none
+# Bytes that are not utf-8 are std/text's failure, a box this arm takes whole
+# and answers with the decoder's own reason.
+fn string_ok p _:<some>effect
   err (parse_failure p "invalid utf-8 in string")
 
 fn string_ok _ v
