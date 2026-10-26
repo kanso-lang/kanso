@@ -57,7 +57,19 @@ fn number_start? none
 fn number_start? c
   47 < c and c < 58
 
+fn float_of none
+  none
+
+fn float_of digits
+  text/to_float digits
+
+fn int_of none
+  none
+
+fn int_of digits
+  text/to_int digits
+
 fn number_value cs p q
   digits = text/slice cs p q
-  raw = if (mark_from? cs p q) (text/to_float digits) (text/to_int digits)
+  raw = if (mark_from? cs p q) (float_of digits) (int_of digits)
   number_ok p raw

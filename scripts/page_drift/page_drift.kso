@@ -99,7 +99,7 @@ fn walk shas i
   if (i > length shas) (against "") (looked shas i)
 
 fn looked shas i
-  sha = shas[i]
+  sha = present shas[i]
   asked ["show" "-U0" "--format=" "--diff-merges=first-parent" sha "--" page]
     .> (r -> moved shas i sha (numbers_only? r.stdout))
 
@@ -193,3 +193,10 @@ owing = """
 """
 
 pub play = asked ["rev-parse" "--is-shallow-repository"] .> depth
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost a commit it had counted"
+
+fn present x
+  x

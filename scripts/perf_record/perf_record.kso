@@ -307,7 +307,7 @@ fn scored_counters text
 # second field, so that is what is asked, and the status goes in the message
 # rather than into the decision.
 fn score_in r
-  head = (text/split r.stdout "\n")[1]
+  head = present (text/split r.stdout "\n")[1]
   score_of head r (length (text/split head " ") < 2)
 
 fn score_of _ r true
@@ -397,3 +397,10 @@ fn intact _ gone false
   io/write_err "{mangled}  lost: {listed}\n" .> (_ -> os/exit 2)
 
 pub play = asked ["log" "-1" "--format=%h %cI %s"] .> stamped
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a split answered no first line"
+
+fn present x
+  x

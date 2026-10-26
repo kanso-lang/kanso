@@ -709,6 +709,11 @@ fn folded s at acc false
   c = text/slice s at at
   folding s (at + 1) "{acc}{c}{swapped c}"
 
+# `folded` reads `c` at a position its caller has checked, so a none here is a
+# bug in this file.
+fn swapped none
+  err "a character inside the class answered none"
+
 fn swapped c
   code = text/char_code c
   other code (case_of code)
@@ -915,6 +920,10 @@ fn past after false
   after
 
 no_ceiling = 0 - 1
+
+# `braced` reads the mark at a position it has checked, so a none is a bug
+fn spans none
+  err "a quantifier's mark answered none"
 
 fn spans "*"
   bounds 0 no_ceiling

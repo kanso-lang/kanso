@@ -44,7 +44,7 @@ fn looked? _ _ _ true
   true
 
 fn looked? line heads at false
-  head = heads[at]
+  head = present heads[at]
   seen? line heads at (text/slice line 1 (length head) == head)
 
 fn seen? _ _ _ true
@@ -81,9 +81,6 @@ fn either? true _
 
 fn either? _ answer
   answer
-
-fn door_of e@(err _)
-  e
 
 fn door_of src
   chosen src (library? src)
@@ -142,9 +139,6 @@ fn with_page progs
   page = page_for progs
   on = (w -> with_runtime progs page w)
   os/read_bytes! "docs/kanso.wasm" .> on
-
-fn with_runtime _ e@(err _) _
-  e
 
 fn with_runtime progs page w
   on = (r -> with_engine progs page w r)
@@ -214,9 +208,6 @@ fn more_files paths at acc book false
   on = (src -> one_file paths at acc book src)
   os/read_file! paths[at] .> on
 
-fn book_read _ _ e@(err _)
-  e
-
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
 
@@ -241,7 +232,7 @@ fn more_written written at acc false
   os/write_file one.path one.src .> on
 
 fn more_book_files paths at acc false
-  path = paths[at]
+  path = present paths[at]
   recorded = recorded_of path
   on = (there -> book_maybe paths at acc path there)
   os/exists recorded .> on
@@ -333,7 +324,7 @@ fn hunted? src needles at false
 
 fn a_test? path
   parts = text/split path "/"
-  name = parts[length parts]
+  name = present parts[length parts]
   length (text/split name "_test.kso") > 1
 
 fn recorded_of path
@@ -374,15 +365,12 @@ fn unescaped raw
   twice = replaced once "\\`" "`"
   replaced twice "\\$" "$"
 
-fn replaced e@(err _) _ _
-  e
-
 fn replaced text from to
   text/split text from .> (parts -> text/join parts to)
 
 fn name_before piece
   lines = text/split piece "\n"
-  last = lines[length lines]
+  last = present lines[length lines]
   named = text/split last ":"
   return "" if length named < 1
   text/trim named[1]
@@ -417,7 +405,8 @@ fn shell script
 
 fn dir_of path
   parts = text/split path "/"
-  text/slice path 1 (length path - length parts[length parts] - 1)
+  last = present parts[length parts]
+  present (text/slice path 1 (length path - length last - 1))
 
 fn file_of path
   parts = text/split path "/"
@@ -647,7 +636,7 @@ fn tallied progs raw
   json/decode! raw .> (read -> tallied_from progs read)
 
 fn tallied_from progs read
-  results = read["results"]
+  results = present read["results"]
   counts = by_kind results 1 {}
   said = "the tab: {length results} answers, {counts}"
   seen = keyed results 1 {}
@@ -675,7 +664,7 @@ fn more_crashes _ _ acc true
   acc
 
 fn more_crashes results at acc false
-  one = results[at]
+  one = present results[at]
   crashes results (at + 1) (kept_crash acc one one["kind"])
 
 fn kept_crash acc one "crash"
@@ -706,7 +695,7 @@ fn more_gaps _ _ acc true
   acc
 
 fn more_gaps lines at acc false
-  line = lines[at]
+  line = present lines[at]
   gathered_gaps lines (at + 1) (noted_gap acc line)
 
 fn noted_gap acc line
@@ -739,8 +728,8 @@ fn more_kinds _ _ acc true
   acc
 
 fn more_kinds results at acc false
-  one = results[at]
-  which = one["kind"]
+  one = present results[at]
+  which = present one["kind"]
   by_kind results (at + 1) (bumped acc which)
 
 fn bumped acc which
@@ -762,7 +751,7 @@ fn more_pairs _ _ _ _ bad agreed skipped true
   verdict bad agreed skipped
 
 fn more_pairs progs seen gaps at bad agreed skipped false
-  p = progs[at]
+  p = present progs[at]
   on = (r -> compared progs seen gaps at bad agreed skipped p r)
   native_of p .> on
 
@@ -802,9 +791,6 @@ fn filed progs seen gaps at bad agreed skipped p r said false
   theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (list/concat bad [why]) agreed skipped
-
-fn filed _ _ _ _ _ _ _ _ _ _ e@(err _)
-  e
 
 # A crashed case answers no code and no text, so the ordinary line reads
 # `tab <none> <none>` and throws away the reason the tab already captured.
@@ -856,3 +842,10 @@ fn ended_run bad agreed skipped false
   tally = "{agreed} agree, {skipped} known gaps"
   said = "FAIL  {length bad} disagree ({tally}):\n{text/join bad "\n"}\n"
   io/write said .> (_ -> os/exit 1)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a read the run bounded answered none"
+
+fn present x
+  x

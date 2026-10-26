@@ -30,8 +30,15 @@ fn worsened? bare before after
   low = found? bare tags
   ruled? low (found? bare tags) before after
 
+# the whole of `name` is inside it
+fn present none
+  err "the whole of a name answered none"
+
+fn present s
+  s
+
 fn asked? name
-  bare = text/slice name 1 (length name)
+  bare = present (text/slice name 1 (length name))
   worsened? bare (count_of name) (count_of "b")
 
 pub play = print "{asked? "a"}"

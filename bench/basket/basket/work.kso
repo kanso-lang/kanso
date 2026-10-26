@@ -104,6 +104,13 @@ fn arith_float n acc
 fn shift 0 p
   p
 
+# `built` is longer than 128 characters, so a none is a bug
+fn sized none
+  err "a slice inside the text answered none"
+
+fn sized s
+  length s
+
 fn shift n p
   shift (n - 1) (point (p.x + 1) p.y)
 
@@ -132,7 +139,7 @@ pub fn run _
   trimmed = text/trim "   {window}   "
   head500 = list/to_list (list/take xs 500)
   sorted = list/sum (list/sort (list/map head500 (v -> 4000 - v)))
-  sliced = length (text/slice built 1 128)
+  sliced = sized (text/slice built 1 128)
   a = "{length built} {length repeated} {length grown} {summed}"
   b = "{length kept} {folded} {length grouped} {length counted}"
   c = "{ints} {floats} {moved.x} {length joined} {sliced} {sorted}"

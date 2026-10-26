@@ -1,0 +1,5 @@
+# The inline form of a_none_bound_to_a_name_reaches_push (#2088).
+fn grown rows
+  push rows[3] 1
+
+pub play = print "{grown [[1] [2]]}"

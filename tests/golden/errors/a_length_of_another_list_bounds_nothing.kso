@@ -1,0 +1,12 @@
+# The bound handed down is the length of a different list, so the guard says
+# nothing about `xs[i]`, and the read can answer none.
+fn twice x
+  x * 2
+
+fn walk xs i n acc
+  if (i > n) acc (walk xs (i + 1) n (acc + twice xs[i]))
+
+fn total xs ys
+  walk xs 1 (length ys) 0
+
+pub play = print "{total [1 2] [1 2 3 4]}"

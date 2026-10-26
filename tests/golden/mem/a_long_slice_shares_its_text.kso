@@ -15,7 +15,14 @@ ascii = text/join [fifty fifty] ""
 wide = text/join [fifty last] ""
 
 fn cut s
-  length (text/slice s 2 99)
+  width (text/slice s 2 99)
+
+# both strings hold a hundred characters
+fn width none
+  err "a slice inside the string answered none"
+
+fn width x
+  length x
 
 fn walk 0 acc
   print acc

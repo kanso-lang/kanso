@@ -47,7 +47,7 @@ fn walking site _ names true
   over_pages site names
 
 fn walking site at names false
-  asset = assets[at]
+  asset = present assets[at]
   source = path/join site asset
   os/exists source .> (there -> one_asset site at names asset source there)
 
@@ -109,7 +109,7 @@ fn paging _ _ names _ true
   reported names 1
 
 fn paging pages at names site false
-  page = pages[at]
+  page = present pages[at]
   on = (raw -> one_page pages at names site page raw)
   os/read_file! page .> on
 
@@ -117,14 +117,8 @@ fn one_page pages at names site page raw
   fixed = references raw names 1
   written page raw fixed .> (_ -> page_loop pages (at + 1) names site)
 
-fn written _ _ e@(err _)
-  e
-
 fn written page _ fixed
   os/write_file page fixed
-
-fn references e@(err _) _ _
-  e
 
 fn references raw names at
   pointing raw names at (at > length names)
@@ -171,9 +165,6 @@ fn guarded c true
 
 fn guarded c false
   "\\{c}"
-
-fn guarded _ e@(err _)
-  e
 
 fn under dir
   os/list_dir dir .> (names -> walk_names dir names 1 [])
@@ -238,3 +229,10 @@ fn as_bytes raw:string
 
 fn as_bytes raw
   raw
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

@@ -5,7 +5,7 @@ fn classify s
   q = number_end cs 1
   digits = text/slice cs 1 (q - 1)
   floaty = mark_from cs 1 (q - 1)
-  if floaty "float64 {text/to_float digits}" "int {text/to_int digits}"
+  shown floaty digits
 
 fn is_number_char 43
   true
@@ -48,6 +48,12 @@ fn mark_step cs _ p q
 
 fn number_end cs p
   if (is_number_char cs[p]) (number_end cs (p + 1)) p
+
+fn shown _ none
+  err "no digits to read"
+
+fn shown floaty digits
+  if floaty "float64 {text/to_float digits}" "int {text/to_int digits}"
 
 print (classify "42")
   .> (_ -> print (classify "-17"))
