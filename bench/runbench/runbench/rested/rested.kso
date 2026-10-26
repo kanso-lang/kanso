@@ -1,0 +1,20 @@
+# A list walked by reading its first element and handing the rest on, with
+# `list/to_list (list/drop xs 1)`, the way most of this repository's scripts
+# walk their arguments, lines and names. Each rest is built afresh, so the
+# walk is quadratic in the list wherever it runs, and the build stepped
+# through the list one record at a time: natively 5,000 elements took 6.5
+# seconds, and the interpreter took 23.
+import "std/list"
+
+fn upto xs i n
+  return xs if i > n
+  upto (push xs i) (i + 1) n
+
+fn walked _ acc 0
+  acc
+
+fn walked xs acc n
+  walked (list/to_list (list/drop xs 1)) (acc + xs[1]) (n - 1)
+
+pub fn total n
+  walked (upto [] 1 n) 0 n

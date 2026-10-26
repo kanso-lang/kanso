@@ -1,0 +1,14 @@
+# `group_by` calls `tag` for each element, and `tag` calls into the library
+# itself. The failure comes after, inside `group_by`, which cannot file a
+# list under a key, so the line named is the one that called `group_by`, not
+# the one `tag` called from.
+import "std/list"
+import "std/text"
+
+fn tag x
+  [(text/trim " {x} ")]
+
+fn grouped xs
+  list/group_by xs tag
+
+pub play = print (grouped [1 2 3])

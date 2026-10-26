@@ -27,17 +27,17 @@
 # do not name.
 # measured-on glibc=2.39-0ubuntu8.9
 # measured-on clang=19.1.1
-jsonbench 557386433
-encodebench 2327386052
-oneshot 10034004
-basket 18214855
-widebench 28413165
-deepbench 197978249
-escapebench 40308401
-pendbench 155739092
-indexbench 1837249
-scanbench 274306
-digestbench 4122823
-readbench 4581998
-livebench 936013492
-runbench 847302475
+jsonbench 557387287
+encodebench 2335195960
+oneshot 10033544
+basket 18294810
+widebench 28605098
+deepbench 198242568
+escapebench 40308378
+pendbench 154123901
+indexbench 1837160
+scanbench 274245
+digestbench 4122972
+readbench 4583158
+livebench 938703709
+runbench 822286353

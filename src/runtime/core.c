@@ -611,6 +611,8 @@ static KValue k_partial_run(KClosure* p);
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps, void* body);
 KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
+static inline int k_map_has_gone(KMap* m);
+static void k_map_close_gone(KMap* m);
 
 /* The arena is a chain of blocks, newest first; allocation bumps in the head
    block. k_beat_boundary rewinds the chain to a snapshot taken on its first
@@ -751,6 +753,10 @@ static long long k_stat_put_mut_fast = 0;
 static long long k_stat_put_mut_grow = 0;
 static long long k_stat_push_mut_fast = 0;
 static long long k_stat_push_mut_slow = 0;
+/* Pairs `k_b_delete_mut` marked dead where they stand: the in-place delete's
+   presence. Printed only by a run that made one, so the many veins that
+   never delete in place read as they did before it existed. */
+static long long k_stat_delete_marks = 0;
 
 static void k_stats_dump(void);
 
@@ -822,6 +828,7 @@ static void k_stats_dump(void) {
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
     fprintf(stderr, "spare_peak_bytes=%lld\n", k_stat_spare_peak);
+    if (k_stat_delete_marks) fprintf(stderr, "delete_marks=%lld\n", k_stat_delete_marks);
     if (k_ahead_ran) {
         fprintf(stderr, "ahead_forced=%lld\nahead_dropped=%lld\n",
                 k_stat_ahead_forced, k_stat_ahead_dropped);
@@ -2703,6 +2710,9 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
+            /* the copy's header starts with no view, so it takes no dead
+               pairs with it */
+            if (k_map_has_gone(mp)) k_map_close_gone(mp);
             KMap* nm = k_copy_alloc(cp, sizeof(KMap));
             k_copy_map_put(p, nm);
             KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)));
@@ -2840,6 +2850,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
+            if (k_map_has_gone(mp)) k_map_close_gone(mp);
             if (!k_survives_x(mp->pairs, cp->mark)) {
                 long long cap = 2 * (mp->len ? mp->len : 1);
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
@@ -3593,11 +3604,29 @@ static long long k_itoa(char* buf, long long v);
 const char* k_site;
 int k_site_id;
 const char* k_deep_site;
+/* The program line that last called into the library and has not returned:
+   "<file>:<line>", set and put back around each such call (ruled on #2099). */
+const char* k_from;
+
+/* Whether "<fn> at <file>:<line>" names a library's file: the standard
+   library's `std/` or a hako fetched under `.hako/`, as
+   provenance::is_library_file says. */
+static int k_library_place(const char* spelled) {
+    const char* at = NULL;
+    for (const char* p = strstr(spelled, " at "); p; p = strstr(p + 1, " at ")) at = p;
+    if (!at) return 0;
+    const char* file = at + 4;
+    return strncmp(file, "std/", 4) == 0 || strstr(file, ".hako/") != NULL;
+}
 
 __attribute__((noreturn, noinline)) void k_died(void) {
     const char* site = k_site_now();
-    if (site)
-        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), site + strlen(site) + 1, k_c_off());
+    if (site) {
+        const char* spelled = site + strlen(site) + 1;
+        fprintf(stderr, "%s  failed in %s%s\n", k_c_dim(), spelled, k_c_off());
+        if (k_from && k_library_place(spelled))
+            fprintf(stderr, "%s  called from %s%s\n", k_c_dim(), k_from, k_c_off());
+    }
     exit(1);
 }
 

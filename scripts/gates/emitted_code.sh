@@ -25,13 +25,10 @@ strip_comments() { grep -v '^;' "$1"; }
 } > emitted.txt
 grep -v '^#' bench/emitted_golden.txt > emitted_want.txt
 
-# The other eight programs the same build step produces. Each has a cost
-# golden of its own and none was watched on this dimension, so the leak this
-# gate was built to catch could have happened in any of them unseen. They sit
-# in a second file so the decoder's history — which its comments are — stays
-# one series.
-for b in encodebench oneshot basket widebench deepbench escapebench pendbench scanbench \
-         indexbench digestbench readbench livebench runbench; do
+# The other programs the same build step produces. The leak this gate was
+# built to catch could happen in any of them. They sit in a second file so the
+# decoder's history, which its comments are, stays one series.
+for b in $(sh scripts/gates/benchmarks.sh | grep -vx jsonbench); do
   printf '%s defines=%s calls=%s branches=%s lines=%s\n' "$b" \
     "$(grep -c '^define' $b.ll)" "$(strip_comments $b.ll | grep -c 'call ')" \
     "$(grep -c '^  br \|^  switch' $b.ll)" "$(wc -l < $b.ll | tr -d ' ')"

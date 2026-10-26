@@ -1,2 +1,3 @@
 error[runtime]: net_read takes a connection
   failed in net/read at std/net/net.kso:30
+  called from net_read_takes_a_connection.kso:9

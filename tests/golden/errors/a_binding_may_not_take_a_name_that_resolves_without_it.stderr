@@ -1,4 +1,4 @@
-error[name]: `inc` is already a declaration; rename the binding
+error[name]: `inc` is already a declaration, at line 12; rename the binding
   --> a_binding_may_not_take_a_name_that_resolves_without_it.kso:15:10
   15 | fn shade inc
                 ^
