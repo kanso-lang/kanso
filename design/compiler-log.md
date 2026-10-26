@@ -1922,20 +1922,22 @@ Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
 that no longer fire; the ports carry hundreds; #2088's migration can now use
 the bang forms at reads that must succeed.
 
-CI's rows, against main at #2149. The checker loses the raise analysis, so
+CI's rows, against main at #2168. The checker loses the raise analysis, so
 compiling gets cheaper: `compile_instructions` reads 24,604,939,
 `entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
-`compile_allocs` 13,930. The interpreter no longer carries the raised bit:
+`compile_allocs` 13,930, and the front end holds less while it checks:
+`compile_peak_bytes` 607,213 -> 598,492, and `front_end_visits` reads 7,397
+where it read 7,373. The interpreter no longer carries the raised bit:
 `interp_instructions` 560,993,797, `interp_allocs` 630,584 and
 `interp_peak_bytes` 1,306,819. In the tab, `browser_compile_instructions`
-reads 339,955,918, `browser_compile_peak_bytes` 832,433 and
+reads 339,964,747, `browser_compile_peak_bytes` 832,433 and
 `browser_run_instructions` 61,425,132. The decoders lost their hand-back
 arms, so the emitter writes less: `emitted_lines` 14,150, `emitted_calls`
 1,519, `emitted_branches` 1,293, `emitted_other_lines` 168,876,
 `emitted_other_calls` 20,311, `emitted_other_branches` 17,723 and `text`
 5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,865
 and `codegen_instructions_release` to 371,551,519. `emit_instructions` rises
-to 5,689,680, 1,722 more; against main at #2162 it fell 491, and #2154's
+to 5,689,859, 1,722 more; against main at #2162 it fell 491, and #2154's
 fixpoints, which drop an entry as its check fails, sit between the two
 readings, so the rise is recorded unisolated. `emitted_defines` rises to 160
 and `emitted_other_defines` to 2,243 because `json/decode!` and the bang
@@ -1954,3 +1956,17 @@ std/testing to read its own failure, and the import costs six allocations of
 and `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
 `an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
 and reads 3 allocs and 112 bytes.
+
+The ratchet found two rows that prove nothing. `a chain callback's parameter
+seeded as never failing` made inference seed a rescue or annotate callback's
+parameter without the failure bit; a callback is now handed the err out of
+its box, an ordinary value, so the seed protects nothing and the row and its
+mutation are gone. Seeding the parameter as never failing is now correct,
+and is an open lead. `an encoder that hands a clean string to the escape
+path anyway` repointed `escape_onto`'s clean-string arm, which lib/json's
+encoder has not called since strings went out through `append_string` in one
+call (197f172b), so the row was blind on main too and was only rerun here
+because this branch touches lib/json. Its mutation now makes the encoder
+copy each string before it writes it: livebench writes the same bytes and
+the live vein reads 858,314 allocations where it reads 8,314. `escape_onto`
+and its two helpers are dead in the library.
