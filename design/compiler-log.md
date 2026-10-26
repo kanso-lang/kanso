@@ -1942,24 +1942,23 @@ with it and 822,287,654 with it reading nothing, a column of 15,536,568
 (1.85%). The run program's allocation vein moves with it. Welfare re-bases
 each moved term once CI's rows are in, so the fix scores as a rise.
 
-CI's rows, against main at #2149. `work_runbench` reads 837,824,388,
-15,538,035 more, and the welfare term `run_instructions` is re-based to it
-so the fix scores as a rise. The allocation vein moves with the three loops:
-`run_alloc_bytes` 282,790,202, `run_allocs` 1,596,593, `run_arena_blocks` 5,
-`run_arena_peak_bytes` 5,767,184, `run_spare_peak_bytes` 3,670,032,
-`run_beat_iters` 192,274, `run_bytes_malloc` 13,923, `run_evac_allocs`
-1,744, `run_evac_bytes` 4,635,024, `run_perm_allocs` 106, `run_sh_str`
-21,455,984, `run_str_scan_bytes` 18,358,325 and `run_str_scans` 1,888, and
-the welfare term `run_peak_bytes` is re-based to 7,882,897. The emitter
-writes the new module into the run program: `emitted_other_defines` 2,253,
-`emitted_other_calls` 20,692, `emitted_other_branches` 18,040,
-`emitted_other_lines` 171,030, and `text` 5,701,471, the run program's own
-819,681. The interpreted corpus reads `interp_instructions` 580,418,637,
-`interp_allocs` 652,700 and `interp_peak_bytes` 1,335,167, and the tab
-compiles and runs it: `browser_compile_instructions` 349,456,400,
-`browser_compile_peak_bytes` 846,721, `browser_run_instructions` 64,279,824
-and `browser_run_peak_bytes` 2,621,440, a page more for the copies. Those
-welfare terms are re-based to these readings too.
+CI's rows, against main at #2165. work_runbench reads 821,243,366 ->
+836,794,013 with the phase, and its allocation vein moves with the three
+loops: run_alloc_bytes 223,916,952 -> 282,819,050, run_allocs 1,581,593 ->
+1,596,597, run_arena_blocks 4 -> 5, run_arena_peak_bytes 4,718,608 ->
+5,767,184, run_spare_peak_bytes 2,621,456 -> 3,670,032, run_beat_iters
+178,072 -> 193,074, run_bytes_malloc 7,924 -> 13,926, run_evac_allocs 1,732
+-> 1,744, run_evac_bytes 4,602,176 -> 4,635,024, run_perm_allocs 103 -> 106,
+run_sh_str 16,769,952 -> 21,455,984, run_str_scan_bytes 18,352,322 ->
+18,358,325 and run_str_scans 1,885 -> 1,888. The interpreted corpus reads
+interp_instructions 562,047,199 -> 579,993,703, interp_allocs 631,738 ->
+653,569 and interp_peak_bytes 1,328,317 -> 1,339,129, and the tab compiles
+and runs it: browser_compile_instructions 348,471,187 -> 353,823,116,
+browser_compile_peak_bytes 843,030 -> 847,565, browser_run_instructions
+61,478,759 -> 64,252,748 and browser_run_peak_bytes 1,572,864 -> 2,621,440,
+a page more for the copies. Under the corpus-first gavel each moved welfare
+term's baseline is scaled so its ratio to what it reads holds, so the phase
+leaves welfare where it was and the fix below scores as a rise.
 
 ## 2026-10-26 — a builder handed on round a cycle is still a builder
 
@@ -2001,3 +2000,29 @@ fixtures move too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes`
 `a_split_stops_where_the_separator_does` reads 24,487 (from 24,639), and
 undoing either the argument change or the count change puts part of that
 back.
+
+CI's rows, against #2171's phase on main at #2165. The run program reads
+work_runbench 836,794,013 -> 825,009,976, 3,766,610 above main without the
+phase, which is the three loops' linear work. The interpreted corpus reads
+interp_instructions 579,993,703 -> 577,237,316: at 1,500 steps the copies
+were 2,756,387 of the phase's 17,946,504, and `tagged` now grows linearly on
+the interpreter as well, 0.04 s at 20,000 steps and 0.11 s at 80,000 where
+main takes 0.12 s and 1.25 s. interp_allocs reads 653,378 and interp_peak_bytes 1,356,556. Natively the run
+vein falls to run_alloc_bytes 224,043,124, run_allocs 1,582,921,
+run_bytes_malloc 7,850, run_evac_bytes 4,602,208 and run_sh_str 16,816,384,
+while run_beat_iters reads 193,074, run_perm_allocs 106, run_str_scan_bytes
+18,358,325 and run_str_scans 3,387, a scan per lap where the copy used to
+stand. regexp's argument change moves work_scanbench 274,220 -> 266,360 and
+work_digestbench 4,122,972 -> 4,103,700, and their veins with it:
+scan_allocs 149 -> 91, scan_alloc_bytes 11,069 -> 8,934, digest_allocs
+7,194 -> 7,051 and digest_alloc_bytes 697,073 -> 692,506. The three
+analyses cost the front end a little: compile_instructions 24,864,430 ->
+24,873,029, entry_instructions 73,696,160 -> 73,712,018,
+library_instructions 73,344,720 -> 73,349,447 and emit_instructions
+5,703,136 -> 5,715,797, and the tab's browser_compile_instructions reads
+353,650,925, browser_compile_peak_bytes 847,746 and browser_run_instructions
+64,598,033. The emitted rows grow
+with the new module: emitted_other_defines 2,262 -> 2,276,
+emitted_other_calls 20,540 -> 20,700, emitted_other_branches 17,831 ->
+17,925, emitted_other_lines 170,150 -> 171,135 and text 5,622,043 ->
+5,624,571. Welfare rises 95.52 -> 95.55 and is banked.
