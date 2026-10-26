@@ -30,7 +30,13 @@ pub play = print \"sum {climbed 1 20 0} {mapped} {read}\"
 
 mapped = list/sum (list/map [1 2 3] doubled)
 
-read = length (json/decode \"[1, \\\"a\\\\n\\\"]\")
+read = size_of (json/decode \"[1, \\\"a\\\\n\\\"]\")
+
+fn size_of none
+  err \"the document is not json\"
+
+fn size_of v
+  length v
 
 fn doubled x
   x * 2

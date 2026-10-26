@@ -1,36 +1,40 @@
+error[exhaustive]: this can be a none and `print` does not take one — resolve it here
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:28:25
+  28 |   .> (_ -> print os/args[1])
+                               ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:35:20
-  35 |   >> print (length loaded)
-                          ^
-error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:34:21
-  34 |   >> print (length (load "flavors.txt"))
-                           ^
-error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:33:21
-  33 |   >> print (length (os/read_file "flavors.txt"))
-                           ^
-error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:30:13
-  30 |   >> print (math/random 6 == 3)
-                   ^
-error[effect]: this is an effect — a box the words open — and an index takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:29:12
-  29 |   >> print os/args[1]
-                  ^
-error[effect]: this is an effect — a box the words open — and `if` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:28:16
-  28 |   >> print (if os/args 1 2)
-                      ^
-error[effect]: this is an effect — a box the words open — and `told` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:27:19
-  27 |   >> print (told (math/random 2))
-                         ^
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:24:26
+  24 | pub play = print (length os/args)
+                                ^
 error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:26:13
-  26 |   >> print (math/random 6 + 1)
-                   ^
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:25:19
+  25 |   .> (_ -> print (math/random 6 + 1))
+                         ^
+error[effect]: this is an effect — a box the words open — and `told` takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:26:25
+  26 |   .> (_ -> print (told (math/random 2)))
+                               ^
+error[effect]: this is an effect — a box the words open — and `if` takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:27:22
+  27 |   .> (_ -> print (if os/args 1 2))
+                            ^
+error[effect]: this is an effect — a box the words open — and an index takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:28:18
+  28 |   .> (_ -> print os/args[1])
+                        ^
+error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:29:19
+  29 |   .> (_ -> print (math/random 6 == 3))
+                         ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:25:17
-  25 |   print (length os/args)
-                       ^
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:32:27
+  32 |   .> (_ -> print (length (os/read_file "flavors.txt")))
+                                 ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:33:27
+  33 |   .> (_ -> print (length (load "flavors.txt")))
+                                 ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> tests/golden/errors/a_box_where_a_value_is_expected.kso:34:26
+  34 |   .> (_ -> print (length loaded))
+                                ^

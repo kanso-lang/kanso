@@ -28,4 +28,11 @@ import "std/text"
 
 message = "the quick brown fox jumps over the lazy dog."
 
-pub play = print (text/slice (sha256/hex (text/bytes message)) 1 16)
+# a digest's hex is 64 characters
+fn present none
+  err "the head of the digest answered none"
+
+fn present s
+  s
+
+pub play = print (present (text/slice (sha256/hex (text/bytes message)) 1 16))

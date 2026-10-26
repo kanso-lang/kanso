@@ -12,6 +12,13 @@ fn shown none
 fn shown s
   "{length s} [{s}]"
 
+# the whole of a string is inside it, so a none here is a bug
+fn whole none
+  err "the whole of a string answered none"
+
+fn whole s
+  length s
+
 fn grown _ 0 acc
   text/join acc ""
 
@@ -28,10 +35,10 @@ three = text/join [(repeated "€" 100) "abc"] ""
 four = text/join ["abc" (repeated "😀" 100) "z"] ""
 
 lines = [
-  "two, the whole: {length (text/slice two 1 102)}"
+  "two, the whole: {whole (text/slice two 1 102)}"
   "two, the tail: {shown (text/slice two 99 102)}"
   "two, a middle: {shown (text/slice two 66 67)}"
-  "three, the whole: {length (text/slice three 1 103)}"
+  "three, the whole: {whole (text/slice three 1 103)}"
   "three, the tail: {shown (text/slice three 99 103)}"
   "three, past the end: {shown (text/slice three 99 104)}"
   "four, the tail: {shown (text/slice four 101 104)}"

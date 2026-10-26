@@ -1,13 +1,18 @@
 # `parts?` hands text/split a none, a slice that starts past the end, and the
 # split fails inside std/text. The report names std/text's file and line,
-# and under it the line of this file that called in.
+# and under it the line of this file that called in. The slice rides in a
+# record's field, whose answer the checker does not know, so the none
+# reaches the split at run time.
 import "std/list"
 import "std/text"
+
+type held
+  value
 
 test_positive = list/all? [1 2] (n -> n > 0)
 
 test_parts = list/all? ["ab" "cd"] parts?
 
 fn parts? s
-  rest = text/slice s 5 (length s)
-  length (text/split rest ", ") > ident 0
+  h = held (text/slice s 5 (length s))
+  length (text/split h.value ", ") > ident 0

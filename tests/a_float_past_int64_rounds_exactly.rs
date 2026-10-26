@@ -38,8 +38,10 @@ fn staged(tag: &str, literal: &str) -> PathBuf {
         format!(
             "import \"std/math\"\nimport \"std/os\"\nimport \"std/text\"\n\n\
              fn shown z\n  p = inside (text/slice \"x\" 1 z)\n  \
-             f = text/to_float (text/join [\"{literal}\" p] \"\")\n  \
+             f = number (text/to_float (text/join [\"{literal}\" p] \"\"))\n  \
              \"{{math/round f}}\"\n\n\
+             fn number none\n  err \"the literal is not a number\"\n\n\
+             fn number x\n  x\n\n\
              fn inside none\n  \"\"\n\n\
              fn inside s\n  s\n\n\
              pub play = os/args .> (a -> print (shown (length a)))\n"
