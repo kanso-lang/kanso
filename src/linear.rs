@@ -2306,27 +2306,29 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
 }
 
 /// Every mention of `name` in `e` that is not the head of an application of
-/// exactly `arity` arguments — a bare reference, or a partial application.
+/// exactly `arity` arguments, or of another count a group of `name` is
+/// declared at — a bare reference, or a partial application.
 ///
 /// This was `escapes_as_value`'s inner walk until 2026-09-16, and it is kept as
 /// the reference `Mentions` is checked against: the index is the same answer
 /// read off one pass, and the spec below runs both over the programs this
-/// repository actually compiles.
+/// repository actually compiles. `declared` joined it on 2026-10-26, when a
+/// call to another group of the same name stopped counting as an escape.
 #[cfg(test)]
-fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
+fn mentioned_as_value(e: &Expr, name: &str, arity: usize, declared: &[usize]) -> bool {
     if let Expr::Ident(n, _, _) = e {
         return n == name;
     }
     if let Expr::App { head, args, .. } = e {
-        let called =
-            matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity;
+        let called = matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
+            && (args.len() == arity || declared.contains(&args.len()));
         let escaping_head = match called {
             true => false,
-            false => mentioned_as_value(head, name, arity),
+            false => mentioned_as_value(head, name, arity, declared),
         };
-        return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity));
+        return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity, declared));
     }
-    child_exprs(e).any(|c| mentioned_as_value(c, name, arity))
+    child_exprs(e).any(|c| mentioned_as_value(c, name, arity, declared))
 }
 
 /// The hand-over being asked about: which group, at which arity, at which
@@ -2966,12 +2968,14 @@ mod tests {
 
     /// The walk this replaced, asked the way `escapes_as_value` asked it.
     fn walked(program: &Program, name: &str, arity: usize) -> bool {
+        let declared: Vec<usize> =
+            program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
         program.fns.iter().any(|d| {
             d.body.iter().any(|s| {
                 let e = match s {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
-                mentioned_as_value(e, name, arity)
+                mentioned_as_value(e, name, arity, &declared)
             })
         })
     }
