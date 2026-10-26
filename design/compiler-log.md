@@ -1861,26 +1861,35 @@ first group and hands it to the second:
 
 Natively, each hop copies the string built so far, so each loop costs the
 square of its length: 80,000 steps of `built` took 13.9 seconds, of `marked`
-11.4 and of `tagged` 2.3. The interpreter is linear on all three. The module
-is `bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
+11.4 and of `tagged` 2.3. The interpreter asks the same analysis and has the
+third cliff too, at 1.57 seconds for 80,000 steps of `tagged` against 0.10
+for 20,000, so `relayed 1500` joins the interpreted corpus: on this
+container it reads 580,418,637 with it and 563,943,189 with it reading
+nothing, a column of 16,475,448 (2.84%). The run program's module is
+`bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
 1,500 for the third. On this container the run program reads 837,824,222
 with it and 822,287,654 with it reading nothing, a column of 15,536,568
 (1.85%). The run program's allocation vein moves with it. Welfare re-bases
 each moved term once CI's rows are in, so the fix scores as a rise.
 
-CI's rows, against main at #2154. `work_runbench` reads 837,824,388,
-15,538,035 more, and the welfare term `run_instructions` is re-based to it so
-the fix scores as a rise. The allocation vein moves with the three loops:
+CI's rows, against main at #2149. `work_runbench` reads 837,824,388,
+15,538,035 more, and the welfare term `run_instructions` is re-based to it
+so the fix scores as a rise. The allocation vein moves with the three loops:
 `run_alloc_bytes` 282,790,202, `run_allocs` 1,596,593, `run_arena_blocks` 5,
 `run_arena_peak_bytes` 5,767,184, `run_spare_peak_bytes` 3,670,032,
-`run_beat_iters` 192,274, `run_bytes_malloc` 13,923, `run_evac_allocs` 1,744,
-`run_evac_bytes` 4,635,024, `run_perm_allocs` 106, `run_sh_str` 21,455,984,
-`run_str_scan_bytes` 18,358,325 and `run_str_scans` 1,888, and the welfare
-term `run_peak_bytes` is re-based to 7,882,897. The emitter writes the new
-module into the run program: `emitted_other_defines` 2,253,
+`run_beat_iters` 192,274, `run_bytes_malloc` 13,923, `run_evac_allocs`
+1,744, `run_evac_bytes` 4,635,024, `run_perm_allocs` 106, `run_sh_str`
+21,455,984, `run_str_scan_bytes` 18,358,325 and `run_str_scans` 1,888, and
+the welfare term `run_peak_bytes` is re-based to 7,882,897. The emitter
+writes the new module into the run program: `emitted_other_defines` 2,253,
 `emitted_other_calls` 20,692, `emitted_other_branches` 18,040,
 `emitted_other_lines` 171,030, and `text` 5,701,471, the run program's own
-819,681.
+819,681. The interpreted corpus reads `interp_instructions` 580,418,637,
+`interp_allocs` 652,700 and `interp_peak_bytes` 1,335,167, and the tab
+compiles and runs it: `browser_compile_instructions` 349,456,400,
+`browser_compile_peak_bytes` 846,721, `browser_run_instructions` 64,279,824
+and `browser_run_peak_bytes` 2,621,440, a page more for the copies. Those
+welfare terms are re-based to these readings too.
 
 ## 2026-10-26 — a builder handed on round a cycle is still a builder
 

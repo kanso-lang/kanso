@@ -109478,3 +109478,25 @@ pins the refusal; main fails both.
 The module path now counts, per name, which files declare it. The rows are
 counted with the batch this landed in, at the end of "an import stays in the
 file that writes it".
+
+## 2026-10-25 — a function's arms split across files are counted together
+
+From #2090, toml's port. A module's files share their declarations, and
+toml's `lookup` had a 2-argument arm in one file that called a 3-argument
+arm in the next. The per-file check counted only the arms in the file it was
+reading and refused the call with "no 3-argument arm of `lookup` (arms take
+2)". The same two arms in one file ran.
+
+The module path now records, for each function its files declare, whether
+more than one file declares arms of it, and the per-file arity check leaves
+such a name to the merged check, which sees every arm. A count no file's arms
+take is still refused there, and the message names every arity: "no
+4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
+said "arms take 2".
+
+`tests/arms_split_across_files.rs` runs toml's shape on both engines and
+pins the refusal; main fails both.
+
+The module path now counts, per name, which files declare it. The rows are
+counted with the batch this landed in, at the end of "an import stays in the
+file that writes it".
