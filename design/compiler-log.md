@@ -1793,19 +1793,24 @@ CI's rows, against #2156's phase. The run program reads work_runbench
 run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
 1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
 list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
-27,272 -> 27,249. The interpreter reads interp_instructions 554,451,443 ->
-523,165,714, interp_allocs 623,573 -> 581,304 and interp_peak_bytes
-1,288,124 -> 1,296,485. The tab's run reads browser_run_instructions
-63,054,006 -> 54,171,024 and browser_run_peak_bytes 2,490,368 -> 1,507,328.
+27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
+523,165,714 against the phase. Main at #2152 added `texts` to the
+interpreted corpus, so against main the interpreter's rows carry the phase
+and its fix together: interp_instructions 564,058,857 -> 565,857,214,
+interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
+1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
+61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
 
-The longer std/list and the builtin cost every compile: compile_instructions
-24,735,836 -> 25,145,388, entry_instructions 72,954,229 -> 73,775,544,
-library_instructions 72,625,200 -> 73,444,678, compile_allocs 13,836 ->
-14,025, module_visits 1,368 -> 1,460, emit_instructions 5,655,925 ->
-5,698,157, codegen_instructions_dev 116,477,304 -> 116,483,659,
-codegen_instructions_release 370,206,363 -> 370,222,776,
-browser_compile_instructions 344,866,301 -> 349,801,935 and
-browser_compile_peak_bytes 806,972 -> 813,673. Every benchmark's machine
+The longer std/list and the builtin cost every compile. Against main at
+#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
+72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
+compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
+emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
+116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
+370,222,776. The tab compiles the corpus with `rested` in it as well, so
+its compile rows carry the phase too: browser_compile_instructions
+344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
+839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
 code carries the new runtime function, about 704 bytes each: text
 5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
 two programs that never drop read work_encodebench 2,327,386,052 ->
@@ -1814,4 +1819,4 @@ emitted lines of the drop's new arms land at emitted_other_lines 168,907,
 emitted_other_branches 17,946, emitted_other_calls 20,494 and
 emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
 list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
-Welfare rises 95.22 -> 95.35 and the rise is banked.
+Welfare rises 95.24 -> 95.37 and the rise is banked.
