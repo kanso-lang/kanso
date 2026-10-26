@@ -1784,4 +1784,17 @@ micro, natively), and the interpreter writing at the wrong position (the
 micro, interpreted). Appendix B's `put` entry gains the list signature and a
 sample.
 
-CI's rows: ROWS.
+CI's rows, against main at #2160. The runtime's machine code grows by
+`k_list_put` and the two puts' list arms, 752 bytes in every benchmark binary:
+text 5,679,729 -> 5,690,257. The interpreter reads interp_instructions
+565,857,214 -> 565,868,501, its `put` arm asking first whether it holds a
+list, and interp_allocs 628,011 -> 628,003. The tab reads
+browser_run_instructions 61,465,433 -> 61,508,652 and
+browser_compile_instructions 359,922,521 -> 359,923,093. The rest move by
+layout: compile_instructions 25,156,620 -> 25,156,569, entry_instructions
+73,811,997 -> 73,811,949, library_instructions 73,482,762 -> 73,482,714,
+codegen_instructions_dev 116,504,899 -> 116,505,396,
+codegen_instructions_release 370,158,521 -> 370,153,673, and among the
+benchmarks basket 18,266,806, runbench 822,288,845, encodebench
+2,327,387,586, livebench 936,013,844, oneshot 10,034,013 and readbench
+4,581,975. Welfare holds at 95.38 and is banked.
