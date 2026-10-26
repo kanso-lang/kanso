@@ -19,6 +19,16 @@ fn or_zero none
 fn or_zero c
   c
 
+# `k` is one of the map's own keys
+fn size_at m k
+  sized m[k]
+
+fn sized none
+  err "a key of the map answered none"
+
+fn sized inner
+  length inner
+
 fn bump m a b
   inner = or_map m[a]
   put m a (put inner b (or_zero inner[b] + 1))
@@ -88,7 +98,7 @@ pub play =
   base = { 0:{} }
   copy = other (put {} 0 base[0]) 3 3
   tally = counted {} 40 40
-  sizes = list/to_list (list/map (keys tally) (k -> length tally[k]))
+  sizes = list/to_list (list/map (keys tally) (k -> size_at tally k))
   print "{shared} {two}"
   print "{x} {held} {base} {copy}"
   print (seen {} [] 4)

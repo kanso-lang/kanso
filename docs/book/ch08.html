@@ -357,7 +357,7 @@ err at 1: unexpected character `?`</code></pre>
   q <span class="o">=</span> <span class="f">number_end</span> cs <span class="n">1</span>
   digits <span class="o">=</span> <span class="f">text/slice</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
   floaty <span class="o">=</span> <span class="f">mark_from</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
-  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{text/to_float digits}</span>"</span> <span class="s">"int <span class="i">{text/to_int digits}</span>"</span>
+  <span class="f">shown</span> floaty digits
 
 <span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">43</span>
   <span class="f">true</span>
@@ -400,6 +400,12 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">number_end</span> cs p
   <span class="f">if</span> (<span class="f">is_number_char</span> cs[p]) (<span class="f">number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="k">fn</span> <span class="f">shown</span> _ none
+  <span class="f">err</span> <span class="s">"no digits to read"</span>
+
+<span class="k">fn</span> <span class="f">shown</span> floaty digits
+  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{text/to_float digits}</span>"</span> <span class="s">"int <span class="i">{text/to_int digits}</span>"</span>
 
 <span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>))
@@ -676,7 +682,14 @@ test_roundtrip ... ok
 hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span class="s">"0123456789abcdef"</span>
 
 <span class="k">fn</span> <span class="f">hex_code</span> n
-  hex_byte_table[n <span class="o">+</span> <span class="n">1</span>]
+  <span class="f">hex_digit_of</span> hex_byte_table[n <span class="o">+</span> <span class="n">1</span>]
+
+<span class="c"># `n` is a nibble, so the read is inside the table and a none is a bug</span>
+<span class="k">fn</span> <span class="f">hex_digit_of</span> none
+  <span class="f">err</span> <span class="s">"a nibble outside 0 to 15"</span>
+
+<span class="k">fn</span> <span class="f">hex_digit_of</span> b
+  <span class="f">b</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   bell <span class="o">=</span> <span class="f">text/from_code</span> <span class="n">7</span>

@@ -1,0 +1,7 @@
+# `push` takes a list first. A lenient read can answer none, and bound to a
+# name it is refused as it is written in place (#2088).
+fn grown rows
+  row = rows[3]
+  push row 1
+
+pub play = print "{grown [[1] [2]]}"

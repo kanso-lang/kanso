@@ -800,7 +800,7 @@ fn sweeping _ _ found after true
   after found
 
 fn sweeping all at found after false
-  k = all[at]
+  k = present all[at]
   judged k (fault -> swept all (at + 1) (kept found k fault) after)
 
 fn kept found _ ""
@@ -850,3 +850,10 @@ fn ending false
   os/exit 1
 
 pub play = swept cases 1 [] (wrong -> then_known wrong)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost a case it had counted"
+
+fn present x
+  x

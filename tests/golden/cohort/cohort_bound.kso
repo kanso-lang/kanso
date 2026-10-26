@@ -12,6 +12,13 @@ fn pick n
 
 fn report text
   doc = json/decode text
-  print "held {length doc}"
+  print "held {size_of doc}"
+
+# escapes.json is this repository's own document
+fn size_of none
+  err "escapes.json is not json"
+
+fn size_of v
+  length v
 
 pick 1

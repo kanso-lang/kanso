@@ -36,8 +36,15 @@ fn onward _ found true
 
 fn onward items found false
   more = list/to_list (list/drop items 1)
-  x = items[1]
+  x = present items[1]
   ran x .> (v -> swept more (noted found (judged x v)))
+
+# `onward` reads the first item of a list it knows is not empty
+fn present none
+  err "an item of a list that is not empty answered none"
+
+fn present x
+  x
 
 pub play = swept ["a" "b"] [] .> told
 

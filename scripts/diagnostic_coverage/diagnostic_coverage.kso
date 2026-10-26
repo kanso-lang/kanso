@@ -188,7 +188,7 @@ fn keeping s piece true
 # order, on one line — specificity the leading run could not reach because it
 # threw the rest away.
 fn shape_of lit
-  unescaped = (text/split lit "\\")[1]
+  unescaped = present (text/split lit "\\")[1]
   squeezed (rejoined (text/split unescaped "\{"))
 
 fn rejoined parts
@@ -575,7 +575,7 @@ fn onward_test _ parts true
 
 fn onward_test names parts false
   rest = list/to_list (list/drop names 1)
-  name = names[1]
+  name = present names[1]
   read_test name (source? name) rest parts
 
 fn read_test _ false rest parts
@@ -774,3 +774,10 @@ fn settled _
   os/exit 1
 
 pub play = sources_of "src" [] .> (found -> gathered found)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x
