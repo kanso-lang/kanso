@@ -1884,3 +1884,17 @@ is `bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
 with it and 822,287,654 with it reading nothing, a column of 15,536,568
 (1.85%). The run program's allocation vein moves with it. Welfare re-bases
 each moved term once CI's rows are in, so the fix scores as a rise.
+
+CI's rows, against main at #2154. `work_runbench` reads 837,824,388,
+15,538,035 more, and the welfare term `run_instructions` is re-based to it so
+the fix scores as a rise. The allocation vein moves with the three loops:
+`run_alloc_bytes` 282,790,202, `run_allocs` 1,596,593, `run_arena_blocks` 5,
+`run_arena_peak_bytes` 5,767,184, `run_spare_peak_bytes` 3,670,032,
+`run_beat_iters` 192,274, `run_bytes_malloc` 13,923, `run_evac_allocs` 1,744,
+`run_evac_bytes` 4,635,024, `run_perm_allocs` 106, `run_sh_str` 21,455,984,
+`run_str_scan_bytes` 18,358,325 and `run_str_scans` 1,888, and the welfare
+term `run_peak_bytes` is re-based to 7,882,897. The emitter writes the new
+module into the run program: `emitted_other_defines` 2,253,
+`emitted_other_calls` 20,692, `emitted_other_branches` 18,040,
+`emitted_other_lines` 171,030, and `text` 5,701,471, the run program's own
+819,681.
