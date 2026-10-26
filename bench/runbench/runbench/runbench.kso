@@ -286,7 +286,7 @@
 # `lasted` reads its list's last element on every step with `list/last`,
 # which folds the whole list to find it, so the loop costs the square of the
 # list.
-
+#
 # One more joined on 2026-10-26, measured on main at kanso#2154 before its
 # fix. Its column is the whole program with it, 837,824,222, less the whole
 # with it reading nothing, 822,287,654, and its share is of the former.
@@ -394,6 +394,7 @@ bucketed_numbers = 2000
 rested_items = 500
 
 lasted_items = 800
+
 relayed_steps = 3000
 
 fn decoded _ 0 sofar
