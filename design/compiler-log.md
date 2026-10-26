@@ -1956,3 +1956,17 @@ std/testing to read its own failure, and the import costs six allocations of
 and `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
 `an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
 and reads 3 allocs and 112 bytes.
+
+The ratchet found two rows that prove nothing. `a chain callback's parameter
+seeded as never failing` made inference seed a rescue or annotate callback's
+parameter without the failure bit; a callback is now handed the err out of
+its box, an ordinary value, so the seed protects nothing and the row and its
+mutation are gone. Seeding the parameter as never failing is now correct,
+and is an open lead. `an encoder that hands a clean string to the escape
+path anyway` repointed `escape_onto`'s clean-string arm, which lib/json's
+encoder has not called since strings went out through `append_string` in one
+call (197f172b), so the row was blind on main too and was only rerun here
+because this branch touches lib/json. Its mutation now makes the encoder
+copy each string before it writes it: livebench writes the same bytes and
+the live vein reads 858,314 allocations where it reads 8,314. `escape_onto`
+and its two helpers are dead in the library.
