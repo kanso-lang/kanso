@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-24 — kq under the pin to 29dafd0f
-
-kq's instruction rows rose when its pin moved to 29dafd0f, the string index
-and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
-path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
-CI runs on two different CPUs read the same four rows, and building kq here
-with kanso before and after #2077 gives the same rise within a few hundred.
-
-The rise is in kq's decoder, around the string scan. `Flat3_string_end`
-keeps an overflow-checked increment the earlier build folded into a `lea`,
-and `parse_string` keeps the same check and a test of a constant zero. The
-IR kanso emits for kq is the same under both pins, apart from the
-declarations #2077 retyped, so the folds are lost in the hot unit or at the
-link. Every `find2` site in kq is inlined since #2077, where 13 were calls
-before.
-
-Measured and set aside: the two scanners without `always_inline`. The link
-then left 6 calls, and kq read print_small 26,132,733 and path_small
-10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
-forced inlining is not what costs kq. The cause is not isolated.
-
 ## 2026-10-24 — a chain built from the left runs past the beat stack
 
 The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
@@ -1787,3 +1766,20 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-26 — a refused binding names the line its name is declared on
+
+The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
+asks the refusal to name the declaration it collides with. One declared in
+another file of the module was already named, with its file and line, since
+de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
+A collision inside one file still said only "`greet` is already a
+declaration", so the reader had to find it. It now says "`greet` is already
+a declaration, at line 1". A name no file declares, such as `length` from
+the library or `done`, keeps the message without a line.
+
+`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
+carry the new line, as does appendix A's panel. Adding a space to the message
+turns both red.
+
+CI's rows: ROWS.
