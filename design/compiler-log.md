@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-25 — a field is read without importing its owner, on every path
-
-From #2090, regex's port. Chapter 03 says nothing has to be imported to read
-a field, and the 2026-10-12 gavel on #1894 says a value carries the arms its
-type's owner wrote, a field of a parameter included. A module `u` that
-imports nothing and reads `h.start` and `h.end` on a value module `m` built
-was refused on check, run and run --interp with "no record type has a field
-`start` (module u)": the module was checked alone before the program that
-imports it, and no type it could see declares the field.
-
-A library compile now leaves to the program a field read on one of the
-function's parameters when no type the library can see declares the field,
-as it leaves a call on a handed value that only another module writes. The
-same holds for two fields read on one parameter when one of them is unseen.
-A read on any other value, a local built from a visible type say, is refused
-where it is written, as before, and so is a parameter read for fields that
-visible types each declare but none holds together. The root (an entry, a
-play file, a test file) refuses a field no type in the whole program
-declares.
-
-`tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
-(main refuses it) and pins the root's refusal of a misspelt field.
-
-A library's field reads reach the root already rewritten into calls on their
-readers, so the root now asks a reader's call the same question.
-`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
-file and line, now said by the root. The root quotes no line from another
-file, as it does for every diagnostic about one, and the dependency's
-`(module deep)` suffix goes with the dependency's check.
-
 ## 2026-10-25 — an import stays in the file that writes it
 
 From #2090, xsv's port. A module's file `join.kso` declared a private
@@ -1845,6 +1815,26 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
 
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
+
 ## 2026-10-26 — an err is born boxed
 
 The build of the #2087 gavel. `err "…"` and every builtin that fails answer
@@ -1902,20 +1892,22 @@ Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
 that no longer fire; the ports carry hundreds; #2088's migration can now use
 the bang forms at reads that must succeed.
 
-CI's rows, against main at #2154. The checker loses the raise analysis, so
+CI's rows, against main at #2168. The checker loses the raise analysis, so
 compiling gets cheaper: `compile_instructions` reads 24,604,939,
 `entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
-`compile_allocs` 13,930. The interpreter no longer carries the raised bit:
+`compile_allocs` 13,930, and the front end holds less while it checks:
+`compile_peak_bytes` 607,213 -> 598,492, and `front_end_visits` reads 7,397
+where it read 7,373. The interpreter no longer carries the raised bit:
 `interp_instructions` 560,993,797, `interp_allocs` 630,584 and
 `interp_peak_bytes` 1,306,819. In the tab, `browser_compile_instructions`
-reads 339,955,918, `browser_compile_peak_bytes` 832,433 and
+reads 339,964,747, `browser_compile_peak_bytes` 832,433 and
 `browser_run_instructions` 61,425,132. The decoders lost their hand-back
 arms, so the emitter writes less: `emitted_lines` 14,150, `emitted_calls`
 1,519, `emitted_branches` 1,293, `emitted_other_lines` 168,876,
 `emitted_other_calls` 20,311, `emitted_other_branches` 17,723 and `text`
-5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,878
-and `codegen_instructions_release` to 371,551,583. `emit_instructions` rises
-to 5,689,904, 1,722 more; against main at #2162 it fell 491, and #2154's
+5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,865
+and `codegen_instructions_release` to 371,551,519. `emit_instructions` rises
+to 5,689,859, 1,722 more; against main at #2162 it fell 491, and #2154's
 fixpoints, which drop an entry as its check fails, sit between the two
 readings, so the rise is recorded unisolated. `emitted_defines` rises to 160
 and `emitted_other_defines` to 2,243 because `json/decode!` and the bang
@@ -1934,6 +1926,20 @@ std/testing to read its own failure, and the import costs six allocations of
 and `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
 `an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
 and reads 3 allocs and 112 bytes.
+
+The ratchet found two rows that prove nothing. `a chain callback's parameter
+seeded as never failing` made inference seed a rescue or annotate callback's
+parameter without the failure bit; a callback is now handed the err out of
+its box, an ordinary value, so the seed protects nothing and the row and its
+mutation are gone. Seeding the parameter as never failing is now correct,
+and is an open lead. `an encoder that hands a clean string to the escape
+path anyway` repointed `escape_onto`'s clean-string arm, which lib/json's
+encoder has not called since strings went out through `append_string` in one
+call (197f172b), so the row was blind on main too and was only rerun here
+because this branch touches lib/json. Its mutation now makes the encoder
+copy each string before it writes it: livebench writes the same bytes and
+the live vein reads 858,314 allocations where it reads 8,314. `escape_onto`
+and its two helpers are dead in the library.
 
 ## 2026-10-26 — a none carried through a name is checked
 
