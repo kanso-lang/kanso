@@ -7,11 +7,11 @@
 # clean and dies at run time with "`+` is not defined for these values".
 set -e
 f=src/check/after_infer.rs
-grep -q 'if name == "effect" || name == "print") =>' src/check/after_infer.rs
-line='                        if name == "effect" || name == "print") =>'
+grep -q 'name == "print"' src/check/after_infer.rs
+line='                        if name == "effect" || name == "print" || name == "err") =>'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the hand-built box's arm moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                        if name == "effect" || name == "print") =>$/                        if name == "effect") =>/' "$f"
+sed -i 's/^                        if name == "effect" || name == "print" || name == "err") =>$/                        if name == "effect" || name == "err") =>/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi

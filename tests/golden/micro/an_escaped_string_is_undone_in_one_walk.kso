@@ -10,10 +10,10 @@ import "std/json"
 # escape and an escape JSON does not have go the long way, and a string that
 # runs out is refused where the walk ran out.
 fn read doc
-  rescue (json/decode doc) (e -> "{e.reason.reason} at {e.reason.position}")
+  json/decode! doc .? (e -> "{e.reason.reason} at {e.reason.position}")
 
 fn said s
-  print (read s)
+  read s .> print
 
 far = "a long value with an escape far from its start"
 

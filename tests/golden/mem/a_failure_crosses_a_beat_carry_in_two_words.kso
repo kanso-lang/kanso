@@ -15,10 +15,13 @@
 # `error[runtime]: `+` is not defined for these values` on native and
 # `stopped: end of input` on the interpreter. Both conversions now ask
 # first, and a failure comes out of the carry as the failure that went in.
+# It is this file's own, so std/testing's `when_failed` reads its reason.
 #
 # The record built for the carry is the reason `sh_rec` reads 64,000 here
 # and not 0: a thousand scans, sixty-four bytes each. A beat that could
 # stage the words themselves would not build them, and does not yet.
+import "std/testing"
+
 type parsed
   pos
   val
@@ -32,16 +35,10 @@ fn scan n
 fn step (parsed p v) acc
   walk (p - 1) (acc + v)
 
-fn step e@(err _) _
-  e
-
 fn walk n acc
   step (scan n) acc
 
-fn report e@(err _)
-  "stopped: {e.reason}"
+fn report reason
+  "stopped: {reason}"
 
-fn report total
-  "total {total}"
-
-pub play = print (report (walk 1000 0))
+pub play = print (testing/when_failed (walk 1000 0) report)

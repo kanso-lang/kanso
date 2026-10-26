@@ -145,6 +145,9 @@ fn onward todo count false
   c = todo[1]
   ran (shaped c.a c.b c.reader) .> (v -> reported rest count c v)
 
+fn reported _ _ none _
+  err "the walk lost a case it had counted"
+
 fn reported rest count c v
   told (named c.label v) .> (n -> swept rest (count + n))
 

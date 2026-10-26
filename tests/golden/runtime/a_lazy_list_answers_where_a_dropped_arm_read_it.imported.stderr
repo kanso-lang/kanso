@@ -1,3 +1,3 @@
 error[endpoint]: unhandled err reached the entry: ""0a" is not an integer"
-  born in text/to_int at std/text/text.kso:89
+  born in a_lazy_list_answers_where_a_dropped_arm_read_it/bad at a_lazy_list_answers_where_a_dropped_arm_read_it.kso:10
   passed through list/find ← list/fold_flat

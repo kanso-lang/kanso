@@ -8,7 +8,14 @@ import "std/text"
 # subject's own scan, the doublings that built it, and the ascii cache's
 # first sight of each of its three ascii bytes.
 fn walk s i n acc
-  if (i > n) acc (walk s (i + 1) n (acc + length s[i]))
+  if (i > n) acc (walk s (i + 1) n (acc + width s[i]))
+
+# `walk` stops at the subject's length
+fn width none
+  err "a character inside the subject answered none"
+
+fn width x
+  length x
 
 fn doubled s n
   wider s n (length s < n)

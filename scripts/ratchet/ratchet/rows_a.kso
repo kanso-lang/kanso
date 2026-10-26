@@ -58,27 +58,16 @@ clay_send_filed = row
   (breaking "a_send_to_clay_with_no_ledger_entry")
   no_setup
 
-# The 2026-09-15 ruling's third part: a raised err arriving where a value is
-# wanted does not compile. The mutation deletes the one call that asks, and
-# the three error fixtures that pin the refusal then compile clean, which the
+# A failure is a box (#2087), and a proven one where a value is read does not
+# compile. The mutation stops counting a failure as a box, and the error
+# fixture a_failure_where_a_value_is_expected then compiles clean, which the
 # error corpus reports as a golden holding a diagnostic nobody raised.
 raised_err = row
-  "a raised err reaching a value site that compiles"
+  "a proven failure reaching a value site that compiles"
   true
   "cargo test --release --test golden error_corpus"
   "specs (unit, golden, differential)"
   (breaking "a_raised_err_reaching_a_value_site_compiles")
-  no_setup
-
-# A name bound to a call that can raise carries the call's err into the
-# check (#1884). The mutation forgets it for locals and constants alike, and
-# the three error fixtures that bind the err first then compile clean.
-named_err = row
-  "a name that forgets the err of its call"
-  true
-  "cargo test --release --test golden error_corpus"
-  "specs (unit, golden, differential)"
-  (breaking "a_name_forgets_the_err_of_its_call")
   no_setup
 
 # A failure crossing a beat carry in the two-word record convention was boxed
@@ -140,18 +129,6 @@ hand_box = row
   (breaking "the_hand_built_box_answers_its_value_bare")
   release
 
-# A rescue or annotate callback is entered with the failure itself. The
-# emitter trusts inference for a group's entry guard, so a callback lambda
-# whose parameter is seeded as never failing costs native the guard on the
-# group it hands the err to, and the interpreter is the oracle that refuses.
-callback_err = row
-  "a chain callback's parameter seeded as never failing"
-  true
-  "cargo test --release --test golden micro_corpus_agrees_across_engines"
-  "specs (unit, golden, differential)"
-  (breaking "a_chain_callbacks_parameter_never_fails")
-  release
-
 # `xs[i]!` answers a box, the element or the missing-index err bubbling
 # through it, and the words are what open it (ruled 2026-09-16, reversing
 # the same morning's reading). The site walk refuses the box at an operator,
@@ -183,6 +160,15 @@ literal_bound = row
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "a_literal_list_of_unknown_length")
+  release
+
+# A third door: a bound handed down a loop as a list's length (kanso#2174).
+handed_length = row
+  "a length handed down a loop proving nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_length_handed_down_proves_nothing")
   release
 
 # A type name inside a shell is several names: `<g/cell>effect` holds one
@@ -361,11 +347,11 @@ oneshot_counters = row
 # copy in bench/encodebench would not move by an instruction, which is both why
 # that control is worth keeping and why this vein had to exist beside it.
 live_counters = row
-  "an encoder that hands a clean string to the escape path anyway"
+  "an encoder that copies each string before it writes it"
   true
   (gating "live_counters")
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_encoder_that_walks_a_clean_string")
+  (breaking "an_encoder_that_copies_each_string")
   benchmarks
 
 # The skip in front of a string's first escape landed on 2026-09-07 as a

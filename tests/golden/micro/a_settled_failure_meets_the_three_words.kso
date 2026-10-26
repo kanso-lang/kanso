@@ -1,5 +1,5 @@
 # `bind` and `rescue` on a subject that has already settled — no effect, so
-# every engine including the page runs this one. json's failure is foreign
+# every engine including the page runs this one. text's failure is foreign
 # here, which is what lets an ordinary arm name it.
 #
 # `rescue` reads the failure channel: it answers on the first line and stands
@@ -7,13 +7,14 @@
 # untouched. `bind` reads the value channel and hands the second line's
 # document to the same group.
 import "std/json"
+import "std/text"
 
 fn told (err r)
-  "rescued: {r.reason}"
+  "rescued: {r}"
 
 fn told v
   "decoded {length v} values"
 
-pub play = print (rescue (json/decode "[1, 2") told)
+pub play = print (rescue (text/to_bytes [999]) told)
   .> (_ -> print (bind (json/decode "[1, 2]") told))
   .> (_ -> print (rescue (json/decode "[1, 2]") told))

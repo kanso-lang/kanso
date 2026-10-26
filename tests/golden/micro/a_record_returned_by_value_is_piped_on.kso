@@ -1,8 +1,11 @@
 # `half` answers a two-field record or an err, and a record of that shape is
 # returned by value, as three words. `.>` hands it to `shown`, which takes it
-# apart with a pattern, and a failure passes by. The join after the two paths
-# wanted the three words boxed and was handed them bare, and the native build
-# stopped in clang. mustache's port wrote it this way.
+# apart with a pattern, and a failure passes by. The failure is this file's own,
+# so std/testing's `when_failed` is the one that reads it. The join after the
+# two paths wanted the three words boxed and was handed them bare, and the
+# native build stopped in clang. mustache's port wrote it this way.
+import "std/testing"
+
 type pair
   a
   b
@@ -16,11 +19,8 @@ fn half n
 fn shown (pair a b)
   "{a}/{b}"
 
-fn said e@(err _)
-  "failed: {e.reason}"
+fn said r
+  "failed: {r}"
 
-fn said s
-  s
-
-pub play = print (said (half 4 .> shown))
-  .> (_ -> print (said (half 0 .> shown)))
+pub play = print (half 4 .> shown)
+  .> (_ -> print (testing/when_failed (half 0 .> shown) said))

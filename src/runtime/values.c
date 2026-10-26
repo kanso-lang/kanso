@@ -653,7 +653,9 @@ KValue k_err(KValue reason, const char* origin) {
    so a re-raise never discards what it was told. */
 KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
     if (!k_not_failure(reason)) return reason;
-    if (original.tag != K_ERR) k_die("wrap_err takes a reason and the err it wraps");
+    /* a program hands it an err out of its box; annotate hands the box */
+    if (original.tag != K_ERRV && original.tag != K_ERR)
+        k_die("wrap_err takes a reason and the err it wraps");
     KErrBox* box =
         k_err_box_new(reason, k_origin_text(origin), origin, NULL, k_err_box(original), 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
@@ -835,13 +837,13 @@ KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
    deliberate hole in infectiousness beside `wrap_err`'s second argument. The
    dispatcher of a reader's getter calls this at its entry, before any arm,
    and only for an err; the interpreter's `err_read` is the oracle. */
-long long k_is_err(KValue v) { return v.tag == K_ERR; }
+long long k_is_err(KValue v) { return v.tag == K_ERRV; }
 KValue k_err_read(KValue v, const char* field) {
     KErrBox* box = k_err_box(v);
     if (field[0] == 'r') return box->reason;
     if (field[0] == 'c') {
         if (!box->cause) return k_none();
-        KValue out; out.tag = K_ERR; out.payload = k_ptr(box->cause); return out;
+        KValue out; out.tag = K_ERRV; out.payload = k_ptr(box->cause); return out;
     }
     if (!box->origin) return k_none();
     return k_str(box->origin);
@@ -849,6 +851,8 @@ KValue k_err_read(KValue v, const char* field) {
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
+/* a box: an effect, or a failure, which `err` makes boxed (#2087) */
+long long k_check_box(KValue v) { return v.tag == K_DESC || v.tag == K_ERR; }
 /* `int` is two tags, a word and a bignum, and an annotation accepts either. */
 long long k_check_int_type(KValue v) { return K_IS_INT(v); }
 /* A pattern's literal past a word: only a bignum can equal it, and the digits
@@ -2499,6 +2503,7 @@ static void k_render_into(KRenderBuf* b, KValue v, long long quote) {
         case K_NONE: k_rb_lit(b, "<none>"); return;
         case K_DONE: k_rb_lit(b, "<done>"); return;
         case K_ERR:
+        case K_ERRV:
             k_rb_lit(b, "err ");
             k_render_into(b, k_err_inner(v), 1);
             return;
@@ -2618,6 +2623,7 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_NONE: return k_str("<none>");
         case K_DONE: return k_str("<done>");
         case K_ERR: return k_render_whole(v);
+        case K_ERRV: return k_render_whole(v);
         case K_STR:
             if (!quote) return v;
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
@@ -2792,6 +2798,9 @@ static long long k_eq_rec(KValue a, KValue b) {
         KBytes* x = k_as_bytes(a); KBytes* y = k_as_bytes(b);
         return x->len == y->len && memcmp(x->data, y->data, x->len) == 0;
     }
+    /* an err out of its box equals another with an equal reason */
+    if (a.tag == K_ERRV && b.tag == K_ERRV)
+        return k_eq_rec(k_err_box(a)->reason, k_err_box(b)->reason);
     /* One numeric domain, which `<=` and `>=` already assert: both answer
        true for 1 and 1.0, and `<` answers false either way round because
        neither is strictly less. Equality was the one operator dissenting. A

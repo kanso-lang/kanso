@@ -1,8 +1,4 @@
-config missing 1
-config: config missing 2
-config missing 3
+to_bytes takes byte values (0-255)
 <none>
-cause: config missing 5
-boom
-wrapped
+to_bytes
 unexpected end of input

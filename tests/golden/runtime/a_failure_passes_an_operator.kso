@@ -1,0 +1,13 @@
+# `err` makes a box (#2087), and a box passes an operator untouched on its
+# way to the endpoint. `steeped` answers one on one arm and a number on the
+# other, so the checker cannot prove the box, and the program compiles; the
+# failure is what reaches the endpoint, never a number.
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+total = steeped 0 + 1
+
+pub play = print "{total}"

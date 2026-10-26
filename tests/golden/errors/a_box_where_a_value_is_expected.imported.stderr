@@ -1,3 +1,7 @@
+error[exhaustive]: this can be a none and `print` does not take one — resolve it here (module a_box_where_a_value_is_expected)
+  --> a_box_where_a_value_is_expected.kso:28:25
+  28 |   .> (_ -> print os/args[1])
+                               ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
   --> a_box_where_a_value_is_expected.kso:24:26
   24 | pub play = print (length os/args)

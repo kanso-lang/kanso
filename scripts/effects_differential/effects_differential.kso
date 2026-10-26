@@ -308,7 +308,7 @@ fn onward _ count true
   io/write "" .> (_ -> count)
 
 fn onward exprs count false
-  s = exprs[1]
+  s = present exprs[1]
   more = list/to_list (list/drop exprs 1)
   ran (shaped s.body)
     .> (v -> told (judged s v) .> (n -> swept more (count + n)))
@@ -343,3 +343,10 @@ fn reported n
   io/write "{n} wrong\n" .> (_ -> os/exit 1)
 
 pub play = begun (shaped "io/write \"\{1}\"" == sample)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost a probe it had counted"
+
+fn present x
+  x

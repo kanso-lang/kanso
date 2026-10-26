@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `push` does not take one — resolve it here
+  --> tests/golden/errors/a_none_reaches_push.kso:3:12
+   3 |   push rows[3] 1
+                  ^

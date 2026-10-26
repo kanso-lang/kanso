@@ -954,11 +954,11 @@ fn claimed? rows shifted n
 # it stand in for one is what the rule exists to stop. A minted counter is
 # out for a different reason: it has a direction and no baseline to aim it.
 fn weighed_up moves seen new_ones reb added att
-  worse = seen[1]
-  better = seen[2]
-  adrift = seen[3]
-  shifted = reb[1]
-  orphans = reb[2]
+  worse = present seen[1]
+  better = present seen[2]
+  adrift = present seen[3]
+  shifted = present reb[1]
+  orphans = present reb[2]
   owed = list/concat worse shifted
   quiet = list/to_list (list/select owed (m -> silent? added m))
   mute = list/to_list (list/reject orphans (k -> named_in? added k))
@@ -1155,3 +1155,10 @@ pure_regression = """
 """
 
 pub play = os/args .> (a -> started (base_of a))
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a tally the gate built answered none"
+
+fn present x
+  x

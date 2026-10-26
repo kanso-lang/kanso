@@ -3,22 +3,27 @@
 # The compiled engines answered the first failing argument, and `push` refused
 # a list that was not one before it looked at a failing item. Found by a
 # generated program on 2026-09-28.
+import "std/testing"
 import "std/text"
+
+fn boom what
+  return 0 if what == "zero"
+  err "\"{what}\" is not an integer"
 
 fn told none
   "none"
 
-fn told (err r)
-  "{r}"
+fn told e:<some>effect
+  testing/when_failed e (r -> "{r}")
 
 fn told x
   "kept {x}"
 
 fn failing n
-  no_map = text/to_int "m{n}"
-  no_list = text/to_int "l{n}"
-  bad = text/to_int "x{n}"
-  worse = text/to_int "y{n}"
+  no_map = boom "m{n}"
+  no_list = boom "l{n}"
+  bad = boom "x{n}"
+  worse = boom "y{n}"
   put_both = told (put no_map "a" bad)
   push_both = told (push no_list bad)
   slice_two = told (text/slice bad 1 worse)

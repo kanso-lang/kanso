@@ -1,11 +1,13 @@
-import "std/text"
-
 fn describe none
   "nothing"
 
 fn describe x
   "got {x}"
 
-steeps = ["3" "not yet"]
-bad = text/to_int steeps[2]
-print (describe bad)
+fn steeps "green"
+  3
+
+fn steeps leaf
+  err "{leaf} is not a tea we steep"
+
+print (describe (steeps "barley"))

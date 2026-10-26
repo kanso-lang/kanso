@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `length` does not take one — resolve it here
+  --> tests/golden/errors/a_none_bound_to_a_name_reaches_length.kso:8:10
+   8 |   length rest
+                ^

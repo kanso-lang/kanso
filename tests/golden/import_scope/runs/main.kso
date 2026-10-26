@@ -2,4 +2,4 @@ import "./m"
 
 hit = m/hits? { "a":[1] } "a"
 
-print "{hit} {m/found "a" "cat"} {m/whole "a" "a"}"
+print "{hit} {m/found? "a" "cat"} {m/whole "a" "a"}"

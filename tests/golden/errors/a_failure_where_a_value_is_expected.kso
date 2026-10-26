@@ -1,0 +1,7 @@
+# `err` makes a box (#2087), so a function whose every arm ends in one answers
+# a box, and `.>` is what opens it. Where a value is read, the checker refuses
+# the box before the program runs, as it refuses an io.
+fn closed _
+  err "the shop is closed"
+
+pub play = print "{closed 1 + 1}"

@@ -31,20 +31,14 @@ pub const DONE: Set = 1 << 14;
 pub const BIG: Set = 1 << 16;
 /// Every int, of either kind: what an `int` annotation admits.
 pub const ANY_INT: Set = INT | BIG;
-pub const TOP: Set = ((1 << 15) - 1) | BIG;
-/// An err the PROGRAM raised, as opposed to one an operation answered on its
-/// own: `err reason`, or an err bound by name and handed on. The bit rides
-/// with ERR everywhere ERR goes and is set at the two places a program
-/// spells one, so a set carrying it is proof of a bare err at that site.
-/// A strict index's miss and a division's zero divisor carry ERR alone,
-/// because what the checker should make of those is the ledger's open
-/// question, and the 2026-09-15 ruling refuses only what a program raised.
-/// It sits above TOP on purpose: TOP is "any value", and a proof is not a
-/// value.
-pub const RAISED: Set = 1 << 15;
+/// An err out of its box (#2087): what a rescue or an annotate hands its
+/// callback, an ordinary value that `(err r)` arms take. ERR is the box.
+pub const UNBOXED: Set = 1 << 17;
+pub const TOP: Set = ((1 << 15) - 1) | BIG | UNBOXED;
 /// What propagates on its own. A none is a value and stays where it is put;
-/// only an err abandons the computation that produced it.
-pub const FAIL: Set = ERR | RAISED;
+/// only a failure, the box `err` makes (#2087), abandons the computation
+/// that produced it.
+pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {
@@ -498,6 +492,7 @@ pub fn infer(program: &Program) -> Inference {
     // one hop per round.
     let (order, mentions, mention_starts) = callee_first(program);
     let floors = counter_floors(program, &mentions, &mention_starts);
+    let lengths = handed_lengths(program, &mentions, &mention_starts);
     // `"{x}"` and `print x` call the render group on a value of any kind, and
     // neither is a call site this walk visits. So its parameters start at
     // every kind a value can be. Read from the explicit calls alone, a
@@ -544,9 +539,7 @@ pub fn infer(program: &Program) -> Inference {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
                 // A parameter can hold a cell nobody has forced, and the
                 // guard ahead of the arm sees the cell rather than what is
-                // in it, so a failure the cell holds survives the guard. It
-                // is kept as an err the runtime met, never as a raise: the
-                // checker reads RAISED, and a cell raises nothing here.
+                // in it, so a failure the cell holds survives the guard.
                 if let Pattern::Var(name, _) = pattern {
                     if joined & FAIL != 0 && cells.contains(&(i, at)) {
                         env.insert(name, (joined & !FAIL) | ERR);
@@ -555,6 +548,7 @@ pub fn infer(program: &Program) -> Inference {
             }
             let mark = ctx.facts.len();
             ctx.facts.extend(floors[i].iter().map(|&(name, k)| Fact::NamedLower(name, k)));
+            ctx.facts.extend(lengths[i].iter().map(|&(n, xs)| Fact::NamedLength(n, xs)));
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             ctx.facts.truncate(mark);
             let mut widened = false;
@@ -627,6 +621,11 @@ enum Fact<'a> {
     AtLeast(&'a str, i64),
     /// `name >= n` for a parameter, from `counter_floors`
     NamedLower(&'a str, i64),
+    /// `index <= name`, where `name` is a bare name and not a length
+    UpperName(&'a Expr, &'a str),
+    /// parameter `name` is `length list` for the whole arm, from
+    /// `handed_lengths`
+    NamedLength(&'a str, &'a str),
 }
 
 /// The list whose length `e` reads, when `e` is `length xs`.
@@ -717,6 +716,20 @@ fn facts_when<'a>(cond: &'a Expr, holds: bool, out: &mut Vec<Fact<'a>>) {
                 (">" | ">=", Some(xs), None) => out.push(Fact::Upper(r, xs)),
                 _ => {}
             }
+            // `index <= n`, where the arm already knows `n` is a list's
+            // length; most comparisons against a name are not, and a fact
+            // nobody can use is one more for every read to scan
+            let known =
+                |n: &str| out.iter().any(|f| matches!(f, Fact::NamedLength(m, _) if *m == n));
+            match (op, l, r) {
+                ("<" | "<=", _, Expr::Ident(n, _, _)) if known(n) => {
+                    out.push(Fact::UpperName(l, n))
+                }
+                (">" | ">=", Expr::Ident(n, _, _), _) if known(n) => {
+                    out.push(Fact::UpperName(r, n))
+                }
+                _ => {}
+            }
             // `length xs >= n`, in its spellings, and `length xs != 0`; the
             // length expression itself is then a lower-bounded index, which is
             // what `xs[length xs]` reads
@@ -789,6 +802,192 @@ fn rebinds(body: &[Stmt], name: &str) -> bool {
 /// turns most names away before a byte is compared.
 fn is_one_of(few: &[&str], name: &str) -> bool {
     few.iter().any(|c| c.len() == name.len() && *c == name)
+}
+
+/// Which parameter of a loop holds another parameter's length, where the
+/// program shows every value it is handed: per arm, `(n, list)` pairs. A loop
+/// that walks a list by index is written `walk xs 1 (length xs) acc` with
+/// `walk xs (at + 1) n ...` inside it, and its guard `at > n` then bounds
+/// `xs[at]` the way `at > length xs` would, without reading the length on
+/// every step.
+///
+/// The conditions are `counter_floors`': the group is not pub and never
+/// travels as a value; every call from outside it passes `length X` at the
+/// bound's position and the same name `X` at the list's; every call from
+/// inside it passes both of its own parameters on unchanged; and no arm
+/// rebinds either. Anything else leaves the pair unproven.
+fn handed_lengths<'p>(
+    program: &'p Program,
+    mentions: &[usize],
+    starts: &[u32],
+) -> Vec<Vec<(&'p str, &'p str)>> {
+    type Pairs = Vec<(usize, usize)>;
+    // A group that hands two of its own parameters to itself unchanged;
+    // nothing else can carry a length down a loop.
+    fn passes_own(e: &Expr, d: &crate::ast::FnDecl) -> bool {
+        if let Expr::App { head, args, piped: false, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if *n == d.name)
+                && args.len() == d.params.len()
+                && args
+                    .iter()
+                    .zip(&d.params)
+                    .filter(|(a, p)| {
+                        matches!((a, p), (Expr::Ident(x, _, _), Pattern::Var(own, _)) if x == own)
+                    })
+                    .count()
+                    >= 2
+            {
+                return true;
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || passes_own(c, d));
+        found
+    }
+    // ... and reads one of them by index, which is the only read the fact
+    // can bound. Most loops pass two parameters on unchanged; few of them
+    // index one, and only those are worth a walk of their callers.
+    fn indexes_own(e: &Expr, d: &crate::ast::FnDecl) -> bool {
+        if let Expr::Index { base, .. } = e {
+            if let Expr::Ident(n, _, _) = base.as_ref() {
+                if d.params.iter().any(|p| matches!(p, Pattern::Var(own, _) if own == n)) {
+                    return true;
+                }
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || indexes_own(c, d));
+        found
+    }
+    let mentioned = |i: usize| &mentions[starts[i] as usize..starts[i + 1] as usize];
+    let in_body = |d: &crate::ast::FnDecl, test: fn(&Expr, &crate::ast::FnDecl) -> bool| {
+        d.body.iter().any(|stmt| {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            test(expr, d)
+        })
+    };
+    let candidates: crate::hash::Set<&str> = program
+        .fns
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| !(d.is_pub || d.written_pub) && d.params.len() >= 3)
+        .filter(|&(i, d)| {
+            mentioned(i).contains(&i) && in_body(d, indexes_own) && in_body(d, passes_own)
+        })
+        .map(|(_, d)| d.name.as_str())
+        .collect();
+    if candidates.is_empty() {
+        return vec![Vec::new(); program.fns.len()];
+    }
+    let few: Vec<&str> = candidates.iter().copied().collect();
+    let candidate_arms: Vec<bool> = program.fns.iter().map(|d| is_one_of(&few, &d.name)).collect();
+    let readers: Vec<usize> = (0..program.fns.len())
+        .filter(|&i| mentioned(i).iter().any(|&j| candidate_arms[j]))
+        .collect();
+    let mut escapes: crate::hash::Set<&str> = Default::default();
+    let mut arities: crate::hash::Set<(&str, usize)> = Default::default();
+    for (d, _) in program.fns.iter().zip(&candidate_arms).filter(|(_, &c)| c) {
+        arities.insert((d.name.as_str(), d.params.len()));
+        if d.is_pub || d.written_pub {
+            escapes.insert(d.name.as_str());
+        }
+    }
+    // (group, arity) -> the pairs every call so far allows; absent until the
+    // first call is seen
+    let mut allowed: HashMap<(&str, usize), Pairs> = HashMap::default();
+    struct Walk<'a, 'p> {
+        allowed: &'p mut HashMap<(&'a str, usize), Pairs>,
+        escapes: &'p mut crate::hash::Set<&'a str>,
+        arities: &'p crate::hash::Set<(&'a str, usize)>,
+        candidates: &'p [&'a str],
+    }
+    // The pairs one call passes: a bound position holding `length X` and a
+    // list position holding `X`, or, on a self-call, both positions holding
+    // the caller's own parameters unchanged.
+    fn pairs_of(args: &[Expr], caller: &crate::ast::FnDecl, recursive: bool) -> Pairs {
+        let mut out = Vec::new();
+        for (pn, an) in args.iter().enumerate() {
+            for (ps, as_) in args.iter().enumerate() {
+                if pn == ps {
+                    continue;
+                }
+                let ok = match recursive {
+                    false => match (length_of(an), as_) {
+                        (Some(x), Expr::Ident(y, _, _)) => x == y,
+                        _ => false,
+                    },
+                    true => {
+                        let own = |a: &Expr, at: usize| matches!((a, &caller.params[at]), (Expr::Ident(x, _, _), Pattern::Var(p, _)) if x == p);
+                        own(an, pn) && own(as_, ps)
+                    }
+                };
+                if ok {
+                    out.push((pn, ps));
+                }
+            }
+        }
+        out
+    }
+    fn visit<'a>(e: &'a Expr, caller: &'a crate::ast::FnDecl, w: &mut Walk<'a, '_>) {
+        match e {
+            Expr::App { head, args, piped, .. } => {
+                if let Expr::Ident(name, _, _) = head.as_ref() {
+                    if is_one_of(w.candidates, name) {
+                        if *piped || !w.arities.contains(&(name.as_str(), args.len())) {
+                            w.escapes.insert(name.as_str());
+                        }
+                        let recursive = caller.name == *name && caller.params.len() == args.len();
+                        let here = pairs_of(args, caller, recursive);
+                        let slot =
+                            w.allowed.entry((name.as_str(), args.len())).or_insert(here.clone());
+                        slot.retain(|p| here.contains(p));
+                    }
+                    for arg in args {
+                        visit(arg, caller, w);
+                    }
+                    return;
+                }
+            }
+            Expr::Ident(name, _, _) | Expr::Partial(name, _) if is_one_of(w.candidates, name) => {
+                w.escapes.insert(name.as_str());
+            }
+            _ => {}
+        }
+        crate::for_each_child(e, |c| visit(c, caller, w));
+    }
+    let mut w =
+        Walk { allowed: &mut allowed, escapes: &mut escapes, arities: &arities, candidates: &few };
+    for &i in &readers {
+        let d = &program.fns[i];
+        for stmt in &d.body {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            visit(expr, d, &mut w);
+        }
+    }
+    program
+        .fns
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            if !candidate_arms[i] || escapes.contains(d.name.as_str()) {
+                return Vec::new();
+            }
+            let Some(pairs) = allowed.get(&(d.name.as_str(), d.params.len())) else {
+                return Vec::new();
+            };
+            pairs
+                .iter()
+                .filter_map(|&(pn, ps)| match (&d.params[pn], &d.params[ps]) {
+                    (Pattern::Var(n, _), Pattern::Var(xs, _))
+                        if !rebinds(&d.body, n) && !rebinds(&d.body, xs) =>
+                    {
+                        Some((n.as_str(), xs.as_str()))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The least value each parameter of a loop can hold, where the program shows
@@ -1022,6 +1221,10 @@ fn in_range(facts: &[Fact<'_>], index: &Expr, list: &str) -> bool {
         // the fact says base + eo <= length, so base + off is too when off <= eo
         Some(_) => facts.iter().any(|f| match f {
             Fact::Upper(e, xs) if *xs == list => same_base(e).is_some_and(|eo| eo >= off),
+            Fact::UpperName(e, n) => {
+                facts.iter().any(|g| matches!(g, Fact::NamedLength(m, xs) if m == n && *xs == list))
+                    && same_base(e).is_some_and(|eo| eo >= off)
+            }
             _ => false,
         }),
     }
@@ -1213,10 +1416,10 @@ fn bind_pattern<'a>(
         // int-ness instead of TOP, which is what unblocks the scanner's hot path
         Pattern::Ctor { ty, fields, whole } => {
             // the as-pattern's name is the value that matched, so it carries
-            // the set the pattern caught: `e@(err _) = e` hands on a RAISED err
-            // and a caller that reads it is refused like the raise itself
+            // the set the pattern caught: `e@(err _)` binds an err out of
+            // its box, the only kind an arm sees (#2087)
             if let Some(whole) = whole {
-                let matched = if ty == "err" { ERR | (joined & RAISED) } else { REC };
+                let matched = if ty == "err" { UNBOXED } else { REC };
                 env.insert(&whole.0, matched);
             }
             let field_sets = type_names.get(ty.as_str()).map(|i| &type_fields[*i]);
@@ -1237,7 +1440,9 @@ fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
         Pattern::Nullary(name, _) if name == "done" => DONE,
-        Pattern::Ctor { ty, .. } if ty == "err" => ERR | RAISED,
+        Pattern::Ctor { ty, .. } if ty == "err" => UNBOXED,
+        // a box is what the annotation takes, and `err` makes one (#2087)
+        Pattern::Annotated { ty, .. } if is_effect_type(ty) => ERR,
         _ => 0,
     }
 }
@@ -1368,7 +1573,8 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             // the index in range, in which case the miss cannot happen and
             // the read is its element
             if *strict {
-                return (b & FAIL) | (k & FAIL) | DESC;
+                // and the miss is a failure, a box already (#2087)
+                return (b & FAIL) | (k & FAIL) | DESC | ERR;
             }
             let proven = match base.as_ref() {
                 Expr::Ident(xs, _, _) => in_range(&ctx.facts, index, xs.as_str()),
@@ -1697,9 +1903,7 @@ pub fn literal_consts(program: &Program) -> Consts<'_> {
 /// declarations read an element is not tracked, so the widening wakes them
 /// all; it can happen at most twice in a program, once per failure bit.
 fn store_fails(ctx: &mut Ctx<'_>, item: Set) {
-    // Read back out, the item is an err value rather than a raise: the
-    // literal ended the raise by keeping it, and the per-call check reads
-    // RAISED, which a read of a list the program built must not answer.
+    // Read back out, the item is the failure the literal kept.
     let fails = match item & FAIL {
         0 => 0,
         _ => ERR,
@@ -1806,8 +2010,9 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
 /// A chain word's callback, walked with its parameter holding the failure
 /// the word hands it. The Lambda arm of `eval_expr` seeds every parameter
 /// as never failing, because an ordinary call refuses to hand a closure a
-/// failure; `rescue` and `annotate` are the two callers that do it on
-/// purpose, so their callback's parameter can be anything, an err included.
+/// failure; `rescue` and `annotate` are the two callers that hand it the
+/// failure on purpose, out of its box (#2087), so their callback's parameter
+/// can be anything, an unboxed err included.
 /// A callback that is not a lambda literal is a value, walked as one.
 fn eval_callback<'a>(ctx: &mut Ctx<'a>, callee: &'a Expr, env: &mut Env<'a>) -> Set {
     let Expr::Lambda { body, params, .. } = callee else {
@@ -1897,7 +2102,7 @@ fn eval_call<'a>(
         return arg_sets[1] | arg_sets[2] | cond_fail | piped_bits;
     }
     if name == "err" {
-        return ERR | RAISED | piped_bits;
+        return ERR | piped_bits;
     }
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL) | piped_bits;
@@ -2164,8 +2369,8 @@ pub fn annotated_set(ty: &str) -> Set {
         "float64" => FLOAT,
         "string" => STR,
         "bool" => BOOL,
-        "err" => ERR | RAISED,
-        t if is_effect_type(t) => DESC,
+        "err" => UNBOXED,
+        t if is_effect_type(t) => DESC | ERR,
         t if t.ends_with("[]") => LIST,
         t if t.contains('[') => MAP,
         _ => REC,
@@ -2178,7 +2383,12 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
     match name {
         // the box built by hand. What goes in is the box's content, value or
         // err, so the argument's failure bits are held rather than carried
-        "effect" => DESC,
+        // an err out of its box goes back into one, and a failure is a box
+        // already (#2087)
+        "effect" => match args[0] & (UNBOXED | FAIL) != 0 {
+            true => DESC | ERR,
+            false => DESC,
+        },
         "at" => {
             let mut out = fails | NONE;
             if args[0] & BYTES != 0 {
@@ -2232,8 +2442,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,
-        "to_int" => ANY_INT | ERR | fails,
-        "to_float" => FLOAT | ERR | fails,
+        "to_int" => ANY_INT | NONE | fails,
+        "to_float" => FLOAT | NONE | fails,
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => ANY_INT | fails,

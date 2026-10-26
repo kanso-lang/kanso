@@ -90,12 +90,20 @@ fn upto_dot b at
 fn without_leading_slash ""
   ""
 
+# The slices below are inside `s`, which the arm above has made non-empty, so
+# a none here is a bug in this file.
+fn without_leading_slash none
+  err "a slice inside a path answered none"
+
 fn without_leading_slash s
   rest = text/slice s 2 (length s)
   if (text/slice s 1 1 == "/") (without_leading_slash rest) s
 
 fn without_trailing_slash ""
   ""
+
+fn without_trailing_slash none
+  err "a slice inside a path answered none"
 
 fn without_trailing_slash s
   rest = text/slice s 1 (length s - 1)

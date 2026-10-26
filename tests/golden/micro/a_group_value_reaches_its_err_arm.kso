@@ -1,6 +1,7 @@
 # a group handed out as a value is entered with the err it is given, as a
 # direct call is, so its `(err _)` arm answers. Native and the browser turned
-# the err down before entering the group and never reached the arm.
+# the err down before entering the group and never reached the arm. The err
+# is one a rescue took out of its box (#2087), the only kind an arm sees.
 import "std/os"
 import "std/text"
 
@@ -11,7 +12,7 @@ fn settle p q
   "{p}{q}"
 
 fn go n
-  bad = text/to_int "x{n}"
+  bad = text/to_bytes [(n + 300)] .? (u -> u)
   f = settle
   f bad 1
 
