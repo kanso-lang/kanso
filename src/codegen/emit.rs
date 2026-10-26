@@ -1361,6 +1361,41 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// Whether a call from the function being emitted, naming `name`, crosses
+    /// from the program's own files into the library's. A flattened twin is
+    /// not a crossing: it carries the program's own continuation, so a call
+    /// to it can be a step of the program's loop and keeps its jump.
+    fn crosses_into_library(&self, f: &FnEmit, name: &str) -> bool {
+        !crate::flat::made(name)
+            && !crate::provenance::is_library_file(&f.file)
+            && self
+                .group_named(name)
+                .first()
+                .is_some_and(|&i| crate::provenance::is_library_file(&self.program.fns[i].file))
+    }
+
+    /// Before a call from the program into the library: the line a failure
+    /// inside the library names as its caller is saved, and set to this
+    /// call's (ruled on #2099). Answers the saved one, which `left_library`
+    /// puts back once the call returns, so a program function the library
+    /// calls back leaves the outer line in place when it is done.
+    fn entering_library(&mut self, f: &mut FnEmit, name: &str, span: Span) -> Option<String> {
+        if !self.crosses_into_library(f, name) {
+            return None;
+        }
+        let (lit, _) = self.intern(&format!("{}:{}\0", f.file, span.line));
+        let saved = f.tmp();
+        f.line_fmt(format_args!("{saved} = load ptr, ptr @k_from"));
+        f.line_fmt(format_args!("store ptr @{lit}, ptr @k_from"));
+        Some(saved.to_string())
+    }
+
+    fn left_library(&mut self, f: &mut FnEmit, saved: Option<String>) {
+        if let Some(saved) = saved {
+            f.line_fmt(format_args!("store ptr {saved}, ptr @k_from"));
+        }
+    }
+
     /// The group a call names, when it names one by name with its arity.
     fn named_call(expr: &Expr) -> Option<(&str, usize)> {
         match expr {
@@ -1408,10 +1443,13 @@ impl<'a> Backend<'a> {
             if let Expr::Ident(name, _, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
                 // an insisting form is called rather than jumped to, so its
-                // answer can be pointed at this line on the way back
+                // answer can be pointed at this line on the way back; a call
+                // into the library likewise, so the line it was called from
+                // is put back when it returns (#2099)
                 if self.forwarders.contains(bare, args.len())
                     || self.forwarders.contains(name, args.len())
                     || name.ends_with('!')
+                    || self.crosses_into_library(f, name)
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
@@ -3841,6 +3879,7 @@ impl<'a> Backend<'a> {
                         if sets[0] != BYTES {
                             self.stamp(f, &origin);
                         }
+                        let from = self.entering_library(f, name, span);
                         let t = f.tmp();
                         // three KValues and the origin pointer want seven of
                         // the six integer registers the abi has, so the last
@@ -3850,6 +3889,7 @@ impl<'a> Backend<'a> {
                             "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
+                        self.left_library(f, from);
                         f.record(&t, infer::builtin_set("utf8", &[sliced]));
                         return Ok(Some(t.to_string()));
                     }
@@ -3962,6 +4002,7 @@ impl<'a> Backend<'a> {
                                 None => self.origin_arg(f, span),
                             },
                         };
+                        let from = self.entering_library(f, name, span);
                         let t = f.tmp();
                         // three KValues and the origin want seven of the six
                         // integer registers, so the last spilled at every
@@ -3972,6 +4013,7 @@ impl<'a> Backend<'a> {
                             "{t} = call %KValue @k_b_{door}_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
+                        self.left_library(f, from);
                         f.record(&t, infer::builtin_set(door, &[sliced]));
                         return Ok(Some(t.to_string()));
                     }
@@ -4184,6 +4226,7 @@ impl<'a> Backend<'a> {
         if self.can_miss_with(f, name, n, emitted) {
             self.stamp_site(f, span);
         }
+        let from = self.entering_library(f, name, span);
         let t = match twin {
             None => {
                 let t = f.tmp();
@@ -4236,6 +4279,7 @@ impl<'a> Backend<'a> {
                 }
             }
         };
+        self.left_library(f, from);
         let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
         let result = if region {
             let p = f.tmp();

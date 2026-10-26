@@ -109362,3 +109362,48 @@ every engine, and main stops it with "`<io>` is not callable".
 cut cloned every declared name into a set, 305 allocations; the set now
 borrows them. The rows are counted with the batch this landed in, at the end
 of "an import stays in the file that writes it".
+
+## 2026-10-24 — an arm names only a type its file can see
+
+mal's port wrote `shown (held v)` in a module that cannot see `held`, a type
+private to another module (#2091, item 4; raytracer F15 is the same shape).
+`kanso check` passed it. The interpreter passed the arm over and printed "got
+nothing", and native stopped with "native backend: unknown type `held`", with
+no file or line.
+
+`patterns()` in `check_annotation_names` left this case to dispatch on
+purpose. Its comment said the obvious check, a constructor pattern whose type
+`program.types` does not hold, calls `std/list`'s `(entry k v)` wrong. Two
+more sets turned out to be needed. A type an import exports is named bare
+(`(file_not_found _)` from std/os in bc and datalog), and the file's imported
+globals hold it by its constructor. A type whose bare name a function of the
+file takes, as `fn step` beside std/list's `step` record, stays a type in a
+pattern; the import's enrolled twins hold that one. `unseen_ctor` now refuses
+a parameter pattern whose type is in none of those, is not built in, is not
+qualified, and is not `entry`. The caret sits on the first field, as the
+other constructor diagnostics' do.
+
+`errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
+`errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
+main passes both. The stdlib, the twenty ports and kq check as before.
+
+## 2026-10-25 — a module's own type beats an imported function of its name
+
+From #2090, mal's port. A module declared `type tally` beside
+`import "std/list"`, which exports a one-argument `list/tally`. Every
+construction `tally a b` was refused with "no 2-argument arm of `tally`
+(arms take 1)": the import's function, enrolled under its bare name, took
+the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
+shape. diff's `drop` is a record in std/list too, and main built std/list's
+record for `drop 3 4`, whose field `d.a` the run then could not read.
+
+`own_types_beat_twins` already let a module's own type beat an import's type
+of the same name. It now does the same for an import's function: a
+synthetic bare function named like a type the module declares is dropped,
+at any arity. A module cannot declare a function and a type of one name, so
+such a function can only be an import's twin. The import's function stays
+reachable as `list/tally`.
+
+`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
+`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
+refuses it.

@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-25 — a module's own type beats an imported function of its name
-
-From #2090, mal's port. A module declared `type tally` beside
-`import "std/list"`, which exports a one-argument `list/tally`. Every
-construction `tally a b` was refused with "no 2-argument arm of `tally`
-(arms take 1)": the import's function, enrolled under its bare name, took
-the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
-shape. diff's `drop` is a record in std/list too, and main built std/list's
-record for `drop 3 4`, whose field `d.a` the run then could not read.
-
-`own_types_beat_twins` already let a module's own type beat an import's type
-of the same name. It now does the same for an import's function: a
-synthetic bare function named like a type the module declares is dropped,
-at any arity. A module cannot declare a function and a type of one name, so
-such a function can only be an import's twin. The import's function stays
-reachable as `list/tally`.
-
-`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
-`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
-refuses it.
-
 ## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
 
 From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
@@ -60,30 +39,6 @@ made, so a push onto a list runs the instructions it ran before.
 `tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
 `text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
 the first line.
-
-## 2026-10-24 — an arm names only a type its file can see
-
-mal's port wrote `shown (held v)` in a module that cannot see `held`, a type
-private to another module (#2091, item 4; raytracer F15 is the same shape).
-`kanso check` passed it. The interpreter passed the arm over and printed "got
-nothing", and native stopped with "native backend: unknown type `held`", with
-no file or line.
-
-`patterns()` in `check_annotation_names` left this case to dispatch on
-purpose. Its comment said the obvious check, a constructor pattern whose type
-`program.types` does not hold, calls `std/list`'s `(entry k v)` wrong. Two
-more sets turned out to be needed. A type an import exports is named bare
-(`(file_not_found _)` from std/os in bc and datalog), and the file's imported
-globals hold it by its constructor. A type whose bare name a function of the
-file takes, as `fn step` beside std/list's `step` record, stays a type in a
-pattern; the import's enrolled twins hold that one. `unseen_ctor` now refuses
-a parameter pattern whose type is in none of those, is not built in, is not
-qualified, and is not `entry`. The caret sits on the first field, as the
-other constructor diagnostics' do.
-
-`errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
-`errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
-main passes both. The stdlib, the twenty ports and kq check as before.
 
 ## 2026-10-25 — a test that fails inside a library names the library's line
 
@@ -1799,3 +1754,122 @@ benchmarks work_basket 18,278,697 -> 18,266,806, work_runbench
 822,295,072 -> 822,288,845, work_encodebench 2,327,387,236 ->
 2,327,387,586, work_livebench 936,013,522 -> 936,013,844, work_oneshot
 10,033,523 -> 10,034,013 and work_readbench 4,581,973 -> 4,581,975. Welfare holds at 95.38 and is banked.
+
+## 2026-10-26 — a failure inside the library names the program line that called in
+
+The 2026-10-26 gavel on #2099 keeps a library failure's own line and adds,
+under it, the nearest line of the program's own files that called in:
+
+```
+error[runtime]: split takes two strings
+  failed in text/split at std/text/text.kso:38
+  called from g.kso:11
+```
+
+A file is the library's when it is under `std/` or fetched under `.hako/`,
+which `provenance::is_library_file` says and the runtime's
+`k_library_place` repeats for a site's file. The line is added only under a
+library line, so a failure in the program's own code reads as before.
+
+The interpreter adds it as a failure leaves a call written by name, in a
+program file, of a group the library declares. The first such call the
+failure passes out of is the nearest, and the line rides in the place string
+`failed in` already prints, so none of the 108 places that build a
+`RuntimeError` changed. Natively the emitter saves `k_from` before each such
+call, stores the call's `<file>:<line>`, and puts the saved one back when the
+call returns; `k_died` prints it when the failing site's file is the
+library's. A program function the library calls back sets and restores its
+own, so a failure after the callback names the line that called the library
+function, as the interpreter's frames do. The two fused slice doors, which
+call no wrapper, save and restore around the door.
+
+A call into the library in tail position is made rather than looped on, on
+both engines, as an insisting form already is: a looped call would leave no
+program frame to name in the interpreter and nothing to restore natively. A
+call to a flattened twin is not counted as one. `flat` copies `text/span_to`
+into a twin that carries the program's own continuation, so the twin can be a
+step of the program's loop; the first draft made that call an ordinary one,
+and `a_span_handed_on_is_never_built` read beat_iters 26 -> 17, the loop no
+longer rewinding. Both engines skip twins, and it reads 26 again.
+
+The emitted lines move by the store and its restore: the compile samples
+read recursion 470 -> 471, dispatch 370 -> 371, guards 327 -> 328 and
+records 426 -> 427 lines, and the module 1,181 -> 1,186.
+Calls through a function value and steps a chain word runs are not counted on
+either engine. A step that `.>` hands a box is run by the executor after the
+line that wrote it has finished.
+
+`a_library_failure_names_the_line_that_called_in` reaches `text/split`
+through two program functions, the inner one calling it in tail position.
+`a_library_failure_after_a_callback_names_the_outer_line` has `group_by` call
+a key function that calls `text/trim`, and then fail inside the library's
+own `list/file_under`. `an_operator_failing_in_the_library_names_the_line_that_called_in`
+hands `pad_start` a width it subtracts from. Between them they cover the
+ruling's three kinds of failure born in the library, a builtin's, a library
+function's and an operator's, and all three are in the runtime corpus, which
+every engine runs. Nineteen runtime goldens whose
+failure is inside the library, and `test_verb/fails_in_std`, gain the line.
+Four mutations turn the corpus red: the native restore made a no-op, the
+interpreter's addition taken out, and the tail call kept on either engine.
+
+CI's rows, against main at #2161. The interpreter's crossing test first
+scanned both files' paths for a fetched hako on every tail call, and
+`interp_instructions` read 582,178,759; a frame now carries the answer,
+read off its path once, and it reads 571,553,496 against main's
+565,868,501, the rest being the calls into the library made rather than
+looped. `interp_allocs` reads 628,009 and `interp_peak_bytes` 1,313,667.
+Natively the store and restore around each crossing move the run rows:
+`work_encodebench` 2,335,195,960, `work_livebench` 938,703,709,
+`work_widebench` 28,605,098, `work_deepbench` 198,242,568, `work_basket`
+18,294,810, `work_readbench` 4,583,158, `work_jsonbench` 557,387,287,
+`work_pendbench` 154,123,901 (down), `work_runbench` 822,286,353,
+`work_oneshot` 10,033,544, `work_digestbench` 4,122,972,
+`work_escapebench` 40,308,378, `work_indexbench` 1,837,160 and
+`work_scanbench` 274,245. The emitter writes the stores:
+`emitted_lines` 14,383, `emitted_other_calls` 20,496,
+`emitted_other_lines` 170,009, `emit_instructions` 5,725,463, `text`
+5,698,479, `lines` 1,597 and `module_lines` 1,186. Compiling them moves
+`codegen_instructions_dev` to 116,762,508 and `codegen_instructions_release`
+to 371,664,033. In the tab, `browser_compile_instructions` reads
+360,520,776, `browser_compile_peak_bytes` 842,026 and
+`browser_run_instructions` 61,510,637. The live vein's `cohort_kept` reads
+1 where it read 0: a program-to-library tail call is now a call, so the
+caller's beat stays open around it, and on its pop the survivor is more
+than half of what grew, so the region is kept rather than copied out; with
+that one arm of `emit_tail` taken back out it reads 0 again. Welfare is
+banked at 95.38, the floor taking what this ruled feature measured.
+
+## 2026-10-26 — gavel: an err is born boxed
+
+Clay ruled #2087. Since #1884 a name bound to a call that can fail carries
+the err into the check, and a function it reaches must take it with an
+`(err _)` arm. Most of the arms the ports added only hand the err back:
+site wrote 68, toml 37 and bc 22, and bc's came in three rounds because each
+new arm made its callers need one. A bare err did two jobs that other things
+already do. For an outcome the caller handles there are `none` and markers,
+and for a failure that travels up there is the box.
+
+**The ruling.** Clay: "maybe you can unbox an error and pass it around but
+you can't generate an unboxed error." Every way of making an err makes a
+boxed failure. `err "…"` answers an effect that bubbles to a foreign `rescue`
+or the endpoint, and no expression produces a bare err. An err taken out of
+its box, by `rescue` or by a chain callback handed the failure, is an
+ordinary value: it can be passed, stored and dispatched on, and `effect` puts
+it back in a box. An outcome the caller is expected to handle is an ordinary
+value, `none` or a marker or a record carrying the reason. A plain form
+answers one of those, and its `!` form answers the boxed err with its
+message. A box cannot be used as a value without `.>`, so a failure still
+cannot slip into arithmetic.
+
+This supersedes part 2 of the 2026-09-15 gavel ("a bare err is data") and
+the bare err in the 2026-09-16 list of what a non-bang form answers. The
+issue's three options were declined in favour of this one.
+
+Owes, on #2087: `err "…"` answers a boxed failure on every engine, and the
+checker has no bare-err type left to track; each bare err in the library
+classified, a mistake becoming a box and an expected outcome becoming `none`
+or a marker on the plain form with the boxed message on the `!` form; an
+unboxed err behaving as a value on every engine, with goldens; the ports'
+hand-back arms removed, and #2088's migration using the `!` form at reads that
+must succeed; ch04, ch05 and appendix B rewritten where they describe bare
+errs as data, and the error goldens regenerated.
