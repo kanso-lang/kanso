@@ -1,0 +1,19 @@
+# A loop that reads its list's last element on every step with `list/last`.
+# `last` folds the whole collection to find it, so each read costs the length
+# of the list and the loop costs its square on every engine: natively 5,000
+# reads of a 5,000-element list took 0.38 seconds, and the interpreter took
+# 17.7.
+import "std/list"
+
+fn upto xs i n
+  return xs if i > n
+  upto (push xs i) (i + 1) n
+
+fn summed _ 0 acc
+  acc
+
+fn summed xs n acc
+  summed xs (n - 1) (acc + list/last xs)
+
+pub fn total n
+  summed (upto [] 1 n) n 0

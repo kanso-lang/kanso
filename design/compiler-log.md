@@ -23,116 +23,6 @@
 
 
 
-## 2026-10-25 — four cliffs from the ports join the run program
-
-#2089's first item, entered in the corpus before its fix under the
-2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
-a map entry into a name and handed the name to a function inside the write:
-`seen = m[key]` then `put m key (counted seen)`. The 2026-10-10 entry
-(kanso#1822) discounts such a name only when it reaches the write through
-arithmetic and comparison, so here `m` counts as used twice and every put
-copies the map. toml's reduction at 8,000 keys took 4.2 seconds in release
-against 0.012 with the read written inline.
-
-The run program gains a `handed` phase: 380 updates over 100 keys through
-such a name. Built alone on main it costs 41,508,775 instructions above the
-empty program. The phase prints the same total on both engines.
-
-#2089's second item joins it. markdown's port pushed onto a list held in a
-record under a guard, `return st if i > n` above `loop (state (push
-st.events i) i) (i + 1) n`, and natively 64,000 pushes took 8.9 seconds.
-kanso#1926 moves such a list out of its record only when every mention of the
-record is a field read, and the guard's `return st` is a mention that is not,
-though it runs instead of the push. The same loop written as two arms grows
-the list in place. The `guarded` phase pushes 3,050 times. Its cost is a
-cliff whose knee depends on what the arena already holds: built alone the
-knee is at 4,096 elements and the phase costs 746,860 instructions, while
-inside the run program the knee falls between 2,000 and 3,000 and the phase
-costs 43,734,573, the whole program with it less the whole without.
-
-#2089's fourth item is the third phase. chip8's port kept its memory as a
-map of 16 keys in a record, read one key and overwrote another each lap, and
-8,000 laps took 2.4 seconds natively against 0.1 on the interpreter. Every
-put that cannot write in place copies the map's append log, which keeps each
-overwrite until something sorts it, so the copy grows by an entry a lap. The
-`overwrite` phase runs 380 laps, 42,238,603 instructions built alone above
-the empty program, and prints the same total on both engines.
-
-On this container the whole program reads 917,589,885, where main reads
-788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
-
-#2089's third item is the fourth phase. lox's statement loop re-enters itself
-when a Lox constructor builds a tree, carrying a persistent trie that each
-lap writes one leaf into, and the reduction took 7.0 seconds natively for
-4,094 writes. The lap rule stages a carry once the arena has drifted a
-quarter megabyte, measured from where the last stage at the loop's depth
-left it. A fresh entry measured from the previous loop's position, which the
-rewind had already passed, so every entry staged on its first lap and copied
-the whole trie. The `reentered` phase writes 62 leaves. Its cost is a knee
-like `guarded`'s: 1,236,018 built alone with the empty program's start-up,
-and 70,582,705 inside the run program, where each stage also walks what the
-earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
-the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
-print 62.
-
-CI's rows. The run program with all four phases reads work_runbench
-788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
-20.2% of the new whole. The program is larger, so the code it emits grows:
-emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
-emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
-163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
-5,518,316 over the fourteen. No compile row and no browser row moves. Under
-the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
-stack and bag joined: the run_instructions baseline keeps its ratio to the
-run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
-the fixes in #2106 score against these rows as a rise.
-
-The run program's allocation vein moves with it, and the peak it holds is the
-run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
-re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
-baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
-on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
-run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
-run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
-run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
-run_ten_blocks 2.
-
-The fixes follow in their own pull requests and will score as rises.
-
-
-On this container the whole program reads 874,292,848, where main reads
-788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
-in their own pull requests and will score as rises.
-
-empty program, 5.00% of the whole program's 830,558,275 on this container,
-where main reads 788,981,054. The phase prints the same total on both
-engines. The fix follows in its own pull request and will score as a rise.
-
-## 2026-10-25 — a read handed to a call keeps the write in place
-
-The fix for the `handed` phase the previous entry put into the run program
-(#2089, first item). `seen = m[key]` then `put m key (counted seen)` copied
-the map on every put, because `linear.rs` discounts a name bound to a read of
-the map only when every later use reaches the put through arithmetic: a use
-anywhere else could force the read after the write.
-
-That can happen only if the binding is a thunk, and `demand::analyze` makes a
-binding a thunk only when its expression is expensive, which a plain index
-read with a key that calls nothing and compares nothing is not. Both engines
-read the same verdict, so `seen` holds the element before anything below its
-line runs. `read_in_block` now discounts such a binding's read of the map
-whatever the name does next. Pooled names, which the work-ahead pass always
-makes cells, are left out.
-
-`tests/golden/mem/a_read_handed_to_a_call_stays_in_place` is the shape at
-2,000 updates over 100 keys: 15 allocations and 16,800 bytes, where main
-makes 6,006 and 80,274,944. No other mem golden moved, and
-`micro/a_read_named_before_a_write_sees_the_old_value`, whose names are used
-after the write, still prints the old value beside the new on every engine.
-On this container the `handed` phase built alone falls from 41,838,242
-instructions to 1,090,527, each including the empty program's 329,467; CI's
-rows follow.
-
 ## 2026-10-25 — a guarded loop grows its record's list in place
 
 The fix for the `guarded` phase (#2089, second item). kanso#1926 lets a push
@@ -1983,3 +1873,86 @@ fall with the guard's `length` call: emitted_other_calls 20,472 -> 20,468,
 emitted_other_branches 17,764 -> 17,762, emitted_other_lines 169,582 ->
 169,576 and text 5,620,636 -> 5,620,459. Welfare rises 95.38 -> 95.41 and the
 rise is banked.
+
+## 2026-10-26 — a list read for its last element joins the corpus
+
+A battery of list shapes, each run at 5,000 and 20,000 elements on both
+engines, found `list/last` read in a loop quadratic on both. `last` folds
+the whole collection to find its last element, so each read costs the
+length of the list: 5,000 reads of a 5,000-element list took 0.38 seconds
+natively and 17.7 on the interpreter, and at 20,000 they took 4.6 seconds
+natively, where the interpreter ran past two minutes. The other shapes,
+`text/join`, `list/zip`, `list/count`, `list/reverse`, `list/sort_by`,
+`list/tally`, `list/to_h`, `text/to_int` over a list and floats rendered by
+interpolation, grow linearly or by n log n on both.
+
+Under the 2026-09-05 corpus-first gavel `lasted` joins the run program with
+800 reads and the interpreted corpus with 70, measured on main at #2158
+before its fix. On this container the run program reads 865,303,604 with it
+and 828,684,309 with it reading nothing, a column of 36,619,295 (4.23%), and
+the interpreted corpus reads 565,857,214 -> 593,093,849. Both engines print
+the same line for it.
+
+The battery also found a field read that the engines disagree on: native
+reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
+Clay which way it goes.
+
+CI's rows, against main at #2175. The run program reads work_runbench
+821,299,208 -> 859,187,448, and its allocation vein moves with the 800 reads:
+run_allocs 1,581,589 -> 1,582,393, run_alloc_bytes 223,888,104 ->
+223,955,352, run_beat_iters 177,272 -> 178,072, run_push_mut_slow 1,644,657
+-> 1,645,457, run_sh_rec 4,098,336 -> 4,136,736, run_sh_buf 91,336,688 ->
+91,336,800, run_perm_peak_bytes 1,867,025 -> 1,875,217, run_bytes_malloc
+7,921 -> 7,924 and run_bytes_freed 7,779 -> 7,782. The interpreted corpus
+reads interp_instructions 560,933,132 -> 588,905,757, interp_allocs 630,614
+-> 656,976 and interp_peak_bytes 1,306,819 -> 1,327,257. The tab compiles
+and runs the corpus too: browser_compile_instructions 342,497,302 ->
+348,067,219, browser_compile_peak_bytes 832,433 -> 836,713 and
+browser_run_instructions 61,425,132 -> 64,341,530. The run program's new
+function is emitted code: emitted_other_lines 169,576 -> 170,115,
+emitted_other_branches 17,762 -> 17,826, emitted_other_calls 20,468 ->
+20,537, emitted_other_defines 2,253 -> 2,262, and text 5,620,459 ->
+5,622,379. Under the corpus-first gavel each moved welfare term's baseline
+is scaled so its ratio to what it reads holds, so the phase leaves welfare
+where it was and the fix in #2165 scores as a rise.
+
+## 2026-10-26 — the last element of a list is read at its end
+
+`list/last` gains an arm for a list, `last xs:[]some`, which answers
+`xs[length xs]`: the last element, or none for an empty list, as the fold did.
+Anything that is not a list keeps the fold, so a lazy sequence, a string,
+bytes and a map are walked to their last element as before.
+
+5,000 reads of a 5,000-element list took 0.38 s natively and 17.7 s on the
+interpreter, and take 0.07 s and 0.015 s. At 20,000 they take 0.09 s and
+0.03 s, where the interpreter ran past two minutes.
+
+`a_list_is_read_at_its_end` (micro, both engines) reads the last of a list of
+numbers, of records and of lists, of one element and of none, and of a lazy
+sequence, a string, bytes and a map. Its output is main's interpreter, and
+both engines on main and on this branch print it. Reading one before the end
+turns the micro corpus red.
+
+The new arm moves std/list's lines below it down by four, so
+`runtime/tie_takes_a_list_of_ids` names `list/tie` at line 602 where it named
+598.
+
+CI's rows, against #2164's phase on main at #2175. The run program's 800
+reads cost what an index costs: work_runbench 859,187,448 -> 821,243,366,
+below main's 821,299,208 without the phase, run_allocs 1,582,393 ->
+1,581,593, run_alloc_bytes 223,955,352 -> 223,916,952 and run_sh_rec
+4,136,736 -> 4,098,336, the 800 step records the fold built. The interpreted
+corpus falls the same way: interp_instructions 588,905,757 -> 562,047,199
+and interp_allocs 656,976 -> 631,738, while interp_peak_bytes reads
+1,328,317, 1,060 more, for the library's extra arm. In the tab
+browser_run_instructions falls 64,341,530 -> 61,478,759. The arm is library
+code every compile reads, so the compile rows rise a little:
+compile_instructions 24,862,623 -> 24,864,430, entry_instructions
+73,686,908 -> 73,696,160, library_instructions 73,325,258 -> 73,344,720,
+emit_instructions 5,702,866 -> 5,703,136, codegen_instructions_dev
+116,733,865 -> 116,733,909, codegen_instructions_release 371,551,519 ->
+371,551,607, browser_compile_instructions 348,471,187 and
+browser_compile_peak_bytes 843,030. The run program emits the arm too:
+emitted_other_lines 170,150, emitted_other_calls 20,540,
+emitted_other_branches 17,831 and emitted_other_defines 2,262, and text
+reads 5,622,043. Welfare rises 95.41 -> 95.52 and is banked.
