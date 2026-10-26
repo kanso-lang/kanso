@@ -132,7 +132,12 @@ rows_c1n = list/concat rows_c1m2 [err_as_pattern force_chain]
 
 rows_c1o = list/concat rows_c1n [hand_box callback_err]
 
-rows_c1w = list/concat rows_c1o [bang_box guard_bound literal_bound]
+rows_c1w = list/concat rows_c1o [
+  bang_box
+  guard_bound
+  literal_bound
+  handed_length
+]
 
 rows_c1x = list/concat rows_c1w [guard_bind_linear guard_bind_chain]
 

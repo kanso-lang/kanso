@@ -1,0 +1,12 @@
+# The loop hands its bound on one larger each step, so after the first the
+# bound is no longer the list's length and the read can answer none.
+fn twice x
+  x * 2
+
+fn walk xs i n acc
+  if (i > n) acc (walk xs (i + 1) (n + 1) (acc + twice xs[i]))
+
+fn total xs
+  walk xs 1 (length xs) 0
+
+pub play = print "{total [1 2 3 4]}"

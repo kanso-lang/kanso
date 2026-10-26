@@ -185,6 +185,15 @@ literal_bound = row
   (breaking "a_literal_list_of_unknown_length")
   release
 
+# A third door: a bound handed down a loop as a list's length (kanso#2174).
+handed_length = row
+  "a length handed down a loop proving nothing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_length_handed_down_proves_nothing")
+  release
+
 # A type name inside a shell is several names: `<g/cell>effect` holds one
 # qualified name and one bare one, and the import check has to see the
 # qualified one. Splitting the whole spelling at its first slash answered

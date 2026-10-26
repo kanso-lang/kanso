@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `twice` has no arm for it — resolve it here, or give `twice` a `none` arm (in a_length_of_another_list_bounds_nothing.kso) (module a_length_of_another_list_bounds_nothing)
+  --> a_length_of_another_list_bounds_nothing.kso:7:52
+   7 |   if (i > n) acc (walk xs (i + 1) n (acc + twice xs[i]))
+                                                          ^

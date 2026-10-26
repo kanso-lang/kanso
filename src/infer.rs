@@ -498,6 +498,7 @@ pub fn infer(program: &Program) -> Inference {
     // one hop per round.
     let (order, mentions, mention_starts) = callee_first(program);
     let floors = counter_floors(program, &mentions, &mention_starts);
+    let lengths = handed_lengths(program, &mentions, &mention_starts);
     // `"{x}"` and `print x` call the render group on a value of any kind, and
     // neither is a call site this walk visits. So its parameters start at
     // every kind a value can be. Read from the explicit calls alone, a
@@ -555,6 +556,7 @@ pub fn infer(program: &Program) -> Inference {
             }
             let mark = ctx.facts.len();
             ctx.facts.extend(floors[i].iter().map(|&(name, k)| Fact::NamedLower(name, k)));
+            ctx.facts.extend(lengths[i].iter().map(|&(n, xs)| Fact::NamedLength(n, xs)));
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             ctx.facts.truncate(mark);
             let mut widened = false;
@@ -627,6 +629,11 @@ enum Fact<'a> {
     AtLeast(&'a str, i64),
     /// `name >= n` for a parameter, from `counter_floors`
     NamedLower(&'a str, i64),
+    /// `index <= name`, where `name` is a bare name and not a length
+    UpperName(&'a Expr, &'a str),
+    /// parameter `name` is `length list` for the whole arm, from
+    /// `handed_lengths`
+    NamedLength(&'a str, &'a str),
 }
 
 /// The list whose length `e` reads, when `e` is `length xs`.
@@ -717,6 +724,12 @@ fn facts_when<'a>(cond: &'a Expr, holds: bool, out: &mut Vec<Fact<'a>>) {
                 (">" | ">=", Some(xs), None) => out.push(Fact::Upper(r, xs)),
                 _ => {}
             }
+            // `index <= n`, where a parameter `n` may be some list's length
+            match (op, l, r) {
+                ("<" | "<=", _, Expr::Ident(n, _, _)) => out.push(Fact::UpperName(l, n)),
+                (">" | ">=", Expr::Ident(n, _, _), _) => out.push(Fact::UpperName(r, n)),
+                _ => {}
+            }
             // `length xs >= n`, in its spellings, and `length xs != 0`; the
             // length expression itself is then a lower-bounded index, which is
             // what `xs[length xs]` reads
@@ -789,6 +802,175 @@ fn rebinds(body: &[Stmt], name: &str) -> bool {
 /// turns most names away before a byte is compared.
 fn is_one_of(few: &[&str], name: &str) -> bool {
     few.iter().any(|c| c.len() == name.len() && *c == name)
+}
+
+/// Which parameter of a loop holds another parameter's length, where the
+/// program shows every value it is handed: per arm, `(n, list)` pairs. A loop
+/// that walks a list by index is written `walk xs 1 (length xs) acc` with
+/// `walk xs (at + 1) n ...` inside it, and its guard `at > n` then bounds
+/// `xs[at]` the way `at > length xs` would, without reading the length on
+/// every step.
+///
+/// The conditions are `counter_floors`': the group is not pub and never
+/// travels as a value; every call from outside it passes `length X` at the
+/// bound's position and the same name `X` at the list's; every call from
+/// inside it passes both of its own parameters on unchanged; and no arm
+/// rebinds either. Anything else leaves the pair unproven.
+fn handed_lengths<'p>(
+    program: &'p Program,
+    mentions: &[usize],
+    starts: &[u32],
+) -> Vec<Vec<(&'p str, &'p str)>> {
+    type Pairs = Vec<(usize, usize)>;
+    // A group that hands two of its own parameters to itself unchanged;
+    // nothing else can carry a length down a loop.
+    fn passes_own(e: &Expr, d: &crate::ast::FnDecl) -> bool {
+        if let Expr::App { head, args, piped: false, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if *n == d.name)
+                && args.len() == d.params.len()
+                && args
+                    .iter()
+                    .zip(&d.params)
+                    .filter(|(a, p)| {
+                        matches!((a, p), (Expr::Ident(x, _, _), Pattern::Var(own, _)) if x == own)
+                    })
+                    .count()
+                    >= 2
+            {
+                return true;
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || passes_own(c, d));
+        found
+    }
+    let mentioned = |i: usize| &mentions[starts[i] as usize..starts[i + 1] as usize];
+    let candidates: crate::hash::Set<&str> = program
+        .fns
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| !(d.is_pub || d.written_pub) && d.params.len() >= 2)
+        .filter(|&(i, d)| {
+            mentioned(i).contains(&i)
+                && d.body.iter().any(|stmt| {
+                    let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+                    passes_own(expr, d)
+                })
+        })
+        .map(|(_, d)| d.name.as_str())
+        .collect();
+    if candidates.is_empty() {
+        return vec![Vec::new(); program.fns.len()];
+    }
+    let few: Vec<&str> = candidates.iter().copied().collect();
+    let candidate_arms: Vec<bool> = program.fns.iter().map(|d| is_one_of(&few, &d.name)).collect();
+    let readers: Vec<usize> = (0..program.fns.len())
+        .filter(|&i| mentioned(i).iter().any(|&j| candidate_arms[j]))
+        .collect();
+    let mut escapes: crate::hash::Set<&str> = Default::default();
+    let mut arities: crate::hash::Set<(&str, usize)> = Default::default();
+    for (d, _) in program.fns.iter().zip(&candidate_arms).filter(|(_, &c)| c) {
+        arities.insert((d.name.as_str(), d.params.len()));
+        if d.is_pub || d.written_pub {
+            escapes.insert(d.name.as_str());
+        }
+    }
+    // (group, arity) -> the pairs every call so far allows; absent until the
+    // first call is seen
+    let mut allowed: HashMap<(&str, usize), Pairs> = HashMap::default();
+    struct Walk<'a, 'p> {
+        allowed: &'p mut HashMap<(&'a str, usize), Pairs>,
+        escapes: &'p mut crate::hash::Set<&'a str>,
+        arities: &'p crate::hash::Set<(&'a str, usize)>,
+        candidates: &'p [&'a str],
+    }
+    // The pairs one call passes: a bound position holding `length X` and a
+    // list position holding `X`, or, on a self-call, both positions holding
+    // the caller's own parameters unchanged.
+    fn pairs_of(args: &[Expr], caller: &crate::ast::FnDecl, recursive: bool) -> Pairs {
+        let mut out = Vec::new();
+        for (pn, an) in args.iter().enumerate() {
+            for (ps, as_) in args.iter().enumerate() {
+                if pn == ps {
+                    continue;
+                }
+                let ok = match recursive {
+                    false => match (length_of(an), as_) {
+                        (Some(x), Expr::Ident(y, _, _)) => x == y,
+                        _ => false,
+                    },
+                    true => {
+                        let own = |a: &Expr, at: usize| matches!((a, &caller.params[at]), (Expr::Ident(x, _, _), Pattern::Var(p, _)) if x == p);
+                        own(an, pn) && own(as_, ps)
+                    }
+                };
+                if ok {
+                    out.push((pn, ps));
+                }
+            }
+        }
+        out
+    }
+    fn visit<'a>(e: &'a Expr, caller: &'a crate::ast::FnDecl, w: &mut Walk<'a, '_>) {
+        match e {
+            Expr::App { head, args, piped, .. } => {
+                if let Expr::Ident(name, _, _) = head.as_ref() {
+                    if is_one_of(w.candidates, name) {
+                        if *piped || !w.arities.contains(&(name.as_str(), args.len())) {
+                            w.escapes.insert(name.as_str());
+                        }
+                        let recursive = caller.name == *name && caller.params.len() == args.len();
+                        let here = pairs_of(args, caller, recursive);
+                        let slot =
+                            w.allowed.entry((name.as_str(), args.len())).or_insert(here.clone());
+                        slot.retain(|p| here.contains(p));
+                    }
+                    for arg in args {
+                        visit(arg, caller, w);
+                    }
+                    return;
+                }
+            }
+            Expr::Ident(name, _, _) | Expr::Partial(name, _) if is_one_of(w.candidates, name) => {
+                w.escapes.insert(name.as_str());
+            }
+            _ => {}
+        }
+        crate::for_each_child(e, |c| visit(c, caller, w));
+    }
+    let mut w =
+        Walk { allowed: &mut allowed, escapes: &mut escapes, arities: &arities, candidates: &few };
+    for &i in &readers {
+        let d = &program.fns[i];
+        for stmt in &d.body {
+            let (Stmt::Bind { expr, .. } | Stmt::Expr(expr)) = stmt;
+            visit(expr, d, &mut w);
+        }
+    }
+    program
+        .fns
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            if !candidate_arms[i] || escapes.contains(d.name.as_str()) {
+                return Vec::new();
+            }
+            let Some(pairs) = allowed.get(&(d.name.as_str(), d.params.len())) else {
+                return Vec::new();
+            };
+            pairs
+                .iter()
+                .filter_map(|&(pn, ps)| match (&d.params[pn], &d.params[ps]) {
+                    (Pattern::Var(n, _), Pattern::Var(xs, _))
+                        if !rebinds(&d.body, n) && !rebinds(&d.body, xs) =>
+                    {
+                        Some((n.as_str(), xs.as_str()))
+                    }
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// The least value each parameter of a loop can hold, where the program shows
@@ -1022,6 +1204,10 @@ fn in_range(facts: &[Fact<'_>], index: &Expr, list: &str) -> bool {
         // the fact says base + eo <= length, so base + off is too when off <= eo
         Some(_) => facts.iter().any(|f| match f {
             Fact::Upper(e, xs) if *xs == list => same_base(e).is_some_and(|eo| eo >= off),
+            Fact::UpperName(e, n) => {
+                facts.iter().any(|g| matches!(g, Fact::NamedLength(m, xs) if m == n && *xs == list))
+                    && same_base(e).is_some_and(|eo| eo >= off)
+            }
             _ => false,
         }),
     }
