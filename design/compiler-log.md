@@ -1812,7 +1812,32 @@ failure is inside the library, and `test_verb/fails_in_std`, gain the line.
 Four mutations turn the corpus red: the native restore made a no-op, the
 interpreter's addition taken out, and the tail call kept on either engine.
 
-CI's rows: ROWS.
+CI's rows, against main at #2161. The interpreter's crossing test first
+scanned both files' paths for a fetched hako on every tail call, and
+`interp_instructions` read 582,178,759; a frame now carries the answer,
+read off its path once, and it reads 571,553,496 against main's
+565,868,501, the rest being the calls into the library made rather than
+looped. `interp_allocs` reads 628,009 and `interp_peak_bytes` 1,313,667.
+Natively the store and restore around each crossing move the run rows:
+`work_encodebench` 2,335,195,960, `work_livebench` 938,703,709,
+`work_widebench` 28,605,098, `work_deepbench` 198,242,568, `work_basket`
+18,294,810, `work_readbench` 4,583,158, `work_jsonbench` 557,387,287,
+`work_pendbench` 154,123,901 (down), `work_runbench` 822,286,353,
+`work_oneshot` 10,033,544, `work_digestbench` 4,122,972,
+`work_escapebench` 40,308,378, `work_indexbench` 1,837,160 and
+`work_scanbench` 274,245. The emitter writes the stores:
+`emitted_lines` 14,383, `emitted_other_calls` 20,496,
+`emitted_other_lines` 170,009, `emit_instructions` 5,725,463, `text`
+5,698,479, `lines` 1,597 and `module_lines` 1,186. Compiling them moves
+`codegen_instructions_dev` to 116,762,508 and `codegen_instructions_release`
+to 371,664,033. In the tab, `browser_compile_instructions` reads
+360,520,776, `browser_compile_peak_bytes` 842,026 and
+`browser_run_instructions` 61,510,637. The live vein's `cohort_kept` reads
+1 where it read 0: a program-to-library tail call is now a call, so the
+caller's beat stays open around it, and on its pop the survivor is more
+than half of what grew, so the region is kept rather than copied out; with
+that one arm of `emit_tail` taken back out it reads 0 again. Welfare is
+banked at 95.38, the floor taking what this ruled feature measured.
 
 ## 2026-10-26 — gavel: an err is born boxed
 
