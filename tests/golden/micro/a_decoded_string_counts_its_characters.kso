@@ -8,7 +8,7 @@ import "std/text"
 # builds the text a piece at a time: a run of the input, an ascii escape, a
 # `\u` code point, a surrogate pair. `chars` counts the same text one
 # character at a time, so each pair of numbers must agree.
-fn report (err _)
+fn report none
   print "refused"
 
 fn report s

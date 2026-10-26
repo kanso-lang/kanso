@@ -1,32 +1,25 @@
-# `.reason`, `.cause` and `.origin` read an err instead of propagating it —
-# the second deliberate hole in infectiousness, beside `wrap_err`'s second
-# argument. Every other operation on an err still passes it through, which
-# is why the readers are applied inside an `:err` arm or a rescue callback:
-# `"{e.cause}"` would answer the cause itself, and a bare binder handed the
-# err would pass it through.
+# `.reason`, `.cause` and `.origin` read an err instead of propagating it,
+# the second deliberate hole in infectiousness beside `wrap_err`'s second
+# argument. A failure is a box (ruled 2026-10-26), and the readers apply to
+# the unboxed err a rescue hands its callback, here to `:err` arms used as
+# callbacks.
 #
-# The arms are this module's and the errs are this module's. A bare err is
-# data (ruled 2026-09-15), so an `:err` arm takes one wherever it was raised;
-# `rescue` would not do here, because its licence is foreign-only and every
-# failure but json's was raised in this file. json's is foreign, and the last
-# line reads it through the word to keep that shape in the corpus.
+# A rescue's licence is foreign-only, so the failures are std/text's: a byte
+# value too large for `to_bytes`. A cause is read on an err another package
+# annotated, which takes two modules: `tests/golden/cause`.
 #
 # Settled failures only, so every engine including the page runs this one.
 # The origin names the file the err was raised in, and the harness stages a
 # copy under another path, so only the part before ` at ` is printed; an
 # import qualifies the raising function's name, so the part after its
-# module's slash. json's
-# failure carries a record whose own field is called `reason`, which is the
-# case where a reader and a record field share a name.
+# module's slash. json's failure carries a record whose own field is called
+# `reason`, which is the case where a reader and a record field share a name.
 import "std/json"
 import "std/list"
 import "std/text"
 
 fn boom n
-  err "config missing {n}"
-
-fn wrapped n
-  annotate (boom n) (e -> "config: {e.reason}")
+  text/to_bytes [(n + 300)]
 
 fn raised_in origin
   list/last (text/split (list/first (text/split origin " at ")) "/")
@@ -37,20 +30,10 @@ fn reason_of e:err
 fn cause_of e:err
   e.cause
 
-fn cause_reason_of e:err
-  e.cause.reason
-
-fn caused e:err
-  "cause: {e.reason}"
-
 fn origin_of e:err
   raised_in e.origin
 
-pub play = print (reason_of (boom 1))
-  .> (_ -> print (reason_of (wrapped 2)))
-  .> (_ -> print (cause_reason_of (wrapped 3)))
-  .> (_ -> print (cause_of (boom 4)))
-  .> (_ -> print (caused (cause_of (wrapped 5))))
-  .> (_ -> print (origin_of (boom 6)))
-  .> (_ -> print (origin_of (wrapped 7)))
-  .> (_ -> print (rescue (json/decode "[1, 2") (e -> e.reason.reason)))
+pub play = print (boom 1 .? reason_of)
+  .> (_ -> print (boom 2 .? cause_of))
+  .> (_ -> print (boom 3 .? origin_of))
+  .> (_ -> json/decode! "[1, 2" .? (e -> e.reason.reason) .> print)

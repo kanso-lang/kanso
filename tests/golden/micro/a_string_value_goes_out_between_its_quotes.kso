@@ -14,7 +14,7 @@ wide = "\"été\",\"\\u00e9\",\"q\\\"uo\",\"b\\\\sl\",\"t\\tab\""
 
 doc = "[{short},{wide},\{\"in\":[\"wxyz\"]}]"
 
-fn encoded (err _)
+fn encoded none
   "refused"
 
 fn encoded v

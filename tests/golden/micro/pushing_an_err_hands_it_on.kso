@@ -4,16 +4,18 @@
 # failure on. Both pushes are here, the one onto a fresh literal, which the
 # emitter writes in place, and the one onto a list read again afterwards. Found
 # by a generated program on 2026-09-28.
-import "std/text"
+fn boom what
+  return 0 if what == "zero"
+  err "\"{what}\" is not an integer"
 
-fn told (err _)
+fn told _:<some>effect
   "handed on"
 
 fn told xs
   "{xs}"
 
 fn pushed n
-  bad = text/to_int "x{n}"
+  bad = boom "x{n}"
   kept = [n]
   fresh = push [1 2] bad
   shared = push kept bad

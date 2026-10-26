@@ -1,3 +1,4 @@
+import "std/testing"
 import "std/text"
 
 # A loop whose cursor may be an err, and an err built inside the lap.
@@ -6,11 +7,11 @@ import "std/text"
 # the arena on the edge back into `walk`. The cursor crosses that rewind as
 # a number, which needs nothing copied. On the lap that meets the `x` after
 # the `#`, `skip` answers an err instead, holding a record built in the
-# lap's own storage, and `walk`'s err arm hands it on. A rewind
-# taken on that edge handed the record's storage back, the err picked up a
-# hop on its way out and the hop was written over the record, and the
-# caller met a record with no type: the err arm below did not match it and
-# the program died with an unhandled err.
+# lap's own storage, and the failure passes `walk`. A rewind taken on that
+# edge handed the record's storage back, the err picked up a hop on its way
+# out and the hop was written over the record, and the caller met a record
+# with no type. The failure is this file's own, so std/testing's
+# `when_failed` reads it.
 type failure
   at
   why
@@ -18,9 +19,6 @@ type failure
 fn skip cs p
   return err (failure p "stopped") if cs[p + 1] == 120
   p + 1
-
-fn walk _ e@(err _)
-  e
 
 fn walk cs p
   look cs cs[p] p
@@ -35,10 +33,7 @@ fn look cs 35 p
 fn look cs _ p
   walk cs (p + 1)
 
-fn report (err (failure at why))
+fn report (failure at why)
   "failed at {at}: {why}"
 
-fn report v
-  "reached {v}"
-
-pub play = print (report (walk (text/bytes "ab#xc") 1))
+pub play = print (testing/when_failed (walk (text/bytes "ab#xc") 1) report)

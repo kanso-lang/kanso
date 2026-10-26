@@ -1,7 +1,8 @@
-# Three patterns can hold an err — `(err …)`, an `:err` annotation, and a
-# typeset with err among its members — and the table says which, for every
-# pattern form a parameter can take. It lived in three scattered fixtures
-# covering three of its cells before it was one table.
+# Three patterns hold an err a rescue has opened: `(err …)`, an `:err`
+# annotation, and a typeset with err among its members. One holds a failure
+# still in its box: an effect annotation. The table says what each pattern
+# form a parameter can take does with a failure. It lived in three scattered
+# fixtures covering three of its cells before it was one table.
 #
 # Two divergences were cells of it. `_:some` took a foreign failure on two
 # engines and was refused outright at build time on the third (#1052). A
@@ -11,19 +12,15 @@
 # the tree.
 #
 # `took` means the arm fired. `past` means the failure went by as though the
-# arm were not written. The table had a second column for a failure this
-# module spelled. Since #1884 a spelled err reaches only the three rows that
-# admit one; the other seven refuse it at check, bound to a name or not. So
-# the failure here is the runtime's, `text/to_int` refusing text it cannot
-# read, which is the one that can still reach a pattern unannounced. Adding a
-# spelling to the language means adding a row here.
+# arm were not written. An err is born boxed (#2087), so every row lets the
+# failure pass except the effect annotation. `boom` can answer a number, so
+# the checker cannot prove its failure is one and lets each call stand.
 #
 # `when_failed` hands the reason to its callback and answers `false` when
 # there was no failure, so `outcome` reads that `false` as `took`. It is
 # std's arm that reads the err, which keeps the table about the patterns
 # rather than about which module wrote them.
 import "std/testing"
-import "std/text"
 
 type maybe err int
 
@@ -37,7 +34,8 @@ fn outcome v
   v
 
 fn boom what
-  text/to_int what
+  return 0 if what == "zero"
+  err "\"{what}\" is not an integer"
 
 fn wildcard _
   "took"
@@ -69,6 +67,9 @@ fn absent _:none
 fn exact 1
   "took"
 
+fn boxed _:<some>effect
+  "took"
+
 failed = boom "x"
 
 wildcard_seen = outcome (testing/when_failed (wildcard failed) slipped)
@@ -91,6 +92,8 @@ absent_seen = outcome (testing/when_failed (absent failed) slipped)
 
 exact_seen = outcome (testing/when_failed (exact failed) slipped)
 
+boxed_seen = outcome (testing/when_failed (boxed failed) slipped)
+
 pub play = print "pattern   failure"
   .> (_ -> print "_         {wildcard_seen}")
   .> (_ -> print "v         {variable_seen}")
@@ -102,3 +105,4 @@ pub play = print "pattern   failure"
   .> (_ -> print "v:string  {text_seen}")
   .> (_ -> print "v:none    {absent_seen}")
   .> (_ -> print "1         {exact_seen}")
+  .> (_ -> print "v:effect  {boxed_seen}")

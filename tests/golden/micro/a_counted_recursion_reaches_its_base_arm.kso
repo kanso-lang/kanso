@@ -12,16 +12,13 @@
 import "std/json"
 
 fn said (err r)
-  "the err arm handed it on: {r.reason}"
+  "the failure passed step: {r.reason}"
 
 fn step 0
   "base"
 
 fn step none
   "step nothing"
-
-fn step e@(err _)
-  e
 
 fn step n
   "step {n}"
@@ -37,5 +34,5 @@ pub play = print (step 0)
   .> (_ -> print (step (0 - 1)))
   .> (_ -> print (step "x"))
   .> (_ -> print (step none))
-  .> (_ -> print (rescue (step (json/decode "[1, 2")) said))
+  .> (_ -> print (rescue (step (json/decode! "[1, 2")) said))
   .> (_ -> print "{total 0 10}")
