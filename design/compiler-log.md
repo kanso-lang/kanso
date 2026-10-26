@@ -23,28 +23,6 @@
 
 
 
-## 2026-10-25 — a function's arms split across files are counted together
-
-From #2090, toml's port. A module's files share their declarations, and
-toml's `lookup` had a 2-argument arm in one file that called a 3-argument
-arm in the next. The per-file check counted only the arms in the file it was
-reading and refused the call with "no 3-argument arm of `lookup` (arms take
-2)". The same two arms in one file ran.
-
-The module path now records, for each function its files declare, whether
-more than one file declares arms of it, and the per-file arity check leaves
-such a name to the merged check, which sees every arm. A count no file's arms
-take is still refused there, and the message names every arity: "no
-4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
-said "arms take 2".
-
-`tests/arms_split_across_files.rs` runs toml's shape on both engines and
-pins the refusal; main fails both.
-
-The module path now counts, per name, which files declare it. The rows are
-counted with the batch this landed in, at the end of "an import stays in the
-file that writes it".
-
 ## 2026-10-25 — a field is read without importing its owner, on every path
 
 From #2090, regex's port. Chapter 03 says nothing has to be imported to read
@@ -1886,3 +1864,28 @@ the tab: emit_instructions 5,687,958 -> 5,688,137 and
 browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
 than a hundredth, and the floor is lowered by exactly that, since this makes native
 build a program the language allows.
+
+## 2026-10-26 — a length handed down a loop bounds its reads
+
+#2174. A loop that walks a list by index usually hands its bound down once,
+`walk xs 1 (length xs) 0`, and guards with `i > n`. The prover had two doors
+for the upper bound of `xs[i]`, a guard written against `length xs` and the
+length a literal list spells out, and the guard against `n` passed neither,
+so a read like `twice xs[i]` was refused unless the loop read `length xs`
+again on every step. #2088 makes that the common case, since a name bound to
+such a read now carries its none too: bench/indexbench, migrated to `i >
+length s`, reads 13% more instructions for it.
+
+`handed_lengths` (`src/infer.rs`) is a third door. It proves that a
+parameter holds another parameter's length for a whole arm on the terms
+`counter_floors` proves a floor: the group is not pub and never travels as a
+value, every call from outside passes `length X` at the bound's position and
+the same name `X` at the list's, every self-call passes both on unchanged,
+and no arm rebinds either. The arm starts with that fact, and a guard `i >
+n` gives the read its upper bound through it.
+
+`a_length_handed_down_bounds_the_read` (micro) prints `20 0` on both
+engines, and main refuses it. `a_length_of_another_list_bounds_nothing` and
+`a_bound_that_grows_bounds_nothing` (errors) keep the two near misses
+refused. The ratchet row `a length handed down a loop proving nothing` drops
+the fact and watches the micro corpus go red.
