@@ -1,0 +1,2 @@
+error[runtime]: put writes a list at an int position
+  failed in put_writes_a_list_at_an_int_position/play at put_writes_a_list_at_an_int_position.kso:7

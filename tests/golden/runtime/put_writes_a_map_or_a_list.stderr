@@ -1,0 +1,2 @@
+error[runtime]: put writes a map at a key or a list at a position
+  failed in put_writes_a_map_or_a_list/play at put_writes_a_map_or_a_list.kso:5

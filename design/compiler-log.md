@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-25 — a module's own type beats an imported function of its name
-
-From #2090, mal's port. A module declared `type tally` beside
-`import "std/list"`, which exports a one-argument `list/tally`. Every
-construction `tally a b` was refused with "no 2-argument arm of `tally`
-(arms take 1)": the import's function, enrolled under its bare name, took
-the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
-shape. diff's `drop` is a record in std/list too, and main built std/list's
-record for `drop 3 4`, whose field `d.a` the run then could not read.
-
-`own_types_beat_twins` already let a module's own type beat an import's type
-of the same name. It now does the same for an import's function: a
-synthetic bare function named like a type the module declares is dropped,
-at any arity. A module cannot declare a function and a type of one name, so
-such a function can only be an import's twin. The import's function stays
-reachable as `list/tally`.
-
-`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
-`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
-refuses it.
-
 ## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
 
 From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
@@ -1707,6 +1686,74 @@ what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
 entry_instructions 73,813,902 -> 73,811,997, library_instructions
 73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
 359,922,521. Welfare rises by less than a hundredth and the rise is banked.
+
+## 2026-10-26 — `put` writes a list at a position
+
+The 2026-10-25 gavel on #2086 rules that `put xs i v` on a list answers the
+list with element `i` replaced, 1-based as `xs[i]` reads it, and `none` for
+a position outside the list. A position that is not an int stops the run,
+on both engines, with "put writes a list at an int position"; a first
+argument that is neither a map nor a list stops it with "put writes a map at
+a key or a list at a position", where both used to say "put takes a map, a
+key, and a value". A position past a word answers `none`, as a read there
+does.
+
+The interpreter replaces the element in a copy of the vector, or in the
+vector itself at a site the linearity analysis licenses. The native runtime
+does the same in `k_list_put`, which `k_b_put` and `k_b_put_mut` reach on a
+list before their map arms. No analysis changed: `put` with three arguments
+was already a write into its first argument wherever that argument was
+unique, so a list built by in-place pushes and handed down a loop is
+written where it stands.
+
+A persistent push hands its answer the buffer it was given when the list is
+that buffer's frontier, so two lists can share one buffer. I first had the
+in-place write copy a list into a buffer of its own before writing, and
+then wrote programs to make the copy matter: a push onto a list still held,
+followed by a write into the push's answer, and a function that writes into
+a literal on every call. Neither write was in place. The analysis calls a
+push's answer unique only when the list pushed onto is, which is the case
+where the push was in place and nothing shares the buffer, and a list
+literal is built afresh on each evaluation. Both programs print the same
+lines with the copy taken out, so I removed it.
+
+Inference answers `LIST | NONE` for `put` on a list, `MAP` on a map, and
+both where the first argument could be either. The checker's literal table
+takes a list for `put`, and the after-inference walk that refused a list
+handed to `put` (#2091's fifth item) now asks only of `delete`, `keys`,
+`values` and `entries`, so diff F9 and inflate F8, which passed check and
+stopped at run time, now pass both.
+
+`a_list_written_at_a_position` (micro, both engines) writes inside the list,
+at 0, one past the end, -1 and a bignum, into a literal, with a list as the
+value, into an empty list, through a loop that fills six squares, through
+the shared-buffer program and through the literal written on every call.
+`a_list_written_in_place_is_not_copied` (mem) fills 4,000 squares into a
+list built by pushes and reads allocs=10. `put_writes_a_list_at_an_int_position`
+pins the refusal, and `put_takes_a_map_a_key_and_a_value` is renamed
+`put_writes_a_map_or_a_list` with the new words. `errors/a_list_handed_to_put`
+becomes `a_list_handed_to_delete`, the same two shapes handed to `delete`.
+Three mutations turn the corpus red: the native in-place write made a copy
+(the mem golden), the persistent write made through the original (the
+micro, natively), and the interpreter writing at the wrong position (the
+micro, interpreted). Appendix B's `put` entry gains the list signature and a
+sample.
+
+CI's rows, against main at #2160. The runtime's machine code grows by
+`k_list_put` and the two puts' list arms, 752 bytes in every benchmark binary:
+text 5,679,729 -> 5,690,257. The interpreter reads interp_instructions
+565,857,214 -> 565,868,501, its `put` arm asking first whether it holds a
+list, and interp_allocs 628,011 -> 628,003. The tab reads
+browser_run_instructions 61,465,433 -> 61,508,652 and
+browser_compile_instructions 359,922,521 -> 359,923,093. The rest move by
+layout: compile_instructions 25,156,620 -> 25,156,569, entry_instructions
+73,811,997 -> 73,811,949, library_instructions 73,482,762 -> 73,482,714,
+codegen_instructions_dev 116,504,899 -> 116,505,396,
+codegen_instructions_release 370,158,521 -> 370,153,673, and among the
+benchmarks work_basket 18,278,697 -> 18,266,806, work_runbench
+822,295,072 -> 822,288,845, work_encodebench 2,327,387,236 ->
+2,327,387,586, work_livebench 936,013,522 -> 936,013,844, work_oneshot
+10,033,523 -> 10,034,013 and work_readbench 4,581,973 -> 4,581,975. Welfare holds at 95.38 and is banked.
 
 ## 2026-10-26 — a failure inside the library names the program line that called in
 

@@ -109386,3 +109386,24 @@ other constructor diagnostics' do.
 `errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
 `errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
 main passes both. The stdlib, the twenty ports and kq check as before.
+
+## 2026-10-25 — a module's own type beats an imported function of its name
+
+From #2090, mal's port. A module declared `type tally` beside
+`import "std/list"`, which exports a one-argument `list/tally`. Every
+construction `tally a b` was refused with "no 2-argument arm of `tally`
+(arms take 1)": the import's function, enrolled under its bare name, took
+the call. datalog (`repeat`), make (`run`) and diff (`drop`) met the same
+shape. diff's `drop` is a record in std/list too, and main built std/list's
+record for `drop 3 4`, whose field `d.a` the run then could not read.
+
+`own_types_beat_twins` already let a module's own type beat an import's type
+of the same name. It now does the same for an import's function: a
+synthetic bare function named like a type the module declares is dropped,
+at any arity. A module cannot declare a function and a type of one name, so
+such a function can only be an import's twin. The import's function stays
+reachable as `list/tally`.
+
+`tests/golden/micro/a_type_named_like_an_imported_function_is_built` builds
+`tally` and `drop` and calls `list/drop` beside them, on every engine. Main
+refuses it.

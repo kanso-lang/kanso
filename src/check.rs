@@ -2301,7 +2301,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("net_close", &[&[Int]]),
         ("concat", &[&[List], &[List]]),
         ("push", &[&[List]]),
-        ("put", &[&[Map]]),
+        ("put", &[&[Map, List]]),
         ("delete", &[&[Map]]),
         ("sleep", &[&[Int]]),
         ("random", &[&[Int]]),
