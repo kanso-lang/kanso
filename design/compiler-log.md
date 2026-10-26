@@ -1752,4 +1752,8 @@ the library or `done`, keeps the message without a line.
 carry the new line, as does appendix A's panel. Adding a space to the message
 turns both red.
 
-CI's rows: ROWS.
+CI's rows, against main at #2155. The rewrite runs only on a refusal, so
+what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
+entry_instructions 73,813,902 -> 73,811,997, library_instructions
+73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
+359,922,521. Welfare rises by less than a hundredth and the rise is banked.
