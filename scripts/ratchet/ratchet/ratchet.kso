@@ -656,12 +656,14 @@ fn greened picked pairs _ acc true
 
 fn greened picked pairs at acc false
   p = present pairs[at]
-  shell base_dir p.setup .> (s -> base_setup picked pairs at acc p s.status)
+  ran = (s -> base_setup picked pairs at acc p s (s.status == 0))
+  shell base_dir p.setup .> ran
 
-fn base_setup picked pairs at acc p 0
+fn base_setup picked pairs at acc p _ true
   shell base_dir p.gate .> (g -> base_gate picked pairs at acc p g)
 
-fn base_setup picked pairs at acc p s
+# `unmade` quotes what the setup said, so it is handed the run, not its status.
+fn base_setup picked pairs at acc p s false
   greening picked pairs (at + 1) (push acc (unmade p s))
 
 fn base_gate picked pairs at acc p g
