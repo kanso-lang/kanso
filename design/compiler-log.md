@@ -23,260 +23,6 @@
 
 
 
-## 2026-10-24 — a chain built from the left runs past the beat stack
-
-The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
-stopped at its first compile error, under rulings made since, so each was
-migrated and its journal re-tested; the re-sit has its own entry. Two ports,
-rg and site, hit the same native crash, and this entry fixes it.
-
-rg walks a directory by folding `.>` onto an effect, once per entry:
-`list/fold entries (effect 0) added`, where `added` answers
-`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
-and native code runs it by entering `k_exec` for the inner chain from the
-outer one, a frame per link. The interpreter printed the sum at 100,000 links.
-Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
-
-Two faults were behind it, and both were in `k_exec`.
-
-- Each chain pushes a beat mark and then reads and writes
-  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
-  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
-  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
-  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
-  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
-  runs in `k_exec_unmarked`, which does what a beat past the stack has always
-  done: it keeps count and stages nothing, and its garbage waits for an outer
-  mark.
-- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
-  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
-  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
-  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
-  360 bytes a link.
-
-`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
-and prints `total 500500` on every engine. Main stops it with "ran out of
-stack". With the frame fix alone and the depth guard removed, it stops the
-same way. A chain of 100,000 links still runs out of native stack: the
-interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
-gives, as any deep recursion does. Running a left-built chain without
-recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
-there would lose the failure it is owed, so it is not attempted here.
-
-A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
-links one segfaults on main as well as on this branch, at 20 links, before
-printing anything. The sweep's own `--prove` was not run, and nothing here
-claims a clean sweep.
-
-CI's rows. Every benchmark does less work, because a frame that reserved
-64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
-work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
-28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
-2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
-work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
-4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
-4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
-and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
-274,348. Every binary's text grows 2,576 bytes for the two new functions,
-runbench's to 762,112, and text, the sum over fourteen binaries, from
-5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
-codegen_instructions_dev 116,426,119 -> 116,447,795 and
-codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
-
-## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
-
-The 2026-10-12 entry "a name the author declared wins over a builtin and an
-import" fixed three reductions from the ports. The re-sit found two more
-paths the rule did not reach, from three ports.
-
-- **Native code, a direct call.** ugit and sat declare `fn step a b` and
-  import std/list, which exports a record `step` and enrols it under the
-  bare name. Under `kanso play`, native code built the record:
-  `print "{step 1 2}"` printed `list/step 1 2`, where the interpreter
-  printed `3`. The 10-12 spec passed the function as a value
-  (`apply counting`), which already worked; a call named directly reached
-  `emit_call`'s constructor branch first. The branch now asks
-  `constructs`, which gives an enrolled type way to a group the program
-  declares, as the interpreter's `callee` does. std/list's own
-  constructions are unchanged: `iterate`, `naturals` and `fold`, which
-  build `step` and `counting` records, print the same on both engines
-  with a local `step` and `counting` in the file.
-- **The interpreter, a constant.** make declares `fn read_line at s`, and
-  std/io exports `read_line`, a constant over `builtin_read_line`. The
-  interpreter evaluates a call's head as a value, and `resolve` took the
-  enrolled constant, and behind it the described builtin of the same
-  name, before the file's own group. The call stopped with "`<io>` is not
-  callable", and 57 of make's 82 fixtures went red on that engine. A group
-  with an arm the program declares now wins both rungs.
-- **Both engines, a type.** mustache declares `type env` and imports std/os,
-  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
-  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
-  the bare name to `os/env`, because the only declarations it counted were
-  functions, and `apply_wrappers` sent that on to `builtin_env`. The
-  interpreter printed `<io>`; native code still built the record, by a path
-  this did not reach. Both passes now leave a name the program declares as a
-  type, and each alone leaves the interpreter printing `<io>`.
-
-`tests/golden/play/a_function_named_like_an_imported_type` gains the direct
-call, and main prints `2 list/counting 3 4` for it natively.
-`tests/golden/play/a_function_named_like_an_imported_constant` is make's
-shape; main stops it on the interpreter.
-`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
-main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
-on both engines, and the walk over the play corpus now reads twelve goldens.
-
-One shape from the same family is not fixed here. kv's module form, a
-function named `read_line` passed by value to `list/fold` in a module that
-imports std/io, stops every engine with "`<io>` is not callable", on main and
-on this branch. The module's own name is lost in `qualify`, a path none of
-these fixes touch.
-
-CI's rows. The front end asks the two new questions of every program it
-compiles, and the tab compiles with the same front end:
-compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
--> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
-emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
-385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
-Nothing at run time moved. Welfare fell by less than a hundredth, and the
-floor follows: this makes the engines agree, which the welfare script's own
-header puts ahead of the score.
-
-## 2026-10-24 — a record returned by value keeps its shape across a pipe
-
-#2091's first item, from the mustache port. `half` answers a two-field
-record or an err, and escape analysis returns a record of that shape by
-value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
-of the value's tag, a call of `shown` on the success path, and a phi joining
-the two paths as `%KValue`s. The failure edge named the value as it came,
-three words, and clang refused the module: "'%t1' defined with type
-'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
-
-The boxing rewrite that turns a by-value record into a `%KValue` wherever a
-line names it as one reads `%KValue %t1`, and a phi's operand list names its
-values bare, so the rewrite never reached this line. The pipe now boxes the
-value for the failure edge before it branches, and boxes the call's answer
-when that comes back by value too. The call itself still takes the three
-words, since `shown` takes them by value.
-
-`micro/a_record_returned_by_value_is_piped_on` runs the success and the
-failure paths. Main stops it in clang; every engine now prints `4/2` and
-`failed: zero`.
-
-CI's rows: the emitter writes the box where it wrote nothing, so
-emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
-emits the same way, takes browser_compile_instructions from 216,735,094 to
-216,735,256. No benchmark builds a pipe of that shape, and nothing at run
-time moved.
-
-## 2026-10-24 — a loop counter knows where it starts
-
-The ports' re-sit counted the same complaint in about ten journals: a guard
-proves a list read only when it is written `i < 1 or length xs < i` (httpd
-F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
-its counter at one and only adds to it, and its author writes the guard on
-the far end alone: `return acc if length xs < at`. The checker read that as
-a bound above and none below, so `xs[at]` could be a none, and the read had
-to be resolved where it could not miss.
-
-Inference now gives a parameter a floor when every value it can hold is in
-sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
-outside the program exists. It is never named except as the head of a call
-with an arity it declares, so it never travels as a value or a partial.
-Every call from outside the group passes an integer literal at that position.
-Every call from inside passes the parameter itself plus a literal that is not
-negative, and no arm rebinds the parameter. The floor is the least literal,
-and it enters each arm as a fact beside the ones guards add, so `in_range`
-reads `at >= 1` from it and the guard on the far end finishes the proof.
-
-`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
-refuses it with "this can be a none and `double` has no arm for it". Two
-error goldens pin where the floor stops: a loop entered at zero
-(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
-the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
-lambda, whose arguments come from out of sight, is refused as before.
-
-A proven read carries no none in inference's sets, so inference settles
-sooner where std/text reads one: compiling `text/uppercase` alone now takes
-223 expression visits, one fewer, and
-`tests/an_import_reads_what_the_program_names.rs` says so.
-
-What it does not reach: the about 130 reads #2088's named-none check refuses
-in the tree. With the floor under that check the count is still 130. Most of
-them read behind a bound passed through a boolean, `applied dir list at acc
-(at > length list)` with the read in the `false` arm, where the fact lives in
-the caller and no floor on the counter covers it.
-
-CI's rows. Every compile asks the call graph where each counter starts, and
-the tab compiles with the same front end: compile_instructions 24,230,258 ->
-24,488,495, entry_instructions 71,606,414 -> 72,335,545,
-library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
--> 5,637,678, compile_allocs 13,789 -> 13,815 and
-browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
-corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
-401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
-native moved. Welfare fell by less than a hundredth, and the floor follows
-under the language exception: the ruling asks for index reads to be proven,
-and this proves more of them.
-
-## 2026-10-24 — a field read is asked the none question the same way on every route
-
-`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
-inflate's port has the shape: `fn go (req none)` answers a request whose
-path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
-test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
-split, and toml's had it between `check lib` and `check main.kso`.
-
-The none question in `after_infer.rs` asks whether an argument can be a none.
-It answers no for a field read, so a none carried in a field stays the
-runtime's sentence. But the module and play routes run the check before
-field reads are rewritten into getter calls, and the entry and test routes
-run it after. On those two the argument was a call to `Get_path`, whose
-return set is every value the field was built from, and the first arm's
-claim on the none never reaches that set. The question now answers no for a
-getter call too, so all four routes give a field read the same answer.
-
-`tests/golden/test_verb/claims_a_field` is inflate's shape, and
-`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
-it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
-in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
-what `check lib` passed.
-
-Whether a none carried in a field should be refused at check is #2088's
-question, for every route at once.
-
-CI's rows. A getter call now answers the none question before the table
-lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
-entry_instructions 72,335,545 -> 72,317,212, library_instructions
-72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
-218,016,527. Welfare rose, and the rise is banked.
-
-## 2026-10-24 — a test file's helper is checked like its constants
-
-Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
-module beside it and nothing else. A test constant that names a private
-function is refused at check. A helper function in the test file that names
-one was not: xsv's port called the module's private `hidden` from a helper,
-`kanso check` passed it, and `kanso test` failed that test at run time with
-"error[runtime]: unknown name `~hidden`", a spelling the author never wrote.
-(#2091, item 2.)
-
-The check does refuse the name. It sends a call it cannot resolve inside a
-function to a traveling group, which the program's root fills from every
-module that writes the name for a type it owns, or refuses. A library
-compile leaves that to whatever imports it, so `compile_library_beside`
-dropped the shades and moved on. A test file is compiled on the same path,
-and nothing imports it. It now settles the groups where it is compiled, with
-`enroll_travelers`, as the entry and module paths do, and the helper's call
-is refused at check with the same `unknown name` error the constant gets.
-
-`tests/golden/test_verb/reaches` is the reduction, and
-`a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
-pins its stderr. On main it prints the run-time error above.
-
-A library compile takes the path it took before, and the test verb has no
-row. The rows this moved are counted with the batch it landed in, at the end
-of "an import stays in the file that writes it".
-
 ## 2026-10-24 — a module's own function beats an imported constant of its name
 
 #2090's first item, from the kv port. A module that imports std/io and
@@ -1766,6 +1512,230 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
+
+Clay ruled #2085. Every function in a module is visible from every file of
+it, so a local in one file that reuses a name declared in another file
+shadows a callable name, which is what no-shadowing forbids. Eighteen of the
+twenty ports met it as action at a distance: a declaration added in `b.kso`
+refused a parameter in `a.kso`, and the refusal pointed at the parameter
+without naming the declaration.
+
+**The ruling.** The rule stands across files. The refusal names the
+declaration it collides with, by file and line, so the fix is a rename made
+knowing what clashed. Letting a local reuse a name declared only in another
+file was declined, because inside the local's scope the name would mean two
+things. File-scoped private names were declined, because they would end the
+sharing of helpers between a module's files.
+
+Owes, on #2085: the refusal names the colliding declaration's file and line;
+an error golden for a two-file module.
+
+## 2026-10-25 — gavel: `put` writes a list at an index
+
+Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
+`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
+list, so the ports built vectors from maps with integer keys and paid for
+keys they did not need.
+
+**The ruling.** `put xs i v` answers the list with element `i` replaced,
+1-based like `xs[i]`. An index outside the list answers `none`, as a read
+there does. A list nothing else holds is written in place, as a map already
+is.
+
+Owes, on #2086: `put` on a list on every engine; the in-place write under
+the existing uniqueness analysis; the checker accepting a list for `put`, and
+refusing at check what it refuses at run time (diff F9, inflate F8); micro and
+mem goldens; appendix B.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
+
+## 2026-10-25 — a list walked by its rest joins the corpus
+
+`rest = list/to_list (list/drop xs 1)` is how most of this repository's
+scripts walk a list: the welfare script, the trend gate, `golden_prose` and
+the differentials among them. A battery of list and text shapes run at two
+sizes on both engines found it the worst of them. Each rest is built afresh,
+so a walk costs the square of the list on any engine, and `list/drop` builds
+it by stepping a cursor through the list one record at a time: `fold` has an
+arm that reads a capped cursor by index, which `take` reaches, and none for
+a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
+the interpreter, about 260 instructions an element stepped natively and
+12,700 interpreted.
+
+Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
+500 elements and the interpreted corpus with 70, measured on main at #2148
+before its fix. On this container the run program reads 888,090,230 with it
+and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
+interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
+same line for it.
+
+The rest of the battery is linear or n log n on both engines: `group_by`,
+`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
+elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
+natively and quadratic on the interpreter, 64 ms at 5,000 characters and
+563 ms at 20,000. On #2152's build, which shares a long string and slices
+an ASCII one by byte, the same two read 39 ms and 77 ms.
+
+CI's rows, against main at #2141. The run program reads work_runbench
+828,232,672 -> 869,011,503, and each rest's step records cost it memory as
+well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
+242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
+94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
+23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
+1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
+run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
+emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
+168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
+-> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
+interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
+623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
+browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
+1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
+344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
+re-bases the eight terms among these it weighs, each keeping its ratio to
+its baseline, and the floor stays at 95.22.
+
+## 2026-10-25 — the rest of a list after a drop is one copy
+
+`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
+`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
+a list, and it asks a new internal builtin, `rest_from`. Given a list and a
+position of at least 1, it answers the list's elements from that position
+on, copied in one move. Given anything else it answers none, and std walks
+that a step at a time as before, so a string still drops to its characters,
+bytes to their numbers and a negative count to nothing. `fold` gains the
+indexed arm a capped cursor already had, so a fold over a drop reads by
+index. Before this, each rest was built a step record and an advanced cursor
+per element.
+
+Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
+interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
+so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
+shared its list's storage would be linear, but a list's items pointer is
+also how a push onto it finds its buffer's header, so a list that points
+into the middle of another's items needs a header of its own first.
+
+`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
+the end and a negative count, from lists of numbers, records and lists, and
+from a string, bytes and a map, which keep their step walk; it also folds
+over a drop. Its output is main's interpreter, and both engines agree with
+it. A first draft clamped a negative drop to the whole list, where main
+answers none of it, and the fixture caught the difference. Moving the copy
+one element either way, on either engine, turns it red.
+
+On this container the run program reads 888,090,230 -> 847,406,017 and the
+interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
+phase's 40.8 million instructions natively, and all but 1.7 million of its
+34 million interpreted.
+
+CI's rows, against #2156's phase. The run program reads work_runbench
+869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
+-> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
+20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
+run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
+1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
+list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
+27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
+523,165,714 against the phase. Main at #2152 added `texts` to the
+interpreted corpus, so against main the interpreter's rows carry the phase
+and its fix together: interp_instructions 564,058,857 -> 565,857,214,
+interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
+1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
+61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
+
+The longer std/list and the builtin cost every compile. Against main at
+#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
+72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
+compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
+emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
+116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
+370,222,776. The front end visits compile_corpus more often and holds more
+while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
+598,984 -> 607,213, read on this container, whose rustc is the one the
+golden names. The tab compiles the corpus with `rested` in it as well, so
+its compile rows carry the phase too: browser_compile_instructions
+344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
+839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
+code carries the new runtime function, about 704 bytes each: text
+5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
+two programs that never drop read work_encodebench 2,327,386,052 ->
+2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
+emitted lines of the drop's new arms land at emitted_other_lines 168,907,
+emitted_other_branches 17,946, emitted_other_calls 20,494 and
+emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
+list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
+Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-25 — a delete marks its pair dead where it stands
+
+`k_b_delete_mut` took a key out of a map nobody else holds by moving every
+pair after it down one slot. In the run program's `drained` phase that move
+was 87% of the phase's instructions, and draining half of 80,000 keys took
+0.92 s (#2118).
+
+Now the deleted pair keeps its slot. Its key moves into the value's slot, and
+the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
+stay sorted by key, so the next delete finds its key with a binary search
+that reads a dead pair by the key it kept. Dead pairs at the end of the map
+are dropped at once. The header records the state in `sorted_len`, which is
+negative while the map has no view: -(len + 1) while the pairs are what the
+deletes left, and any other negative once an in-place put appends past them.
+A lookup searches past the dead pairs. Every other reader closes the gaps
+first, in one pass at the top of `k_map_sort_build`. A persistent put closes
+them before it can share the pairs with a new header, and so do the deep copy
+and the carry's evacuation, whose headers start with no view.
+
+Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
+takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
+6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
+
+`delete_marks` counts the pairs marked dead. It is printed only by a run that
+marked one, so the veins that never delete in place, the sibling
+repositories' among them, read as before. The run program reads 550 and
+`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
+`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
+reader: a lookup, the length, the keys, an in-place put and a delete after
+it, a delete of a key already gone, a drain to empty, and two persistent
+puts beside the maps they copy. Three mutations turn it red: a search that
+answers a dead pair, a persistent put that shares dead pairs, and gaps
+closed as though nothing had been appended.
+
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.
 
 ## 2026-10-26 — a refused binding names the line its name is declared on
 

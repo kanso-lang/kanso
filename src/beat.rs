@@ -1712,6 +1712,7 @@ fn expr_allocates(
         "map",
         "push",
         "put",
+        "rest_from",
         "slice",
         "sort",
         "utf8",
