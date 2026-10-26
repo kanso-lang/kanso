@@ -23,28 +23,6 @@
 
 
 
-## 2026-10-25 — a function's arms split across files are counted together
-
-From #2090, toml's port. A module's files share their declarations, and
-toml's `lookup` had a 2-argument arm in one file that called a 3-argument
-arm in the next. The per-file check counted only the arms in the file it was
-reading and refused the call with "no 3-argument arm of `lookup` (arms take
-2)". The same two arms in one file ran.
-
-The module path now records, for each function its files declare, whether
-more than one file declares arms of it, and the per-file arity check leaves
-such a name to the merged check, which sees every arm. A count no file's arms
-take is still refused there, and the message names every arity: "no
-4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
-said "arms take 2".
-
-`tests/arms_split_across_files.rs` runs toml's shape on both engines and
-pins the refusal; main fails both.
-
-The module path now counts, per name, which files declare it. The rows are
-counted with the batch this landed in, at the end of "an import stays in the
-file that writes it".
-
 ## 2026-10-25 — a field is read without importing its owner, on every path
 
 From #2090, regex's port. Chapter 03 says nothing has to be imported to read
@@ -1866,6 +1844,26 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
 
 ## 2026-10-26 — an err is born boxed
 

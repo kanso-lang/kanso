@@ -850,25 +850,12 @@ impl<'a> Backend<'a> {
                 f.record(&t, crate::infer::TOP);
                 Ok(t.to_string())
             }
-            Expr::Block(stmts, _) => {
-                let mut value = "{ i64 4, i64 0 }".to_string();
-                let last = stmts.len().saturating_sub(1);
-                for (i, stmt) in stmts.iter().enumerate() {
-                    match stmt {
-                        Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
-                        Stmt::Expr(e) => {
-                            let v = self.emit_expr(f, e)?;
-                            if i == last {
-                                value = v;
-                            }
-                        }
-                    }
-                }
-                Ok(value)
-            }
-            Expr::Guard { .. } => {
-                Err("native backend: a return guard sits only in tail position".to_string())
-            }
+            Expr::Block(stmts, _) => self.emit_stmts_value(f, stmts),
+            // A guard inside a block that is read for its value, an `if`
+            // branch bound to a name, leaves that block: its early answer is
+            // the block's, and the rest of the block is the other arm. The
+            // interpreter reads it the same way.
+            Expr::Guard { cond, early, rest, .. } => self.emit_guard_value(f, cond, early, rest),
             // A literal wider than a word is a bignum the runtime reads from
             // its digits, each time the literal is reached.
             Expr::Int(n, _) => match i64::try_from(n) {
@@ -2031,6 +2018,62 @@ impl<'a> Backend<'a> {
         ));
         f.record(&t, infer::BOOL | f.set_of(&general));
         Ok(Some(t.to_string()))
+    }
+
+    /// Statements read for the value of the last one.
+    fn emit_stmts_value(&mut self, f: &mut FnEmit, stmts: &[Stmt]) -> Result<String, String> {
+        let mut value = "{ i64 4, i64 0 }".to_string();
+        let last = stmts.len().saturating_sub(1);
+        for (i, stmt) in stmts.iter().enumerate() {
+            match stmt {
+                Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
+                Stmt::Expr(e) => {
+                    let v = self.emit_expr(f, e)?;
+                    if i == last {
+                        value = v;
+                    }
+                }
+            }
+        }
+        Ok(value)
+    }
+
+    /// A guard read for its value: the early answer when the condition
+    /// holds, the rest of the block when it does not, and a phi over the two
+    /// and any failure the condition carried out, as an `if` has.
+    fn emit_guard_value(
+        &mut self,
+        f: &mut FnEmit,
+        cond: &Expr,
+        early: &Expr,
+        rest: &[Stmt],
+    ) -> Result<String, String> {
+        let early_label = f.label();
+        let rest_label = f.label();
+        let merge = f.label();
+        let asked = self.emit_cond(f, cond, &early_label, &rest_label, Some(&merge))?;
+        f.start_block(&early_label);
+        let early_value = self.emit_expr(f, early)?;
+        let early_from = f.cur_label.clone();
+        f.line_fmt(format_args!("br label %{merge}"));
+        f.start_block(&rest_label);
+        let rest_value = self.emit_stmts_value(f, rest)?;
+        let rest_from = f.cur_label.clone();
+        f.line_fmt(format_args!("br label %{merge}"));
+        f.start_block(&merge);
+        let mut arms = vec![
+            format!("[ {early_value}, %{early_from} ]"),
+            format!("[ {rest_value}, %{rest_from} ]"),
+        ];
+        let mut fail_set = 0;
+        for (v, from) in &asked.failed {
+            arms.push(format!("[ {v}, %{from} ]"));
+            fail_set |= f.set_of(v) & FAIL;
+        }
+        let t = f.tmp();
+        f.line_fmt(format_args!("{t} = phi %KValue {}", arms.join(", ")));
+        f.record(&t, f.set_of(&early_value) | f.set_of(&rest_value) | fail_set);
+        Ok(t.to_string())
     }
 
     /// An `if` read for its value: the condition asked as a question, each arm
