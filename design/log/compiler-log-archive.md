@@ -109442,3 +109442,17 @@ keeps the rendered span.
 `tests/golden/test_verb/fails_in_std` is the reduction, and
 `a_test_failing_inside_a_library_names_the_librarys_line` in
 `tests/test_verb.rs` pins both streams.
+
+## 2026-10-25 — a binding refused for another file's name says which file
+
+#2085 asks whether a local may reuse a name declared only in another file of
+its module, and notes that the message is cloud's to fix whatever the
+ruling. rg's port had `` `escaped` is already a declaration; rename the
+binding `` with the caret in `m/a.kso` and the declaration in `b.kso`, which
+the message did not name. The module path now looks the name up in the
+module's other files when it reports one of these, and says where it is:
+`` `escaped` is already a declaration, in m/b.kso at line 1; rename the
+binding ``. The lookup runs only on a refused compile.
+
+`errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
+shape, and main prints the message without the place.
