@@ -221,7 +221,7 @@ fn why_bound gate
   found = list/to_list (list/select host_bound (e -> e.gate == gate))
   found[1].why
 
-rows = list/concat rows_a (list/concat rows_b rows_c)
+rows = list/concat rows_a (list/concat rows_b (list/concat rows_c rows_d))
 
 # A job with no row and no reason is the thing this refuses. A reason is a
 # sentence, not a flag: it has to say what would prove the job, so the debt is

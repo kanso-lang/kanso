@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 78] = [
+pub const BUILTINS: [&str; 79] = [
     "annotate",
     "built_text",
     "append",
@@ -51,6 +51,7 @@ pub const BUILTINS: [&str; 78] = [
     "round",
     "sleep",
     "slice",
+    "rest_from",
     "slice_in",
     "split",
     "sqrt",
@@ -106,7 +107,7 @@ pub const AMBIENT: [&str; 14] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 83] = [
+pub const BUILTIN_ARITY: [(&str, usize); 84] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -166,6 +167,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 83] = [
     ("read_line", 0),
     ("render_value", 1),
     ("rescue", 2),
+    ("rest_from", 2),
     ("round", 1),
     ("run", 2),
     ("sleep", 1),
@@ -2299,7 +2301,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("net_close", &[&[Int]]),
         ("concat", &[&[List], &[List]]),
         ("push", &[&[List]]),
-        ("put", &[&[Map]]),
+        ("put", &[&[Map, List]]),
         ("delete", &[&[Map]]),
         ("sleep", &[&[Int]]),
         ("random", &[&[Int]]),

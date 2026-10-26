@@ -2210,6 +2210,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "key_at" => ANY_INT | STR | NONE | fails,
         "value_at" => (TOP & !FAIL) | NONE | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | NONE | fails,
+        // std/list's rest after a drop: a list from a position on, or none
+        // for anything that is not a list
+        "rest_from" => LIST | NONE | fails,
         // std's own measured ranges (#1890): a range the library took from a
         // scan of the same value never leaves it, so it answers no none.
         "slice_in" => (args[0] & (BYTES | LIST | STR)) | fails,
@@ -2220,7 +2223,13 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"
         | "filter" => LIST | fails,
         "map" => LIST | fails,
-        "put" | "delete" => MAP | fails,
+        // a list written at a position answers none outside it (kanso#2086)
+        "put" => match args[0] & (MAP | LIST) {
+            LIST => LIST | NONE | fails,
+            0 | MAP => MAP | fails,
+            _ => MAP | LIST | NONE | fails,
+        },
+        "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,
         "to_int" => ANY_INT | ERR | fails,

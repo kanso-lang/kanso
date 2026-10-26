@@ -42,6 +42,18 @@ pub fn for_the_emitter(program: &Program) -> EmitterFacts {
     )
 }
 
+/// Both of the interpreter's questions from one `Analysis`: where a push
+/// writes in place, and where a template joins onto a string. Building one per
+/// question cost a run that asked both about 35 million instructions twice
+/// over on the interpreted corpus, and keeping the analysis for the run's
+/// second question held it in memory for the whole run.
+pub fn for_the_interpreter(
+    program: &Program,
+) -> (HashSet<(std::sync::Arc<str>, usize, usize)>, Sites) {
+    let analysis = Analysis::new(program);
+    (in_place_pushes_with(&analysis, program), string_builders_with(&analysis, program).0)
+}
+
 pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
     in_place_pushes_with(&Analysis::new(program), program)
 }
@@ -1931,9 +1943,10 @@ fn fed_to_consumer(var: &str, v: &str, e: &Expr) -> Option<usize> {
         let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
             if matches!(h.as_str(), "put" | grows_first!()));
         if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
-            // a sibling that writes into `v` forces it before this write, and
-            // a binding forced once answers every later mention from its cell
-            if args[1..].iter().any(|s| writes_into(v, s)) {
+            // a sibling that forces `v` on every path does so before this
+            // write, and a binding forced once answers every later mention
+            // from its cell
+            if args[1..].iter().any(|s| forces(v, s)) {
                 return Some(args[1..].iter().map(|s| mentions(v, s)).sum());
             }
             for sibling in &args[1..] {
@@ -1962,19 +1975,45 @@ fn forced_operand(v: &str, e: &Expr) -> Option<usize> {
     }
 }
 
-/// Whether `e` is a builtin write into `v`, `put v k x` or the like, reached
-/// from a forced argument through arithmetic and other such writes: the
-/// builtin forces `v` before it returns.
-fn writes_into(v: &str, e: &Expr) -> bool {
+/// Whether evaluating `e` forces `v` on every path before `e` answers. A
+/// call's arguments are evaluated before it runs, but a name handed bare to a
+/// function or a constructor may travel as an unforced cell, so only a
+/// position that reads the value counts: an operand, the base of a field or
+/// element read, an interpolation, a condition, or an argument of a builtin
+/// write. A lambda runs later, and one arm of an `if` (and so of `and` and
+/// `or`, which are written as one) may not run.
+fn forces(v: &str, e: &Expr) -> bool {
+    forces_in(v, e, true)
+}
+
+fn forces_in(v: &str, e: &Expr, read: bool) -> bool {
+    let strict_builtin = |h: &str| matches!(h, "put" | "length" | "keys" | grows_first!());
     match e {
-        Expr::BinOp { lhs, rhs, .. } => writes_into(v, lhs) || writes_into(v, rhs),
-        Expr::App { head, args, .. } => {
-            matches!(head.as_ref(), Expr::Ident(h, _, _)
-                if matches!(h.as_str(), "put" | grows_first!()))
-                && (matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == v)
-                    || args.iter().any(|a| writes_into(v, a)))
-        }
-        _ => false,
+        Expr::Ident(n, _, _) => read && n == v,
+        Expr::Lambda { .. } | Expr::Block(..) => false,
+        Expr::Field { base, .. } => forces_in(v, base, true),
+        Expr::Index { base, index, .. } => forces_in(v, base, true) || forces_in(v, index, true),
+        Expr::BinOp { lhs, rhs, .. } => forces_in(v, lhs, true) || forces_in(v, rhs, true),
+        Expr::Str(parts, _) => parts.iter().any(|p| match p {
+            TemplatePart::Interp(x) => forces_in(v, x, true),
+            TemplatePart::Lit(_) => false,
+        }),
+        Expr::Guard { cond, .. } => forces_in(v, cond, true),
+        Expr::App { head, args, .. } => match head.as_ref() {
+            Expr::Ident(h, _, _) if h == "if" && args.len() == 3 => {
+                forces_in(v, &args[0], true)
+                    || (forces_in(v, &args[1], read) && forces_in(v, &args[2], read))
+            }
+            Expr::Ident(h, _, _) if crate::ast::getter_field(h).is_some() && args.len() == 1 => {
+                forces_in(v, &args[0], true)
+            }
+            Expr::Ident(h, _, _) => {
+                let reads = strict_builtin(h.as_str());
+                args.iter().any(|a| forces_in(v, a, reads))
+            }
+            other => forces_in(v, other, true) || args.iter().any(|a| forces_in(v, a, false)),
+        },
+        _ => crate::any_child(e, |c| forces_in(v, c, false)),
     }
 }
 

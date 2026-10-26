@@ -50,11 +50,18 @@ pub struct Site {
     /// is cloned once per declaration, which is what this struct already
     /// costs: it is built by `frame_of` and memoized by pointer.
     pub file: std::sync::Arc<str>,
+    /// Whether the file is the standard library's or a fetched hako's, asked
+    /// at every tail call that might cross into the library (#2099), so it is
+    /// read off the path once here rather than scanned for at each call.
+    pub library: bool,
     /// The (line, column) of every push in this file that writes in place,
     /// gathered on the first question; see `Interp::writes_in_place`.
     in_place: std::cell::OnceCell<Set<(usize, usize)>>,
     /// The same for `linear::moved_writes`; see `Interp::moved_here`.
     moved: std::cell::OnceCell<Set<(usize, usize)>>,
+    /// The same for the joins `linear::string_builders` finds; see
+    /// `Interp::joins_here`.
+    joins: std::cell::OnceCell<Set<(usize, usize)>>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -64,8 +71,10 @@ fn frame_of(decl: &FnDecl) -> Frame {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
         file: decl.file.clone(),
+        library: crate::provenance::is_library_file(&decl.file),
         in_place: std::cell::OnceCell::new(),
         moved: std::cell::OnceCell::new(),
+        joins: std::cell::OnceCell::new(),
     }))
 }
 
@@ -103,6 +112,27 @@ fn placed(mut e: RuntimeError, frame: &Frame) -> RuntimeError {
     // a span at line 0 was made where no source position was known
     if e.at.is_none() && e.span.line > 0 {
         e.at = origin_at(frame, e.span).at;
+    }
+    e
+}
+
+/// The place a failure that left the library through a call this program
+/// wrote by name prints: the library's own line, and under it the program's
+/// line that called in (ruled on #2099). `RuntimeError::place` prints `at`
+/// after "failed in", so the second line rides in the same string. Only the
+/// innermost such call names itself; a failure that already carries one, or
+/// whose place is not a library's, passes through unchanged.
+fn called_from(mut e: RuntimeError, frame: &Frame, span: Span) -> RuntimeError {
+    let Some(site) = frame else { return e };
+    if site.library {
+        return e;
+    }
+    if let Some(at) = &e.at {
+        let file = at.rsplit_once(" at ").and_then(|(_, rest)| rest.rsplit_once(':'));
+        let library = file.is_some_and(|(file, _)| crate::provenance::is_library_file(file));
+        if library && !at.contains("\n  called from ") {
+            e.at = Some(Rc::from(format!("{at}\n  called from {}:{}", site.file, span.line)));
+        }
     }
     e
 }

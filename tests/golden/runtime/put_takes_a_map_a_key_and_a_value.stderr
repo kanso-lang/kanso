@@ -1,2 +1,0 @@
-error[runtime]: put takes a map, a key, and a value
-  failed in put_takes_a_map_a_key_and_a_value/play at put_takes_a_map_a_key_and_a_value.kso:5

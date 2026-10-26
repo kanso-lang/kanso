@@ -265,6 +265,17 @@
 # `bucketed` keeps a record per key, a count and a list. The record is read
 # out of the map and reaches the put only through its fields, so natively
 # every number copied the map.
+#
+# One more joined on 2026-10-25, measured on main at kanso#2148 before its
+# fix. Its column is the whole program with it, 888,090,230, less the whole
+# without, 847,302,584, and its share is of the former.
+#
+#   rested    500 elements walked by their rest           40,787,646  4.59%
+#
+# `rested` reads a list's first element and hands on `list/to_list (list/drop
+# xs 1)`, the walk most of this repository's scripts use. Each rest is built
+# afresh by stepping a cursor through the list one record at a time, about
+# 260 instructions an element, so the walk costs the square of the list.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -288,6 +299,7 @@ import "./padded"
 import "./pend"
 import "./reentered"
 import "./restate"
+import "./rested"
 import "./rewind"
 import "./scatter"
 import "./split"
@@ -357,6 +369,8 @@ appended_numbers = 64000
 
 bucketed_numbers = 2000
 
+rested_items = 500
+
 fn decoded _ 0 sofar
   sofar
 
@@ -408,8 +422,9 @@ fn tally raw doc a b
   ported15 = ported14 + nested/total nested_counts
   ported16 = ported15 + appended/total appended_numbers
   ported17 = ported16 + bucketed/total bucketed_numbers
+  ported18 = ported17 + rested/total rested_items
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported17 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported18 + rest))
   bulk .> on
 
 fn shaped raw doc a

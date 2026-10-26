@@ -29,6 +29,7 @@ done:
 @k_site = external global ptr
 @k_site_id = external global i32
 @k_deep_site = external global ptr
+@k_from = external global ptr
 @k_arena_left = external global i64
 @k_stats_on = external global i32
 @k_token_store = external global i8
@@ -1867,6 +1868,7 @@ declare %KValue @k_b_delete(%KValue, %KValue)
 declare %KValue @k_b_delete_mut(%KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
+declare %KValue @k_b_rest_from(%KValue, %KValue)
 declare %KValue @k_b_slice_raw(ptr, i64, i64, i64)
 declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_utf8_slice_raw(ptr, i64, i64, i64, ptr)
