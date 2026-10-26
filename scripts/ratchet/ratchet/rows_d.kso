@@ -1,0 +1,1727 @@
+import "std/list"
+
+# Every workflow installs the rustc its goldens were measured under, named
+# once at the top of the file, rather than whatever is stable that day.
+# Unpinned, the runner moved to 1.99.0 after 2026-10-01 and every gate that
+# names rustc refused (2026-10-04).
+toolchain_pinned = row
+  "a job that installs whatever rustc is stable"
+  true
+  "cargo test --release --test the_toolchain_is_pinned_to_the_rows"
+  "specs (unit, golden, differential)"
+  (breaking "a_job_takes_whatever_rustc_is_stable")
+  no_setup
+
+# A checkout builds with that same rustc, so a reading taken by hand is a
+# reading of CI's toolchain. Two playground sizes were published from a
+# container's default 1.94.1 before rust-toolchain.toml existed (2026-10-06).
+checkout_pinned = row
+  "a checkout that builds with whatever rustc the host has"
+  true
+  "cargo test --release --test the_toolchain_is_pinned_to_the_rows"
+  "specs (unit, golden, differential)"
+  (breaking "the_checkout_builds_with_its_own_rustc")
+  no_setup
+
+rows_d1zzzzzzzf = [toolchain_pinned checkout_pinned]
+
+# `list/tie` fills each key's cell with its node once every node is made,
+# which is what turns the references the maker stored into a cycle
+# (2026-10-04).
+tie_fills = row
+  "a tie that never fills its cells"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_that_never_fills_its_cells")
+  release
+
+rows_d1zzzzzzze = list/concat rows_d1zzzzzzzf [tie_fills]
+
+# A tie's reference goes into a constructor's field and nowhere else, and a
+# literal link to an id the list does not hold is refused (2026-10-04).
+tie_check = row
+  "a tie reference read anywhere"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_reference_read_anywhere")
+  release
+
+# A list or map literal written as a field may hold a tie's references
+# (2026-10-10).
+tie_list = row
+  "a tie list read as a reference"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_list_read_as_a_reference")
+  release
+
+# A field may hold a list of references built from data, written
+# `list/to_list (list/map xs ref)`, and `push` stores a cell still being made
+# on both engines (2026-10-11).
+tie_mapped = row
+  "a tie map of references refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_map_of_references_refused")
+  release
+
+tie_push_interp = row
+  "an interpreted push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_push_forces_a_tie_cell")
+  release
+
+tie_push_native = row
+  "a native push that forces a tie cell"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_push_forces_a_tie_cell")
+  release
+
+tie_rows = [tie_check tie_list tie_mapped tie_push_interp tie_push_native]
+
+rows_d1zzzzzzzd = list/concat rows_d1zzzzzzze tie_rows
+
+# A record constructor handed over as a function lowers to the lambda that
+# calls it on native, as the interpreter treats it (2026-10-10, lox F20).
+ctor_value = row
+  "a constructor refused as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_constructor_refused_as_a_value")
+  release
+
+# Native `tie` rewrites every field holding one of its cells to hold the node
+# before the cells go back to the free list (2026-10-05).
+tie_resolves = row
+  "a native tie that frees cells still in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_that_frees_cells_still_in_its_graph")
+  release
+
+rows_d1zzzzzzzc = list/concat rows_d1zzzzzzzd [tie_resolves ctor_value]
+
+# The interpreter rewrites the fields holding a tie's cells to hold the nodes,
+# as native does; a `ref` names its tie by serial, so one called after its tie
+# returned is refused on both engines; and native's stack of open ties grows
+# rather than stopping at 256 (2026-10-05).
+tie_interp_resolves = row
+  "an interpreter tie that leaves cells in its graph"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreter_tie_that_leaves_cells_in_its_graph")
+  release
+
+tie_serial = row
+  "a tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_serial = row
+  "a native tie ref that answers any open tie"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_ref_that_answers_any_open_tie")
+  release
+
+tie_native_depth = row
+  "a native tie stack that stops at 256"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_tie_stack_that_stops_at_256")
+  release
+
+tie_fixes = [tie_interp_resolves tie_serial tie_native_serial tie_native_depth]
+
+rows_d1zzzzzzza = list/concat rows_d1zzzzzzzc tie_fixes
+
+# The release link unswitches a loop on a test of a value the loop does not
+# change, such as the overflow flag of `k * 31` in the escape loop
+# (2026-10-07). The mutation takes the pass out of the link's pipeline.
+loop_unswitch = row
+  "a release link that tests an invariant inside its loop"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_that_tests_an_invariant_inside_its_loop")
+  benchmarks
+
+rows_d1zzzzzzz9 = list/concat rows_d1zzzzzzza [loop_unswitch]
+
+# The release link runs correlated propagation after each jump-threading and
+# early-cse<memssa> before the first (2026-10-07). Each mutation takes its pass
+# out of the link's pipeline.
+link_correlated = row
+  "a release link without correlated propagation"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_without_correlated_propagation")
+  benchmarks
+
+link_early_cse = row
+  "a release link without early-cse"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_release_link_without_early_cse")
+  benchmarks
+
+rows_d1zzzzzzz8 = list/concat rows_d1zzzzzzz9 [link_correlated link_early_cse]
+
+# A local reference keeps the frame and slot its binding sat in, and reads
+# that place on every later run (2026-10-07). The mutation keeps plain local,
+# so every reference walks the frames again.
+local_place = row
+  "a local found by walking the frames"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_local_found_by_walking")
+  release
+
+rows_d1zzzzzzz7 = list/concat rows_d1zzzzzzz8 [local_place]
+
+# The tab's compiler keeps a free list for each size of small block and hands
+# blocks out again before dlmalloc is asked (2026-10-08). The mutation sends
+# every block to dlmalloc, so the browser compile row is the witness.
+small_blocks = row
+  "small blocks left to dlmalloc"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "small_blocks_left_to_dlmalloc")
+  release
+
+rows_d1zzzzzzz6 = list/concat rows_d1zzzzzzz7 [small_blocks]
+
+# The emitter writes each body line with three pushes rather than through
+# `writeln!` (2026-10-08). The mutation sends the line through the formatter
+# again, so the emit row is the witness.
+emitted_lines = row
+  "emitted lines written through the formatter"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_lines_through_fmt")
+  release
+
+rows_d1zzzzzzz5 = list/concat rows_d1zzzzzzz6 [emitted_lines]
+
+# A dispatch lets go of what is left in its argument vector through
+# `release`, which skips `Value`'s drop for the variants that own nothing
+# (2026-10-08). The mutation drops every one again, so the interpreted row is
+# the witness.
+arguments_released = row
+  "argument placeholders dropped one by one"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "arguments_dropped_one_by_one")
+  release
+
+rows_d1zzzzzzz4 = list/concat rows_d1zzzzzzz5 [arguments_released]
+
+# The tab emits only the groups its entry reaches, by the names the bodies
+# mention, and emits again with nothing skipped when the module names a group
+# it left out (2026-10-08). The mutation emits every group, so the browser
+# compile row is the witness.
+reached_groups = row
+  "the tab emitting every group"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tab_emits_every_group")
+  release
+
+# The tab's walk leaves groups out of the program before any analysis reads
+# it, and the emitter asks about some groups by name rather than calling them.
+# A question about a left-out group has to send the program back whole. The
+# mutation stops noting the question, and the unit spec that leaves a `+` arm
+# out says nothing saw it.
+left_out_asked = row
+  "a question about a group the tab left out, answered unseen"
+  true
+  "cargo test --release --lib a_question_about_a_left_out_operator_is_noticed"
+  "specs (unit, golden, differential)"
+  (breaking "a_question_about_a_left_out_group_goes_unseen")
+  no_setup
+
+rows_d1zzzzzzz2 = list/concat rows_d1zzzzzzz3 [left_out_asked]
+
+# A dispatch ranks its candidates into two `Score`s held on the stack, twelve
+# ranks inline each (2026-10-08). The mutation gives each a heap buffer at the
+# start of every dispatch again, and the interpreted row is the witness.
+scores_inline = row
+  "a dispatch that allocates its score"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatch_allocates_its_score")
+  release
+
+rows_d1zzzzzzz1 = list/concat rows_d1zzzzzzz2 [scores_inline]
+
+# A dispatch that tries a second candidate keeps the losers' bindings buffer
+# for the next dispatch instead of freeing it. The mutation frees it again, and
+# the interpreted row counts the allocations that come back.
+spare_binds = row
+  "a dispatch that frees its losers' bindings"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatch_frees_its_spare_binds")
+  release
+
+rows_d1zzzzzzz0 = list/concat rows_d1zzzzzzz1 [spare_binds]
+
+# A string value of up to fifteen bytes is held inside the value, which stays
+# 32 bytes. The mutation sends every string to the heap again, and the
+# interpreted row counts the allocations and copies that come back.
+short_strings = row
+  "a short string that allocates"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_string_allocates")
+  release
+
+rows_d1zzzzzzy9 = list/concat rows_d1zzzzzzz0 [short_strings]
+
+# A local whose place is kept is answered before the interpreter builds the
+# frame every other expression needs (2026-10-08). The mutation sends every
+# name through that frame again, and the interpreted row is the witness.
+front_door = row
+  "a name read through the whole node"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_name_read_through_the_whole_node")
+  release
+
+rows_d1zzzzzzy8 = list/concat rows_d1zzzzzzy9 [front_door]
+
+# A global name whose slot holds a function reference is answered from a table
+# of fixed values before `eval_node` builds its frame (2026-10-08). The
+# mutation leaves the table without its function references, and the
+# interpreted row is the witness.
+fixed_globals = row
+  "a fixed global read through the whole node"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_fixed_global_read_through_the_whole_node")
+  release
+
+rows_d1zzzzzzy7 = list/concat rows_d1zzzzzzy8 [fixed_globals]
+
+rows_d1zzzzzzz3 = list/concat rows_d1zzzzzzz4 [reached_groups]
+
+# A line's tokens are moved into a vector of their exact length, from a
+# buffer kept between lines (2026-10-08). The mutation hands the buffer itself
+# over, so every line grows from empty by doubling; the allocation vein is the
+# witness.
+line_exact = row
+  "a line of tokens grown by doubling"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_line_of_tokens_grown_by_doubling")
+  release
+
+# The alias pass indexes only the sites a synthetic declaration stands at
+# (2026-10-08). The mutation indexes every declaration again, which changes no
+# alias. The witness is the allocation count: once the syntax tree shrank, the
+# front end's peak is set where the index is no longer alive, and a shard on
+# CI found the peak blind to it.
+alias_sites = row
+  "every declaration indexed for its alias"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_declaration_indexed_for_its_alias")
+  release
+
+# A guard's statements sit behind a box, so `Guard` is no longer the variant
+# that sets the size of every `Expr` (2026-10-08). The mutation holds them
+# inline again; every expression grows by eight bytes and the front end's peak
+# is the witness.
+guard_rest = row
+  "a guard's statements held in every expression"
+  false
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_guards_statements_held_in_every_expression")
+  release
+
+rows_d1zzzzzzy5 = list/concat rows_d1zzzzzzy7 [line_exact alias_sites]
+
+# On a 64-bit target `Expr` keeps its tag in a byte of its own (2026-10-08).
+# The mutation leaves the tag to the compiler, which hides it in a field of a
+# 48-byte enum; every walk over the program decodes it, and the entry row is
+# the witness.
+expr_tag = row
+  "an expression's tag hidden in its fields"
+  false
+  "sh scripts/gates/entry_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_expressions_tag_hidden_in_its_fields")
+  release
+
+rows_d1zzzzzzy6 = list/concat rows_d1zzzzzzy5 [guard_rest expr_tag]
+
+# The interpreter's callee and frame tables hold 256 slots each, sized by the
+# run's peak as well as its speed (2026-10-08). The mutation gives the callees
+# 1,024 again, and the interpreted run's peak is the witness.
+callee_slots = row
+  "the callee cache sized for speed"
+  false
+  "sh scripts/gates/interp_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_callee_cache_sized_for_speed")
+  release
+
+rows_d1zzzzzzy4 = list/concat rows_d1zzzzzzy6 [callee_slots]
+
+# A group of one arm whose parameters are bare names is bound without a
+# candidate loop: it wins whenever no argument is a failure, and nothing reads
+# its score (2026-10-09). The mutation scores it like a crowd again, and the
+# interpreted run's instruction count is the witness.
+lone_arm = row
+  "a lone arm scored like its rivals"
+  false
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_lone_arm_scored_like_its_rivals")
+  release
+
+# A candidate that takes the lead swaps two fixed slots of buffers, where it
+# used to move an 80-byte tuple through an `Option` (2026-10-09). The
+# mutation chooses the score's slot at run time, which is what an index
+# between the slots cost, and the same witness counts it.
+leader_slots = row
+  "a leader's slot chosen at run time"
+  false
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_leaders_slot_chosen_at_run_time")
+  release
+
+rows_d1zzzzzzy3 = list/concat rows_d1zzzzzzye [lone_arm leader_slots]
+
+# A built binary run directly reports a recursion deeper than its stack the
+# way the interpreter does (2026-10-12). The mutation leaves the stack
+# unwatched, and the binary dies by the bare signal.
+stack_watch = row
+  "a binary that does not watch its stack"
+  true
+  "cargo test --release --test a_built_binary_names_its_stack_overflow"
+  "specs (unit, golden, differential)"
+  (breaking "a_binary_that_does_not_watch_its_stack")
+  release
+
+rows_d1zzzzzzye = list/concat rows_d1zzzzzzy4 [stack_watch]
+
+# A push, put or append the analysis proved in place writes through the
+# container's pointer and hands back the `Rc` it was given, where it used to
+# take the contents out and box them afresh (2026-10-09). The mutation boxes
+# the pushed list again, and the shared-seed spec's per-lap allocation count
+# is the witness.
+kept_box = row
+  "a write in place that boxes its container afresh"
+  true
+  "cargo test --release --test a_shared_seed_is_copied_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_write_in_place_boxes_afresh")
+  no_setup
+
+rows_d1zzzzzzy2 = list/concat rows_d1zzzzzzy3 [kept_box]
+
+# A runtime diagnostic names an err it was handed (2026-10-12). The mutation
+# renders it the way a program does, which hands the err back unrendered,
+# and native crashes and reports running out of stack.
+err_shown = row
+  "a diagnostic handed an unrendered err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_handed_an_unrendered_err")
+  release
+
+rows_d1zzzzzzyd = list/concat rows_d1zzzzzzy2 [err_shown]
+
+# A native build emits only the groups its entry reaches, the walk the tab
+# has made since 2026-10-08 (2026-10-09). The mutation empties the walk's
+# answer, every imported group is emitted and pruned afterwards, and the emit
+# row is the witness.
+native_reached = row
+  "a native build emitting every group"
+  true
+  emit_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_native_build_emits_every_group")
+  release
+
+rows_d1zzzzzzy1 = list/concat rows_d1zzzzzzyd [native_reached]
+
+# kanso test runs its tests on the deep thread `run --interp` uses, so a test
+# that recurses too far fails with the depth diagnostic and the rest still
+# report (2026-10-12). The mutation gives the thread 8 MiB, and Rust's own
+# overflow aborts the run.
+test_stack = row
+  "a test run on the main stack"
+  true
+  "cargo test --release --test test_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_test_run_on_the_main_stack")
+  no_setup
+
+rows_d1zzzzzzy0 = list/concat rows_d1zzzzzzy1 [test_stack]
+
+# A record goes back to its caller in two words only when every arm of its
+# group answers that record or a failure (2026-10-09). The mutation skips the
+# check, and the two micro fixtures built from `list/take` print the wrong
+# thing or fail.
+parsed_arms = row
+  "a group answering other values by value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_answering_other_values_goes_by_value")
+  no_setup
+
+rows_d1zzzzzzx9 = list/concat rows_d1zzzzzzy0 [parsed_arms]
+
+# A record on either side of an operator goes to the program's own arms, so
+# inference adds what they answer (2026-10-12). The mutation reads the
+# operator as arithmetic alone, release assumes a float where a record comes
+# back, and the micro fixture prints its record through the number arm.
+op_arms_answer = row
+  "an operator answering arithmetic alone"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_answering_arithmetic_alone")
+  release
+
+rows_d1zzzzzzx8 = list/concat rows_d1zzzzzzx9 [op_arms_answer]
+
+# An operator's arms stay boxed now that inference widens their parameters
+# (2026-10-12). The mutation lets a proven-int parameter go unboxed, and the
+# wasm translator refuses four operator fixtures.
+op_arms_boxed = row
+  "an operator arm given an unboxed int"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_arm_given_an_unboxed_int")
+  release
+
+rows_d1zzzzzzx7 = list/concat rows_d1zzzzzzx8 [op_arms_boxed]
+
+# A file of a several-file module names only what the module declares and
+# what its own imports bring. The mutation lets every file see every
+# sibling's imports, and a file calling `fold` with no import of std/list
+# checks clean.
+sibling_import = row
+  "a sibling's import seen from every file"
+  true
+  "cargo test --release --test errors_module"
+  "specs (unit, golden, differential)"
+  (breaking "a_sibling_import_seen_from_every_file")
+  no_setup
+
+rows_d1zzzzzzw9 = list/concat rows_d1zzzzzzx7 [sibling_import]
+
+# A reader that stops early ends every engine by SIGPIPE, quietly
+# (2026-10-12). The mutation leaves the signal ignored, and the interpreter
+# panics on the closed pipe.
+pipe_quiet = row
+  "a closed pipe met as an error"
+  true
+  "cargo test --release --test a_closed_pipe_stops_every_engine_quietly"
+  "specs (unit, golden, differential)"
+  (breaking "a_closed_pipe_met_as_an_error")
+  release
+
+rows_d1zzzzzzx6 = list/concat rows_d1zzzzzzw9 [pipe_quiet]
+
+# A native program's stdout reaches its reader before it writes to stderr,
+# waits or stops (2026-10-12). The mutation leaves stdout in its buffer.
+stdout_settled = row
+  "stdout left in its buffer"
+  true
+  "cargo test --release --test stdout_reaches_its_reader"
+  "specs (unit, golden, differential)"
+  (breaking "stdout_left_in_its_buffer")
+  release
+
+rows_d1zzzzzzx5 = list/concat rows_d1zzzzzzx6 [stdout_settled]
+
+# A lambda called in tail position costs no stack on any engine
+# (2026-10-12). The first mutation has the interpreter call it as a nested
+# call, the second has native call it without the jump; either way the
+# continuation-passing fixture runs out of stack.
+lambda_nested = row
+  "a lambda called as a nested call"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_as_a_nested_call")
+  no_setup
+
+rows_d1zzzzzzx4 = list/concat rows_d1zzzzzzx5 [lambda_nested]
+
+lambda_jump = row
+  "a lambda called without a jump"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_called_without_a_jump")
+  no_setup
+
+rows_d1zzzzzzx3 = list/concat rows_d1zzzzzzx4 [lambda_jump]
+
+# A value carries the arms its owner wrote into a library that never imported
+# the owner. The mutation lets no call travel, and the library's `area c` is
+# an unknown name again.
+arm_travels = row
+  "an arm left behind by its value"
+  true
+  "cargo test --release --test arms_travel"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_left_behind_by_its_value")
+  no_setup
+
+rows_d1zzzzzzw8 = list/concat rows_d1zzzzzzx3 [arm_travels]
+
+# A module that writes a name for its own type keeps that arm and takes the
+# owners' arms of every other shape. The mutation keeps its calls off the
+# traveling path, and a circle handed to it finds no arm.
+local_shade = row
+  "a local arm that shadows every shape"
+  true
+  "cargo test --release --test arms_travel"
+  "specs (unit, golden, differential)"
+  (breaking "a_local_arm_shadows_every_shape")
+  no_setup
+
+rows_d1zzzzzzw7 = list/concat rows_d1zzzzzzw8 [local_shade]
+
+# A list held in a record and pushed onto through the record is written in
+# place once the record is handed over whole and the field is alone. The
+# mutation refuses every field read, and the mem corpus's record fixture goes
+# from 73 allocations to tens of thousands.
+field_in_place = row
+  "a record field copied on every push"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_field_copied_every_push")
+  no_setup
+
+rows_d1zzzzzzv3bb = list/concat rows_d1zzzzzzw7 [field_in_place]
+
+# A lazy sequence handed where a builtin takes a list is refused at check
+# (2026-10-13). The mutation deletes the one call that asks, and the error
+# fixture's two refusals go missing.
+lazy_as_list = row
+  "a lazy sequence where a list goes checks clean"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_sequence_where_a_list_goes_checks_clean")
+  no_setup
+
+rows_dq1 = list/concat rows_d1zzzzzzv3bb [lazy_as_list]
+
+# A type the program declares shadows a builtin of that name (2026-10-12).
+# The mutation drops the checker's arity guard, and `type run` built with
+# `run 1 2 3` is refused with the builtin's count.
+own_type_count = row
+  "a builtin count over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_count_over_a_declared_type")
+  no_setup
+
+rows_dq2 = list/concat rows_dq1 [own_type_count]
+
+# The checker's literal check lets a declared type shadow a builtin too. The
+# mutation drops it, and `run 1 2 3` is refused for not starting with a string.
+own_type_demand = row
+  "a builtin demand over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_demand_over_a_declared_type")
+  no_setup
+
+rows_dq3 = list/concat rows_dq2 [own_type_demand]
+
+# Native code lets a declared type shadow a builtin. The mutation drops it,
+# and the play file's build stops on the builtin's count.
+own_type_native = row
+  "a native builtin over a declared type"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_builtin_over_a_declared_type")
+  no_setup
+
+rows_dq4 = list/concat rows_dq3 [own_type_native]
+
+# The interpreter calls a declared group before an imported type of the same
+# bare name. The mutation builds the type, and std/list's `counting` stops on
+# its field count.
+own_group_interp = row
+  "an imported type over a declared group"
+  true
+  "cargo test --release --test play_verb"
+  "specs (unit, golden, differential)"
+  (breaking "an_imported_type_over_a_declared_group")
+  no_setup
+
+rows_dq5 = list/concat rows_dq4 [own_group_interp]
+
+# `&`, `|` and `^` mixed without parentheses are refused. The mutation lets the
+# chain through, and the error corpus's fixture reads left to right instead.
+bits_mixed = row
+  "bit operators mixed freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "bit_operators_mixed_freely")
+  no_setup
+
+rows_dq6 = list/concat rows_dq5 [bits_mixed]
+
+# `and` and `or` meeting without parentheses are refused. The mutation lets the
+# condition through, and the error corpus's fixture prints instead.
+and_or_mixed = row
+  "and meets or freely"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "and_meets_or_freely")
+  no_setup
+
+rows_dq7 = list/concat rows_dq6 [and_or_mixed]
+
+# A file may open with a header comment and one blank line. The mutation
+# refuses that blank, and the micro corpus's fixture that opens with a header
+# stops building.
+header_blank = row
+  "header comment refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "header_comment_refused")
+  no_setup
+
+rows_dq8 = list/concat rows_dq7 [header_blank]
+
+callee_under_a_frame = row
+  "a cluster refused for a callee it reaches under a frame"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_refused_for_a_callee_under_a_frame")
+  no_setup
+
+rows_dq9 = list/concat rows_dq8 [callee_under_a_frame]
+
+concat_in_place = row
+  "a concat accumulator copied every lap"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_concat_accumulator_copied_every_lap")
+  no_setup
+
+rows_dq10 = list/concat rows_dq9 [concat_in_place]
+
+# A closed call bound ahead of the first park is computed in the park, and a
+# failure it meets there is raised at the park (#1856, ruled 2026-10-11).
+binding_left_ahead = row
+  "a binding left ahead of the park"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_binding_left_ahead_of_the_park")
+  no_setup
+
+moved_failure_read = row
+  "a moved binding's failure raised where it is read"
+  true
+  "cargo test --release --test work_ahead a_moved_binding_fails_at_the_park"
+  "specs (unit, golden, differential)"
+  (breaking "a_moved_binding_fails_where_it_is_read")
+  no_setup
+
+moved_read_as_local = row
+  "a moved binding read as a local"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_moved_binding_read_as_local")
+  no_setup
+
+# The pool takes only constants that run the program's work (#1856's grain).
+literal_pooled = row
+  "a literal handed to the pool"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_pooled")
+  no_setup
+
+ahead_rows = [binding_left_ahead moved_failure_read moved_read_as_local]
+
+rows_dq11 = list/concat rows_dq10 ahead_rows
+
+rows_dq12 = list/concat rows_dq11 [literal_pooled]
+
+# A group of effect lines pools at its first idle point (#1856).
+group_never_pools = row
+  "a group that never pools"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_that_never_pools")
+  no_setup
+
+group_side_unread = row
+  "a group's side left unread"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_group_side_left_unread")
+  no_setup
+
+rows_dq13 = list/concat rows_dq12 [group_never_pools group_side_unread]
+
+# A call on a function's locals is pooled as a cell its sleep carries (#1856).
+chain_never_pooled = row
+  "a function's chain never pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_function_chain_never_pooled")
+  no_setup
+
+cell_handed_over_when_built = row
+  "a pooled cell handed over when its sleep is built"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_handed_over_when_built")
+  no_setup
+
+cell_forced_outside_the_try = row
+  "a pooled cell forced outside the try"
+  true
+  "cargo test --release --test work_ahead a_pooled_cell_fails_where_it_is_read"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_forced_outside_the_try")
+  no_setup
+
+pooled_binding_left_strict = row
+  "a pooled binding left strict"
+  true
+  "cargo test --release --test work_ahead a_pooled_cell_fails_where_it_is_read"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_binding_left_strict")
+  no_setup
+
+cell_counted_as_a_thunk = row
+  "a pooled cell counted as a lazy binding"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pooled_cell_counted_as_a_thunk")
+  no_setup
+
+value_read_never_pooled = row
+  "a call on a builtin's reading never pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_builtin_read_never_pooled")
+  no_setup
+
+pushed_list_pooled = row
+  "a call on a pushed list pooled"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_extending_builtin_pooled")
+  no_setup
+
+pool_cells = [chain_never_pooled cell_handed_over_when_built]
+
+pool_counts = [cell_counted_as_a_thunk]
+
+pool_failures = [cell_forced_outside_the_try pooled_binding_left_strict]
+
+parking_lambda_never_lifted = row
+  "a parking lambda never lifted"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_parking_lambda_never_lifted")
+  no_setup
+
+pool_builtins = [value_read_never_pooled pushed_list_pooled]
+
+pool_lambdas = [parking_lambda_never_lifted]
+
+pool_reach = list/concat pool_builtins pool_lambdas
+
+pool_more = list/concat pool_failures pool_reach
+
+pool_rows = list/concat pool_cells (list/concat pool_counts pool_more)
+
+rows_dq14 = list/concat rows_dq13 pool_rows
+
+# An arithmetic operator handed a literal string, list or map is refused at
+# check (#1975). Left to the run, the error corpus holds a refusal nobody made.
+operator_kind_unchecked = row
+  "an operator's certain wrong kind left to the run"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_kind_left_to_the_run")
+  no_setup
+
+rows_dq15 = list/concat rows_dq14 [operator_kind_unchecked]
+
+# A run-time failure names the line it happened on, on every engine (#1975).
+# Each half dropped turns the runtime corpus red where the engines disagree.
+death_unplaced = row
+  "a native death that names no place"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_runtime_death_with_no_place")
+  release
+
+oracle_unplaced = row
+  "an interpreted failure left unplaced"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_failure_left_unplaced")
+  release
+
+insisted_native = row
+  "an insisting form that names the library's line"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_insisting_form_that_names_the_library")
+  release
+
+insisted_oracle = row
+  "an interpreted insisting form that names the library's line"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_insisting_form_that_names_the_library")
+  release
+
+failure_places = [death_unplaced oracle_unplaced]
+
+insisted_places = [insisted_native insisted_oracle]
+
+rows_dq16 = list/concat rows_dq15 failure_places
+
+rows_dq17 = list/concat rows_dq16 insisted_places
+
+# A byte handed on beside the position it was read at bounds that position in
+# an arm that takes the byte as a byte, and the fact holds only when every
+# call passes such a pair. One mutation keeps a link a call broke, which a
+# program built for release can see (the dev tier never acts on the assume);
+# the other drops every link, which the emitted code shows.
+read_link_kept = row
+  "a read position assumed where a call passed a literal"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_read_position_assumed_past_a_literal")
+  release
+
+read_link_lost = row
+  "a read position left unbounded"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_read_position_left_unbounded")
+  benchmarks
+
+length_bound = row
+  "an inline length left unbounded"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_inline_length_left_unbounded")
+  benchmarks
+
+read_positions = [read_link_kept read_link_lost length_bound]
+
+rows_dq18 = list/concat rows_dq17 read_positions
+
+key_claimed = row
+  "a key claimed one byte at a time"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_key_claimed_one_byte_at_a_time")
+  benchmarks
+
+token_size = row
+  "a token measured at its native size on wasm32"
+  true
+  "cargo test --release --test ir_to_wasm"
+  "specs (unit, golden, differential)"
+  (breaking "a_token_measured_at_its_native_size_on_wasm32")
+  release
+
+key_paths = [key_claimed token_size]
+
+rows_dq19 = list/concat rows_dq18 key_paths
+
+entry_inline = row
+  "a map entry read through the C"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_map_entry_read_through_the_c")
+  benchmarks
+
+rows_dq20 = list/concat rows_dq19 [entry_inline]
+
+string_claimed = row
+  "a string value claimed three times"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_value_claimed_three_times")
+  benchmarks
+
+rows_dq21 = list/concat rows_dq20 [string_claimed]
+
+entry_twice = row
+  "an entry read twice"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_entry_read_twice")
+  benchmarks
+
+rows_dq22 = list/concat rows_dq21 [entry_twice]
+
+frontier_copied = row
+  "a builder copied at the frontier"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_builder_copied_at_the_frontier")
+  no_setup
+
+count_allocating = row
+  "a map's count held as allocating"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_maps_count_held_as_allocating")
+  benchmarks
+
+rows_dq23 = list/concat rows_dq22 [frontier_copied count_allocating]
+
+loop_unbracketed = row
+  "a call into a loop left unbracketed"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_call_into_a_loop_left_unbracketed")
+  benchmarks
+
+nothing_bracketed = row
+  "a loop that builds nothing bracketed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_loop_that_builds_nothing_bracketed")
+  benchmarks
+
+rows_dq24 = list/concat rows_dq23 [loop_unbracketed nothing_bracketed]
+
+sited_stamped = row
+  "a sited call stamped anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_sited_call_stamped_anyway")
+  benchmarks
+
+rows_dq25 = list/concat rows_dq24 [sited_stamped]
+
+key_beside = row
+  "a short key read from the slot beside it"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_key_read_from_the_slot_beside_it")
+  no_setup
+
+key_called = row
+  "a short key left to the call"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_key_left_to_the_call")
+  benchmarks
+
+rows_dq26 = list/concat rows_dq25 [key_beside key_called]
+
+point_forgotten = row
+  "a point forgotten on the fast path"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_point_forgotten_on_the_fast_path")
+  no_setup
+
+number_scanned = row
+  "a number scanned sixteen bytes at a time anyway"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_number_scanned_sixteen_bytes_at_a_time_anyway")
+  benchmarks
+
+rows_dq27 = list/concat rows_dq26 [point_forgotten number_scanned]
+
+chain_first = row
+  "a chain staged on its first step"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_chain_staged_on_its_first_step")
+  benchmarks
+
+rows_dq28 = list/concat rows_dq27 [chain_first]
+
+comma_looped = row
+  "a blank run looped at the comma"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_blank_run_looped_at_the_comma")
+  benchmarks
+
+rows_dq29 = list/concat rows_dq28 [comma_looped]
+
+escaped_twice = row
+  "an escaped string undone twice"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_undone_twice")
+  benchmarks
+
+rows_dq30 = list/concat rows_dq29 [escaped_twice]
+
+escape_by_words = row
+  "an escaped string written a word at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_written_a_word_at_a_time")
+  benchmarks
+
+undo_by_words = row
+  "an escaped string undone a word at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_string_undone_a_word_at_a_time")
+  benchmarks
+
+rows_dq31 = list/concat rows_dq30 [escape_by_words undo_by_words]
+
+string_index_by_tags = row
+  "a proven string index through the tag tests"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_string_index_through_the_tag_tests")
+  benchmarks
+
+rows_dq32 = list/concat rows_dq31 [string_index_by_tags]
+
+# A death names its place through an id the stamp stored, read back through
+# the program's site table. The mutation has the runtime read only the
+# address a stamp used to store, and a death behind an id stamp loses its
+# `failed in` line.
+site_by_id = row
+  "a death's place read only from the address a stamp used to store"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_site_named_by_its_address_alone")
+  no_setup
+
+rows_dq33 = list/concat rows_dq32 [site_by_id]
+
+# The escape writer and the undo walk answer every escape a sixteen-byte block
+# holds from the block's one mask. Each mutation puts back a block load at
+# every escape; the output is the same and the work rows rise.
+escape_block_once = row
+  "an escaped block classified again at every escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_escaped_block_classified_at_every_escape")
+  benchmarks
+
+undo_block_once = row
+  "an undone block classified again at every escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_undone_block_classified_at_every_escape")
+  benchmarks
+
+rows_dq34 = list/concat rows_dq33 [escape_block_once undo_block_once]
+
+# A mention of a constant whose one arm is an integer literal is that
+# literal. The mutation sends every mention back through the constant's cell;
+# the output is the same and the work rows rise.
+literal_constant = row
+  "a literal constant read through its cell"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_constant_read_through_its_cell")
+  benchmarks
+
+rows_dq35 = list/concat rows_dq34 [literal_constant]
+
+# A template whose first piece is a field of a record the arm is finished with
+# joins into that string in place, and a parameter an arm only reads into
+# templates can still be an accumulator. Each mutation takes one away, and the
+# mem fixture `a_record_field_joined_in_place` copies its string every pass.
+field_join = row
+  "a record field joined by copying"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_record_field_joined_by_copying")
+  no_setup
+
+template_hold = row
+  "a template read counted as a hold"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_template_read_counted_as_a_hold")
+  no_setup
+
+rows_dq36 = list/concat rows_dq35 [field_join template_hold]
+
+# The browser rows count the wasm instructions a module executes rather than
+# wasmi's fuel, which charges a loop for every arm of a dispatch on every pass
+# (2026-10-23). The mutation lets a counted run go on through a `br_table`, and
+# the hand-counted loop in tests/browser_cost.rs is the witness.
+hand_count = "the_count_is_every_instruction_control_reached"
+
+run_through_dispatch = row
+  "a counted run that goes on through a br_table"
+  true
+  "cargo test --release --test browser_cost {hand_count}"
+  "specs (unit, golden, differential)"
+  (breaking "a_counted_run_that_goes_on_through_a_br_table")
+  no_setup
+
+rows_dq37 = list/concat rows_dq36 [run_through_dispatch]
+
+# The tab's compiler exports a memcmp that compares eight bytes a pass
+# (2026-10-23). The mutation renames it, so the wasm build links
+# compiler-builtins' byte loop again and the browser compile row is the
+# witness.
+word_compare = row
+  "a byte loop compares in the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_loop_compares_in_the_tab")
+  release
+
+rows_dq38 = list/concat rows_dq37 [word_compare]
+
+# The tab's translator finds a switch line by its `=` rather than by a
+# substring searcher built for every line (2026-10-23). The mutation builds
+# the searcher again, and the browser compile row is the witness.
+switch_line = row
+  "a searcher built for every line the tab translates"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_searcher_built_for_every_line_the_tab_translates")
+  release
+
+rows_dq39 = list/concat rows_dq38 [switch_line]
+
+# The narrowing reads whether the module defines the closure-jump twin off
+# the define lines it walks (2026-10-23). One mutation searches the whole
+# module for it again, and the browser compile row is the witness; the other
+# stops collecting lambdas, and the narrowing's own spec is.
+twin_search = row
+  "the whole module searched for the closure jump"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_whole_module_searched_for_the_closure_jump")
+  release
+
+lambda_test = "a_lambda_keeps_the_convention_where_a_closure_jump_can_reach_it"
+
+lambda_narrowed = row
+  "a lambda narrowed beside a closure jump"
+  true
+  "cargo test --release --lib {lambda_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_lambda_narrowed_beside_a_closure_jump")
+  no_setup
+
+rows_dq40 = list/concat rows_dq39 [twin_search lambda_narrowed]
+
+# The tab's compiler finds `@sN` by memchr on `@` and ends each IR line eight
+# bytes a pass (2026-10-23); each mutation brings a searcher back, and the
+# browser compile row is the witness. The word compare and the byte search
+# share a fuzzer, and each has a mutation that the fuzzer catches.
+string_names = row
+  "a string name found by a two-byte searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_name_found_by_a_two_byte_searcher")
+  release
+
+line_search = row
+  "a line found by a searcher in the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_line_found_by_a_searcher_in_the_tab")
+  release
+
+compare_fuzz = "the_word_compare_agrees_with_bytes"
+
+wrong_end = row
+  "a word compare that reads the wrong end"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_word_compare_that_reads_the_wrong_end")
+  no_setup
+
+borrow = row
+  "a byte search that trusts a borrow"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_search_that_trusts_a_borrow")
+  no_setup
+
+rows_dq41a = list/concat rows_dq40 [string_names line_search]
+
+rows_dq41 = list/concat rows_dq41a [wrong_end borrow]
+
+# The emitter asks of every line it writes whether it is a stack slot, and
+# finds the line's first space with a byte loop (2026-10-23). The mutation
+# puts `find` back, and the browser compile row is the witness.
+stack_slot = row
+  "a stack slot found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_stack_slot_found_by_a_searcher")
+  release
+
+rows_dq42 = list/concat rows_dq41 [stack_slot]
+
+# The wasm build keeps no allocation tally the tab never reads (2026-10-23).
+# The mutation keeps it again, and the browser compile row is the witness.
+tab_tally = row
+  "a tally the tab never reads"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tally_the_tab_never_reads")
+  release
+
+rows_dq43 = list/concat rows_dq42 [tab_tally]
+
+# The tab's compile, second round (2026-10-23): a numbered name read without
+# checking it, a rewritten body not validated again, each `@` found eight bytes
+# a pass, the module handed over in pieces and what the walk left out let go
+# before emitting. Each mutation undoes one, and the browser compile rows are
+# the witness.
+checked_name = row
+  "a numbered name checked on every read"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_numbered_name_checked_on_every_read")
+  release
+
+validated_body = row
+  "a rewritten body validated again"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rewritten_body_validated_again")
+  release
+
+at_searcher = row
+  "an at sign found by a searcher"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_at_sign_found_by_a_searcher")
+  release
+
+joined_module = row
+  "a module joined for the tab"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_module_joined_for_the_tab")
+  release
+
+held_left_out = row
+  "what the tab left out held while it emits"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "what_the_tab_left_out_held_while_it_emits")
+  release
+
+pieces_test = "the_interp_corpus_answers_through_the_translator"
+
+early_piece = row
+  "a piece let go before its functions"
+  true
+  "cargo test --release --test ir_to_wasm {pieces_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_piece_let_go_before_its_functions")
+  no_setup
+
+rows_dq44a = list/concat rows_dq43 [checked_name validated_body at_searcher]
+
+rows_dq44b = list/concat rows_dq44a [joined_module held_left_out]
+
+kept_room = row
+  "the tab's syntax kept with its room"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tabs_syntax_kept_with_its_room")
+  release
+
+narrowing_word = row
+  "a narrowing that searches by the word"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_narrowing_that_searches_by_the_word")
+  release
+
+anchored_test = "a_line_found_by_one_byte_is_a_line_found_by_the_word"
+
+late_line = row
+  "a line found one byte late"
+  true
+  "cargo test --release --lib {anchored_test}"
+  "specs (unit, golden, differential)"
+  (breaking "a_line_found_one_byte_late")
+  no_setup
+
+rows_dq44c = list/concat rows_dq44b [early_piece kept_room]
+
+two_byte_borrow = row
+  "a two-byte search that trusts a borrow"
+  true
+  "cargo test --release --test {compare_fuzz}"
+  "specs (unit, golden, differential)"
+  (breaking "a_two_byte_search_that_trusts_a_borrow")
+  no_setup
+
+rows_dq44d = list/concat rows_dq44c [narrowing_word late_line]
+
+rows_dq44 = list/concat rows_dq44d [two_byte_borrow]
+
+# A float that passes at the guessed place count takes the zeros off its scaled
+# decimal to reach the fewest places, instead of trying each place below. The
+# mutation puts the tries back, and the work vein reads runbench heavier.
+float_walk = row
+  "a float walked down by tries"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_float_walked_down_by_tries")
+  benches
+
+rows_dq45 = list/concat rows_dq44 [float_walk]
+
+# welfare_rescore weighs each phase by the share the run program's header
+# measured for it (2026-10-24). The mutation gives every phase one share, and
+# the uneven fixture in the reconstruction spec rebuilds to the wrong count.
+splice_test = "the_reconstruction_refuses_a_splice_that_moved"
+
+one_share = row
+  "every phase weighted by one share"
+  true
+  "cargo test --release --test {splice_test}"
+  "specs (unit, golden, differential)"
+  (breaking "every_phase_weighted_by_one_share")
+  no_setup
+
+rows_dq46 = list/concat rows_dq45 [one_share]
+
+# A body built for the dev tier or the tab writes no `llvm.assume` and no
+# compare feeding one, since neither build is optimized (2026-10-24). The
+# mutation writes them for every body, and the browser compile row reads
+# heavier.
+no_optimizer = row
+  "an assume written for no optimizer"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_assume_written_for_no_optimizer")
+  release
+
+rows_dq47 = list/concat rows_dq46 [no_optimizer]
+
+# The tab's module keeps its tail calls as written, since its translator
+# reads no calling convention (2026-10-24). The mutation narrows them as a
+# native module is narrowed, and the browser compile row reads heavier.
+tab_narrowing = row
+  "the tab narrowing its tail calls"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_tab_narrowing_its_tail_calls")
+  release
+
+rows_dq48 = list/concat rows_dq47 [tab_narrowing]
+
+# A short float's text is written right to left in one pass over its scaled
+# decimal, the point placed on the way (2026-10-24). The mutation splits the
+# whole part off by a division again, and the work vein reads runbench
+# heavier.
+float_one_pass = row
+  "a short float written in two parts"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_float_written_in_two_parts")
+  benches
+
+rows_dq49 = list/concat rows_dq48 [float_one_pass]
+
+# The module writer reads every piece's calls and line-ending symbols in one
+# pass over its ats (2026-10-24). The mutation scans each piece again for the
+# endings, and the browser compile row reads heavier.
+one_scan = row
+  "the module scanned twice for its symbols"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_module_scanned_twice_for_its_symbols")
+  release
+
+rows_dq50 = list/concat rows_dq49 [one_scan]
+
+# The strings the body names are marked in the same pass, and only the type
+# tables are scanned for them after (2026-10-24). The mutation scans the body
+# for them again, and the browser compile row reads heavier.
+strings_in_scan = row
+  "the strings found by a scan of their own"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_strings_found_by_a_scan_of_their_own")
+  release
+
+rows_dq51 = list/concat rows_dq50 [strings_in_scan]
+
+# The translator answers a pair of scalar leaves, every %KValue, without a
+# vector (2026-10-24). The mutation lists them in one again, and the browser
+# compile row reads heavier.
+pair_leaves = row
+  "a pair of leaves listed in a vector"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pair_of_leaves_listed_in_a_vector")
+  release
+
+rows_dq52 = list/concat rows_dq51 [pair_leaves]
+
+# The tab's bcmp answers equality alone, from a body of its own (2026-10-24).
+# The mutation makes it the ordering compare again, and the browser compile row
+# reads heavier.
+equal_bcmp = row
+  "a bcmp that orders its bytes"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bcmp_that_orders_its_bytes")
+  release
+
+rows_dq53 = list/concat rows_dq52 [equal_bcmp]
+
+# queries_named passes over a name no query starts like before hashing it
+# (2026-10-24). The mutation admits every byte, and the browser compile row
+# reads heavier.
+query_leads = row
+  "every name hashed whatever it starts with"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_name_hashed_whatever_it_starts_with")
+  release
+
+rows_dq54 = list/concat rows_dq53 [query_leads]
+
+# The string arm of an index lives in the release build's LTO unit and is
+# inlined into the program's walks over text (2026-10-24). The mutation takes
+# its always_inline away, and the work vein reads runbench heavier.
+index_inline = row
+  "a string index called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_index_called_out_of_line")
+  benches
+
+rows_dq55 = list/concat rows_dq54 [index_inline]
+
+# The word-at-a-time number span joins the string index in the LTO unit, so
+# the decoder's walk scans a number without a call (2026-10-24). The mutation
+# takes its always_inline away.
+number_span_inline = row
+  "a number span called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_number_span_called_out_of_line")
+  benches
+
+rows_dq56 = list/concat rows_dq55 [number_span_inline]
+
+# The int and float slice parsers join them, so the decoder reads a number
+# without a call (2026-10-24). The mutation takes both always_inlines away.
+slice_parsers_inline = row
+  "the slice parsers called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_parsers_called_out_of_line")
+  benches
+
+rows_dq57 = list/concat rows_dq56 [slice_parsers_inline]
+
+# The empty list and map join them, so the decoder opens an array or an
+# object without a call (2026-10-24). The mutation puts noinline in place of
+# both always_inlines.
+empty_inline = row
+  "the empty collections called out of line"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_empty_collections_called_out_of_line")
+  benches
+
+rows_dq58 = list/concat rows_dq57 [empty_inline]
+
+# The in-place byte append asks for room before it reads the buffer's header,
+# and the separate test for a borrowed view is gone (2026-10-24). The mutation
+# puts that test back in the twin the json encoder's separators go through.
+room_first = row
+  "a byte append that asks ownership first"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_append_asks_ownership_first")
+  benches
+
+rows_dq59 = list/concat rows_dq58 [room_first]
+
+# The prune finds each line of the emitted IR a word at a time (2026-10-24).
+# The mutation puts the per-line `str::find` back, a memchr call a line.
+prune_lines = row
+  "the prune splits its lines with memchr"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_prune_splits_its_lines_with_memchr")
+  release
+
+# The tab's translator trims its lines as ASCII (2026-10-24). The mutation
+# puts `str::trim` back on both per-line trims.
+ascii_trim = row
+  "the translator trims unicode whitespace"
+  true
+  (gating "browser_cost")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_translator_trims_unicode_whitespace")
+  release
+
+rows_dq60 = list/concat rows_dq59 [prune_lines ascii_trim]
+
+# The lexer finds each line of a source a word at a time (2026-10-24). The
+# mutation puts `str::lines` back, a memchr call a line.
+lex_lines = row
+  "the lexer splits its lines with str::lines"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_splits_its_lines_with_str_lines")
+  release
+
+# The lexer answers both openers for a line with no quote and no `#` from one
+# scan a word at a time (2026-10-24). The mutation sends every line through
+# the two byte-at-a-time scans.
+lex_openers = row
+  "the lexer scans every line for its openers byte by byte"
+  true
+  (gating "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_lexer_scans_every_line_for_its_openers")
+  release
+
+rows_dq61 = list/concat rows_dq60 [lex_lines lex_openers]
+
+rows_d = list/concat rows_dq61 [itself]
