@@ -1908,4 +1908,20 @@ The new arm moves std/list's lines below it down by four, so
 `runtime/tie_takes_a_list_of_ids` names `list/tie` at line 602 where it named
 598.
 
-CI's rows: ROWS.
+CI's rows, against #2164's phase on main at #2149. The run program's 800
+reads cost what an index costs: `work_runbench` 860,174,697 -> 822,230,062,
+`run_allocs` 1,582,393 -> 1,581,593, `run_alloc_bytes` 223,955,352 ->
+223,916,952 and `run_sh_rec` 4,136,736 -> 4,098,336, the 800 step records
+the fold built. The interpreted corpus falls the same way:
+`interp_instructions` 592,911,824 -> 565,113,790 and `interp_allocs` 657,248
+-> 632,010, while `interp_peak_bytes` reads 1,335,165, 1,060 more, for the
+library's extra arm. In the tab `browser_run_instructions` falls 64,427,034
+-> 61,564,263. The arm is library code every compile reads, so the compile
+rows rise a little: `compile_instructions` 25,056,497, `entry_instructions`
+73,544,933, `library_instructions` 73,225,529, `emit_instructions`
+5,688,228, `codegen_instructions_dev` 116,762,604,
+`codegen_instructions_release` 371,664,050, `browser_compile_instructions`
+350,083,473 and `browser_compile_peak_bytes` 846,630. The run program emits
+the arm too: `emitted_other_lines` 170,583, `emitted_other_calls` 20,568 and
+`emitted_other_branches` 18,015, and its text reads 5,700,111. Welfare rises
+95.40 -> 95.51 and is banked.
