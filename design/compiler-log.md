@@ -23,20 +23,6 @@
 
 
 
-## 2026-10-25 — a binding refused for another file's name says which file
-
-#2085 asks whether a local may reuse a name declared only in another file of
-its module, and notes that the message is cloud's to fix whatever the
-ruling. rg's port had `` `escaped` is already a declaration; rename the
-binding `` with the caret in `m/a.kso` and the declaration in `b.kso`, which
-the message did not name. The module path now looks the name up in the
-module's other files when it reports one of these, and says where it is:
-`` `escaped` is already a declaration, in m/b.kso at line 1; rename the
-binding ``. The lookup runs only on a refused compile.
-
-`errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
-shape, and main prints the message without the place.
-
 ## 2026-10-25 — a function's arms split across files are counted together
 
 From #2090, toml's port. A module's files share their declarations, and
@@ -1861,6 +1847,25 @@ interpreter runs the analysis before each program, so interp_instructions
 falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
 the lists of entries a drop collects while it walks a set it is changing.
 Welfare rises 95.38 -> 95.40 and the rise is banked.
+
+## 2026-10-26 — the runtime's tags and doors are read from its C
+
+Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
+the tag enum and the functions defined with `K_DOORCC` out of the joined
+text into `$OUT_DIR/runtime_abi.rs`. The seven tags `codegen.rs` restated,
+`K_ERR_TAG`, the door list in `codegen/module.rs`, and the two specs that
+held those copies to the C are gone. A door the reader cannot parse stops
+the build, since a door missing from the list would be called on the C
+convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
+watches `cargo build` go red.
+
+CI's rows, against main at #2154. The derived door list is in the runtime's
+include order, and `through_doors` checks doors in list order, so
+`emit_instructions` reads 5,687,958, 224 fewer. Compiling the runtime reads
+the edited comment in `core.c`, which moves `codegen_instructions_dev` to
+116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
+fewer). Both read as layout of the clang input, since the program's code
+is unchanged, and no runtime row moved.
 
 ## 2026-10-26 — an err is born boxed
 

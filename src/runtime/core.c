@@ -545,10 +545,9 @@ typedef struct {
    to save, so they stay on the C convention. `append_string_mut` joined
    later, measured the same way on the run program: -2,228,335. The two slice
    parsers the decoder's number twins call are inlined into them in a release
-   build, so their convention is the C one. The emitter writes
-   the keyword on the declares and calls of exactly these, in
-   `PRESERVE_NONE_DOORS`, and `tests/the_doors_the_program_calls_agree.rs`
-   holds the two lists equal. */
+   build, so their convention is the C one. build.rs reads the functions
+   defined with `K_DOORCC` into `PRESERVE_NONE_DOORS`, and the emitter writes
+   the keyword on the declares and calls of exactly those. */
 #define K_DOORCC K_CLOSCC
 
 /* `fn` is the wrapper C calls through. `body` is the lambda itself on the
