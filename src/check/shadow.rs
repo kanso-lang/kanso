@@ -629,6 +629,26 @@ pub fn check_file_shadow(
             travels,
         );
     }
+    // A binding refused for a name this file declares names the line it is
+    // declared on (#2085). One declared in another file of the module is
+    // named, with its file, where the module's files are checked together.
+    for d in &mut diags {
+        let Some(name) = d
+            .message
+            .strip_prefix('`')
+            .and_then(|rest| rest.strip_suffix("` is already a declaration; rename the binding"))
+        else {
+            continue;
+        };
+        let at = program.fns.iter().find(|f| f.name == name).map(|f| f.span);
+        let at = at.or_else(|| program.types.iter().find(|t| t.name == name).map(|t| t.span));
+        if let Some(span) = at {
+            d.message = format!(
+                "`{name}` is already a declaration, at line {}; rename the binding",
+                span.line
+            );
+        }
+    }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
 }

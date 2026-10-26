@@ -1,3 +1,2 @@
 error[runtime]: tie takes a list of ids and a maker
-  failed in list/tie at std/list/list.kso:577
-  called from tie_takes_a_list_of_ids.kso:15
+  failed in list/tie at std/list/list.kso:598

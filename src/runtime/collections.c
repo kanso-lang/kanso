@@ -762,7 +762,75 @@ static void k_map_view_merge(KMap* m) {
     m->sorted_len = n + sl;
 }
 
+/* A pair `k_b_delete_mut` took out keeps its slot: the key moves to the
+   value's place and the key's place holds this tag, which no key has. The
+   pairs stay sorted by key, the dead keys included, so the next delete finds
+   its key by a search and a drain costs a search a key. Closing each gap as
+   it opened moved every pair after it: half of 80,000 keys took 0.92 s.
+
+   A map holding dead pairs has no view, and `sorted_len` is negative:
+   -(len + 1) while the pairs are exactly what the deletes left, any other
+   negative once an in-place put has appended past them. Every reader but
+   the delete and a lookup closes the gaps first, so nothing else ever sees
+   the tag. */
+#define K_GONE K_DONE
+
+static inline int k_map_has_gone(KMap* m) {
+    return m->sorted_len < 0;
+}
+
+/* The pairs are sorted, with dead ones among them, and nothing was appended
+   since: a search can still find a key in them. */
+static inline int k_map_gone_sorted(KMap* m) {
+    return !m->sorted && m->sorted_len == -m->len - 1;
+}
+
+/* The key slot of `key`'s pair in sorted pairs that hold dead ones, or NULL.
+   A dead pair is searched by the key it keeps in its value's place, and
+   finding one is finding nothing. */
+static KValue* k_gone_search(KValue* run, long long n, KValue key) {
+    long long lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        long long mid = lo + (hi - lo) / 2;
+        KValue* at = &run[mid * 2];
+        int gone = at->tag == K_GONE;
+        int c = k_key_cmp(gone ? at[1] : at[0], key);
+        if (c == 0) return gone ? NULL : at;
+        if (c < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return NULL;
+}
+
+/* Close the gaps the deletes left, where the pairs stand. Only the map's own
+   header reads its pairs while it holds dead ones: the delete that left them
+   was proved to hold the map alone, and a persistent put, the one thing
+   that would share the pairs with a second header, closes them before it
+   does. Pairs nothing was appended to are still in order, so they are their
+   own view again. */
+static __attribute__((noinline)) void k_map_close_gone(KMap* m) {
+    int in_order = k_map_gone_sorted(m);
+    long long w = 0;
+    for (long long i = 0; i < m->len; i++) {
+        if (m->pairs[i * 2].tag == K_GONE) continue;
+        m->pairs[w * 2] = m->pairs[i * 2];
+        m->pairs[w * 2 + 1] = m->pairs[i * 2 + 1];
+        w++;
+    }
+    m->len = w;
+    k_buf_of(m->pairs)->used = 2 * w;
+    m->sorted = in_order ? m->pairs : NULL;
+    m->sorted_len = in_order ? w : 0;
+}
+
 static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
+    if (__builtin_expect(k_map_has_gone(m), 0)) {
+        k_map_close_gone(m);
+        if (m->sorted) return;
+    }
     if ((uintptr_t)m->sorted & K_VIEW_SIDE) {
         k_map_view_merge(m);
         return;
@@ -1197,6 +1265,9 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
+    /* the answer may share these pairs, and a header that shares them must
+       never meet a dead one */
+    if (__builtin_expect(k_map_has_gone(m), 0)) k_map_close_gone(m);
     KBuf* buf = k_buf_of(m->pairs);
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_sh_map += (long long)sizeof(KMap);
     KMap* out = k_alloc(sizeof(KMap));
@@ -1264,22 +1335,15 @@ KValue k_b_delete(KValue mv, KValue key) {
     return k_map_lit(w, kept);
 }
 
-/* `delete` where linearity proved nothing else holds the map: the key comes
-   out of it where it stands. A map whose pairs are not their own view first
-   restarts them from it, as the in-place put's growth does, so the pairs are
-   sorted with each key once; the key's pair is then closed over by the pairs
-   after it, and the view, being the pairs, shrinks with them. A loop that
-   drained a map by `delete` copied the whole map on every call: half of
-   20,000 keys took 27.9 billion instructions. */
-KValue k_b_delete_mut(KValue mv, KValue key) {
-    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key), 0)) return k_failed2(mv, key);
-    if (mv.tag != K_MAP) k_die("delete takes a map and a key");
-    k_check_map_key(key);
-    KMap* m = k_as_map(mv);
+/* The key slot of `key` in pairs that are the map's sorted view, restarting
+   the pairs from the view first when they are not, as the in-place put's
+   growth does, so the pairs are sorted with each key once. NULL when the map
+   does not hold the key, which costs no restart. */
+static KValue* k_delete_restart(KMap* m, KValue key) {
     long long n;
     KValue* s = k_map_sorted(m, &n);
     KValue* hit = k_view_search(s, n, key);
-    if (!hit) return mv;
+    if (!hit) return NULL;
     if (s != m->pairs || n != m->len) {
         long long cap = 8;
         while (cap < 2 * n) cap <<= 1;
@@ -1294,15 +1358,51 @@ KValue k_b_delete_mut(KValue mv, KValue key) {
             k_buf_donate(m->pairs);
         }
         m->pairs = np;
-        m->sorted = np;
+        m->len = n;
+        k_buf_of(np)->used = 2 * n;
         if (perm) k_permreg_add(m, &m->pairs);
     }
-    long long at = (hit - m->pairs - 1) / 2;
-    memmove(m->pairs + at * 2, m->pairs + (at + 1) * 2, sizeof(KValue) * 2 * (size_t)(n - at - 1));
-    m->len = n - 1;
-    m->sorted_len = n - 1;
-    k_buf_of(m->pairs)->used = 2 * (n - 1);
+    return hit - 1;
+}
+
+/* `delete` where linearity proved nothing else holds the map: the key comes
+   out of it where it stands. Its pair is marked dead in place (K_GONE above)
+   and dead pairs at the end are dropped, so a drain costs a search a key. A
+   loop that drained a map by `delete` copied the whole map on every call:
+   half of 20,000 keys took 27.9 billion instructions. */
+KValue k_b_delete_mut(KValue mv, KValue key) {
+    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key), 0)) return k_failed2(mv, key);
+    if (mv.tag != K_MAP) k_die("delete takes a map and a key");
+    k_check_map_key(key);
+    KMap* m = k_as_map(mv);
+    KValue* at = k_map_gone_sorted(m) ? k_gone_search(m->pairs, m->len, key) : k_delete_restart(m, key);
+    if (!at) return mv;
+    if (K_COUNTING) k_stat_delete_marks++;
+    at[1] = at[0];
+    at[0].tag = K_GONE;
+    at[0].payload = 0;
+    long long n = m->len;
+    while (n > 0 && m->pairs[(n - 1) * 2].tag == K_GONE) n--;
+    m->len = n;
+    k_buf_of(m->pairs)->used = 2 * n;
+    m->sorted = NULL;
+    m->sorted_len = -n - 1;
     return mv;
+}
+
+/* `builtin_rest_from xs at`, std/list's rest after a drop: a list's elements
+   from position `at` on, copied in one move, and none for anything that is
+   not a list or a position that is not a word of at least 1, which std then
+   walks a step at a time as it always did. Walking
+   a list by `list/to_list (list/drop xs 1)` built each rest a step record and
+   an advanced cursor per element: 5,000 elements took 6.5 seconds. */
+KValue k_b_rest_from(KValue coll, KValue atv) {
+    if (__builtin_expect(!k_not_failure(coll) || !k_not_failure(atv), 0)) return k_failed2(coll, atv);
+    if (coll.tag != K_LIST || atv.tag != K_INT || atv.payload < 1) return k_none();
+    KList* l = k_as_list(coll);
+    long long at = atv.payload;
+    if (at > l->len) return k_mklist(0, NULL);
+    return k_mklist(l->len - at + 1, l->items + (at - 1));
 }
 
 /* A failing field is the rare arm of `entries`, and k_rec is a plain call
