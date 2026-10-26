@@ -50,6 +50,10 @@ pub struct Site {
     /// is cloned once per declaration, which is what this struct already
     /// costs: it is built by `frame_of` and memoized by pointer.
     pub file: std::sync::Arc<str>,
+    /// Whether the file is the standard library's or a fetched hako's, asked
+    /// at every tail call that might cross into the library (#2099), so it is
+    /// read off the path once here rather than scanned for at each call.
+    pub library: bool,
     /// The (line, column) of every push in this file that writes in place,
     /// gathered on the first question; see `Interp::writes_in_place`.
     in_place: std::cell::OnceCell<Set<(usize, usize)>>,
@@ -67,6 +71,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
         file: decl.file.clone(),
+        library: crate::provenance::is_library_file(&decl.file),
         in_place: std::cell::OnceCell::new(),
         moved: std::cell::OnceCell::new(),
         joins: std::cell::OnceCell::new(),
@@ -119,7 +124,7 @@ fn placed(mut e: RuntimeError, frame: &Frame) -> RuntimeError {
 /// whose place is not a library's, passes through unchanged.
 fn called_from(mut e: RuntimeError, frame: &Frame, span: Span) -> RuntimeError {
     let Some(site) = frame else { return e };
-    if crate::provenance::is_library_file(&site.file) {
+    if site.library {
         return e;
     }
     if let Some(at) = &e.at {

@@ -1096,7 +1096,7 @@ impl<'a> Interp<'a> {
                 return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
             }
             return match (group_of(&callee), callee) {
-                (Some((_, group)), callee) if Self::enters_library(frame, &group, args) => {
+                (Some((_, group)), callee) if self.enters_library(frame, &group, args) => {
                     let answer = self
                         .call(callee, values, *span, frame)
                         .map_err(|e| called_from(e, frame, *span))?;
@@ -1131,7 +1131,7 @@ impl<'a> Interp<'a> {
             return Ok(Flow::Done(self.insisted(head, answer, *span, frame)));
         }
         match (group_of(&callee), callee) {
-            (Some((_, group)), callee) if Self::enters_library(frame, &group, args) => {
+            (Some((_, group)), callee) if self.enters_library(frame, &group, args) => {
                 let answer = self
                     .call(callee, values, *span, frame)
                     .map_err(|e| called_from(e, frame, *span))?;
@@ -1166,12 +1166,13 @@ impl<'a> Interp<'a> {
     /// library. Such a call is made rather than looped on, so the program's
     /// frame is still there to name its line if the library fails, as it is
     /// natively, where the same call is not a tail call either.
-    fn enters_library(frame: &Frame, group: &[&FnDecl], args: &[Expr]) -> bool {
-        !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n.as_str() == "__piped")
-            && frame.as_ref().is_some_and(|site| !crate::provenance::is_library_file(&site.file))
+    fn enters_library(&self, frame: &Frame, group: &[&'a FnDecl], args: &[Expr]) -> bool {
+        frame.as_ref().is_some_and(|site| !site.library)
             && group.first().is_some_and(|d| {
-                crate::provenance::is_library_file(&d.file) && !crate::flat::made(&d.name)
+                self.frame_for(d).is_some_and(|callee| callee.library)
+                    && !crate::flat::made(&d.name)
             })
+            && !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n.as_str() == "__piped")
     }
 
     /// A zero divisor's answer as the program can see it; see `bare_math`.
