@@ -1979,19 +1979,22 @@ diagnostic, since `print os/args[1]` hands `print` a none. The test verb's
 last item on #2088, bc's slice edges, was built on 2026-10-25: a start before
 1 answers none, as a range past the end does.
 
-CI's rows against main at #2169. The check costs the front end: compile
-instructions 24,604,939 -> 24,798,984, the entry path 72,571,754 ->
-73,507,587, the library path 72,232,245 -> 73,143,499 and the tab's compile
-339,964,747 -> 340,825,316. indexbench reads its bound at the guard on every
-step, `if (i > length s)`, because the prover cannot see a bound handed down
-(#2174), so it rises 1,837,160 -> 2,077,157, and the run program, which
-carries the shape at a larger size, 819,572,053 -> 829,234,755. The none arms
-the library and the benchmarks gained move the rest by small amounts:
-jsonbench 549,333,568 -> 549,337,021, widebench 28,685,100 -> 28,701,099,
-basket 18,294,810 -> 18,294,814, encodebench 2,335,339,266 -> 2,335,338,865,
-scanbench 274,243 -> 274,220 and the interpreter's allocations 630,584 ->
-630,592. The emitted and text rows grow with the same arms: the decoder's
-emitted lines 14,150 -> 14,240, the other benchmarks' 168,876 -> 169,582, and
-the run program's text 812,017 -> 814,177. The check is the 2026-09-15
-gavel's part 3 carried to none, so the floor drops by what it costs, 95.42
-to 95.38.
+CI's rows against main at #2169. The check costs the front end:
+compile_instructions 24,604,939 -> 24,798,984, entry_instructions 72,571,754
+-> 73,507,587, library_instructions 72,232,245 -> 73,143,499 and the tab's
+browser_compile_instructions 339,964,747 -> 340,825,316. indexbench reads its
+bound at the guard on every step, `if (i > length s)`, because the prover
+cannot see a bound handed down (#2174), so work_indexbench rises 1,837,160 ->
+2,077,157, and work_runbench, which carries the shape at a larger size,
+819,572,053 -> 829,234,755. The none arms the library and the benchmarks
+gained move the rest by small amounts: work_jsonbench 549,333,568 ->
+549,337,021, work_widebench 28,685,100 -> 28,701,099, work_basket 18,294,810
+-> 18,294,814, work_encodebench 2,335,339,266 -> 2,335,338,865,
+work_scanbench 274,243 -> 274,220 and interp_allocs 630,584 -> 630,592. The
+emitted and text rows grow with the same arms: for the decoder
+emitted_defines 160 -> 161, emitted_calls 1,519 -> 1,528, emitted_branches
+1,293 -> 1,308 and emitted_lines 14,150 -> 14,240; for the other benchmarks
+emitted_other_defines 2,243 -> 2,253, emitted_other_calls 20,311 -> 20,472,
+emitted_other_branches 17,723 -> 17,764 and emitted_other_lines 168,876 ->
+169,582; and text 5,619,835 -> 5,620,636 over every benchmark. The check is the 2026-09-15 gavel's part 3
+carried to none, so the floor drops by what it costs, 95.42 to 95.38.
