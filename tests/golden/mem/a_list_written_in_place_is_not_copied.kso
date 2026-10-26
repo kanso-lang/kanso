@@ -1,0 +1,17 @@
+# a vector filled by position, the shape the ports wrote with integer-keyed
+# maps before a list could be written at an index (kanso#2086). Each `put`
+# is in place, so 4,000 writes add no allocation to the 4,000 pushes that
+# built the list; a copy per write would add 4,000 lists of 4,000 elements.
+fn zeros 0 xs
+  xs
+
+fn zeros n xs
+  zeros (n - 1) (push xs 0)
+
+fn squares xs i n
+  return xs if i > n
+  squares (put xs i (i * i)) (i + 1) n
+
+pub play =
+  xs = squares (zeros 4000 []) 1 4000
+  print "{length xs} {xs[1]} {xs[2]} {xs[4000]}"

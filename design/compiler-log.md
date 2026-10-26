@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-24 — kq under the pin to 29dafd0f
-
-kq's instruction rows rose when its pin moved to 29dafd0f, the string index
-and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
-path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
-CI runs on two different CPUs read the same four rows, and building kq here
-with kanso before and after #2077 gives the same rise within a few hundred.
-
-The rise is in kq's decoder, around the string scan. `Flat3_string_end`
-keeps an overflow-checked increment the earlier build folded into a `lea`,
-and `parse_string` keeps the same check and a test of a constant zero. The
-IR kanso emits for kq is the same under both pins, apart from the
-declarations #2077 retyped, so the folds are lost in the hot unit or at the
-link. Every `find2` site in kq is inlined since #2077, where 13 were calls
-before.
-
-Measured and set aside: the two scanners without `always_inline`. The link
-then left 6 calls, and kq read print_small 26,132,733 and path_small
-10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
-forced inlining is not what costs kq. The cause is not isolated.
-
 ## 2026-10-24 — a chain built from the left runs past the beat stack
 
 The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
@@ -1787,3 +1766,57 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-26 — `put` writes a list at a position
+
+The 2026-10-25 gavel on #2086 rules that `put xs i v` on a list answers the
+list with element `i` replaced, 1-based as `xs[i]` reads it, and `none` for
+a position outside the list. A position that is not an int stops the run,
+on both engines, with "put writes a list at an int position"; a first
+argument that is neither a map nor a list stops it with "put writes a map at
+a key or a list at a position", where both used to say "put takes a map, a
+key, and a value". A position past a word answers `none`, as a read there
+does.
+
+The interpreter replaces the element in a copy of the vector, or in the
+vector itself at a site the linearity analysis licenses. The native runtime
+does the same in `k_list_put`, which `k_b_put` and `k_b_put_mut` reach on a
+list before their map arms. No analysis changed: `put` with three arguments
+was already a write into its first argument wherever that argument was
+unique, so a list built by in-place pushes and handed down a loop is
+written where it stands.
+
+A persistent push hands its answer the buffer it was given when the list is
+that buffer's frontier, so two lists can share one buffer. I first had the
+in-place write copy a list into a buffer of its own before writing, and
+then wrote programs to make the copy matter: a push onto a list still held,
+followed by a write into the push's answer, and a function that writes into
+a literal on every call. Neither write was in place. The analysis calls a
+push's answer unique only when the list pushed onto is, which is the case
+where the push was in place and nothing shares the buffer, and a list
+literal is built afresh on each evaluation. Both programs print the same
+lines with the copy taken out, so I removed it.
+
+Inference answers `LIST | NONE` for `put` on a list, `MAP` on a map, and
+both where the first argument could be either. The checker's literal table
+takes a list for `put`, and the after-inference walk that refused a list
+handed to `put` (#2091's fifth item) now asks only of `delete`, `keys`,
+`values` and `entries`, so diff F9 and inflate F8, which passed check and
+stopped at run time, now pass both.
+
+`a_list_written_at_a_position` (micro, both engines) writes inside the list,
+at 0, one past the end, -1 and a bignum, into a literal, with a list as the
+value, into an empty list, through a loop that fills six squares, through
+the shared-buffer program and through the literal written on every call.
+`a_list_written_in_place_is_not_copied` (mem) fills 4,000 squares into a
+list built by pushes and reads allocs=10. `put_writes_a_list_at_an_int_position`
+pins the refusal, and `put_takes_a_map_a_key_and_a_value` is renamed
+`put_writes_a_map_or_a_list` with the new words. `errors/a_list_handed_to_put`
+becomes `a_list_handed_to_delete`, the same two shapes handed to `delete`.
+Three mutations turn the corpus red: the native in-place write made a copy
+(the mem golden), the persistent write made through the original (the
+micro, natively), and the interpreter writing at the wrong position (the
+micro, interpreted). Appendix B's `put` entry gains the list signature and a
+sample.
+
+CI's rows: ROWS.

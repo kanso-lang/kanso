@@ -1,0 +1,15 @@
+# `delete` takes a key out of a map, and stops at run time on a list. A list
+# it is handed is refused at check when the list is certain: a name bound to
+# a list literal in the same body, or a call whose every arm answers a list.
+# A list literal written in place was refused already.
+fn filled n
+  [n n n]
+
+fn drop_middle n
+  xs = [1 2 n]
+  delete xs 2
+
+fn drop_made n
+  delete (filled n) 2
+
+pub play = print "{drop_middle 9} {drop_made 4}"

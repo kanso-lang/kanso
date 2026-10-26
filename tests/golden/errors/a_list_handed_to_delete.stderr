@@ -1,0 +1,8 @@
+error[type]: `delete` takes a map here, not a list (module a_list_handed_to_delete)
+  --> a_list_handed_to_delete.kso:10:10
+  10 |   delete xs 2
+                ^
+error[type]: `delete` takes a map here, not a list (module a_list_handed_to_delete)
+  --> a_list_handed_to_delete.kso:13:11
+  13 |   delete (filled n) 2
+                 ^
