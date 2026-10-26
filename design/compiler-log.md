@@ -1880,4 +1880,20 @@ The battery also found a field read that the engines disagree on: native
 reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
 Clay which way it goes.
 
-CI's rows: ROWS.
+CI's rows, against main at #2162. The run program reads work_runbench
+822,286,353 -> 860,174,697, and its allocation vein moves with the 800 reads:
+run_allocs 1,581,589 -> 1,582,393, run_alloc_bytes 223,888,104 ->
+223,955,352, run_beat_iters 177,272 -> 178,072, run_push_mut_slow 1,644,657
+-> 1,645,457, run_sh_rec 4,098,336 -> 4,136,736, run_sh_buf 91,336,688 ->
+91,336,800, run_perm_peak_bytes 1,867,025 -> 1,875,217, run_bytes_malloc
+7,921 -> 7,924 and run_bytes_freed 7,779 -> 7,782. The interpreted corpus
+reads interp_instructions 571,553,496 -> 600,288,596, interp_allocs 628,009
+-> 654,424 and interp_peak_bytes 1,313,667 -> 1,334,105. The tab compiles
+and runs the corpus too: browser_compile_instructions 360,520,776 ->
+366,066,854, browser_compile_peak_bytes 842,026 -> 846,225 and
+browser_run_instructions 61,510,637 -> 64,427,034. The run program's new
+function is emitted code: emitted_other_lines 170,009 -> 170,548,
+emitted_other_branches 17,946 -> 18,010, emitted_other_calls 20,496 ->
+20,565, emitted_other_defines 2,239 -> 2,248, and its binary's text 5,698,479
+-> 5,700,447. The welfare floor is re-based to what the corpus now reads, as
+the corpus-first gavel asks, so the fix in #2165 scores as a rise.
