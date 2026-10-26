@@ -88,10 +88,6 @@ pub play = io/stdin .> (model -> with_model model)
 fn with_model model
   os/args .> (given -> scoring_rows (read model) given)
 
-# A model with no formula line answers an err, handed on as it is.
-fn scoring_rows e@(err _) _
-  e
-
 fn scoring_rows m given
   over_rows m given
 
@@ -593,18 +589,6 @@ fn written m phases epochs raw
   decoded = list/to_list (list/map lines row_of)
   a = anchor decoded phases
   scored_rows m phases decoded a (epoch_divisors decoded epochs)
-
-# An epoch naming a commit no row carries answers an err, handed on as it is,
-# and it is the one reported when the splice's anchor is an err as well.
-fn scored_rows _ _ _ (err _) e@(err _)
-  e
-
-# A splice whose rows disagree answers an err from `anchor`, handed on too.
-fn scored_rows _ _ _ e@(err _) _
-  e
-
-fn scored_rows _ _ _ _ e@(err _)
-  e
 
 fn scored_rows m phases decoded a epoch_divs
   divs = bounded epoch_divs[2]

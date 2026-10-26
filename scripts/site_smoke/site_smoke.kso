@@ -465,9 +465,6 @@ fn noted acc _ true
 fn noted acc why false
   list/concat acc [why]
 
-fn noted _ _ e@(err _)
-  e
-
 fn running set chrome
   on = (report -> landed set chrome report)
   visiting set chrome landing_port "/index.html" on
@@ -482,9 +479,6 @@ fn after_landing set chrome report
   told = noted [] why ran
   visiting_paint set chrome told
 
-fn visiting_paint _ _ e@(err _)
-  e
-
 fn visiting_paint set chrome failures
   on = (report -> painted_page set chrome failures report)
   visiting set chrome paint_port "/paint.html" on
@@ -496,9 +490,6 @@ fn painted_page set chrome failures report
 fn read_paint set chrome failures report
   on = (read -> visiting_board set chrome (missing_paint read failures))
   json/decode! report .> on
-
-fn visiting_board _ _ e@(err _)
-  e
 
 fn visiting_board set chrome failures
   on = (report -> boarded set chrome failures report)
@@ -520,9 +511,6 @@ fn judged_read set chrome failures read
   faults = missing_compile read k
   visiting_book set chrome faults
 
-fn visiting_book _ _ e@(err _)
-  e
-
 fn visiting_book set chrome failures
   on = (report -> booked set chrome failures report)
   visiting set chrome book_port "/book/ch04.html" on
@@ -539,9 +527,6 @@ fn book_read set chrome failures read
   b = missing_run read a
   faults = missing_reader read b
   visiting_chart set chrome faults
-
-fn visiting_chart _ _ e@(err _)
-  e
 
 fn visiting_chart set chrome failures
   on = (report -> charted failures report)
@@ -582,9 +567,6 @@ fn drew? none
 fn drew? series
   series == [2 2 2 5 6 6 6 6]
 
-fn missing_bounds _ e@(err _)
-  e
-
 # One coverage change in the stub is one rule PER PANEL, each labelled with the
 # share the rows to its right are scored on. `scored_weight` arrives as TEXT in
 # every row of the real history -- "0.00", "0.28", "0.44", "1.00" -- and a
@@ -603,9 +585,6 @@ fn missing_bounds read acc
   one = "coverage 1.00"
   marked = [one one one one one one one]
   noted acc why (read["marks"] == marked)
-
-fn missing_panel_rows _ e@(err _)
-  e
 
 # The panel leads with the chart's own lines, in the chart's own order, because
 # it is built from the same list rather than from a second one written by hand.
@@ -627,16 +606,10 @@ fn any_live? none
 fn any_live? live
   live > 0
 
-fn missing_run _ e@(err _)
-  e
-
 fn missing_run read acc
   why = "the chapter's first panel did not run"
   said = said_in? read "ran" "is not an integer"
   noted acc why said
-
-fn missing_reader _ e@(err _)
-  e
 
 fn missing_reader read acc
   why = "a book panel did not run edited source"
@@ -646,9 +619,6 @@ fn missing_reader read acc
 fn missing_paint read acc
   faults = paint_faults read["painted"] acc 1
   missing_above read faults
-
-fn missing_above _ e@(err _)
-  e
 
 # 2 * 2^23 characters and the newline print adds.
 fn missing_above read acc
@@ -682,9 +652,6 @@ fn missing_first read acc
   said = said_in? read "out" "hello, kanso"
   noted acc why said
 
-fn missing_fanout _ e@(err _)
-  e
-
 # fanout puts a closure in a record field, which the browser engine could not
 # do until Value::TableFn — the regression this page must never take again.
 fn missing_fanout read acc
@@ -692,32 +659,20 @@ fn missing_fanout read acc
   said = said_in? read "fanout" "650 yen"
   noted acc why said
 
-fn missing_repl _ e@(err _)
-  e
-
 fn missing_repl read acc
   why = "the repl did not answer"
   said = said_in? read "repl" "5"
   noted acc why said
-
-fn missing_edit _ e@(err _)
-  e
 
 fn missing_edit read acc
   why = "the run button did not run edited source"
   said = said_in? read "edited" "edited then run 42"
   noted acc why said
 
-fn missing_keys _ e@(err _)
-  e
-
 fn missing_keys read acc
   why = "the keyboard shortcut did not run edited source"
   said = said_in? read "keyed" "keys then run 5"
   noted acc why said
-
-fn missing_compile _ e@(err _)
-  e
 
 # The playground compiles through the native emitter and runs what it wrote
 # on the runtime; a page that cannot fetch or compile the runtime interprets
@@ -726,9 +681,6 @@ fn missing_compile read acc
   why = "the playground interpreted a program it should have compiled"
   said = said_in? read "edited" "compiled to wasm in your tab"
   noted acc why said
-
-fn finished e@(err _) _
-  e
 
 fn finished failures report
   ended failures report (length failures == 0)
