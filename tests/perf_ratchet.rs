@@ -108,12 +108,12 @@ fn linear_list_accumulator_pushes_in_place() {
 /// else in the suite notices when they drift — a program only sees the
 /// difference where a none meets a path that inlines. It was an LLVM twin of
 /// the C predicate until 2026-09-25 and is a compare of the tag with the err
-/// tag since; pin that compare to err alone. The number itself is held to the
-/// runtime's enum by `tests/the_err_tag_is_the_runtime_s.rs`.
+/// tag since; pin that compare to err alone. The number itself is build.rs's
+/// reading of the runtime's enum.
 #[test]
 fn the_failure_test_asks_err_and_nothing_else() {
     let ir = ir_for(PREDICATES);
-    let err = format!(", {}", kanso::codegen::K_ERR_TAG);
+    let err = format!(", {}", kanso::codegen::K_ERR);
     let tests: Vec<&str> =
         ir.lines().filter(|l| l.contains(" = icmp ne i64 ") && l.ends_with(&err)).collect();
     assert!(!tests.is_empty(), "the program asks no failure test, so this proves nothing");
