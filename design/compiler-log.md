@@ -23,32 +23,6 @@
 
 
 
-## 2026-10-24 — a module's own function beats an imported constant of its name
-
-#2090's first item, from the kv port. A module that imports std/io and
-declares `fn read_line acc x`, then hands `read_line` to `list/fold`, stopped
-on every engine with "`<io>` is not callable". #2084 fixed the play-file form
-of this in the interpreter's `resolve`. A module takes another path.
-
-`qualify` gives a name the module declares and an import also enrols a
-spelling of its own, the shared bare space (`m/~read_line`), where the
-module's own arms join the import's twin as synthetic clones. #2084's test
-for an arm the author wrote finds only clones there, so it never fires, and
-std/io's `read_line` is a constant, which answers any mention of the name
-read as a value. A constant has no arity a call could dispatch on, so it
-cannot share a name with a function by overloading. `qualify` now drops an
-import's constant twin wherever the module declares the name, and the name
-takes its plain qualified spelling. A module that declares no `read_line`
-still reads std/io's bare.
-
-`micro/a_modules_function_named_like_an_imported_constant` prints `6` on
-every engine, and main stops it with "`<io>` is not callable".
-
-`qualify` asks each dependency which names its module declares. The first
-cut cloned every declared name into a set, 305 allocations; the set now
-borrows them. The rows are counted with the batch this landed in, at the end
-of "an import stays in the file that writes it".
-
 ## 2026-10-25 — a module's own type beats an imported function of its name
 
 From #2090, mal's port. A module declared `type tally` beside
@@ -1757,3 +1731,60 @@ what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
 entry_instructions 73,813,902 -> 73,811,997, library_instructions
 73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
 359,922,521. Welfare rises by less than a hundredth and the rise is banked.
+
+## 2026-10-26 — an err is born boxed
+
+The build of the #2087 gavel. `err "…"` and every builtin that fails answer
+a failure in a box on all three engines. Natively the box is `K_ERR` and the
+err a rescue takes out of it is a new tag, `K_ERRV`; the interpreter has
+`Value::Unboxed` for the second. A failure passes every function it reaches
+and every arm, the three err patterns included, and the endpoint or a
+foreign rescue ends it. A rescue's callback and an annotate's are handed the
+unboxed err, which renders as `err <reason>`, compares by reason, and goes
+back in a box through `effect`. A parameter annotated with an effect type,
+`e:<some>effect`, takes the box itself, through `k_check_box`, which is how
+std/testing reads a package's own failures.
+
+The checker loses the raise analysis of #1884: the raised bit, `raised_err_at`,
+the raisers table and the err-arm requirement are gone. In their place a
+failure counts as a box, so a group whose every answer is a failure, or a
+tail that calls `err`, is refused where a value is read, as an io is. A group
+that can also answer a value passes, as one that can answer none does.
+
+The library classified its bare errs. `text/to_int` and `text/to_float`
+answer none for text that is not a number, and `to_int!` and `to_float!` in
+std/text answer the box with the reason they used to give. `json/decode`
+answers none and `json/decode!` the box carrying the `parse_failure`.
+`text/utf8` keeps its failure. The checker's refusal of a literal that is not
+a number moved to the bang forms. The hand-back arms in std/json, std/regexp
+and the frozen benchmark copies are gone, since a failure passes them anyway.
+std/testing's two functions take the box through an effect-annotated arm.
+
+The corpora followed. Error fixtures pinning the raise analysis were deleted
+and two moved to the runtime corpus, where the failure now passes the
+operator or group they named. A micro sample that leaned on a plain
+conversion failing uses the bang form, or a local function with a mixed arm
+so its reason is unchanged. `an_arm_sees_its_own_hakos_err` and
+`a_typeset_arm_sees_its_own_hakos_err` pinned the 2026-09-15 rule and now pin
+its reversal as `a_failure_passes_its_own_hakos_arm` and
+`a_failure_passes_its_own_hakos_typeset_arm`. `.cause` can be read only on an
+err another package annotated, so it moved to a two-module golden,
+`tests/golden/cause`. ch04, ch05, ch08 and appendix B were rewritten where
+they described a bare err as data, and ch08's mini decoders answer their
+`parse_failure` record as a value, the shape the ruling gives an outcome the
+caller handles. kq and kanso-json carry the same changes on branches of this
+name.
+
+`an_err_as_pattern_keeps_a_carried_slot_unboxed` lost its shape: its scanner's
+failure now passes the err arm, the loop becomes a beat, and the carry builds
+the records whatever the arm does, so the exemption's mutation survived. The
+fixture's walk now stops before the scanner fails, and the mutation reads
+sh_rec 0 -> 64,000 again. A slot that can hold an unboxed err beside a
+two-field record is passed boxed: answering a scanner's end with
+`text/to_bytes [300] .? (e -> e)` reads sh_rec=64,064. Nothing in the tree
+answers that shape, and the two-word convention could carry `K_ERRV` as it
+carries `K_ERR`, which is an open lead.
+
+Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
+that no longer fire; the ports carry hundreds; #2088's migration can now use
+the bang forms at reads that must succeed.

@@ -2839,20 +2839,22 @@ impl<'a> Interp<'a> {
             // the callback is handed the err out of its box, an ordinary
             // value from here on (#2087)
             Word::Rescue => self.call_decided(callee, Value::Unboxed(cause), span),
-            Word::Annotate => match self.call_decided(callee, Value::Unboxed(cause.clone()), span)? {
-                // the callback failed on its own account, and that err
-                // already carries what it was told; wrapping it again would
-                // report the same failure twice
-                answer if is_failure(&answer) => Ok(answer),
-                reason => Ok(Value::ErrV(Rc::new(ErrInfo {
-                    reason,
-                    origin: raised.at.clone(),
-                    hako: raised.hako.clone(),
-                    hops: Vec::new(),
-                    cause: Some(cause),
-                    merged: false,
-                }))),
-            },
+            Word::Annotate => {
+                match self.call_decided(callee, Value::Unboxed(cause.clone()), span)? {
+                    // the callback failed on its own account, and that err
+                    // already carries what it was told; wrapping it again would
+                    // report the same failure twice
+                    answer if is_failure(&answer) => Ok(answer),
+                    reason => Ok(Value::ErrV(Rc::new(ErrInfo {
+                        reason,
+                        origin: raised.at.clone(),
+                        hako: raised.hako.clone(),
+                        hops: Vec::new(),
+                        cause: Some(cause),
+                        merged: false,
+                    }))),
+                }
+            }
         }
     }
 
