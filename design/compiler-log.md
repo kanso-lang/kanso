@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-24 — a test file's helper is checked like its constants
-
-Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
-module beside it and nothing else. A test constant that names a private
-function is refused at check. A helper function in the test file that names
-one was not: xsv's port called the module's private `hidden` from a helper,
-`kanso check` passed it, and `kanso test` failed that test at run time with
-"error[runtime]: unknown name `~hidden`", a spelling the author never wrote.
-(#2091, item 2.)
-
-The check does refuse the name. It sends a call it cannot resolve inside a
-function to a traveling group, which the program's root fills from every
-module that writes the name for a type it owns, or refuses. A library
-compile leaves that to whatever imports it, so `compile_library_beside`
-dropped the shades and moved on. A test file is compiled on the same path,
-and nothing imports it. It now settles the groups where it is compiled, with
-`enroll_travelers`, as the entry and module paths do, and the helper's call
-is refused at check with the same `unknown name` error the constant gets.
-
-`tests/golden/test_verb/reaches` is the reduction, and
-`a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
-pins its stderr. On main it prints the run-time error above.
-
-A library compile takes the path it took before, and the test verb has no
-row. The rows this moved are counted with the batch it landed in, at the end
-of "an import stays in the file that writes it".
-
 ## 2026-10-24 — a module's own function beats an imported constant of its name
 
 #2090's first item, from the kv port. A module that imports std/io and
@@ -1734,5 +1707,24 @@ the same line for it.
 The battery also found a field read that the engines disagree on: native
 reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
 Clay which way it goes.
+
+CI's rows: ROWS.
+
+## 2026-10-26 — the last element of a list is read at its end
+
+`list/last` gains an arm for a list, `last xs:[]some`, which answers
+`xs[length xs]`: the last element, or none for an empty list, as the fold did.
+Anything that is not a list keeps the fold, so a lazy sequence, a string,
+bytes and a map are walked to their last element as before.
+
+5,000 reads of a 5,000-element list took 0.38 s natively and 17.7 s on the
+interpreter, and take 0.07 s and 0.015 s. At 20,000 they take 0.09 s and
+0.03 s, where the interpreter ran past two minutes.
+
+`a_list_is_read_at_its_end` (micro, both engines) reads the last of a list of
+numbers, of records and of lists, of one element and of none, and of a lazy
+sequence, a string, bytes and a map. Its output is main's interpreter, and
+both engines on main and on this branch print it. Reading one before the end
+turns the micro corpus red.
 
 CI's rows: ROWS.
