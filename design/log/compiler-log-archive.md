@@ -109336,3 +109336,29 @@ pins its stderr. On main it prints the run-time error above.
 A library compile takes the path it took before, and the test verb has no
 row. The rows this moved are counted with the batch it landed in, at the end
 of "an import stays in the file that writes it".
+
+## 2026-10-24 — a module's own function beats an imported constant of its name
+
+#2090's first item, from the kv port. A module that imports std/io and
+declares `fn read_line acc x`, then hands `read_line` to `list/fold`, stopped
+on every engine with "`<io>` is not callable". #2084 fixed the play-file form
+of this in the interpreter's `resolve`. A module takes another path.
+
+`qualify` gives a name the module declares and an import also enrols a
+spelling of its own, the shared bare space (`m/~read_line`), where the
+module's own arms join the import's twin as synthetic clones. #2084's test
+for an arm the author wrote finds only clones there, so it never fires, and
+std/io's `read_line` is a constant, which answers any mention of the name
+read as a value. A constant has no arity a call could dispatch on, so it
+cannot share a name with a function by overloading. `qualify` now drops an
+import's constant twin wherever the module declares the name, and the name
+takes its plain qualified spelling. A module that declares no `read_line`
+still reads std/io's bare.
+
+`micro/a_modules_function_named_like_an_imported_constant` prints `6` on
+every engine, and main stops it with "`<io>` is not callable".
+
+`qualify` asks each dependency which names its module declares. The first
+cut cloned every declared name into a set, 305 allocations; the set now
+borrows them. The rows are counted with the batch this landed in, at the end
+of "an import stays in the file that writes it".

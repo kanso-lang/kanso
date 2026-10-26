@@ -1,0 +1,8 @@
+# a list is written at a 1-based position, and a position is an int: a
+# string there stops the run, where a map would take it as a key
+pub fn opaque x
+  x
+
+pub play =
+  xs = put [1 2 3] (opaque "2") 9
+  print "{xs}"
