@@ -23,20 +23,6 @@
 
 
 
-## 2026-10-25 — a binding refused for another file's name says which file
-
-#2085 asks whether a local may reuse a name declared only in another file of
-its module, and notes that the message is cloud's to fix whatever the
-ruling. rg's port had `` `escaped` is already a declaration; rename the
-binding `` with the caret in `m/a.kso` and the declaration in `b.kso`, which
-the message did not name. The module path now looks the name up in the
-module's other files when it reports one of these, and says where it is:
-`` `escaped` is already a declaration, in m/b.kso at line 1; rename the
-binding ``. The lookup runs only on a refused compile.
-
-`errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
-shape, and main prints the message without the place.
-
 ## 2026-10-25 — a function's arms split across files are counted together
 
 From #2090, toml's port. A module's files share their declarations, and
@@ -1880,3 +1866,23 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
