@@ -23,145 +23,6 @@
 
 
 
-## 2026-10-24 — kq under the pin to 29dafd0f
-
-kq's instruction rows rose when its pin moved to 29dafd0f, the string index
-and its company: print_small 25,683,047 -> 25,774,281 (+0.36%) and
-path_small 10,572,005 -> 10,663,669 (+0.87%), with the big rows in step. Two
-CI runs on two different CPUs read the same four rows, and building kq here
-with kanso before and after #2077 gives the same rise within a few hundred.
-
-The rise is in kq's decoder, around the string scan. `Flat3_string_end`
-keeps an overflow-checked increment the earlier build folded into a `lea`,
-and `parse_string` keeps the same check and a test of a constant zero. The
-IR kanso emits for kq is the same under both pins, apart from the
-declarations #2077 retyped, so the folds are lost in the hot unit or at the
-link. Every `find2` site in kq is inlined since #2077, where 13 were calls
-before.
-
-Measured and set aside: the two scanners without `always_inline`. The link
-then left 6 calls, and kq read print_small 26,132,733 and path_small
-10,847,487, against 25,776,035 and 10,663,837 with the attribute, so the
-forced inlining is not what costs kq. The cause is not isolated.
-
-## 2026-10-24 — a chain built from the left runs past the beat stack
-
-The twenty ports of 2026-10-10 were run again on main (78f72a58). Every one
-stopped at its first compile error, under rulings made since, so each was
-migrated and its journal re-tested; the re-sit has its own entry. Two ports,
-rg and site, hit the same native crash, and this entry fixes it.
-
-rg walks a directory by folding `.>` onto an effect, once per entry:
-`list/fold entries (effect 0) added`, where `added` answers
-`chain .> (acc -> effect (acc + x))`. That builds a chain nested to the left,
-and native code runs it by entering `k_exec` for the inner chain from the
-outer one, a frame per link. The interpreter printed the sum at 100,000 links.
-Native code stopped at 64 with "ran out of stack", on 8 MiB or on 64 MiB.
-
-Two faults were behind it, and both were in `k_exec`.
-
-- Each chain pushes a beat mark and then reads and writes
-  `k_carries[k_beat_depth - 1]` without asking whether the depth is inside the
-  stack's 64 marks. A sanitizer build named it: a global-buffer-overflow write
-  at index 64 of `KCarry[64]`. The write lands on whatever is laid out past
-  the array, and the crash comes later: gdb stops it in `k_beat_pop_slow`, in
-  a loop that frees blocks, 11 frames deep. A chain entered past the last mark now
-  runs in `k_exec_unmarked`, which does what a beat past the stack has always
-  done: it keeps count and stages nothing, and its garbage waits for an outer
-  mark.
-- The socket read held a `char buf[65536]` inside `k_exec`'s switch, so every
-  `k_exec` frame reserved 64 KiB, including the chain's own frames. 63 links
-  needed 4,126 KiB of stack. The read is now `k_conn_read`, out of line, and
-  10,000 links need 5,790 KiB on release and 3,607 KiB on dev, about 580 and
-  360 bytes a link.
-
-`micro/a_chain_built_from_the_left_runs_past_the_beat_stack` folds 1,000 links
-and prints `total 500500` on every engine. Main stops it with "ran out of
-stack". With the frame fix alone and the depth guard removed, it stops the
-same way. A chain of 100,000 links still runs out of native stack: the
-interpreter runs on a 1 GiB thread and native code on the 8 MiB the system
-gives, as any deep recursion does. Running a left-built chain without
-recursion means reassociating `(m .> f) .> g` at run time, and a rescue step
-there would lose the failure it is owed, so it is not attempted here.
-
-A sanitizer build of a dev program linked the way `scripts/asan/sweep.sh`
-links one segfaults on main as well as on this branch, at 20 links, before
-printing anything. The sweep's own `--prove` was not run, and nothing here
-claims a clean sweep.
-
-CI's rows. Every benchmark does less work, because a frame that reserved
-64 KiB no longer does: work_runbench 789,204,097 -> 788,981,005,
-work_deepbench 200,095,696 -> 198,788,407, work_widebench 28,508,996 ->
-28,461,019, work_livebench 936,031,367 -> 936,030,078, work_encodebench
-2,325,240,311 -> 2,325,240,037, work_pendbench 155,738,415 -> 155,737,991,
-work_oneshot 10,051,248 -> 10,050,617, work_readbench 4,582,008 ->
-4,581,989, work_jsonbench 557,386,434 -> 557,386,424, work_digestbench
-4,122,786 -> 4,122,778, and work_basket, work_escapebench, work_indexbench
-and work_scanbench one each, to 31,062,419, 40,308,387, 1,837,322 and
-274,348. Every binary's text grows 2,576 bytes for the two new functions,
-runbench's to 762,112, and text, the sum over fourteen binaries, from
-5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
-codegen_instructions_dev 116,426,119 -> 116,447,795 and
-codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
-
-## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
-
-The 2026-10-12 entry "a name the author declared wins over a builtin and an
-import" fixed three reductions from the ports. The re-sit found two more
-paths the rule did not reach, from three ports.
-
-- **Native code, a direct call.** ugit and sat declare `fn step a b` and
-  import std/list, which exports a record `step` and enrols it under the
-  bare name. Under `kanso play`, native code built the record:
-  `print "{step 1 2}"` printed `list/step 1 2`, where the interpreter
-  printed `3`. The 10-12 spec passed the function as a value
-  (`apply counting`), which already worked; a call named directly reached
-  `emit_call`'s constructor branch first. The branch now asks
-  `constructs`, which gives an enrolled type way to a group the program
-  declares, as the interpreter's `callee` does. std/list's own
-  constructions are unchanged: `iterate`, `naturals` and `fold`, which
-  build `step` and `counting` records, print the same on both engines
-  with a local `step` and `counting` in the file.
-- **The interpreter, a constant.** make declares `fn read_line at s`, and
-  std/io exports `read_line`, a constant over `builtin_read_line`. The
-  interpreter evaluates a call's head as a value, and `resolve` took the
-  enrolled constant, and behind it the described builtin of the same
-  name, before the file's own group. The call stopped with "`<io>` is not
-  callable", and 57 of make's 82 fixtures went red on that engine. A group
-  with an arm the program declares now wins both rungs.
-- **Both engines, a type.** mustache declares `type env` and imports std/os,
-  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
-  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
-  the bare name to `os/env`, because the only declarations it counted were
-  functions, and `apply_wrappers` sent that on to `builtin_env`. The
-  interpreter printed `<io>`; native code still built the record, by a path
-  this did not reach. Both passes now leave a name the program declares as a
-  type, and each alone leaves the interpreter printing `<io>`.
-
-`tests/golden/play/a_function_named_like_an_imported_type` gains the direct
-call, and main prints `2 list/counting 3 4` for it natively.
-`tests/golden/play/a_function_named_like_an_imported_constant` is make's
-shape; main stops it on the interpreter.
-`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
-main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
-on both engines, and the walk over the play corpus now reads twelve goldens.
-
-One shape from the same family is not fixed here. kv's module form, a
-function named `read_line` passed by value to `list/fold` in a module that
-imports std/io, stops every engine with "`<io>` is not callable", on main and
-on this branch. The module's own name is lost in `qualify`, a path none of
-these fixes touch.
-
-CI's rows. The front end asks the two new questions of every program it
-compiles, and the tab compiles with the same front end:
-compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
--> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
-emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
-385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
-Nothing at run time moved. Welfare fell by less than a hundredth, and the
-floor follows: this makes the engines agree, which the welfare script's own
-header puts ahead of the score.
-
 ## 2026-10-24 — a record returned by value keeps its shape across a pipe
 
 #2091's first item, from the mustache port. `half` answers a two-field
@@ -1787,3 +1648,58 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
+
+Clay ruled #2085. Every function in a module is visible from every file of
+it, so a local in one file that reuses a name declared in another file
+shadows a callable name, which is what no-shadowing forbids. Eighteen of the
+twenty ports met it as action at a distance: a declaration added in `b.kso`
+refused a parameter in `a.kso`, and the refusal pointed at the parameter
+without naming the declaration.
+
+**The ruling.** The rule stands across files. The refusal names the
+declaration it collides with, by file and line, so the fix is a rename made
+knowing what clashed. Letting a local reuse a name declared only in another
+file was declined, because inside the local's scope the name would mean two
+things. File-scoped private names were declined, because they would end the
+sharing of helpers between a module's files.
+
+Owes, on #2085: the refusal names the colliding declaration's file and line;
+an error golden for a two-file module.
+
+## 2026-10-25 — gavel: `put` writes a list at an index
+
+Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
+`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
+list, so the ports built vectors from maps with integer keys and paid for
+keys they did not need.
+
+**The ruling.** `put xs i v` answers the list with element `i` replaced,
+1-based like `xs[i]`. An index outside the list answers `none`, as a read
+there does. A list nothing else holds is written in place, as a map already
+is.
+
+Owes, on #2086: `put` on a list on every engine; the in-place write under
+the existing uniqueness analysis; the checker accepting a list for `put`, and
+refusing at check what it refuses at run time (diff F9, inflate F8); micro and
+mem goldens; appendix B.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
