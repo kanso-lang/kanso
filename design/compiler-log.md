@@ -1897,24 +1897,24 @@ The battery also found a field read that the engines disagree on: native
 reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
 Clay which way it goes.
 
-CI's rows, against main at #2149. The run program reads work_runbench
-822,286,353 -> 860,174,697, and its allocation vein moves with the 800 reads:
+CI's rows, against main at #2175. The run program reads work_runbench
+821,299,208 -> 859,187,448, and its allocation vein moves with the 800 reads:
 run_allocs 1,581,589 -> 1,582,393, run_alloc_bytes 223,888,104 ->
 223,955,352, run_beat_iters 177,272 -> 178,072, run_push_mut_slow 1,644,657
 -> 1,645,457, run_sh_rec 4,098,336 -> 4,136,736, run_sh_buf 91,336,688 ->
 91,336,800, run_perm_peak_bytes 1,867,025 -> 1,875,217, run_bytes_malloc
 7,921 -> 7,924 and run_bytes_freed 7,779 -> 7,782. The interpreted corpus
-reads interp_instructions 563,210,772 -> 592,911,824, interp_allocs 630,870
--> 657,248 and interp_peak_bytes 1,313,667 -> 1,334,105. The tab compiles
-and runs the corpus too: browser_compile_instructions 344,137,759 ->
-349,644,229, browser_compile_peak_bytes 842,026 -> 846,225 and
-browser_run_instructions 61,510,637 -> 64,427,034. The run program's new
-function is emitted code: emitted_other_lines 170,009 -> 170,548,
-emitted_other_branches 17,946 -> 18,010, emitted_other_calls 20,496 ->
-20,565, emitted_other_defines 2,239 -> 2,248, and its binary's text 5,698,479
--> 5,700,447. Under the corpus-first gavel each moved welfare term's
-baseline is scaled so its ratio to what it reads holds, welfare reads 95.40
-as before, and the fix in #2165 scores as a rise.
+reads interp_instructions 560,933,132 -> 588,905,757, interp_allocs 630,614
+-> 656,976 and interp_peak_bytes 1,306,819 -> 1,327,257. The tab compiles
+and runs the corpus too: browser_compile_instructions 342,497,302 ->
+348,067,219, browser_compile_peak_bytes 832,433 -> 836,713 and
+browser_run_instructions 61,425,132 -> 64,341,530. The run program's new
+function is emitted code: emitted_other_lines 169,576 -> 170,115,
+emitted_other_branches 17,762 -> 17,826, emitted_other_calls 20,468 ->
+20,537, emitted_other_defines 2,253 -> 2,262, and text 5,620,459 ->
+5,622,379. Under the corpus-first gavel each moved welfare term's baseline
+is scaled so its ratio to what it reads holds, so the phase leaves welfare
+where it was and the fix in #2165 scores as a rise.
 
 ## 2026-10-26 — the last element of a list is read at its end
 
@@ -1937,20 +1937,22 @@ The new arm moves std/list's lines below it down by four, so
 `runtime/tie_takes_a_list_of_ids` names `list/tie` at line 602 where it named
 598.
 
-CI's rows, against #2164's phase on main at #2149. The run program's 800
-reads cost what an index costs: `work_runbench` 860,174,697 -> 822,230,062,
-`run_allocs` 1,582,393 -> 1,581,593, `run_alloc_bytes` 223,955,352 ->
-223,916,952 and `run_sh_rec` 4,136,736 -> 4,098,336, the 800 step records
-the fold built. The interpreted corpus falls the same way:
-`interp_instructions` 592,911,824 -> 565,113,790 and `interp_allocs` 657,248
--> 632,010, while `interp_peak_bytes` reads 1,335,165, 1,060 more, for the
-library's extra arm. In the tab `browser_run_instructions` falls 64,427,034
--> 61,564,263. The arm is library code every compile reads, so the compile
-rows rise a little: `compile_instructions` 25,056,497, `entry_instructions`
-73,544,933, `library_instructions` 73,225,529, `emit_instructions`
-5,688,228, `codegen_instructions_dev` 116,762,604,
-`codegen_instructions_release` 371,664,050, `browser_compile_instructions`
-350,083,473 and `browser_compile_peak_bytes` 846,630. The run program emits
-the arm too: `emitted_other_lines` 170,583, `emitted_other_calls` 20,568 and
-`emitted_other_branches` 18,015, and its text reads 5,700,111. Welfare rises
-95.40 -> 95.51 and is banked.
+CI's rows, against #2164's phase on main at #2175. The run program's 800
+reads cost what an index costs: work_runbench 859,187,448 -> 821,243,366,
+below main's 821,299,208 without the phase, run_allocs 1,582,393 ->
+1,581,593, run_alloc_bytes 223,955,352 -> 223,916,952 and run_sh_rec
+4,136,736 -> 4,098,336, the 800 step records the fold built. The interpreted
+corpus falls the same way: interp_instructions 588,905,757 -> 562,047,199
+and interp_allocs 656,976 -> 631,738, while interp_peak_bytes reads
+1,328,317, 1,060 more, for the library's extra arm. In the tab
+browser_run_instructions falls 64,341,530 -> 61,478,759. The arm is library
+code every compile reads, so the compile rows rise a little:
+compile_instructions 24,862,623 -> 24,864,430, entry_instructions
+73,686,908 -> 73,696,160, library_instructions 73,325,258 -> 73,344,720,
+emit_instructions 5,702,866 -> 5,703,136, codegen_instructions_dev
+116,733,865 -> 116,733,909, codegen_instructions_release 371,551,519 ->
+371,551,607, browser_compile_instructions 348,471,187 and
+browser_compile_peak_bytes 843,030. The run program emits the arm too:
+emitted_other_lines 170,150, emitted_other_calls 20,540,
+emitted_other_branches 17,831 and emitted_other_defines 2,262, and text
+reads 5,622,043. Welfare rises 95.41 -> 95.52 and is banked.
