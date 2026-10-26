@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-24 — a test file's helper is checked like its constants
-
-Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
-module beside it and nothing else. A test constant that names a private
-function is refused at check. A helper function in the test file that names
-one was not: xsv's port called the module's private `hidden` from a helper,
-`kanso check` passed it, and `kanso test` failed that test at run time with
-"error[runtime]: unknown name `~hidden`", a spelling the author never wrote.
-(#2091, item 2.)
-
-The check does refuse the name. It sends a call it cannot resolve inside a
-function to a traveling group, which the program's root fills from every
-module that writes the name for a type it owns, or refuses. A library
-compile leaves that to whatever imports it, so `compile_library_beside`
-dropped the shades and moved on. A test file is compiled on the same path,
-and nothing imports it. It now settles the groups where it is compiled, with
-`enroll_travelers`, as the entry and module paths do, and the helper's call
-is refused at check with the same `unknown name` error the constant gets.
-
-`tests/golden/test_verb/reaches` is the reduction, and
-`a_test_helper_reaching_a_private_name_is_refused` in `tests/test_verb.rs`
-pins its stderr. On main it prints the run-time error above.
-
-A library compile takes the path it took before, and the test verb has no
-row. The rows this moved are counted with the batch it landed in, at the end
-of "an import stays in the file that writes it".
-
 ## 2026-10-24 — a module's own function beats an imported constant of its name
 
 #2090's first item, from the kv port. A module that imports std/io and
@@ -1763,3 +1736,24 @@ the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
 codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
 browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
 95.38 and the rise is banked.
+
+## 2026-10-26 — a refused binding names the line its name is declared on
+
+The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
+asks the refusal to name the declaration it collides with. One declared in
+another file of the module was already named, with its file and line, since
+de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
+A collision inside one file still said only "`greet` is already a
+declaration", so the reader had to find it. It now says "`greet` is already
+a declaration, at line 1". A name no file declares, such as `length` from
+the library or `done`, keeps the message without a line.
+
+`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
+carry the new line, as does appendix A's panel. Adding a space to the message
+turns both red.
+
+CI's rows, against main at #2155. The rewrite runs only on a refusal, so
+what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
+entry_instructions 73,813,902 -> 73,811,997, library_instructions
+73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
+359,922,521. Welfare rises by less than a hundredth and the rise is banked.
