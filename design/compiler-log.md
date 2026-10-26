@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-25 — push reads the bytes text/bytes answers, on every engine
-
-From #2091's fifth item, kv's port. Appendix b declares `text/bytes string ->
-int[]`, and the 2026-10-12 entry made `list/concat` read a bytes value as its
-byte values on both engines. `push` was left out: `push (text/bytes "a") 2`
-stopped with "push takes a list and a value" on the interpreter and natively,
-and `kanso check` passed it. A push onto bytes now answers the list of their
-values with the item after them, on both engines. The bytes it came from are
-unchanged, and a list is still never read as bytes.
-
-Native code takes this path out of line, behind the tag test the push already
-made, so a push onto a list runs the instructions it ran before.
-
-`tests/golden/micro/a_push_onto_text_bytes_answers_a_list` pushes onto
-`text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
-the first line.
-
 ## 2026-10-25 — a test that fails inside a library names the library's line
 
 From #2091's sixth item, chip8's port. A test whose helper handed
@@ -1873,3 +1856,26 @@ unboxed err behaving as a value on every engine, with goldens; the ports'
 hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
+
+## 2026-10-26 — the linearity fixpoints drop an entry as its check fails
+
+The linearity analysis settles three fixpoints over parameters, record fields
+and map elements. Each collected a lap's refusals and applied them at the
+end, so a refusal that cascades through a chain of calls took a lap per link:
+`field_fixpoint` ran 18 laps on the interpreted corpus, re-asking the 54
+records that had settled by the fourth, and `drop_elems` re-ran the main
+fixpoint after each of its laps, nine runs that found nothing new. Each entry
+now goes as soon as its check fails, so the next entry asked already sees it
+gone. A check only turns from yes to no as the sets lose entries, so a no read
+against a larger set is a no against the fixpoint, and the order cannot
+change what is left. The emitted IR is byte-identical on 430 programs: the
+examples, the micro corpus and every benchmark.
+
+CI's rows, against main at #2162. The compile rows fall: compile_instructions
+25,156,569 -> 25,048,015, entry_instructions 73,811,949 -> 73,539,324,
+library_instructions 73,482,714 -> 73,209,499, emit_instructions 5,725,463 ->
+5,688,182 and browser_compile_instructions 360,520,776 -> 344,137,759. The
+interpreter runs the analysis before each program, so interp_instructions
+falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
+the lists of entries a drop collects while it walks a set it is changing.
+Welfare rises 95.38 -> 95.40 and the rise is banked.
