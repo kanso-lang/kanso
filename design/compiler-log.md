@@ -23,24 +23,6 @@
 
 
 
-## 2026-10-25 — a test that fails inside a library names the library's line
-
-From #2091's sixth item, chip8's port. A test whose helper handed
-`text/split` a none failed inside std/text, and `kanso test` printed
-"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
-number under the test file's path. In the port, line 38 of the test file was
-a different test, one that had passed. The runner rendered every failure's
-span against the test file's own source.
-
-A failure that knows its place now prints it the way `run` and `play` do,
-`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
-(#1975) that a failure names the line it happened on. A failure with no place
-keeps the rendered span.
-
-`tests/golden/test_verb/fails_in_std` is the reduction, and
-`a_test_failing_inside_a_library_names_the_librarys_line` in
-`tests/test_verb.rs` pins both streams.
-
 ## 2026-10-25 — a binding refused for another file's name says which file
 
 #2085 asks whether a local may reuse a name declared only in another file of
@@ -1857,6 +1839,29 @@ hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
 
+## 2026-10-26 — the linearity fixpoints drop an entry as its check fails
+
+The linearity analysis settles three fixpoints over parameters, record fields
+and map elements. Each collected a lap's refusals and applied them at the
+end, so a refusal that cascades through a chain of calls took a lap per link:
+`field_fixpoint` ran 18 laps on the interpreted corpus, re-asking the 54
+records that had settled by the fourth, and `drop_elems` re-ran the main
+fixpoint after each of its laps, nine runs that found nothing new. Each entry
+now goes as soon as its check fails, so the next entry asked already sees it
+gone. A check only turns from yes to no as the sets lose entries, so a no read
+against a larger set is a no against the fixpoint, and the order cannot
+change what is left. The emitted IR is byte-identical on 430 programs: the
+examples, the micro corpus and every benchmark.
+
+CI's rows, against main at #2162. The compile rows fall: compile_instructions
+25,156,569 -> 25,048,015, entry_instructions 73,811,949 -> 73,539,324,
+library_instructions 73,482,714 -> 73,209,499, emit_instructions 5,725,463 ->
+5,688,182 and browser_compile_instructions 360,520,776 -> 344,137,759. The
+interpreter runs the analysis before each program, so interp_instructions
+falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
+the lists of entries a drop collects while it walks a set it is changing.
+Welfare rises 95.38 -> 95.40 and the rise is banked.
+
 ## 2026-10-26 — the runtime's tags and doors are read from its C
 
 Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
@@ -1875,4 +1880,3 @@ the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
 is unchanged, and no runtime row moved.
-
