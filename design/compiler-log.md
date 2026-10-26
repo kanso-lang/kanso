@@ -1924,7 +1924,7 @@ Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
 that no longer fire; the ports carry hundreds; #2088's migration can now use
 the bang forms at reads that must succeed.
 
-CI's rows, against main at #2154. The checker loses the raise analysis, so
+CI's rows, against main at #2149. The checker loses the raise analysis, so
 compiling gets cheaper: `compile_instructions` reads 24,604,939,
 `entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
 `compile_allocs` 13,930. The interpreter no longer carries the raised bit:
@@ -1935,9 +1935,9 @@ reads 339,955,918, `browser_compile_peak_bytes` 832,433 and
 arms, so the emitter writes less: `emitted_lines` 14,150, `emitted_calls`
 1,519, `emitted_branches` 1,293, `emitted_other_lines` 168,876,
 `emitted_other_calls` 20,311, `emitted_other_branches` 17,723 and `text`
-5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,878
-and `codegen_instructions_release` to 371,551,583. `emit_instructions` rises
-to 5,689,904, 1,722 more; against main at #2162 it fell 491, and #2154's
+5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,865
+and `codegen_instructions_release` to 371,551,519. `emit_instructions` rises
+to 5,689,680, 1,722 more; against main at #2162 it fell 491, and #2154's
 fixpoints, which drop an entry as its check fails, sit between the two
 readings, so the rise is recorded unisolated. `emitted_defines` rises to 160
 and `emitted_other_defines` to 2,243 because `json/decode!` and the bang
