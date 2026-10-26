@@ -441,6 +441,11 @@ fn values_equal_seen(
             true
         }
         (Value::Bytes(x), Value::Bytes(y)) => x == y,
+        // an err out of its box is a value, equal to another with an equal
+        // reason, as a record with one field would be
+        (Value::Unboxed(x), Value::Unboxed(y)) => {
+            values_equal_seen(&x.reason, &y.reason, seen, cells, span)?
+        }
         // `==` crosses where the functions do not, because the compiled engine
         // has compared a byte string against a list of its numbers since it was
         // written (k_bytes_eq_list) and the differential law is what it is.
@@ -648,7 +653,9 @@ fn render_seen(
         Value::False => "false".to_string(),
         Value::NoneV => "<none>".to_string(),
         Value::Done => "<done>".to_string(),
-        Value::ErrV(info) => format!("err {}", render_seen(interp, &info.reason, true, seen)),
+        Value::ErrV(info) | Value::Unboxed(info) => {
+            format!("err {}", render_seen(interp, &info.reason, true, seen))
+        }
         // On the path like a record, so a knot that closes through a cell
         // holding this very list prints the list once and says `<cycle>`
         // where it comes round.

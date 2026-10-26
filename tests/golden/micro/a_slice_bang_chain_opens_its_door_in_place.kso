@@ -14,10 +14,10 @@ fn joined from to
     .> text/utf8 .? (e -> e.reason)
 
 fn whole from to
-  text/slice! bs from to .> text/to_int .> (n -> n + 1) .? (e -> e.reason)
+  text/slice! bs from to .> text/to_int! .> (n -> n + 1) .? (e -> e.reason)
 
 fn real from to
-  text/slice! bs from to .> text/to_float .> (x -> x * 2.0) .? (e -> e.reason)
+  text/slice! bs from to .> text/to_float! .> (x -> x * 2.0) .? (e -> e.reason)
 
 pub play = word 1 5 .> print
   .> (_ -> word 4 3 .> print)

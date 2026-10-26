@@ -2,24 +2,32 @@
 # `test_`, and `==` is the assertion — nothing here adds a second way to write
 # a test that can already be written.
 #
-# Every tested package's errs are foreign to this hako, so these arms are
-# licensed by the rules as they stand: no builtin, no file gating, no
-# exemption.
-pub fn failed? (err _)
-  true
+# A failure is a box (#2087), so these arms take the box and open it with a
+# rescue. Every tested package's failures are foreign to this hako, which is
+# what licenses the rescue: no builtin, no file gating, no exemption.
+type caught
+
+pub fn failed? e:<some>effect
+  rescued? (e .? (_ -> caught))
 
 pub fn failed? _
   false
 
-# Asserting WHICH failure. The err is rescued here, where the raiser is
-# foreign, and the caller receives the bare reason record — a value a licensed
-# party has already separated from the failure, so the tested package may read
-# its own reason without matching its own err.
+fn rescued? caught
+  true
+
+fn rescued? _
+  false
+
+# Asserting WHICH failure. The failure is rescued here, where the raiser is
+# foreign, and the caller receives its reason — a value a licensed party has
+# already taken out of the box, so the tested package may read its own reason
+# without rescuing its own failure.
 #
 # A non-failure answers false, so a test that expected a failure and got a
 # value fails rather than passing quietly.
-pub fn when_failed (err reason) k
-  k reason
+pub fn when_failed e:<some>effect k
+  e .? (u -> k u.reason)
 
 pub fn when_failed _ _
   false

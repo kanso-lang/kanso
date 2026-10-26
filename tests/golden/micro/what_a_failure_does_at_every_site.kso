@@ -16,12 +16,9 @@
 #   holds      a container holds what it was built from; it did not fail
 #   through    the failure passes and the operation does not happen
 #
-# A raised err handed to an operator or to a group with no arm for it does
-# not compile, bound to a name or not (#1884), so the failures here are the
-# runtime's: `text/to_int` refusing text it cannot read. What the runtime does
-# with a failure the checker was not warned about is what these lines pin.
+# `boom` can answer a number, so the checker cannot prove either failure is
+# one and lets every site read them.
 import "std/testing"
-import "std/text"
 
 type couple
   left
@@ -31,7 +28,8 @@ fn as_text reason
   "{reason}"
 
 fn boom what
-  text/to_int what
+  return 0 if what == "zero"
+  err "\"{what}\" is not an integer"
 
 fn joined a b
   "{a}{b}"

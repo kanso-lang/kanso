@@ -5,6 +5,9 @@ type deposit
 
 type logger
 
+type refusal
+  reason
+
 type withdraw
   amount
 
@@ -23,7 +26,7 @@ fn step _ _ _ _ out none
 fn step store actions i sub out action
   advance (update store action) actions i sub out action
 
-fn advance (err reason) _ _ _ out _
+fn advance (refusal reason) _ _ _ out _
   out .> (_ -> print "the till refuses: {reason}")
 
 fn advance next actions i sub out action
@@ -34,7 +37,7 @@ fn update balance (deposit n)
   balance + n
 
 fn update balance (withdraw n)
-  if (balance < n) (err "overdrawn: tried {n} against {balance}") (balance - n)
+  if (balance < n) (refusal "overdrawn: {n} against {balance}") (balance - n)
 
 moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
 drive 0 moves 1 logger (print "the till opens at 0 yen")

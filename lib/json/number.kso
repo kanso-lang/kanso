@@ -20,18 +20,18 @@ fn number_done cs start p false
   parsed p (number_ok start (int_of (text/to_span cs start (p - 1))))
 
 fn float_of none
-  err "invalid number"
+  none
 
 fn float_of run
   text/to_float (text/slice run)
 
 fn int_of none
-  err "invalid number"
+  none
 
 fn int_of run
   text/to_int (text/slice run)
 
-fn number_ok p (err _)
+fn number_ok p none
   fail p "invalid number"
 
 fn number_ok _ n

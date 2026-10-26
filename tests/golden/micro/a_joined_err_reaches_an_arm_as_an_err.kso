@@ -9,7 +9,7 @@ fn five _:string
   5
 
 fn shown z
-  bad = text/to_float "1 "
+  bad = text/to_float! "{z} "
   j = text/join ["{bad}" "{z}"] ","
   "{[(five j) (five "a")]}"
 

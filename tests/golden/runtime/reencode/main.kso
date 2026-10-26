@@ -1,4 +1,4 @@
 import "./loop"
 import "std/json"
 
-loop/start (json/decode loop/doc) { "a":[4.5 6.7] "b":[8.9] }
+json/decode! loop/doc .> (d -> loop/start d { "a":[4.5 6.7] "b":[8.9] })

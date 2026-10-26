@@ -18,7 +18,12 @@ KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
    it is built holding what it was handed, value or err, and running it hands
    that over. An err arrives as content, never as a failure to propagate. */
 KValue k_settled(KValue v) { return k_mkdesc(31, v, k_none()); }
-KValue k_b_effect(KValue v) { return k_settled(v); }
+/* an err out of its box goes back into one, and a failure is a box already
+   (#2087) */
+KValue k_b_effect(KValue v) {
+    if (v.tag == K_ERRV || v.tag == K_ERR) { v.tag = K_ERR; return v; }
+    return k_settled(v);
+}
 KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
 /* The next line of standard input, or done at its end (ruled 2026-10-13). */
 KValue k_desc_read_line(void) { return k_mkdesc(32, k_none(), k_none()); }
@@ -379,13 +384,16 @@ static K_CLOSCC KValue k_rescue_wrap(void* env, KValue failure) {
     KValue callback = k_env_get(env, 0);
     KValue site = k_env_get(env, 1);
     if (k_own_failure(failure, (const char*)(intptr_t)site.payload)) return failure;
-    return k_call_decided(callback, failure);
+    /* the callback is handed the err out of its box (#2087) */
+    KValue unboxed = failure; unboxed.tag = K_ERRV;
+    return k_call_decided(callback, unboxed);
 }
 
 static K_CLOSCC KValue k_annotate_wrap(void* env, KValue failure) {
     KValue callback = k_env_get(env, 0);
     KValue site = k_env_get(env, 1);
-    return k_b_wrap_err(k_call_decided(callback, failure), failure,
+    KValue unboxed = failure; unboxed.tag = K_ERRV;
+    return k_b_wrap_err(k_call_decided(callback, unboxed), failure,
                         (const char*)(intptr_t)site.payload);
 }
 

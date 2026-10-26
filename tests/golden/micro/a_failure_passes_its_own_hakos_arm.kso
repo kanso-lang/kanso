@@ -1,0 +1,38 @@
+# A failure passes every arm, in the module that raised it as in any other,
+# and an `(err _)` arm matches only the unboxed err a rescue hands its
+# callback. Ruled 2026-10-26 ("an err is born boxed"), which retired the
+# 2026-09-15 rule this fixture used to pin: under it a bare err was data, and
+# the module's own arm took it.
+#
+#   1. the arm still works, on a value
+#   2. a foreign rescuer reads the reason: `when_failed` is std's, so this
+#      module's failures are foreign to it
+#   3. the module's own failure passes `mine` and reaches the foreign rescuer,
+#      which reads "foreign reads 99"
+#
+# If line 3 read "false", `mine`'s err arm would have taken a boxed failure.
+import "std/testing"
+
+type torn
+  limit
+
+fn fetch 1
+  err (torn 99)
+
+fn fetch n
+  "plain {n}"
+
+fn mine (err t:torn)
+  "rescued {t.limit}"
+
+fn mine v
+  "value {v}"
+
+fn limit_of r
+  "foreign reads {r.limit}"
+
+own = fetch 1
+
+pub play = print "own arm on a value: {mine (fetch 2)}"
+  .> (_ -> print "foreign rescue: {testing/when_failed own limit_of}")
+  .> (_ -> print "past the own arm: {testing/when_failed (mine own) limit_of}")

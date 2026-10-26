@@ -17,8 +17,8 @@ src = text/bytes "x-1234.5e2y"
 
 long = text/bytes "12345678901234567890123456789"
 
-fn shown (err reason)
-  "err {reason}"
+fn shown none
+  "no number"
 
 fn shown other
   "{other}"

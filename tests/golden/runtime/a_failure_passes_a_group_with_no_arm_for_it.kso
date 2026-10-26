@@ -1,0 +1,17 @@
+# The book's menu sample: `base_price` fails for an item off the menu, and
+# `with_service` has arms for numbers only. The failure is a box (#2087), so
+# it passes `with_service` without its body running, and the report names
+# the group it passed through.
+fn base_price "dango"
+  350
+
+fn base_price item
+  err "we do not serve {item}"
+
+fn with_service n
+  n + 50
+
+fn price item
+  with_service (base_price item)
+
+pub play = print "{price "pocky"}"

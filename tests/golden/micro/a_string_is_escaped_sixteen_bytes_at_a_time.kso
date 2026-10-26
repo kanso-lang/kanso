@@ -10,8 +10,8 @@ import "std/json"
 fn again doc
   shown (json/decode doc)
 
-fn shown e@(err _)
-  "{e.reason.reason} at {e.reason.position}"
+fn shown none
+  "refused"
 
 fn shown v
   json/encode v

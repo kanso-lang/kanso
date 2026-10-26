@@ -175,11 +175,11 @@ fn rounds_from given
   asked_for given (length given == 0)
 
 fn asked_for _ true
-  200
+  effect 200
 
 fn asked_for given false
-  return 200 if length given < 1
-  text/to_int given[1]
+  return effect 200 if length given < 1
+  text/to_int! given[1]
 
 fn started rounds
   fixed = every_edge_case
@@ -297,4 +297,4 @@ fn closed _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
     .> (_ -> os/exit 1)
 
-pub play = os/args .> (given -> started (rounds_from given))
+pub play = os/args .> (given -> rounds_from given .> started)

@@ -82,11 +82,41 @@ fn step_back s from at false
 pub fn to_bytes xs
   builtin_to_bytes xs
 
+# Text that is not a number answers none, an outcome the caller handles.
 pub fn to_float x
   builtin_to_float x
 
 pub fn to_int s
   builtin_to_int s
+
+# `to_int!` and `to_float!` are the conversions from a caller that insists the
+# text is a number. Like every `!` name they answer a box: the number, or a
+# failure that bubbles and says what the text was.
+pub fn to_int! s
+  number_kept (to_int s) s "an integer"
+
+pub fn to_float! x
+  number_kept (to_float x) x "a number"
+
+fn number_kept none s kind
+  err (not_a s kind)
+
+fn number_kept n _ _
+  effect n
+
+fn not_a s:string kind
+  "\"{s}\" is not {kind}"
+
+fn not_a bs kind
+  not_text (utf8 bs) kind
+
+# Bytes that are not utf-8 are a failure inside `utf8`, a box this arm takes
+# whole rather than opens.
+fn not_text _:<some>effect kind
+  "bytes are not {kind}"
+
+fn not_text s kind
+  "\"{s}\" is not {kind}"
 
 pub fn utf8 codes
   builtin_utf8 codes

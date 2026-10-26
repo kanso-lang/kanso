@@ -88,16 +88,17 @@ print "20! = {fact 20}"
 `,
   json: `import "std/json"
 
-fn report (err reason)
-  "did not parse: {reason}"
-
 fn report doc
   "title {doc["title"]}, {length doc} fields in all"
+
+fn refused e
+  "did not parse: {e.reason.reason} at byte {e.reason.position}"
 
 good = "\\{\\"title\\": \\"kanso\\", \\"stars\\": 3}"
 
 torn = "\\{\\"title\\": \\"kanso\\", \\"stars\\": }"
-print (report (json/decode good)) .> (_ -> print (report (json/decode torn)))
+json/decode! good .> report .> print
+  .> (_ -> json/decode! torn .> report .? refused .> print)
 `,
   railway: `fn describe n
   "half is {n}"
@@ -281,6 +282,9 @@ type deposit
 
 type logger
 
+type refusal
+  reason
+
 type withdraw
   amount
 
@@ -302,7 +306,7 @@ fn step _ _ _ _ out none
 fn step store actions i sub out action
   advance (update store action) actions i sub out action
 
-fn advance (err reason) _ _ _ out _
+fn advance (refusal reason) _ _ _ out _
   out .> (_ -> print "the till refuses: {reason}")
 
 fn advance next actions i sub out action
@@ -313,7 +317,7 @@ fn update balance (deposit n)
   balance + n
 
 fn update balance (withdraw n)
-  if (balance < n) (err "overdrawn: tried {n} against {balance}") (balance - n)
+  if (balance < n) (refusal "overdrawn: {n} against {balance}") (balance - n)
 `,
 };
 

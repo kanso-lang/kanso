@@ -1,4 +1,4 @@
 import "std/json"
 
 pub fn parse text
-  json/decode text
+  json/decode! text

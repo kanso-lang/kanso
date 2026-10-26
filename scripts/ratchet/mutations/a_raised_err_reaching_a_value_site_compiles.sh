@@ -1,12 +1,18 @@
 #!/bin/sh
-# The 2026-09-15 ruling's third part: a raised err arriving where a value is
-# wanted — an operator's operand, an index's base or key, a call at a position
-# no arm names an err at — does not compile. This deletes the one call that
-# asks the question, so every such program compiles again and the three error
-# fixtures an_err_reaches_an_operator, an_err_reaches_an_index and
-# an_err_reaches_a_group_with_no_arm_for_it answer no diagnostic where their
-# goldens hold one.
+# A failure is a box (#2087): a group whose every answer is a failure answers
+# a box, and so does a tail that calls `err`, and a box where a value is read
+# does not compile. Either test alone refuses `closed 1 + 1`, so this drops
+# both, and the error fixture a_failure_where_a_value_is_expected compiles
+# clean where its golden holds the refusal.
 set -e
-grep -qF 'raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);' src/check/after_infer.rs
-sed -i '/raised_err_at(cur, &raisers, &consts, &err_arms, &named, &decl.file, none_diags);/d' src/check/after_infer.rs
-! grep -qF 'raised_err_at(cur, &raisers' src/check/after_infer.rs
+f=src/check/after_infer.rs
+grep -q 'let boxed = |s: Set|' src/check/after_infer.rs
+set_line='    let boxed = |s: Set| s & (DESC | FAIL) != 0 && s & values == 0;'
+head_line='                        if name == "effect" || name == "print" || name == "err") =>'
+[ "$(grep -cxF "$set_line" "$f")" -eq 1 ] && [ "$(grep -cxF "$head_line" "$f")" -eq 1 ] || {
+  echo "the box test changed shape; this mutation needs rewriting" >&2
+  exit 1
+}
+sed -i 's/^    let boxed = |s: Set| s & (DESC | FAIL) != 0 && s & values == 0;$/    let boxed = |s: Set| s \& DESC != 0 \&\& s \& values == 0;/' "$f"
+sed -i 's/^                        if name == "effect" || name == "print" || name == "err") =>$/                        if name == "effect" || name == "print") =>/' "$f"
+if grep -qxF "$set_line" "$f" || grep -qxF "$head_line" "$f"; then exit 1; fi

@@ -1,0 +1,3 @@
+error[endpoint]: unhandled err reached the entry: "we do not serve pocky"
+  born in base_price at a_failure_passes_a_group_with_no_arm_for_it.kso:9
+  passed through with_service
