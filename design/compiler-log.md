@@ -1880,9 +1880,9 @@ condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
 #2166's program with the guard firing and not, in both branches, and prints
 `11 10` and `36 18` on both engines; on main the native build stops.
 
-CI's rows, against main at #2154. No program in the corpora has the shape, so
+CI's rows, against main at #2149. No program in the corpora has the shape, so
 nothing runtime moves, and only the emitter's new arm shows, natively and in
-the tab: emit_instructions 5,688,182 -> 5,688,361 and
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
 browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
 than a hundredth, and the floor is lowered by exactly that, since this makes native
 build a program the language allows.
