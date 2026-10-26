@@ -289,6 +289,8 @@ struct Mentions<'a> {
     bare: HashSet<&'a str>,
     /// For each name, the argument counts it heads an application with.
     heads: HashMap<&'a str, Vec<usize>>,
+    /// For each name, the arities the program declares a group at.
+    declared: HashMap<&'a str, Vec<usize>>,
     /// For each name, the declarations whose body mentions it at all, as
     /// indices into `program.fns`. A declaration that never names a group
     /// cannot hold a call to it, so `callers_hand_over` has nothing to find
@@ -299,6 +301,12 @@ struct Mentions<'a> {
 impl<'a> Mentions<'a> {
     fn of(program: &'a Program) -> Self {
         let mut m = Mentions::default();
+        for decl in &program.fns {
+            let at = m.declared.entry(decl.name.as_str()).or_default();
+            if !at.contains(&decl.params.len()) {
+                at.push(decl.params.len());
+            }
+        }
         for (d, decl) in program.fns.iter().enumerate() {
             for stmt in &decl.body {
                 let e = match stmt {
@@ -351,6 +359,12 @@ impl<'a> Mentions<'a> {
         }
     }
 
+    /// Whether some application in the program calls `name` with `arity`
+    /// arguments, read off the heads already gathered.
+    fn called_at(&self, name: &str, arity: usize) -> bool {
+        self.heads.get(name).is_some_and(|ks| ks.contains(&arity))
+    }
+
     /// The declarations that could hold a call to `name`, and no others.
     fn mentioning(&self, name: &str) -> &[usize] {
         self.in_decl.get(name).map_or(&[], |v| v.as_slice())
@@ -358,10 +372,17 @@ impl<'a> Mentions<'a> {
 
     /// The same answer `mentioned_as_value` gave, read off the two sets: a bare
     /// occurrence escapes at every arity, and an application head escapes at
-    /// every arity but its own.
+    /// every arity but its own. A head whose count is another group's arity
+    /// calls that group, so it says nothing about this one: regexp's
+    /// `swapped c` turned off the builder in its seven-argument `swapped`, and
+    /// `replace_all` copied its whole answer once per match.
     fn escapes(&self, name: &str, arity: usize) -> bool {
+        let declared = self.declared.get(name).map_or(&[][..], |v| v.as_slice());
         self.bare.contains(name)
-            || self.heads.get(name).is_some_and(|ks| ks.iter().any(|k| *k != arity))
+            || self
+                .heads
+                .get(name)
+                .is_some_and(|ks| ks.iter().any(|k| *k != arity && !declared.contains(k)))
     }
 }
 
@@ -2291,27 +2312,29 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
 }
 
 /// Every mention of `name` in `e` that is not the head of an application of
-/// exactly `arity` arguments — a bare reference, or a partial application.
+/// exactly `arity` arguments, or of another count a group of `name` is
+/// declared at — a bare reference, or a partial application.
 ///
 /// This was `escapes_as_value`'s inner walk until 2026-09-16, and it is kept as
 /// the reference `Mentions` is checked against: the index is the same answer
 /// read off one pass, and the spec below runs both over the programs this
-/// repository actually compiles.
+/// repository actually compiles. `declared` joined it on 2026-10-26, when a
+/// call to another group of the same name stopped counting as an escape.
 #[cfg(test)]
-fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
+fn mentioned_as_value(e: &Expr, name: &str, arity: usize, declared: &[usize]) -> bool {
     if let Expr::Ident(n, _, _) = e {
         return n == name;
     }
     if let Expr::App { head, args, .. } = e {
-        let called =
-            matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity;
+        let called = matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
+            && (args.len() == arity || declared.contains(&args.len()));
         let escaping_head = match called {
             true => false,
-            false => mentioned_as_value(head, name, arity),
+            false => mentioned_as_value(head, name, arity, declared),
         };
-        return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity));
+        return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity, declared));
     }
-    child_exprs(e).any(|c| mentioned_as_value(c, name, arity))
+    child_exprs(e).any(|c| mentioned_as_value(c, name, arity, declared))
 }
 
 /// The hand-over being asked about: which group, at which arity, at which
@@ -2478,9 +2501,8 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
                 // Every arm of the group, not just this one: the set is keyed by
                 // group, so an arm that aliases the parameter or answers it as a
                 // plain string would inherit an exemption it cannot honour.
-                let arms: Vec<&FnDecl> = real_fns(program)
-                    .filter(|d| d.name == decl.name && d.params.len() == arity)
-                    .collect();
+                let arms: Vec<&FnDecl> =
+                    a.group(&decl.name, arity).filter(|d| !d.synthetic).collect();
                 let all = arms.iter().all(|d| match d.params.get(j) {
                     Some(Pattern::Var(n, _)) => forwards_into(&carrying, d, n),
                     _ => false,
@@ -2491,7 +2513,7 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
                 // twins share — so a grant made to the clone would reach the code
                 // the real name emits.
                 if all
-                    && called_somewhere(program, &decl.name, arity)
+                    && a.mentions.called_at(&decl.name, arity)
                     && a.callers_hand_over(&decl.name, arity, j)
                 {
                     carrying.insert((decl.name.clone(), arity, j));
@@ -2516,36 +2538,41 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
 }
 
 /// Names this arm binds to the join itself — the builder made right here.
+/// A guard holds the statements after it, so a join bound below a
+/// `return acc if …` sits inside the guard rather than in the body's own list,
+/// and a bound branch holds its own block; both are walked. Missing them
+/// re-seeded the builder at the call that handed it on, a copy of the whole
+/// string on every lap.
 fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
-    decl.body
-        .iter()
-        .filter_map(|s| match s {
-            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
-                .contains(&(decl.file.clone(), span.line as usize, span.col as usize))
-                .then(|| name.to_string()),
-            _ => None,
-        })
-        .collect()
-}
-
-/// Does any call site in the program name this group?
-fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
-    fn in_expr(e: &Expr, name: &str, arity: usize) -> bool {
-        if let Expr::App { head, args, .. } = e {
-            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity {
-                return true;
-            }
-        }
-        child_exprs(e).any(|c| in_expr(c, name, arity))
-    }
-    program.fns.iter().any(|d| {
-        d.body.iter().any(|s| {
+    fn in_stmts(joins: &Sites, decl: &FnDecl, stmts: &[Stmt], out: &mut HashSet<String>) {
+        for s in stmts {
             let e = match s {
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => {
+                    if joins.contains(&(decl.file.clone(), span.line as usize, span.col as usize)) {
+                        out.insert(name.to_string());
+                    }
+                    continue;
+                }
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
             };
-            in_expr(e, name, arity)
-        })
-    })
+            in_expr(joins, decl, e, out);
+        }
+    }
+    fn in_expr(joins: &Sites, decl: &FnDecl, e: &Expr, out: &mut HashSet<String>) {
+        match e {
+            Expr::Guard { rest, .. } => in_stmts(joins, decl, rest, out),
+            Expr::Block(stmts, _) => in_stmts(joins, decl, stmts, out),
+            Expr::Lambda { .. } => {}
+            _ => {
+                for c in child_exprs(e) {
+                    in_expr(joins, decl, c, out);
+                }
+            }
+        }
+    }
+    let mut out = HashSet::default();
+    in_stmts(joins, decl, &decl.body, &mut out);
+    out
 }
 
 fn param_names(decl: &FnDecl) -> Vec<(usize, String)> {
@@ -2926,12 +2953,14 @@ mod tests {
 
     /// The walk this replaced, asked the way `escapes_as_value` asked it.
     fn walked(program: &Program, name: &str, arity: usize) -> bool {
+        let declared: Vec<usize> =
+            program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
         program.fns.iter().any(|d| {
             d.body.iter().any(|s| {
                 let e = match s {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
-                mentioned_as_value(e, name, arity)
+                mentioned_as_value(e, name, arity, &declared)
             })
         })
     }

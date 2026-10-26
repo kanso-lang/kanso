@@ -233,15 +233,15 @@ fn swapped _ s at acc _ _ true
 fn swapped prog s at acc repl m false
   before = text/slice s at (m.from - 1)
   kept = "{acc}{before}{repl}"
-  stepped_over prog s acc repl m kept (m.to == m.from)
+  stepped_over prog s repl m kept (m.to == m.from)
 
 # An empty match can sit one past the end of `s`, where there is no character
 # to step over, so the slice is none and nothing is copied.
-fn stepped_over prog s _ repl m kept true
+fn stepped_over prog s repl m kept true
   one = or_empty (text/slice s m.from m.from)
   rebuilt prog s (m.from + 1) "{kept}{one}" repl
 
-fn stepped_over prog s _ repl m kept false
+fn stepped_over prog s repl m kept false
   rebuilt prog s m.to kept repl
 
 fn rest_of s at

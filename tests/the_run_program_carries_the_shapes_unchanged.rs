@@ -33,7 +33,8 @@ const CARRIED: &[(&str, &str)] = &[
 /// and `insist` on 2026-10-19, measured on main before kanso#1943's fix.
 /// `guarded`, `handed`, `overwrite` and `reentered` joined on 2026-10-25 from
 /// kanso#2089, measured on main before their fixes, and `branched` and
-/// `padded` later that day, measured on main before theirs.
+/// `padded` later that day, measured on main before theirs. `relayed` joined
+/// on 2026-10-26, measured on main before its fix.
 const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/admitted/admitted.kso",
     "bench/runbench/runbench/appended/appended.kso",
@@ -54,6 +55,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/overwrite/overwrite.kso",
     "bench/runbench/runbench/padded/padded.kso",
     "bench/runbench/runbench/reentered/reentered.kso",
+    "bench/runbench/runbench/relayed/relayed.kso",
     "bench/runbench/runbench/restate/restate.kso",
     "bench/runbench/runbench/rested/rested.kso",
     "bench/runbench/runbench/rewind/rewind.kso",

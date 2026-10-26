@@ -109673,3 +109673,45 @@ after the write, still prints the old value beside the new on every engine.
 On this container the `handed` phase built alone falls from 41,838,242
 instructions to 1,090,527, each including the empty program's 329,467; CI's
 rows follow.
+
+## 2026-10-25 — a guarded loop grows its record's list in place
+
+The fix for the `guarded` phase (#2089, second item). kanso#1926 lets a push
+through `st.events` write in place when the record is handed over and every
+mention of it in the arm reads a field. markdown's loop answered
+`return st if i > n` above the push, and that early `st` is a mention that
+reads no field, so the move was refused and every lap copied the list. The
+guard's early answer runs instead of the lines below it, never beside them.
+`FieldTally` now walks a guard's early answer apart from its rest, and when
+the early answer reads no field of the record it does not count against the
+move below. One that does read the field is counted as before.
+
+`tests/golden/mem/a_list_in_a_record_grows_under_a_guard` pushes 20,000
+times under such a guard: 14 allocations and 1,045,008 bytes, where main
+makes 51,816 and 9,160,000,672. markdown's reduction at 64,000 pushes runs in
+0.005 seconds natively, where main took 8.9.
+On this container the run program with the `guarded` phase falls from
+874,292,848 instructions to 831,115,619 and prints the same total; CI's rows
+follow.
+
+## 2026-10-25 — a copied map leaves its dead entries behind
+
+The fix for the `overwrite` phase (#2089, fourth item). A map keeps an append
+log of its pairs, overwrites included, and sorts and deduplicates it into a
+cached view on the first read. A put that cannot write in place copies the
+map, and `k_b_put` copied the whole log. chip8's memory, 16 keys read and
+overwritten once a lap, therefore carried every earlier lap's entries into
+each copy: 8,000 laps allocated 1,783,786,288 bytes and took 2.1 seconds
+natively.
+
+When the map's sorted view is current and shorter than its log, the copy now
+starts from the view, which holds each key's last value, and the new pair goes
+after it. The answer reads the same either way. The chip8 shape at 8,000 laps
+falls to 9,286,608 bytes and 0.015 seconds, and prints what the interpreter
+prints.
+
+`tests/golden/mem/a_map_overwritten_each_lap_is_copied_without_its_dead_entries`
+runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
+8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
+33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
+tally's map is copied from a view too.
