@@ -276,6 +276,16 @@
 # xs 1)`, the walk most of this repository's scripts use. Each rest is built
 # afresh by stepping a cursor through the list one record at a time, about
 # 260 instructions an element, so the walk costs the square of the list.
+#
+# One more joined on 2026-10-26, measured on main at kanso#2158 before its
+# fix. Its column is the whole program with it, 865,303,604, less the whole
+# with it reading nothing, 828,684,309, and its share is of the former.
+#
+#   lasted    800 reads of a list's last element          36,619,295  4.23%
+#
+# `lasted` reads its list's last element on every step with `list/last`,
+# which folds the whole list to find it, so the loop costs the square of the
+# list.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -292,6 +302,7 @@ import "./guarded"
 import "./handed"
 import "./index"
 import "./insist"
+import "./lasted"
 import "./machine"
 import "./nested"
 import "./overwrite"
@@ -371,11 +382,20 @@ bucketed_numbers = 2000
 
 rested_items = 500
 
+lasted_items = 800
+
 fn decoded _ 0 sofar
   sofar
 
 fn decoded raw n sofar
-  decoded raw (n - 1) (sofar + length (json/decode raw))
+  decoded raw (n - 1) (sofar + size_of (json/decode raw))
+
+# the document is this file's own, so text that is not json is a bug here
+fn size_of none
+  err "the benchmark's document is not json"
+
+fn size_of v
+  length v
 
 fn encoded _ 0 sofar
   sofar
@@ -423,8 +443,9 @@ fn tally raw doc a b
   ported16 = ported15 + appended/total appended_numbers
   ported17 = ported16 + bucketed/total bucketed_numbers
   ported18 = ported17 + rested/total rested_items
+  ported19 = ported18 + lasted/total lasted_items
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported18 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported19 + rest))
   bulk .> on
 
 fn shaped raw doc a

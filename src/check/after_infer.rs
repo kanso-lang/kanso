@@ -324,11 +324,150 @@ fn wrong_kind_at_an_operator(
     }
 }
 
+/// Every name `decl` binds, in order, with where and to what for a plain
+/// `name = expr` binding. A parameter, a destructured name and a lambda's
+/// parameter carry no expression.
+type Binds<'a> = Vec<(&'a str, Option<(crate::diag::Span, &'a Expr)>)>;
+
+fn binds_in_stmts<'a>(body: &'a [Stmt], out: &mut Binds<'a>) {
+    for stmt in body {
+        match stmt {
+            Stmt::Bind { pattern: Pattern::Var(n, at), expr } => {
+                out.push((n.as_str(), Some((*at, expr))));
+                binds_in_expr(expr, out);
+            }
+            Stmt::Bind { pattern, expr } => {
+                for_each_param_name(pattern, &mut |n| out.push((n, None)));
+                binds_in_expr(expr, out);
+            }
+            Stmt::Expr(expr) => binds_in_expr(expr, out),
+        }
+    }
+}
+
+fn binds_in_expr<'a>(e: &'a Expr, out: &mut Binds<'a>) {
+    if let Expr::Lambda { params, .. } = e {
+        out.extend(params.iter().map(|(n, _)| (n.as_str(), None)));
+    }
+    if let Expr::Guard { rest, .. } = e {
+        binds_in_stmts(rest, out);
+    }
+    // a branch of an `if` is a block with bindings of its own
+    if let Expr::Block(stmts, _) = e {
+        return binds_in_stmts(stmts, out);
+    }
+    crate::for_each_child(e, |c| binds_in_expr(c, out));
+}
+
+fn binds_of(decl: &crate::ast::FnDecl) -> Binds<'_> {
+    let mut binds = Vec::new();
+    for param in &decl.params {
+        for_each_param_name(param, &mut |n| binds.push((n, None)));
+    }
+    binds_in_stmts(&decl.body, &mut binds);
+    binds
+}
+
+/// Whether `e` provably answers a none: a lenient read, a literal none, a
+/// call whose group's return set carries one, or a name bound to one of
+/// these. A set holding every value bit is the unknown, and the unknown
+/// carries the none bit with the rest: a field read through a variable (`m.to`
+/// is TOP in infer) and a strict index (`xs[i]!` is every value but a thunk)
+/// both answer it, so a group that hands either back would read as proof of a
+/// none it never produces. Unknown is not proof.
+///
+/// A name carries its none into the check (#2088): `s = text/slice t 2 9` and
+/// then `length s` is refused as `length (text/slice t 2 9)` is, so binding a
+/// value never changes what compiles.
+fn yields_none(e: &Expr, tables: &AfterInfer, named: &BoundNones<'_>) -> bool {
+    use crate::infer::NONE;
+    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
+    let unknown = |s: crate::infer::Set| s & values == values;
+    match e {
+        Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
+        Expr::Ident(name, at, _) if named.local.contains(name.as_str()) => named
+            .none
+            .iter()
+            .any(|(n, bound)| *n == name.as_str() && (bound.line, bound.col) < (at.line, at.col)),
+        Expr::Ident(name, _, _) => name == "none",
+        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
+            // A field read is a getter call on the routes that check after
+            // the rewrite and a field expression on the others, which this
+            // match answers no. `kanso test` refused a module `kanso check`
+            // passed over `os/read_bytes r.path`.
+            Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
+            Expr::Ident(name, _, _) => tables
+                .nones
+                .get(&(name.as_str(), args.len()))
+                .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// The names one declaration binds once to something that provably answers
+/// a none, with where, and every name it binds at all. A name bound twice is
+/// left out, and a name bound to such a name carries the none too.
+#[derive(Default)]
+struct BoundNones<'a> {
+    none: Vec<(&'a str, crate::diag::Span)>,
+    local: crate::hash::Set<&'a str>,
+}
+
+fn none_names<'a>(decl: &'a crate::ast::FnDecl, tables: &AfterInfer) -> BoundNones<'a> {
+    // A name can only carry a none some binding was handed directly, so a
+    // declaration with no such binding answers empty without collecting.
+    fn direct(body: &[Stmt], tables: &AfterInfer, empty: &BoundNones<'_>) -> bool {
+        body.iter().any(|stmt| match stmt {
+            Stmt::Bind { pattern: Pattern::Var(..), expr } => {
+                yields_none(expr, tables, empty) || nested(expr, tables, empty)
+            }
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => nested(expr, tables, empty),
+        })
+    }
+    fn nested(e: &Expr, tables: &AfterInfer, empty: &BoundNones<'_>) -> bool {
+        if let Expr::Guard { rest, .. } = e {
+            if direct(rest, tables, empty) {
+                return true;
+            }
+        }
+        if let Expr::Block(stmts, _) = e {
+            return direct(stmts, tables, empty);
+        }
+        let mut found = false;
+        crate::for_each_child(e, |c| found = found || nested(c, tables, empty));
+        found
+    }
+    let empty = BoundNones::default();
+    if !direct(&decl.body, tables, &empty) {
+        return empty;
+    }
+    let binds = binds_of(decl);
+    let mut named = BoundNones { none: Vec::new(), local: binds.iter().map(|(n, _)| *n).collect() };
+    for (i, (name, at)) in binds.iter().enumerate() {
+        let Some((at, expr)) = at else { continue };
+        if binds.iter().enumerate().any(|(j, (other, _))| j != i && other == name) {
+            continue;
+        }
+        if yields_none(expr, tables, &named) {
+            named.none.push((name, *at));
+        }
+    }
+    named
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
-fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Vec<Diagnostic>) {
-    use crate::infer::NONE;
+fn none_exhaustive_at(
+    e: &Expr,
+    tables: &AfterInfer,
+    named: &BoundNones<'_>,
+    owner: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
     let Expr::App { head, args, piped: false, .. } = e else { return };
     let Expr::Ident(name, _, _) = head.as_ref() else { return };
     // A getter is synthesized from a field read, so nobody can give it
@@ -339,35 +478,7 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     if crate::ast::getter_field(name).is_some() {
         return;
     }
-    // only what is provable: a lenient read, a literal none, or a call whose
-    // group's return set carries one. A set holding every value bit is the
-    // unknown, and the unknown carries the none bit with the rest: a field
-    // read through a variable (`m.to` is TOP in infer) and a strict index
-    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
-    // hands either back would read as proof of a none it never produces.
-    // Unknown is not proof.
-    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
-    let unknown = |s: crate::infer::Set| s & values == values;
-    let yields_none = |e: &Expr| -> bool {
-        match e {
-            Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
-            Expr::Ident(name, _, _) => name == "none",
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(_, span, _) if tables.none_free.contains(span) => false,
-                // A field read is a getter call on the routes that check after
-                // the rewrite and a field expression on the others, which this
-                // match answers no. `kanso test` refused a module `kanso check`
-                // passed over `os/read_bytes r.path`.
-                Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
-                Expr::Ident(name, _, _) => tables
-                    .nones
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
-                _ => false,
-            },
-            _ => false,
-        }
-    };
+    let yields_none = |e: &Expr| yields_none(e, tables, named);
     // THE CHEAP TESTS COME FIRST, and asking the table is not one of
     // them: the lookup hashes the callee's name, where a none question
     // about an argument is a match on the argument's own shape. A call
@@ -378,12 +489,25 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     if !args.iter().any(&yields_none) {
         return;
     }
-    let Some(&(_, named)) = tables.nones.get(&(name.as_str(), args.len())) else { return };
+    // A builtin has no arms to give a none to. The positions its demand table
+    // constrains take the kinds it lists and never a none, which is checked
+    // there by running each wrong kind, so a none reaching one is refused as
+    // a group's would be. sat's `push` and kv's `length` of a slice past the
+    // end passed check and stopped at run time.
+    let group = tables.nones.get(&(name.as_str(), args.len())).map(|&(_, named)| named);
+    let builtin = group.is_none() && crate::check::BUILTINS.contains(&name.as_str());
+    if group.is_none() && !builtin {
+        return;
+    }
     for (pos, arg) in args.iter().enumerate() {
         if !yields_none(arg) {
             continue;
         }
-        if named & (1u64 << pos.min(63)) != 0 {
+        if let Some(named) = group {
+            if named & (1u64 << pos.min(63)) != 0 {
+                continue;
+            }
+        } else if builtin_demand(name, pos).is_none() {
             continue;
         }
         // an absolute path built from the binary's location tells a
@@ -397,14 +521,14 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
             .map(|(_, m)| m)
             .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
             .unwrap_or(owner);
-        diags.push(Diagnostic::new(
-            "exhaustive",
-            format!(
+        let message = match builtin {
+            true => format!("this can be a none and `{name}` does not take one — resolve it here"),
+            false => format!(
                 "this can be a none and `{name}` has no arm for it — resolve it \
                  here, or give `{name}` a `none` arm (in {short})"
             ),
-            arg.span(),
-        ));
+        };
+        diags.push(Diagnostic::new("exhaustive", message, arg.span()));
     }
 }
 
@@ -954,6 +1078,7 @@ fn check_after_infer<'p>(
         // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
         let marks = (effect_diags.len(), box_diags.len(), none_diags.len());
+        let nones = none_names(decl, &tables);
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -962,7 +1087,7 @@ fn check_after_infer<'p>(
             stack.push(e);
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
-                none_exhaustive_at(cur, &tables, &decl.file, none_diags);
+                none_exhaustive_at(cur, &tables, &nones, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);

@@ -1,0 +1,16 @@
+import "std/list"
+import "std/text"
+
+# `list/last` reads a list at its end and walks anything else to it. A list
+# of numbers, records and lists, one element and none, a lazy sequence, a
+# string, bytes and a map each answer what the walk answered.
+type pair
+  name
+  n
+
+pub play =
+  ps = [(pair "a" 1) (pair "b" 2)]
+  doubled = list/map [1 2 3] (x -> x * 2)
+  print "{list/last [3 2 1]} {list/last [7]} {list/last []} {list/last ps}"
+  print "{list/last [[1] [2 3]]} {list/last doubled} {list/last "héllo"}"
+  print "{list/last (text/bytes "ab")} {list/last { 1:"a" 2:"b" }}"

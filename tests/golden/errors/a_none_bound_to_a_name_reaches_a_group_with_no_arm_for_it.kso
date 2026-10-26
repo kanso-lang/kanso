@@ -1,0 +1,13 @@
+# A none handed straight to a group with no `none` arm is refused at check,
+# and binding it to a name first changes nothing (#2088): the name carries
+# the none into the check.
+import "std/text"
+
+fn shout s
+  "{s}!"
+
+fn tail_of t
+  rest = text/slice t 2 9
+  shout rest
+
+pub play = print (tail_of "abc")

@@ -129,7 +129,7 @@ fn more s false
   s
 
 fn more s true
-  head = text/slice s 1 (length s - 3)
+  head = present (text/slice s 1 (length s - 3))
   tail = text/slice s (length s - 2) (length s)
   "{grouped head},{tail}"
 
@@ -292,7 +292,7 @@ fn verb_for false
 
 fn tagged s chunk j seen
   quoted = text/split chunk "\""
-  key = quoted[1]
+  key = present quoted[1]
   after = after_first quoted "\""
   keyed s key after j seen
 
@@ -308,11 +308,11 @@ fn compared s key after seen ""
 
 fn compared s key after seen actual
   opened = text/split after ">"
-  head = opened[1]
+  head = present opened[1]
   body = after_first opened ">"
   closed = text/split body "<"
   return compared s key after seen "" if length opened < 1 or length closed < 1
-  judged s key head closed[1] body seen actual
+  judged s key head (present closed[1]) body seen actual
 
 fn judged s key head shown body seen actual
   settled s key head shown body seen actual (stripped shown == actual)
@@ -329,3 +329,10 @@ fn settled s key head shown body seen actual false
   sweep (s.drift + 1) "{s.notes}{note}" out
 
 pub play = os/args .> (given -> loaded (asks_write? given))
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "a bounded read answered none"
+
+fn present x
+  x

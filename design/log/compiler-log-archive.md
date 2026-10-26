@@ -109478,3 +109478,198 @@ pins the refusal; main fails both.
 The module path now counts, per name, which files declare it. The rows are
 counted with the batch this landed in, at the end of "an import stays in the
 file that writes it".
+
+## 2026-10-25 — a field is read without importing its owner, on every path
+
+From #2090, regex's port. Chapter 03 says nothing has to be imported to read
+a field, and the 2026-10-12 gavel on #1894 says a value carries the arms its
+type's owner wrote, a field of a parameter included. A module `u` that
+imports nothing and reads `h.start` and `h.end` on a value module `m` built
+was refused on check, run and run --interp with "no record type has a field
+`start` (module u)": the module was checked alone before the program that
+imports it, and no type it could see declares the field.
+
+A library compile now leaves to the program a field read on one of the
+function's parameters when no type the library can see declares the field,
+as it leaves a call on a handed value that only another module writes. The
+same holds for two fields read on one parameter when one of them is unseen.
+A read on any other value, a local built from a visible type say, is refused
+where it is written, as before, and so is a parameter read for fields that
+visible types each declare but none holds together. The root (an entry, a
+play file, a test file) refuses a field no type in the whole program
+declares.
+
+`tests/a_field_read_needs_no_import.rs` runs regex's shape on both engines
+(main refuses it) and pins the root's refusal of a misspelt field.
+
+A library's field reads reach the root already rewritten into calls on their
+readers, so the root now asks a reader's call the same question.
+`errors_module/field_read_in_a_deep_library` keeps its refusal at the same
+file and line, now said by the root. The root quotes no line from another
+file, as it does for every diagnostic about one, and the dependency's
+`(module deep)` suffix goes with the dependency's check.
+
+## 2026-10-25 — an import stays in the file that writes it
+
+From #2090, xsv's port. A module's file `join.kso` declared a private
+`matches` and imported nothing; its sibling `search.kso` imported std/regexp,
+which exports `matches` too. The module's merged program held std/regexp's
+bare twin of `matches` beside the private arms, so the call in `join.kso`
+dispatched over both, and the check refused `matches index k != []` because
+one of std/regexp's arms can answer an err. The 2026-10-12 gavel says a file
+names only what it can see, and `join.kso` never imported std/regexp.
+
+The 2026-08-29 ruling keeps the mixed group where it is asked for: a file
+that imports the module and writes the bare name dispatches over both the
+module's arms and the import's. So the module path now drops an import's bare
+twin of a name the module declares only when no file importing that module
+writes the bare name. The import's function stays reachable by its qualified
+spelling, `regexp/matches`. A module whose importing file does write the bare
+name keeps the mixed group, and a module of one file is unchanged.
+
+`tests/an_import_stays_in_its_file.rs` runs xsv's shape with a qualified call
+beside it, on both engines; main refuses it.
+
+CI's rows, for the ten fixes that landed together (#2105). The front end
+asks more of every program: whether an arm's type is one its file can see,
+whether a module's own type or function shadows an import's twin, which
+files declare each name, which files import each exporter, and whether a
+field read stands at the root. compile_instructions 24,486,012 -> 24,681,406
+(+0.80%), entry_instructions 72,317,212 -> 72,814,555, library_instructions
+71,993,114 -> 72,478,036, compile_allocs 13,815 -> 13,836, emit_instructions
+5,637,678 -> 5,637,990, and in the tab browser_compile_instructions
+218,016,527 -> 218,660,965. The interpreter's rows, which count its run of
+the corpus front end included, move by less than a thousandth each:
+interp_instructions 385,499,694 -> 385,496,174 and interp_allocs 401,591 ->
+401,614. The runtime gains `k_push_onto_bytes`, so
+every benchmark's machine code grows 320 bytes, text 5,498,444 -> 5,502,924
+over the fourteen, and building compiles it: codegen_instructions_dev
+116,447,795 -> 116,453,133 and codegen_instructions_release 370,219,514 ->
+370,245,362. The run rows move with the layout around that code, by under
+a thousand each: work_runbench 788,981,005 -> 788,981,075, work_encodebench
+2,325,240,037 -> 2,325,240,758, work_livebench 936,030,078 -> 936,030,540 and
+work_oneshot 10,050,617 -> 10,050,106. Welfare falls by less than a hundredth, and
+the floor follows under the rule for the language doing what it says: the
+2026-10-12 ruling that a file names only what it can see and that a test
+file is an outside consumer, the 2026-08-29 ruling that the author's own
+name wins, and the 2026-08-03 ruling that a module's files share their
+declarations.
+
+Four ratchet mutations anchored on lines these fixes rewrote and no longer
+applied: `the_library_program_is_checked_twice` (the library body moved into
+`compile_library_beside`), `the_entry_program_is_checked_twice` and
+`an_entry_program_rewritten_twice_before_it_is_checked` (the entry check took
+a `root` argument and a line of its own), and
+`a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
+re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
+other mutation still applies to this tree.
+
+## 2026-10-25 — four cliffs from the ports join the run program
+
+#2089's first item, entered in the corpus before its fix under the
+2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
+a map entry into a name and handed the name to a function inside the write:
+`seen = m[key]` then `put m key (counted seen)`. The 2026-10-10 entry
+(kanso#1822) discounts such a name only when it reaches the write through
+arithmetic and comparison, so here `m` counts as used twice and every put
+copies the map. toml's reduction at 8,000 keys took 4.2 seconds in release
+against 0.012 with the read written inline.
+
+The run program gains a `handed` phase: 380 updates over 100 keys through
+such a name. Built alone on main it costs 41,508,775 instructions above the
+empty program. The phase prints the same total on both engines.
+
+#2089's second item joins it. markdown's port pushed onto a list held in a
+record under a guard, `return st if i > n` above `loop (state (push
+st.events i) i) (i + 1) n`, and natively 64,000 pushes took 8.9 seconds.
+kanso#1926 moves such a list out of its record only when every mention of the
+record is a field read, and the guard's `return st` is a mention that is not,
+though it runs instead of the push. The same loop written as two arms grows
+the list in place. The `guarded` phase pushes 3,050 times. Its cost is a
+cliff whose knee depends on what the arena already holds: built alone the
+knee is at 4,096 elements and the phase costs 746,860 instructions, while
+inside the run program the knee falls between 2,000 and 3,000 and the phase
+costs 43,734,573, the whole program with it less the whole without.
+
+#2089's fourth item is the third phase. chip8's port kept its memory as a
+map of 16 keys in a record, read one key and overwrote another each lap, and
+8,000 laps took 2.4 seconds natively against 0.1 on the interpreter. Every
+put that cannot write in place copies the map's append log, which keeps each
+overwrite until something sorts it, so the copy grows by an entry a lap. The
+`overwrite` phase runs 380 laps, 42,238,603 instructions built alone above
+the empty program, and prints the same total on both engines.
+
+On this container the whole program reads 917,589,885, where main reads
+788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
+
+#2089's third item is the fourth phase. lox's statement loop re-enters itself
+when a Lox constructor builds a tree, carrying a persistent trie that each
+lap writes one leaf into, and the reduction took 7.0 seconds natively for
+4,094 writes. The lap rule stages a carry once the arena has drifted a
+quarter megabyte, measured from where the last stage at the loop's depth
+left it. A fresh entry measured from the previous loop's position, which the
+rewind had already passed, so every entry staged on its first lap and copied
+the whole trie. The `reentered` phase writes 62 leaves. Its cost is a knee
+like `guarded`'s: 1,236,018 built alone with the empty program's start-up,
+and 70,582,705 inside the run program, where each stage also walks what the
+earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
+the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
+print 62.
+
+CI's rows. The run program with all four phases reads work_runbench
+788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
+20.2% of the new whole. The program is larger, so the code it emits grows:
+emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
+emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
+163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
+5,518,316 over the fourteen. No compile row and no browser row moves. Under
+the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
+stack and bag joined: the run_instructions baseline keeps its ratio to the
+run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
+the fixes in #2106 score against these rows as a rise.
+
+The run program's allocation vein moves with it, and the peak it holds is the
+run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
+re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
+baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
+on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
+run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
+run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
+run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
+run_ten_blocks 2.
+
+The fixes follow in their own pull requests and will score as rises.
+
+
+On this container the whole program reads 874,292,848, where main reads
+788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
+in their own pull requests and will score as rises.
+
+empty program, 5.00% of the whole program's 830,558,275 on this container,
+where main reads 788,981,054. The phase prints the same total on both
+engines. The fix follows in its own pull request and will score as a rise.
+
+## 2026-10-25 — a read handed to a call keeps the write in place
+
+The fix for the `handed` phase the previous entry put into the run program
+(#2089, first item). `seen = m[key]` then `put m key (counted seen)` copied
+the map on every put, because `linear.rs` discounts a name bound to a read of
+the map only when every later use reaches the put through arithmetic: a use
+anywhere else could force the read after the write.
+
+That can happen only if the binding is a thunk, and `demand::analyze` makes a
+binding a thunk only when its expression is expensive, which a plain index
+read with a key that calls nothing and compares nothing is not. Both engines
+read the same verdict, so `seen` holds the element before anything below its
+line runs. `read_in_block` now discounts such a binding's read of the map
+whatever the name does next. Pooled names, which the work-ahead pass always
+makes cells, are left out.
+
+`tests/golden/mem/a_read_handed_to_a_call_stays_in_place` is the shape at
+2,000 updates over 100 keys: 15 allocations and 16,800 bytes, where main
+makes 6,006 and 80,274,944. No other mem golden moved, and
+`micro/a_read_named_before_a_write_sees_the_old_value`, whose names are used
+after the write, still prints the old value beside the new on every engine.
+On this container the `handed` phase built alone falls from 41,838,242
+instructions to 1,090,527, each including the empty program's 329,467; CI's
+rows follow.

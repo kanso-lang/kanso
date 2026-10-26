@@ -416,7 +416,7 @@ fn json_decode_loops_stay_conservative() {
     // Until 2026-10-10 this compiled lib/json as a root and leaned on the
     // carry boundary matching `lib/` as well as `std/`, which every user
     // directory called `lib` matched too.
-    let src = "import \"std/json\"\n\nprint (json/encode [1 2])\nprint (json/decode \"[1 2]\")\n";
+    let src = "import \"std/json\"\n\nprint (json/encode [1 2])\njson/decode! \"[1 2]\" .> print\n";
     let program = crate::compile_entry("main.kso", src).unwrap();
     let inference = infer::infer(&program);
     let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));

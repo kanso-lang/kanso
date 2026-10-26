@@ -172,7 +172,7 @@ fn onward _ _ count true
 
 fn onward module exprs count false
   rest = list/to_list (list/drop exprs 1)
-  expr = exprs[1]
+  expr = present exprs[1]
   ran (shaped module expr) .> (v -> reported module rest count expr v)
 
 fn reported module rest count expr v
@@ -236,3 +236,10 @@ fn finished n
   io/write "{n} disagree\n" .> (_ -> os/exit 1)
 
 pub play = begun (shaped "text" "text/trim \" 1 \"" == sample)
+
+# A read the code around it has bounded, so a none here is a bug.
+fn present none
+  err "the walk lost a probe it had counted"
+
+fn present x
+  x
