@@ -14,5 +14,19 @@ line='  encode_onto (key_onto acc k) v'
   echo "the encoder's key path moved; this mutation needs rewriting" >&2
   exit 1
 }
+# The library dropped its own escape once strings went out through
+# `append_string`, so the mutation brings it back to call it.
+cat >> lib/json/text.kso <<'KSO'
+
+fn escape_split acc s _ n len
+  if (len < n) (text/append acc s) (builtin_append_escaped acc s)
+
+fn escape_clean acc s bs n
+  escape_split acc s bs n (length bs)
+
+fn escape_onto acc s
+  bs = text/bytes s
+  escape_clean acc s bs (text/find2_below bs 1 34 92 32)
+KSO
 sed -i 's/^  encode_onto (key_onto acc k) v$/  encode_onto (text\/append (escape_onto (text\/append acc 34) k) "\\":") v/' "$f"
 if grep -qxF "$line" "$f"; then exit 1; fi
