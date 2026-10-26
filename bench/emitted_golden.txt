@@ -23,7 +23,7 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move, and
 # regenerate.
-defines=158
-calls=1557
-branches=1343
-lines=14383
+defines=160
+calls=1519
+branches=1293
+lines=14150
