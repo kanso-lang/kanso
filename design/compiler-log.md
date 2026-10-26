@@ -23,38 +23,6 @@
 
 
 
-## 2026-10-24 — a field read is asked the none question the same way on every route
-
-`kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
-inflate's port has the shape: `fn go (req none)` answers a request whose
-path is a none, and the arm below it hands `r.path` to `os/read_bytes`. The
-test file beside it holds only `test_one = 1 == 1`. ugit's port had the same
-split, and toml's had it between `check lib` and `check main.kso`.
-
-The none question in `after_infer.rs` asks whether an argument can be a none.
-It answers no for a field read, so a none carried in a field stays the
-runtime's sentence. But the module and play routes run the check before
-field reads are rewritten into getter calls, and the entry and test routes
-run it after. On those two the argument was a call to `Get_path`, whose
-return set is every value the field was built from, and the first arm's
-claim on the none never reaches that set. The question now answers no for a
-getter call too, so all four routes give a field read the same answer.
-
-`tests/golden/test_verb/claims_a_field` is inflate's shape, and
-`a_test_file_checks_its_module_as_check_does` in `tests/test_verb.rs` runs
-it; main refuses it. `check_gives_a_library_and_its_entry_one_verdict_on_a_field_read`
-in `tests/verbs_agree.rs` is toml's, where main's `check main.kso` refused
-what `check lib` passed.
-
-Whether a none carried in a field should be refused at check is #2088's
-question, for every route at once.
-
-CI's rows. A getter call now answers the none question before the table
-lookup it used to make: compile_instructions 24,488,495 -> 24,486,012,
-entry_instructions 72,335,545 -> 72,317,212, library_instructions
-72,011,050 -> 71,993,114 and browser_compile_instructions 218,080,833 ->
-218,016,527. Welfare rose, and the rise is banked.
-
 ## 2026-10-24 — a test file's helper is checked like its constants
 
 Under the 2026-10-12 gavel (#1883) a test file sees the pub names of the
@@ -1743,3 +1711,55 @@ emitted_other_branches 17,946, emitted_other_calls 20,494 and
 emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
 list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
 Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-25 — a delete marks its pair dead where it stands
+
+`k_b_delete_mut` took a key out of a map nobody else holds by moving every
+pair after it down one slot. In the run program's `drained` phase that move
+was 87% of the phase's instructions, and draining half of 80,000 keys took
+0.92 s (#2118).
+
+Now the deleted pair keeps its slot. Its key moves into the value's slot, and
+the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
+stay sorted by key, so the next delete finds its key with a binary search
+that reads a dead pair by the key it kept. Dead pairs at the end of the map
+are dropped at once. The header records the state in `sorted_len`, which is
+negative while the map has no view: -(len + 1) while the pairs are what the
+deletes left, and any other negative once an in-place put appends past them.
+A lookup searches past the dead pairs. Every other reader closes the gaps
+first, in one pass at the top of `k_map_sort_build`. A persistent put closes
+them before it can share the pairs with a new header, and so do the deep copy
+and the carry's evacuation, whose headers start with no view.
+
+Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
+takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
+6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
+
+`delete_marks` counts the pairs marked dead. It is printed only by a run that
+marked one, so the veins that never delete in place, the sibling
+repositories' among them, read as before. The run program reads 550 and
+`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
+`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
+reader: a lookup, the length, the keys, an in-place put and a delete after
+it, a delete of a key already gone, a drain to empty, and two persistent
+puts beside the maps they copy. Three mutations turn it red: a search that
+answers a dead pair, a persistent put that shares dead pairs, and gaps
+closed as though nothing had been appended.
+
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.

@@ -52,3 +52,4 @@ sh_buf=91336688
 sh_map=12160
 sh_bytes=4872
 spare_peak_bytes=2621456
+delete_marks=550
