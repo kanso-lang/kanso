@@ -109200,3 +109200,80 @@ emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
 Nothing at run time moved. Welfare fell by less than a hundredth, and the
 floor follows: this makes the engines agree, which the welfare script's own
 header puts ahead of the score.
+
+## 2026-10-24 — a record returned by value keeps its shape across a pipe
+
+#2091's first item, from the mustache port. `half` answers a two-field
+record or an err, and escape analysis returns a record of that shape by
+value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
+of the value's tag, a call of `shown` on the success path, and a phi joining
+the two paths as `%KValue`s. The failure edge named the value as it came,
+three words, and clang refused the module: "'%t1' defined with type
+'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
+
+The boxing rewrite that turns a by-value record into a `%KValue` wherever a
+line names it as one reads `%KValue %t1`, and a phi's operand list names its
+values bare, so the rewrite never reached this line. The pipe now boxes the
+value for the failure edge before it branches, and boxes the call's answer
+when that comes back by value too. The call itself still takes the three
+words, since `shown` takes them by value.
+
+`micro/a_record_returned_by_value_is_piped_on` runs the success and the
+failure paths. Main stops it in clang; every engine now prints `4/2` and
+`failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.
+
+## 2026-10-24 — a loop counter knows where it starts
+
+The ports' re-sit counted the same complaint in about ten journals: a guard
+proves a list read only when it is written `i < 1 or length xs < i` (httpd
+F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
+its counter at one and only adds to it, and its author writes the guard on
+the far end alone: `return acc if length xs < at`. The checker read that as
+a bound above and none below, so `xs[at]` could be a none, and the read had
+to be resolved where it could not miss.
+
+Inference now gives a parameter a floor when every value it can hold is in
+sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
+outside the program exists. It is never named except as the head of a call
+with an arity it declares, so it never travels as a value or a partial.
+Every call from outside the group passes an integer literal at that position.
+Every call from inside passes the parameter itself plus a literal that is not
+negative, and no arm rebinds the parameter. The floor is the least literal,
+and it enters each arm as a fact beside the ones guards add, so `in_range`
+reads `at >= 1` from it and the guard on the far end finishes the proof.
+
+`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
+refuses it with "this can be a none and `double` has no arm for it". Two
+error goldens pin where the floor stops: a loop entered at zero
+(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
+the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
+lambda, whose arguments come from out of sight, is refused as before.
+
+A proven read carries no none in inference's sets, so inference settles
+sooner where std/text reads one: compiling `text/uppercase` alone now takes
+223 expression visits, one fewer, and
+`tests/an_import_reads_what_the_program_names.rs` says so.
+
+What it does not reach: the about 130 reads #2088's named-none check refuses
+in the tree. With the floor under that check the count is still 130. Most of
+them read behind a bound passed through a boolean, `applied dir list at acc
+(at > length list)` with the read in the `false` arm, where the fact lives in
+the caller and no floor on the counter covers it.
+
+CI's rows. Every compile asks the call graph where each counter starts, and
+the tab compiles with the same front end: compile_instructions 24,230,258 ->
+24,488,495, entry_instructions 71,606,414 -> 72,335,545,
+library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
+-> 5,637,678, compile_allocs 13,789 -> 13,815 and
+browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
+corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
+401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
+native moved. Welfare fell by less than a hundredth, and the floor follows
+under the language exception: the ruling asks for index reads to be proven,
+and this proves more of them.
