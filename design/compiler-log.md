@@ -61,30 +61,6 @@ made, so a push onto a list runs the instructions it ran before.
 `text/bytes`, onto that answer again, and onto a slice of bytes. Main stops at
 the first line.
 
-## 2026-10-24 — an arm names only a type its file can see
-
-mal's port wrote `shown (held v)` in a module that cannot see `held`, a type
-private to another module (#2091, item 4; raytracer F15 is the same shape).
-`kanso check` passed it. The interpreter passed the arm over and printed "got
-nothing", and native stopped with "native backend: unknown type `held`", with
-no file or line.
-
-`patterns()` in `check_annotation_names` left this case to dispatch on
-purpose. Its comment said the obvious check, a constructor pattern whose type
-`program.types` does not hold, calls `std/list`'s `(entry k v)` wrong. Two
-more sets turned out to be needed. A type an import exports is named bare
-(`(file_not_found _)` from std/os in bc and datalog), and the file's imported
-globals hold it by its constructor. A type whose bare name a function of the
-file takes, as `fn step` beside std/list's `step` record, stays a type in a
-pattern; the import's enrolled twins hold that one. `unseen_ctor` now refuses
-a parameter pattern whose type is in none of those, is not built in, is not
-qualified, and is not `entry`. The caret sits on the first field, as the
-other constructor diagnostics' do.
-
-`errors/an_arm_takes_apart_a_type_nobody_declared` is the one-file case and
-`errors_module/an_arm_takes_apart_another_modules_private_type` is mal's;
-main passes both. The stdlib, the twenty ports and kq check as before.
-
 ## 2026-10-25 — a test that fails inside a library names the library's line
 
 From #2091's sixth item, chip8's port. A test whose helper handed
@@ -1790,3 +1766,38 @@ Four mutations turn the corpus red: the native restore made a no-op, the
 interpreter's addition taken out, and the tail call kept on either engine.
 
 CI's rows: ROWS.
+
+## 2026-10-26 — gavel: an err is born boxed
+
+Clay ruled #2087. Since #1884 a name bound to a call that can fail carries
+the err into the check, and a function it reaches must take it with an
+`(err _)` arm. Most of the arms the ports added only hand the err back:
+site wrote 68, toml 37 and bc 22, and bc's came in three rounds because each
+new arm made its callers need one. A bare err did two jobs that other things
+already do. For an outcome the caller handles there are `none` and markers,
+and for a failure that travels up there is the box.
+
+**The ruling.** Clay: "maybe you can unbox an error and pass it around but
+you can't generate an unboxed error." Every way of making an err makes a
+boxed failure. `err "…"` answers an effect that bubbles to a foreign `rescue`
+or the endpoint, and no expression produces a bare err. An err taken out of
+its box, by `rescue` or by a chain callback handed the failure, is an
+ordinary value: it can be passed, stored and dispatched on, and `effect` puts
+it back in a box. An outcome the caller is expected to handle is an ordinary
+value, `none` or a marker or a record carrying the reason. A plain form
+answers one of those, and its `!` form answers the boxed err with its
+message. A box cannot be used as a value without `.>`, so a failure still
+cannot slip into arithmetic.
+
+This supersedes part 2 of the 2026-09-15 gavel ("a bare err is data") and
+the bare err in the 2026-09-16 list of what a non-bang form answers. The
+issue's three options were declined in favour of this one.
+
+Owes, on #2087: `err "…"` answers a boxed failure on every engine, and the
+checker has no bare-err type left to track; each bare err in the library
+classified, a mistake becoming a box and an expected outcome becoming `none`
+or a marker on the plain form with the boxed message on the `!` form; an
+unboxed err behaving as a value on every engine, with goldens; the ports'
+hand-back arms removed, and #2088's migration using the `!` form at reads that
+must succeed; ch04, ch05 and appendix B rewritten where they describe bare
+errs as data, and the error goldens regenerated.
