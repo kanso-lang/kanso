@@ -23,48 +23,6 @@
 
 
 
-## 2026-10-25 — a guarded loop grows its record's list in place
-
-The fix for the `guarded` phase (#2089, second item). kanso#1926 lets a push
-through `st.events` write in place when the record is handed over and every
-mention of it in the arm reads a field. markdown's loop answered
-`return st if i > n` above the push, and that early `st` is a mention that
-reads no field, so the move was refused and every lap copied the list. The
-guard's early answer runs instead of the lines below it, never beside them.
-`FieldTally` now walks a guard's early answer apart from its rest, and when
-the early answer reads no field of the record it does not count against the
-move below. One that does read the field is counted as before.
-
-`tests/golden/mem/a_list_in_a_record_grows_under_a_guard` pushes 20,000
-times under such a guard: 14 allocations and 1,045,008 bytes, where main
-makes 51,816 and 9,160,000,672. markdown's reduction at 64,000 pushes runs in
-0.005 seconds natively, where main took 8.9.
-On this container the run program with the `guarded` phase falls from
-874,292,848 instructions to 831,115,619 and prints the same total; CI's rows
-follow.
-
-## 2026-10-25 — a copied map leaves its dead entries behind
-
-The fix for the `overwrite` phase (#2089, fourth item). A map keeps an append
-log of its pairs, overwrites included, and sorts and deduplicates it into a
-cached view on the first read. A put that cannot write in place copies the
-map, and `k_b_put` copied the whole log. chip8's memory, 16 keys read and
-overwritten once a lap, therefore carried every earlier lap's entries into
-each copy: 8,000 laps allocated 1,783,786,288 bytes and took 2.1 seconds
-natively.
-
-When the map's sorted view is current and shorter than its log, the copy now
-starts from the view, which holds each key's last value, and the new pair goes
-after it. The answer reads the same either way. The chip8 shape at 8,000 laps
-falls to 9,286,608 bytes and 0.015 seconds, and prints what the interpreter
-prints.
-
-`tests/golden/mem/a_map_overwritten_each_lap_is_copied_without_its_dead_entries`
-runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
-8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
-33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
-tally's map is copied from a view too.
-
 ## 2026-10-25 — a loop entered from its own lap stages by its own drift
 
 #2089's third item, the `reentered` phase. lox's statement loop re-enters
@@ -1956,3 +1914,115 @@ browser_compile_peak_bytes 843,030. The run program emits the arm too:
 emitted_other_lines 170,150, emitted_other_calls 20,540,
 emitted_other_branches 17,831 and emitted_other_defines 2,262, and text
 reads 5,622,043. Welfare rises 95.41 -> 95.52 and is banked.
+
+## 2026-10-26 — a string handed on round a cycle joins the corpus
+
+The corpus phase for the next fix, under the 2026-09-05 corpus-first gavel.
+A battery of core-library shapes at 4,000 and 16,000 elements on both engines
+found one cliff: natively, `regexp/replace_all` over 64,000 words took 49.8
+seconds, where the interpreter took 4.8. Three separate causes sit under it,
+each reduced to a loop of two groups that joins onto a string in place in the
+first group and hands it to the second:
+
+- `built` hands the join straight on, `built s (at + 1) "{acc}{s}x" n`.
+- `marked` binds the join below a `return acc if …` guard, and the guard holds
+  the statements after it.
+- `tagging` is also declared with one parameter, as regexp's `swapped` is.
+
+Natively, each hop copies the string built so far, so each loop costs the
+square of its length: 80,000 steps of `built` took 13.9 seconds, of `marked`
+11.4 and of `tagged` 2.3. The interpreter asks the same analysis and has the
+third cliff too, at 1.57 seconds for 80,000 steps of `tagged` against 0.10
+for 20,000, so `relayed 1500` joins the interpreted corpus: on this
+container it reads 580,418,637 with it and 563,943,189 with it reading
+nothing, a column of 16,475,448 (2.84%). The run program's module is
+`bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
+1,500 for the third. On this container the run program reads 837,824,222
+with it and 822,287,654 with it reading nothing, a column of 15,536,568
+(1.85%). The run program's allocation vein moves with it. Welfare re-bases
+each moved term once CI's rows are in, so the fix scores as a rise.
+
+CI's rows, against main at #2165. work_runbench reads 821,243,366 ->
+836,794,013 with the phase, and its allocation vein moves with the three
+loops: run_alloc_bytes 223,916,952 -> 282,819,050, run_allocs 1,581,593 ->
+1,596,597, run_arena_blocks 4 -> 5, run_arena_peak_bytes 4,718,608 ->
+5,767,184, run_spare_peak_bytes 2,621,456 -> 3,670,032, run_beat_iters
+178,072 -> 193,074, run_bytes_malloc 7,924 -> 13,926, run_evac_allocs 1,732
+-> 1,744, run_evac_bytes 4,602,176 -> 4,635,024, run_perm_allocs 103 -> 106,
+run_sh_str 16,769,952 -> 21,455,984, run_str_scan_bytes 18,352,322 ->
+18,358,325 and run_str_scans 1,885 -> 1,888. The interpreted corpus reads
+interp_instructions 562,047,199 -> 579,993,703, interp_allocs 631,738 ->
+653,569 and interp_peak_bytes 1,328,317 -> 1,339,129, and the tab compiles
+and runs it: browser_compile_instructions 348,471,187 -> 353,823,116,
+browser_compile_peak_bytes 843,030 -> 847,565, browser_run_instructions
+61,478,759 -> 64,252,748 and browser_run_peak_bytes 1,572,864 -> 2,621,440,
+a page more for the copies. Under the corpus-first gavel each moved welfare
+term's baseline is scaled so its ratio to what it reads holds, so the phase
+leaves welfare where it was and the fix below scores as a rise.
+
+## 2026-10-26 — a builder handed on round a cycle is still a builder
+
+The fix for the corpus phase above. A string joined onto itself is a builder,
+and the emitter converts a seed where it enters the group from outside, which
+copies it. Three hops counted as entering when the string they carried was
+the builder the join had just made:
+
+- A join handed straight to the next group as an argument. The emitter knew
+  a name bound to a join was carrying the builder, and asked nothing of the
+  join itself.
+- A join bound below a `return … if` guard. The guard holds the statements
+  after it, and the walk for names bound to a join read only the function's
+  own list.
+- A group whose name is also declared at another count. A call at another
+  count read as the group handed on as a value, called from somewhere no call
+  site describes, so no caller could be proved to hand the string over. A
+  call whose count is another declared group's calls that group, and only a
+  count no group has still counts as the group escaping.
+
+regexp's `replace_all` also handed `stepped_over` its accumulator beside the
+join made from it, so the accumulator was read twice and could not be joined
+in place; `stepped_over` never read it, and the argument is gone. Over 64,000
+words `replace_all` took 49.8 seconds natively and takes 0.15. Each of the
+three loops in `relayed` took between 2.3 and 13.9 seconds at 80,000 steps and
+takes under 0.01.
+
+Three mem fixtures pin the copies, each red with its own change undone and
+green with the other two undone:
+`a_join_handed_on_as_an_argument_is_still_a_builder` and
+`a_join_below_a_guard_is_still_a_builder` read 198 bytes where main reads
+5,337, and `a_name_at_two_counts_keeps_its_builder` 196 where main reads
+1,936. `a_digest_holds_every_block_it_walked` hands a join on as an argument
+too, and its vein falls: `allocs` 266 -> 123, `alloc_bytes` 18,657 ->
+14,090, `bytes_malloc` 81 -> 10 and `sh_str` 1,344 -> 192. Three regexp
+fixtures move too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes`
+106,537 (from 108,672) and `a_scan_that_finds_nothing_keeps_nothing`
+2,781,801 (from 2,783,936), both with the argument change alone;
+`a_split_stops_where_the_separator_does` reads 24,487 (from 24,639), and
+undoing either the argument change or the count change puts part of that
+back.
+
+CI's rows, against #2171's phase on main at #2165. The run program reads
+work_runbench 836,794,013 -> 825,009,976, 3,766,610 above main without the
+phase, which is the three loops' linear work. The interpreted corpus reads
+interp_instructions 579,993,703 -> 577,237,316: at 1,500 steps the copies
+were 2,756,387 of the phase's 17,946,504, and `tagged` now grows linearly on
+the interpreter as well, 0.04 s at 20,000 steps and 0.11 s at 80,000 where
+main takes 0.12 s and 1.25 s. interp_allocs reads 653,378 and interp_peak_bytes 1,356,556. Natively the run
+vein falls to run_alloc_bytes 224,043,124, run_allocs 1,582,921,
+run_bytes_malloc 7,850, run_evac_bytes 4,602,208 and run_sh_str 16,816,384,
+while run_beat_iters reads 193,074, run_perm_allocs 106, run_str_scan_bytes
+18,358,325 and run_str_scans 3,387, a scan per lap where the copy used to
+stand. regexp's argument change moves work_scanbench 274,220 -> 266,360 and
+work_digestbench 4,122,972 -> 4,103,700, and their veins with it:
+scan_allocs 149 -> 91, scan_alloc_bytes 11,069 -> 8,934, digest_allocs
+7,194 -> 7,051 and digest_alloc_bytes 697,073 -> 692,506. The three
+analyses cost the front end a little: compile_instructions 24,864,430 ->
+24,873,029, entry_instructions 73,696,160 -> 73,712,018,
+library_instructions 73,344,720 -> 73,349,447 and emit_instructions
+5,703,136 -> 5,715,797, and the tab's browser_compile_instructions reads
+353,650,925, browser_compile_peak_bytes 847,746 and browser_run_instructions
+64,598,033. The emitted rows grow
+with the new module: emitted_other_defines 2,262 -> 2,276,
+emitted_other_calls 20,540 -> 20,700, emitted_other_branches 17,831 ->
+17,925, emitted_other_lines 170,150 -> 171,135 and text 5,622,043 ->
+5,624,571. Welfare rises 95.52 -> 95.55 and is banked.

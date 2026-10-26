@@ -2969,6 +2969,11 @@ impl<'a> Backend<'a> {
                 span.line as usize,
                 span.col as usize,
             )),
+            Some(Expr::Str(_, span)) => self.builder_joins.contains(&(
+                f.file.clone(),
+                span.line as usize,
+                span.col as usize,
+            )),
             _ => false,
         };
         let entering = self.builder_params.contains(callee, arity, i)

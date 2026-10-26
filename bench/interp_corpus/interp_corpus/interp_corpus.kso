@@ -21,7 +21,7 @@ type bucket
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
-  texts = "{grown 3000} {scanned 1000} {lasted 70}"
+  texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
 
 fn rounds n
@@ -216,3 +216,23 @@ fn summed xs n acc
 
 fn lasted n
   summed (span n) n 0
+
+# A string joined onto itself round a cycle of two groups, the second also
+# declared with one parameter. A call at that other count read as the group
+# handed on as a value, so the join could not take the string over and copied
+# it on every lap.
+fn tagged s at acc n
+  tagging s at acc n (at > n)
+
+fn tagging _ _ acc _ true
+  acc
+
+fn tagging s at acc n false
+  marked = "{acc}{tagging s}"
+  tagged s (at + 1) marked n
+
+fn tagging s
+  "[{s}]"
+
+fn relayed n
+  length (tagged "ab" 1 "" n)
