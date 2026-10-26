@@ -1873,9 +1873,9 @@ the build, since a door missing from the list would be called on the C
 convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
 watches `cargo build` go red.
 
-CI's rows, against main at #2162. The derived door list is in the runtime's
+CI's rows, against main at #2154. The derived door list is in the runtime's
 include order, and `through_doors` checks doors in list order, so
-`emit_instructions` reads 5,725,239, 224 fewer. Compiling the runtime reads
+`emit_instructions` reads 5,687,958, 224 fewer. Compiling the runtime reads
 the edited comment in `core.c`, which moves `codegen_instructions_dev` to
 116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
 fewer). Both read as layout of the clang input, since the program's code
