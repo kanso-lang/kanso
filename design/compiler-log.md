@@ -23,141 +23,6 @@
 
 
 
-## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
-
-The 2026-10-12 entry "a name the author declared wins over a builtin and an
-import" fixed three reductions from the ports. The re-sit found two more
-paths the rule did not reach, from three ports.
-
-- **Native code, a direct call.** ugit and sat declare `fn step a b` and
-  import std/list, which exports a record `step` and enrols it under the
-  bare name. Under `kanso play`, native code built the record:
-  `print "{step 1 2}"` printed `list/step 1 2`, where the interpreter
-  printed `3`. The 10-12 spec passed the function as a value
-  (`apply counting`), which already worked; a call named directly reached
-  `emit_call`'s constructor branch first. The branch now asks
-  `constructs`, which gives an enrolled type way to a group the program
-  declares, as the interpreter's `callee` does. std/list's own
-  constructions are unchanged: `iterate`, `naturals` and `fold`, which
-  build `step` and `counting` records, print the same on both engines
-  with a local `step` and `counting` in the file.
-- **The interpreter, a constant.** make declares `fn read_line at s`, and
-  std/io exports `read_line`, a constant over `builtin_read_line`. The
-  interpreter evaluates a call's head as a value, and `resolve` took the
-  enrolled constant, and behind it the described builtin of the same
-  name, before the file's own group. The call stopped with "`<io>` is not
-  callable", and 57 of make's 82 fixtures went red on that engine. A group
-  with an arm the program declares now wins both rungs.
-- **Both engines, a type.** mustache declares `type env` and imports std/os,
-  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
-  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
-  the bare name to `os/env`, because the only declarations it counted were
-  functions, and `apply_wrappers` sent that on to `builtin_env`. The
-  interpreter printed `<io>`; native code still built the record, by a path
-  this did not reach. Both passes now leave a name the program declares as a
-  type, and each alone leaves the interpreter printing `<io>`.
-
-`tests/golden/play/a_function_named_like_an_imported_type` gains the direct
-call, and main prints `2 list/counting 3 4` for it natively.
-`tests/golden/play/a_function_named_like_an_imported_constant` is make's
-shape; main stops it on the interpreter.
-`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
-main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
-on both engines, and the walk over the play corpus now reads twelve goldens.
-
-One shape from the same family is not fixed here. kv's module form, a
-function named `read_line` passed by value to `list/fold` in a module that
-imports std/io, stops every engine with "`<io>` is not callable", on main and
-on this branch. The module's own name is lost in `qualify`, a path none of
-these fixes touch.
-
-CI's rows. The front end asks the two new questions of every program it
-compiles, and the tab compiles with the same front end:
-compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
--> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
-emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
-385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
-Nothing at run time moved. Welfare fell by less than a hundredth, and the
-floor follows: this makes the engines agree, which the welfare script's own
-header puts ahead of the score.
-
-## 2026-10-24 — a record returned by value keeps its shape across a pipe
-
-#2091's first item, from the mustache port. `half` answers a two-field
-record or an err, and escape analysis returns a record of that shape by
-value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
-of the value's tag, a call of `shown` on the success path, and a phi joining
-the two paths as `%KValue`s. The failure edge named the value as it came,
-three words, and clang refused the module: "'%t1' defined with type
-'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
-
-The boxing rewrite that turns a by-value record into a `%KValue` wherever a
-line names it as one reads `%KValue %t1`, and a phi's operand list names its
-values bare, so the rewrite never reached this line. The pipe now boxes the
-value for the failure edge before it branches, and boxes the call's answer
-when that comes back by value too. The call itself still takes the three
-words, since `shown` takes them by value.
-
-`micro/a_record_returned_by_value_is_piped_on` runs the success and the
-failure paths. Main stops it in clang; every engine now prints `4/2` and
-`failed: zero`.
-
-CI's rows: the emitter writes the box where it wrote nothing, so
-emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
-emits the same way, takes browser_compile_instructions from 216,735,094 to
-216,735,256. No benchmark builds a pipe of that shape, and nothing at run
-time moved.
-
-## 2026-10-24 — a loop counter knows where it starts
-
-The ports' re-sit counted the same complaint in about ten journals: a guard
-proves a list read only when it is written `i < 1 or length xs < i` (httpd
-F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
-its counter at one and only adds to it, and its author writes the guard on
-the far end alone: `return acc if length xs < at`. The checker read that as
-a bound above and none below, so `xs[at]` could be a none, and the read had
-to be resolved where it could not miss.
-
-Inference now gives a parameter a floor when every value it can hold is in
-sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
-outside the program exists. It is never named except as the head of a call
-with an arity it declares, so it never travels as a value or a partial.
-Every call from outside the group passes an integer literal at that position.
-Every call from inside passes the parameter itself plus a literal that is not
-negative, and no arm rebinds the parameter. The floor is the least literal,
-and it enters each arm as a fact beside the ones guards add, so `in_range`
-reads `at >= 1` from it and the guard on the far end finishes the proof.
-
-`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
-refuses it with "this can be a none and `double` has no arm for it". Two
-error goldens pin where the floor stops: a loop entered at zero
-(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
-the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
-lambda, whose arguments come from out of sight, is refused as before.
-
-A proven read carries no none in inference's sets, so inference settles
-sooner where std/text reads one: compiling `text/uppercase` alone now takes
-223 expression visits, one fewer, and
-`tests/an_import_reads_what_the_program_names.rs` says so.
-
-What it does not reach: the about 130 reads #2088's named-none check refuses
-in the tree. With the floor under that check the count is still 130. Most of
-them read behind a bound passed through a boolean, `applied dir list at acc
-(at > length list)` with the read in the `false` arm, where the fact lives in
-the caller and no floor on the counter covers it.
-
-CI's rows. Every compile asks the call graph where each counter starts, and
-the tab compiles with the same front end: compile_instructions 24,230,258 ->
-24,488,495, entry_instructions 71,606,414 -> 72,335,545,
-library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
--> 5,637,678, compile_allocs 13,789 -> 13,815 and
-browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
-corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
-401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
-native moved. Welfare fell by less than a hundredth, and the floor follows
-under the language exception: the ruling asks for index reads to be proven,
-and this proves more of them.
-
 ## 2026-10-24 — a field read is asked the none question the same way on every route
 
 `kanso check m` passed a module that `kanso test m` refused (#2091, item 3).
@@ -1706,6 +1571,61 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
+
+Clay ruled #2085. Every function in a module is visible from every file of
+it, so a local in one file that reuses a name declared in another file
+shadows a callable name, which is what no-shadowing forbids. Eighteen of the
+twenty ports met it as action at a distance: a declaration added in `b.kso`
+refused a parameter in `a.kso`, and the refusal pointed at the parameter
+without naming the declaration.
+
+**The ruling.** The rule stands across files. The refusal names the
+declaration it collides with, by file and line, so the fix is a rename made
+knowing what clashed. Letting a local reuse a name declared only in another
+file was declined, because inside the local's scope the name would mean two
+things. File-scoped private names were declined, because they would end the
+sharing of helpers between a module's files.
+
+Owes, on #2085: the refusal names the colliding declaration's file and line;
+an error golden for a two-file module.
+
+## 2026-10-25 — gavel: `put` writes a list at an index
+
+Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
+`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
+list, so the ports built vectors from maps with integer keys and paid for
+keys they did not need.
+
+**The ruling.** `put xs i v` answers the list with element `i` replaced,
+1-based like `xs[i]`. An index outside the list answers `none`, as a read
+there does. A list nothing else holds is written in place, as a map already
+is.
+
+Owes, on #2086: `put` on a list on every engine; the in-place write under
+the existing uniqueness analysis; the checker accepting a list for `put`, and
+refusing at check what it refuses at run time (diff F9, inflate F8); micro and
+mem goldens; appendix B.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
 
 ## 2026-10-25 — a list walked by its rest joins the corpus
 

@@ -109062,60 +109062,6 @@ integers of eighteen digits or fewer, ahead of the checked `i128` loop.
 `browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
 ratchet row of its own.
 
-## 2026-10-24 — the lexer reads a line before it walks it
-
-The entry compile spent 9,277,662 instructions in the lexer, and about a
-quarter of that came before any token: the work `lex` does on each raw line
-to decide what kind of line it is. Five pieces of it are cheaper now, with
-every diagnostic unchanged.
-
-- The source is split into lines a word at a time, with
-  `compare::byte_from`, where `str::lines` called memchr once a line. A
-  `\r` before a newline still comes off, and one at the end of a file
-  without a newline still stays.
-- The tab test is `compare::find` on the bytes. `str::find('\t')` went
-  through the char searcher and a `bcmp` for every line.
-- The line is trimmed once, where it was trimmed twice.
-- The width cap counts a line's characters only when its bytes exceed the
-  cap, since a character is at least one byte.
-- The text-block opener and the span opener each walked every byte of a
-  code line, tracking quotes and stopping at `#`. A line with no quote and
-  no `#` has no text block and its span opener is its last byte, so one
-  scan for either byte, a word at a time, answers both for most lines.
-
-Measured in this container at the tip of the lines-a-word-at-a-time branch:
-`entry_instructions` 74,133,494 -> 71,498,670 (-3.55%) and
-`compile_instructions` 25,077,347 -> 24,192,780 (-3.53%).
-
-The ratchet row `lex_lines` puts `str::lines` back and reads
-`compile_instructions` 24,363,416; `lex_openers` calls no line plain and
-reads 24,561,382.
-
-CI's rows, all taken into the goldens: `entry_instructions` 74,133,494 ->
-71,498,670 (-3.55%), `compile_instructions` 25,077,347 -> 24,192,780
-(-3.53%), `library_instructions` 73,794,737 -> 71,147,167 (-3.59%),
-`browser_compile_instructions` 218,810,755 -> 216,626,340 (-1.00%), since
-the tab lexes the same way, and `emit_instructions` 5,605,884 -> 5,603,524,
-whose process lexes its program before it emits. Nothing else moved.
-Welfare 93.27 -> 93.28, banked.
-
-What is left in the lexer is `lex_line` itself, about 1,150 instructions a
-code line, most of it a scanner that decodes each line into a `Vec<char>`
-before it reads a token. A scanner over bytes would touch every token
-method and the column arithmetic, so it is a change of its own.
-
-Measured and set aside: the scanner reading an ascii line's bytes in place
-instead of widening them into its `Vec<char>`, through accessors that test
-`ascii` at every read. The widening costs 348,608 instructions of the entry
-compile, and the test at every character cost more: `entry_instructions`
-71,498,670 -> 71,603,369 and `compile_instructions` 24,192,780 ->
-24,224,312.
-
-Measured and set aside: an unchecked `u64` sum for the tab translator's
-integers of eighteen digits or fewer, ahead of the checked `i128` loop.
-`browser_compile_instructions` fell 187,947 (0.09%), too little to carry a
-ratchet row of its own.
-
 ## 2026-10-24 — kq under the pin to 29dafd0f
 
 kq's instruction rows rose when its pin moved to 29dafd0f, the string index
@@ -109196,3 +109142,138 @@ runbench's to 762,112, and text, the sum over fourteen binaries, from
 5,462,380 to 5,498,444. Linking the codegen corpus compiles the larger runtime:
 codegen_instructions_dev 116,426,119 -> 116,447,795 and
 codegen_instructions_release 370,142,417 -> 370,219,514. Nothing else moved.
+
+## 2026-10-24 — the author's own name wins on the paths the 10-12 fix missed
+
+The 2026-10-12 entry "a name the author declared wins over a builtin and an
+import" fixed three reductions from the ports. The re-sit found two more
+paths the rule did not reach, from three ports.
+
+- **Native code, a direct call.** ugit and sat declare `fn step a b` and
+  import std/list, which exports a record `step` and enrols it under the
+  bare name. Under `kanso play`, native code built the record:
+  `print "{step 1 2}"` printed `list/step 1 2`, where the interpreter
+  printed `3`. The 10-12 spec passed the function as a value
+  (`apply counting`), which already worked; a call named directly reached
+  `emit_call`'s constructor branch first. The branch now asks
+  `constructs`, which gives an enrolled type way to a group the program
+  declares, as the interpreter's `callee` does. std/list's own
+  constructions are unchanged: `iterate`, `naturals` and `fold`, which
+  build `step` and `counting` records, print the same on both engines
+  with a local `step` and `counting` in the file.
+- **The interpreter, a constant.** make declares `fn read_line at s`, and
+  std/io exports `read_line`, a constant over `builtin_read_line`. The
+  interpreter evaluates a call's head as a value, and `resolve` took the
+  enrolled constant, and behind it the described builtin of the same
+  name, before the file's own group. The call stopped with "`<io>` is not
+  callable", and 57 of make's 82 fixtures went red on that engine. A group
+  with an arm the program declares now wins both rungs.
+- **Both engines, a type.** mustache declares `type env` and imports std/os,
+  whose `env` forwards to a builtin. Two front-end passes rewrote the file's
+  `env "x"` before either engine saw it: `canonicalize_bare_aliases` sent
+  the bare name to `os/env`, because the only declarations it counted were
+  functions, and `apply_wrappers` sent that on to `builtin_env`. The
+  interpreter printed `<io>`; native code still built the record, by a path
+  this did not reach. Both passes now leave a name the program declares as a
+  type, and each alone leaves the interpreter printing `<io>`.
+
+`tests/golden/play/a_function_named_like_an_imported_type` gains the direct
+call, and main prints `2 list/counting 3 4` for it natively.
+`tests/golden/play/a_function_named_like_an_imported_constant` is make's
+shape; main stops it on the interpreter.
+`tests/golden/play/a_type_named_like_an_imported_function` is mustache's, and
+main prints `<io> 0` for it on the interpreter. `play_verb.rs` runs all three
+on both engines, and the walk over the play corpus now reads twelve goldens.
+
+One shape from the same family is not fixed here. kv's module form, a
+function named `read_line` passed by value to `list/fold` in a module that
+imports std/io, stops every engine with "`<io>` is not callable", on main and
+on this branch. The module's own name is lost in `qualify`, a path none of
+these fixes touch.
+
+CI's rows. The front end asks the two new questions of every program it
+compiles, and the tab compiles with the same front end:
+compile_instructions 24,192,780 -> 24,230,258, entry_instructions 71,498,670
+-> 71,606,414, library_instructions 71,147,167 -> 71,254,677,
+emit_instructions 5,603,524 -> 5,606,362, interp_instructions 385,492,276 ->
+385,500,095 and browser_compile_instructions 216,626,340 -> 216,735,094.
+Nothing at run time moved. Welfare fell by less than a hundredth, and the
+floor follows: this makes the engines agree, which the welfare script's own
+header puts ahead of the score.
+
+## 2026-10-24 — a record returned by value keeps its shape across a pipe
+
+#2091's first item, from the mustache port. `half` answers a two-field
+record or an err, and escape analysis returns a record of that shape by
+value, as the three words of `%parsed`. `half 4 .> shown` lowers to a test
+of the value's tag, a call of `shown` on the success path, and a phi joining
+the two paths as `%KValue`s. The failure edge named the value as it came,
+three words, and clang refused the module: "'%t1' defined with type
+'%parsed' but expected '%KValue'". The interpreter printed `4/2`.
+
+The boxing rewrite that turns a by-value record into a `%KValue` wherever a
+line names it as one reads `%KValue %t1`, and a phi's operand list names its
+values bare, so the rewrite never reached this line. The pipe now boxes the
+value for the failure edge before it branches, and boxes the call's answer
+when that comes back by value too. The call itself still takes the three
+words, since `shown` takes them by value.
+
+`micro/a_record_returned_by_value_is_piped_on` runs the success and the
+failure paths. Main stops it in clang; every engine now prints `4/2` and
+`failed: zero`.
+
+CI's rows: the emitter writes the box where it wrote nothing, so
+emit_instructions goes from 5,606,362 to 5,606,408, and the tab, which
+emits the same way, takes browser_compile_instructions from 216,735,094 to
+216,735,256. No benchmark builds a pipe of that shape, and nothing at run
+time moved.
+
+## 2026-10-24 — a loop counter knows where it starts
+
+The ports' re-sit counted the same complaint in about ten journals: a guard
+proves a list read only when it is written `i < 1 or length xs < i` (httpd
+F3, make F4, sat F6, xsv F1, regex F3, diff F3). A loop over a list starts
+its counter at one and only adds to it, and its author writes the guard on
+the far end alone: `return acc if length xs < at`. The checker read that as
+a bound above and none below, so `xs[at]` could be a none, and the read had
+to be resolved where it could not miss.
+
+Inference now gives a parameter a floor when every value it can hold is in
+sight (`counter_floors` in src/infer.rs). The group is not pub, so no caller
+outside the program exists. It is never named except as the head of a call
+with an arity it declares, so it never travels as a value or a partial.
+Every call from outside the group passes an integer literal at that position.
+Every call from inside passes the parameter itself plus a literal that is not
+negative, and no arm rebinds the parameter. The floor is the least literal,
+and it enters each arm as a fact beside the ones guards add, so `in_range`
+reads `at >= 1` from it and the guard on the far end finishes the proof.
+
+`micro/a_loop_counter_started_at_one_reads_in_range` is the shape, and main
+refuses it with "this can be a none and `double` has no arm for it". Two
+error goldens pin where the floor stops: a loop entered at zero
+(`errors/a_loop_counter_started_at_zero_can_miss`) and a counter rebound in
+the arm (`errors/a_rebound_counter_loses_its_floor`). A loop called from a
+lambda, whose arguments come from out of sight, is refused as before.
+
+A proven read carries no none in inference's sets, so inference settles
+sooner where std/text reads one: compiling `text/uppercase` alone now takes
+223 expression visits, one fewer, and
+`tests/an_import_reads_what_the_program_names.rs` says so.
+
+What it does not reach: the about 130 reads #2088's named-none check refuses
+in the tree. With the floor under that check the count is still 130. Most of
+them read behind a bound passed through a boolean, `applied dir list at acc
+(at > length list)` with the read in the `false` arm, where the fact lives in
+the caller and no floor on the counter covers it.
+
+CI's rows. Every compile asks the call graph where each counter starts, and
+the tab compiles with the same front end: compile_instructions 24,230,258 ->
+24,488,495, entry_instructions 71,606,414 -> 72,335,545,
+library_instructions 71,254,677 -> 72,011,050, emit_instructions 5,606,408
+-> 5,637,678, compile_allocs 13,789 -> 13,815 and
+browser_compile_instructions 216,735,256 -> 218,080,833. The interpreter's
+corpus asked the allocator for 52 more blocks (interp_allocs 401,539 ->
+401,591) and ran 401 fewer instructions (385,500,095 -> 385,499,694). Nothing
+native moved. Welfare fell by less than a hundredth, and the floor follows
+under the language exception: the ruling asks for index reads to be proven,
+and this proves more of them.
