@@ -5,7 +5,8 @@ use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, INT, LIST, MAP, NON
 use crate::name::Name;
 use std::fmt::Write as _;
 
-const K_TRUE: i64 = 2;
+// The runtime's tags and doors, read from its C by build.rs.
+include!(concat!(env!("OUT_DIR"), "/runtime_abi.rs"));
 
 /// What an `if`'s condition left behind: the blocks that branched straight to
 /// the merge because the condition was a failure, each with the value it
@@ -13,17 +14,6 @@ const K_TRUE: i64 = 2;
 struct Cond {
     failed: Vec<(String, String)>,
 }
-const K_FALSE: i64 = 3;
-const K_NONE: i64 = 4;
-/// A succeeded effect's yield; the runtime's newest tag, after K_SUB.
-const K_DONE: i64 = 16;
-/// An int past a machine word, in the arena. Ruled 2026-10-07.
-const K_BIG: i64 = 17;
-/// An err out of its box, an ordinary value (#2087). The runtime's last tag.
-const K_ERRV: i64 = 18;
-const K_ERR: i64 = 5;
-const K_DESC: i64 = 8;
-
 /// What an arm's discriminating pattern tests, when a switch on the value's tag
 /// can express it. Records are `Rec` rather than a tag because they all carry
 /// tag 7 and are told apart by the id and field count inside.
@@ -2626,20 +2616,16 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 /// that returned. Every module paid for the inliner to open the call, and the
 /// dev tier, which does no other optimising, kept the widening and the second
 /// compare as well. The test is the one the runtime's `k_not_failure` makes,
-/// and `tests/the_err_tag_is_the_runtime_s.rs` holds the number to the
-/// runtime's.
+/// against the `K_ERR` build.rs reads from the runtime's enum.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     let tag = inline_tag(f, value);
     if let Ok(known) = tag.parse::<i64>() {
-        return (known != K_ERR_TAG).to_string();
+        return (known != K_ERR).to_string();
     }
     let ok = f.tmp();
-    f.line_fmt(format_args!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
+    f.line_fmt(format_args!("{ok} = icmp ne i64 {tag}, {K_ERR}"));
     ok.to_string()
 }
-
-/// The runtime's `K_ERR`, the sixth tag in its enum.
-pub const K_ERR_TAG: i64 = 5;
 
 impl<'a> Backend<'a> {
     /// A group's declaration indices, read out of the index rather than

@@ -23,60 +23,6 @@
 
 
 
-## 2026-10-25 — a test that fails inside a library names the library's line
-
-From #2091's sixth item, chip8's port. A test whose helper handed
-`text/split` a none failed inside std/text, and `kanso test` printed
-"split takes two strings" with `--> m/m_test.kso:38:3`, std/text's line
-number under the test file's path. In the port, line 38 of the test file was
-a different test, one that had passed. The runner rendered every failure's
-span against the test file's own source.
-
-A failure that knows its place now prints it the way `run` and `play` do,
-`failed in text/split at std/text/text.kso:38`, under the 2026-10-15 ruling
-(#1975) that a failure names the line it happened on. A failure with no place
-keeps the rendered span.
-
-`tests/golden/test_verb/fails_in_std` is the reduction, and
-`a_test_failing_inside_a_library_names_the_librarys_line` in
-`tests/test_verb.rs` pins both streams.
-
-## 2026-10-25 — a binding refused for another file's name says which file
-
-#2085 asks whether a local may reuse a name declared only in another file of
-its module, and notes that the message is cloud's to fix whatever the
-ruling. rg's port had `` `escaped` is already a declaration; rename the
-binding `` with the caret in `m/a.kso` and the declaration in `b.kso`, which
-the message did not name. The module path now looks the name up in the
-module's other files when it reports one of these, and says where it is:
-`` `escaped` is already a declaration, in m/b.kso at line 1; rename the
-binding ``. The lookup runs only on a refused compile.
-
-`errors_module/a_binding_named_like_a_declaration_in_another_file` is rg's
-shape, and main prints the message without the place.
-
-## 2026-10-25 — a function's arms split across files are counted together
-
-From #2090, toml's port. A module's files share their declarations, and
-toml's `lookup` had a 2-argument arm in one file that called a 3-argument
-arm in the next. The per-file check counted only the arms in the file it was
-reading and refused the call with "no 3-argument arm of `lookup` (arms take
-2)". The same two arms in one file ran.
-
-The module path now records, for each function its files declare, whether
-more than one file declares arms of it, and the per-file arity check leaves
-such a name to the merged check, which sees every arm. A count no file's arms
-take is still refused there, and the message names every arity: "no
-4-argument arm of `lookup` (arms take 2, 3)", where the per-file check had
-said "arms take 2".
-
-`tests/arms_split_across_files.rs` runs toml's shape on both engines and
-pins the refusal; main fails both.
-
-The module path now counts, per name, which files declare it. The rows are
-counted with the batch this landed in, at the end of "an import stays in the
-file that writes it".
-
 ## 2026-10-25 — a field is read without importing its owner, on every path
 
 From #2090, regex's port. Chapter 03 says nothing has to be imported to read
@@ -1857,6 +1803,68 @@ hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
 
+## 2026-10-26 — the linearity fixpoints drop an entry as its check fails
+
+The linearity analysis settles three fixpoints over parameters, record fields
+and map elements. Each collected a lap's refusals and applied them at the
+end, so a refusal that cascades through a chain of calls took a lap per link:
+`field_fixpoint` ran 18 laps on the interpreted corpus, re-asking the 54
+records that had settled by the fourth, and `drop_elems` re-ran the main
+fixpoint after each of its laps, nine runs that found nothing new. Each entry
+now goes as soon as its check fails, so the next entry asked already sees it
+gone. A check only turns from yes to no as the sets lose entries, so a no read
+against a larger set is a no against the fixpoint, and the order cannot
+change what is left. The emitted IR is byte-identical on 430 programs: the
+examples, the micro corpus and every benchmark.
+
+CI's rows, against main at #2162. The compile rows fall: compile_instructions
+25,156,569 -> 25,048,015, entry_instructions 73,811,949 -> 73,539,324,
+library_instructions 73,482,714 -> 73,209,499, emit_instructions 5,725,463 ->
+5,688,182 and browser_compile_instructions 360,520,776 -> 344,137,759. The
+interpreter runs the analysis before each program, so interp_instructions
+falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
+the lists of entries a drop collects while it walks a set it is changing.
+Welfare rises 95.38 -> 95.40 and the rise is banked.
+
+## 2026-10-26 — the runtime's tags and doors are read from its C
+
+Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
+the tag enum and the functions defined with `K_DOORCC` out of the joined
+text into `$OUT_DIR/runtime_abi.rs`. The seven tags `codegen.rs` restated,
+`K_ERR_TAG`, the door list in `codegen/module.rs`, and the two specs that
+held those copies to the C are gone. A door the reader cannot parse stops
+the build, since a door missing from the list would be called on the C
+convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
+watches `cargo build` go red.
+
+CI's rows, against main at #2154. The derived door list is in the runtime's
+include order, and `through_doors` checks doors in list order, so
+`emit_instructions` reads 5,687,958, 224 fewer. Compiling the runtime reads
+the edited comment in `core.c`, which moves `codegen_instructions_dev` to
+116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
+fewer). Both read as layout of the clang input, since the program's code
+is unchanged, and no runtime row moved.
+
+## 2026-10-26 — a guard inside a bound branch leaves the branch natively
+
+#2166. `return x if c` inside an `if` branch that is bound to a name leaves
+the branch: the interpreter binds the name to the early answer and the
+function goes on. The native backend refused to build any such program with
+"a return guard sits only in tail position", although `kanso check` accepts
+it, so the engines disagreed. The emitter now reads a guard for its value as
+it reads an `if`: the condition asked as a question, the early answer one arm,
+the rest of the block the other, and a phi over the two and any failure the
+condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
+#2166's program with the guard firing and not, in both branches, and prints
+`11 10` and `36 18` on both engines; on main the native build stops.
+
+CI's rows, against main at #2149. No program in the corpora has the shape, so
+nothing runtime moves, and only the emitter's new arm shows, natively and in
+the tab: emit_instructions 5,687,958 -> 5,688,137 and
+browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
+than a hundredth, and the floor is lowered by exactly that, since this makes native
+build a program the language allows.
+
 ## 2026-10-26 — an err is born boxed
 
 The build of the #2087 gavel. `err "…"` and every builtin that fails answer
@@ -1914,33 +1922,35 @@ Open: the tree's scripts still carry dozens of `e@(err _)` hand-back arms
 that no longer fire; the ports carry hundreds; #2088's migration can now use
 the bang forms at reads that must succeed.
 
-CI's rows, against main at #2162. The checker loses the raise analysis, so
-compiling gets cheaper: `compile_instructions` reads 24,635,159,
-`entry_instructions` 72,652,790, `library_instructions` 72,313,664 and
+CI's rows, against main at #2149. The checker loses the raise analysis, so
+compiling gets cheaper: `compile_instructions` reads 24,604,939,
+`entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
 `compile_allocs` 13,930. The interpreter no longer carries the raised bit:
-`interp_instructions` 569,363,062, `interp_allocs` 627,764 and
+`interp_instructions` 560,993,797, `interp_allocs` 630,584 and
 `interp_peak_bytes` 1,306,819. In the tab, `browser_compile_instructions`
-reads 356,258,990, `browser_compile_peak_bytes` 832,433 and
+reads 339,955,918, `browser_compile_peak_bytes` 832,433 and
 `browser_run_instructions` 61,425,132. The decoders lost their hand-back
 arms, so the emitter writes less: `emitted_lines` 14,150, `emitted_calls`
 1,519, `emitted_branches` 1,293, `emitted_other_lines` 168,876,
-`emitted_other_calls` 20,311, `emitted_other_branches` 17,723, `text`
-5,619,835 and `emit_instructions` 5,724,972, and compiling it moves
-`codegen_instructions_dev` to 116,733,878 and `codegen_instructions_release`
-to 371,551,583. `emitted_defines` rises to 160 and `emitted_other_defines`
-to 2,243 because `json/decode!` and the bang conversions are functions of
-their own beside the plain forms; encodebench and scanbench each lose one
-define with their hand-back helper. The run rows: `work_jsonbench`
-549,333,568, `work_runbench` 819,572,053, `work_oneshot` 9,978,432,
-`work_livebench` 938,653,995 and `work_scanbench` 274,243 fall.
-`work_widebench` rises to 28,685,100, 80,002 more: five for each element
-of its 16,000, and two besides, for the `written` arm the chunk now passes,
-since `text/utf8` can answer none. `work_encodebench` rises to 2,335,339,266
-(143,306 more, 0.006%) and `work_readbench` to 4,583,165 (7 more); nothing
-has isolated either, and they are recorded as moves of that size. The mem
-sample `a_failure_crosses_a_beat_carry_in_two_words` imports std/testing to
-read its own failure, and the import costs six allocations of 32 bytes:
-`a_failure_crosses_a_beat_carry_in_two_words_allocs` reads 1,009 and
-`a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
+`emitted_other_calls` 20,311, `emitted_other_branches` 17,723 and `text`
+5,619,835, and compiling it moves `codegen_instructions_dev` to 116,733,865
+and `codegen_instructions_release` to 371,551,519. `emit_instructions` rises
+to 5,689,680, 1,722 more; against main at #2162 it fell 491, and #2154's
+fixpoints, which drop an entry as its check fails, sit between the two
+readings, so the rise is recorded unisolated. `emitted_defines` rises to 160
+and `emitted_other_defines` to 2,243 because `json/decode!` and the bang
+conversions are functions of their own beside the plain forms; encodebench
+and scanbench each lose one define with their hand-back helper. The run
+rows: `work_jsonbench` 549,333,568, `work_runbench` 819,572,053,
+`work_oneshot` 9,978,432, `work_livebench` 938,653,995 and `work_scanbench`
+274,243 fall. `work_widebench` rises to 28,685,100, 80,002 more: five for
+each element of its 16,000, and two besides, for the `written` arm the chunk
+now passes, since `text/utf8` can answer none. `work_encodebench` rises to
+2,335,339,266 (143,306 more, 0.006%) and `work_readbench` to 4,583,165 (7
+more); nothing has isolated either, and they are recorded as moves of that
+size. The mem sample `a_failure_crosses_a_beat_carry_in_two_words` imports
+std/testing to read its own failure, and the import costs six allocations of
+32 bytes: `a_failure_crosses_a_beat_carry_in_two_words_allocs` reads 1,009
+and `a_failure_crosses_a_beat_carry_in_two_words_alloc_bytes` 64,352.
 `an_err_as_pattern_keeps_a_carried_slot_unboxed` was rewritten, as above,
 and reads 3 allocs and 112 bytes.
