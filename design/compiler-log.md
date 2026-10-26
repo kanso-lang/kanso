@@ -1925,7 +1925,9 @@ the bang forms at reads that must succeed.
 CI's rows, against main at #2168. The checker loses the raise analysis, so
 compiling gets cheaper: `compile_instructions` reads 24,604,939,
 `entry_instructions` 72,571,754, `library_instructions` 72,232,245 and
-`compile_allocs` 13,930. The interpreter no longer carries the raised bit:
+`compile_allocs` 13,930, and the front end holds less while it checks:
+`compile_peak_bytes` 607,213 -> 598,492, and `front_end_visits` reads 7,397
+where it read 7,373. The interpreter no longer carries the raised bit:
 `interp_instructions` 560,993,797, `interp_allocs` 630,584 and
 `interp_peak_bytes` 1,306,819. In the tab, `browser_compile_instructions`
 reads 339,964,747, `browser_compile_peak_bytes` 832,433 and
