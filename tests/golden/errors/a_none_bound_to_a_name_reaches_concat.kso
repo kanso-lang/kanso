@@ -1,0 +1,9 @@
+# `list/concat` has no `none` arm, and a read bound to a name carries its none
+# to it (#2088).
+import "std/list"
+
+fn joined rows
+  row = rows[3]
+  list/to_list (list/concat row [1])
+
+pub play = print "{joined [[1] [2]]}"

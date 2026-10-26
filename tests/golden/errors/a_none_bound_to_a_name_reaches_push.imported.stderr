@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `push` does not take one — resolve it here (module a_none_bound_to_a_name_reaches_push)
+  --> a_none_bound_to_a_name_reaches_push.kso:5:8
+   5 |   push row 1
+              ^

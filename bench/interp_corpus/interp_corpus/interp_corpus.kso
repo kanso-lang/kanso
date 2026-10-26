@@ -21,7 +21,7 @@ type bucket
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
-  texts = "{grown 3000} {scanned 1000} {relayed 1500}"
+  texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
 
 fn rounds n
@@ -206,6 +206,16 @@ fn walked xs acc n
 
 fn rested n
   walked (span n) 0 n
+
+# A loop that reads its list's last element on every step with `list/last`.
+fn summed _ 0 acc
+  acc
+
+fn summed xs n acc
+  summed xs (n - 1) (acc + list/last xs)
+
+fn lasted n
+  summed (span n) n 0
 
 # A string joined onto itself round a cycle of two groups, the second also
 # declared with one parameter. A call at that other count read as the group

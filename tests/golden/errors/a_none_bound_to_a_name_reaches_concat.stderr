@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `list/concat` has no arm for it — resolve it here, or give `list/concat` a `none` arm (in a_none_bound_to_a_name_reaches_concat.kso)
+  --> tests/golden/errors/a_none_bound_to_a_name_reaches_concat.kso:7:29
+   7 |   list/to_list (list/concat row [1])
+                                   ^

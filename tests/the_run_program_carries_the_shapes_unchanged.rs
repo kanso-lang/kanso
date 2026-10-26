@@ -49,6 +49,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/guarded/guarded.kso",
     "bench/runbench/runbench/handed/handed.kso",
     "bench/runbench/runbench/insist/insist.kso",
+    "bench/runbench/runbench/lasted/lasted.kso",
     "bench/runbench/runbench/machine/machine.kso",
     "bench/runbench/runbench/nested/nested.kso",
     "bench/runbench/runbench/overwrite/overwrite.kso",

@@ -18,7 +18,14 @@ fn report (err e)
   print "{e}"
 
 fn report pieces
-  print "{length pieces} pieces, the last {length pieces[3]} long"
+  print "{length pieces} pieces, the last {width pieces[3]} long"
+
+# the split answers three pieces
+fn width none
+  err "the third piece answered none"
+
+fn width x
+  length x
 
 pub play =
   tail = text/utf8 (grow 100 (text/bytes ""))

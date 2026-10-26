@@ -109563,3 +109563,155 @@ a `root` argument and a line of its own), and
 `a_local_arm_shadows_every_shape` (`sibling_fns` became a map). Each is
 re-pointed, and each was dry-run on a copy whose mutated tree builds. Every
 other mutation still applies to this tree.
+
+## 2026-10-25 — four cliffs from the ports join the run program
+
+#2089's first item, entered in the corpus before its fix under the
+2026-09-05 corpus-first gavel. toml, datalog, diff, bc and inflate each read
+a map entry into a name and handed the name to a function inside the write:
+`seen = m[key]` then `put m key (counted seen)`. The 2026-10-10 entry
+(kanso#1822) discounts such a name only when it reaches the write through
+arithmetic and comparison, so here `m` counts as used twice and every put
+copies the map. toml's reduction at 8,000 keys took 4.2 seconds in release
+against 0.012 with the read written inline.
+
+The run program gains a `handed` phase: 380 updates over 100 keys through
+such a name. Built alone on main it costs 41,508,775 instructions above the
+empty program. The phase prints the same total on both engines.
+
+#2089's second item joins it. markdown's port pushed onto a list held in a
+record under a guard, `return st if i > n` above `loop (state (push
+st.events i) i) (i + 1) n`, and natively 64,000 pushes took 8.9 seconds.
+kanso#1926 moves such a list out of its record only when every mention of the
+record is a field read, and the guard's `return st` is a mention that is not,
+though it runs instead of the push. The same loop written as two arms grows
+the list in place. The `guarded` phase pushes 3,050 times. Its cost is a
+cliff whose knee depends on what the arena already holds: built alone the
+knee is at 4,096 elements and the phase costs 746,860 instructions, while
+inside the run program the knee falls between 2,000 and 3,000 and the phase
+costs 43,734,573, the whole program with it less the whole without.
+
+#2089's fourth item is the third phase. chip8's port kept its memory as a
+map of 16 keys in a record, read one key and overwrote another each lap, and
+8,000 laps took 2.4 seconds natively against 0.1 on the interpreter. Every
+put that cannot write in place copies the map's append log, which keeps each
+overwrite until something sorts it, so the copy grows by an entry a lap. The
+`overwrite` phase runs 380 laps, 42,238,603 instructions built alone above
+the empty program, and prints the same total on both engines.
+
+On this container the whole program reads 917,589,885, where main reads
+788,981,054: `handed` is 4.52% of it, `guarded` 4.77% and `overwrite` 4.60%.
+
+#2089's third item is the fourth phase. lox's statement loop re-enters itself
+when a Lox constructor builds a tree, carrying a persistent trie that each
+lap writes one leaf into, and the reduction took 7.0 seconds natively for
+4,094 writes. The lap rule stages a carry once the arena has drifted a
+quarter megabyte, measured from where the last stage at the loop's depth
+left it. A fresh entry measured from the previous loop's position, which the
+rewind had already passed, so every entry staged on its first lap and copied
+the whole trie. The `reentered` phase writes 62 leaves. Its cost is a knee
+like `guarded`'s: 1,236,018 built alone with the empty program's start-up,
+and 70,582,705 inside the run program, where each stage also walks what the
+earlier phases left. Depth 3 sits below the knee and adds 1,254,367. With it
+the whole reads 988,276,908 and `reentered` is 7.14% of that. Both engines
+print 62.
+
+CI's rows. The run program with all four phases reads work_runbench
+788,981,075 -> 988,172,222, the four together 199,191,147 instructions, or
+20.2% of the new whole. The program is larger, so the code it emits grows:
+emitted_other_defines 2,148 -> 2,178, emitted_other_calls 19,353 -> 19,778,
+emitted_other_branches 16,926 -> 17,310, emitted_other_lines 160,895 ->
+163,953, and its machine code 762,432 -> 777,824 bytes, text 5,498,444 ->
+5,518,316 over the fourteen. No compile row and no browser row moves. Under
+the 2026-09-05 corpus-first gavel this is a re-basing, as when rewind,
+stack and bag joined: the run_instructions baseline keeps its ratio to the
+run program, 3,610,619,845 -> 4,522,179,743, so welfare holds at 93.28 and
+the fixes in #2106 score against these rows as a rise.
+
+The run program's allocation vein moves with it, and the peak it holds is the
+run-memory term: run_held_peak_bytes 111,920 -> 2,397,872. That term is
+re-based the same way, run_peak_bytes 3,928,865 -> 6,214,817 against a
+baseline that moves from 1,434,645,006 to 2,269,371,987. The other rows land
+on run_allocs 1,451,390, run_alloc_bytes 248,577,384, run_beat_iters 89,113,
+run_evac_allocs 13,208, run_evac_bytes 15,563,184, run_perm_allocs 101,
+run_push_mut_slow 1,554,430, run_put_mut_grow 17, run_sh_buf 115,790,064,
+run_sh_map 24,320, run_sh_rec 3,920,752, run_survive_slots 395,834,
+run_ten_blocks 2.
+
+The fixes follow in their own pull requests and will score as rises.
+
+
+On this container the whole program reads 874,292,848, where main reads
+788,981,054; `handed` is 4.75% of it and `guarded` 5.00%. Both fixes follow
+in their own pull requests and will score as rises.
+
+empty program, 5.00% of the whole program's 830,558,275 on this container,
+where main reads 788,981,054. The phase prints the same total on both
+engines. The fix follows in its own pull request and will score as a rise.
+
+## 2026-10-25 — a read handed to a call keeps the write in place
+
+The fix for the `handed` phase the previous entry put into the run program
+(#2089, first item). `seen = m[key]` then `put m key (counted seen)` copied
+the map on every put, because `linear.rs` discounts a name bound to a read of
+the map only when every later use reaches the put through arithmetic: a use
+anywhere else could force the read after the write.
+
+That can happen only if the binding is a thunk, and `demand::analyze` makes a
+binding a thunk only when its expression is expensive, which a plain index
+read with a key that calls nothing and compares nothing is not. Both engines
+read the same verdict, so `seen` holds the element before anything below its
+line runs. `read_in_block` now discounts such a binding's read of the map
+whatever the name does next. Pooled names, which the work-ahead pass always
+makes cells, are left out.
+
+`tests/golden/mem/a_read_handed_to_a_call_stays_in_place` is the shape at
+2,000 updates over 100 keys: 15 allocations and 16,800 bytes, where main
+makes 6,006 and 80,274,944. No other mem golden moved, and
+`micro/a_read_named_before_a_write_sees_the_old_value`, whose names are used
+after the write, still prints the old value beside the new on every engine.
+On this container the `handed` phase built alone falls from 41,838,242
+instructions to 1,090,527, each including the empty program's 329,467; CI's
+rows follow.
+
+## 2026-10-25 — a guarded loop grows its record's list in place
+
+The fix for the `guarded` phase (#2089, second item). kanso#1926 lets a push
+through `st.events` write in place when the record is handed over and every
+mention of it in the arm reads a field. markdown's loop answered
+`return st if i > n` above the push, and that early `st` is a mention that
+reads no field, so the move was refused and every lap copied the list. The
+guard's early answer runs instead of the lines below it, never beside them.
+`FieldTally` now walks a guard's early answer apart from its rest, and when
+the early answer reads no field of the record it does not count against the
+move below. One that does read the field is counted as before.
+
+`tests/golden/mem/a_list_in_a_record_grows_under_a_guard` pushes 20,000
+times under such a guard: 14 allocations and 1,045,008 bytes, where main
+makes 51,816 and 9,160,000,672. markdown's reduction at 64,000 pushes runs in
+0.005 seconds natively, where main took 8.9.
+On this container the run program with the `guarded` phase falls from
+874,292,848 instructions to 831,115,619 and prints the same total; CI's rows
+follow.
+
+## 2026-10-25 — a copied map leaves its dead entries behind
+
+The fix for the `overwrite` phase (#2089, fourth item). A map keeps an append
+log of its pairs, overwrites included, and sorts and deduplicates it into a
+cached view on the first read. A put that cannot write in place copies the
+map, and `k_b_put` copied the whole log. chip8's memory, 16 keys read and
+overwritten once a lap, therefore carried every earlier lap's entries into
+each copy: 8,000 laps allocated 1,783,786,288 bytes and took 2.1 seconds
+natively.
+
+When the map's sorted view is current and shorter than its log, the copy now
+starts from the view, which holds each key's last value, and the new pair goes
+after it. The answer reads the same either way. The chip8 shape at 8,000 laps
+falls to 9,286,608 bytes and 0.015 seconds, and prints what the interpreter
+prints.
+
+`tests/golden/mem/a_map_overwritten_each_lap_is_copied_without_its_dead_entries`
+runs 2,000 laps: 8,172 allocations and 2,324,416 bytes, where main makes
+8,130 and 86,135,584. `fused_tally.mem` moves with it: alloc_bytes 33,872 ->
+33,088, held_peak_bytes 7,648 -> 7,392 and sh_buf 9,952 -> 9,568, because its
+tally's map is copied from a view too.

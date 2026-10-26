@@ -12,6 +12,13 @@ fn squares xs i n
   return xs if i > n
   squares (put xs i (i * i)) (i + 1) n
 
+# every put is at a position inside the list
+fn present none
+  err "a put inside the list answered none"
+
+fn present xs
+  xs
+
 pub play =
-  xs = squares (zeros 4000 []) 1 4000
+  xs = present (squares (zeros 4000 []) 1 4000)
   print "{length xs} {xs[1]} {xs[2]} {xs[4000]}"

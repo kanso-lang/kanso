@@ -15,7 +15,13 @@ fn make n
   pt n (n + 1)
 
 fn ignored _ _
-  text/to_int "12"
+  whole (text/to_int "12")
+
+fn whole none
+  err "\"12\" is not a number"
+
+fn whole n
+  n
 
 fn caller n
   made = make n

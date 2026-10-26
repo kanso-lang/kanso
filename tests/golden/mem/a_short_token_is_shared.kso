@@ -11,6 +11,13 @@ fn decoded 0 acc
   acc
 
 fn decoded n acc
-  decoded (n - 1) (acc + length (json/decode doc))
+  decoded (n - 1) (acc + size_of (json/decode doc))
+
+# the document is this file's own
+fn size_of none
+  err "the document is not json"
+
+fn size_of v
+  length v
 
 pub play = print "{decoded 100 0}"
