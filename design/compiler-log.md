@@ -1895,5 +1895,6 @@ browser_run_instructions 61,510,637 -> 64,427,034. The run program's new
 function is emitted code: emitted_other_lines 170,009 -> 170,548,
 emitted_other_branches 17,946 -> 18,010, emitted_other_calls 20,496 ->
 20,565, emitted_other_defines 2,239 -> 2,248, and its binary's text 5,698,479
--> 5,700,447. The welfare floor is re-based to what the corpus now reads, as
-the corpus-first gavel asks, so the fix in #2165 scores as a rise.
+-> 5,700,447. Under the corpus-first gavel each moved welfare term's
+baseline is scaled so its ratio to what it reads holds, welfare reads 95.38
+as before, and the fix in #2165 scores as a rise.
