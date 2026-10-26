@@ -1,0 +1,21 @@
+# `tagging` is declared with three parameters and with one. A call to the
+# one-parameter group read as the three-parameter group handed on as a value,
+# called from somewhere no call site describes, so nothing could prove its
+# caller handed the string over, and the join copied it on every lap. A call
+# whose count is another declared group's calls that group. regexp's
+# `swapped` had this shape, and `replace_all` copied its whole answer once per
+# match.
+fn tagged acc n
+  tagging acc n (n < 1)
+
+fn tagging acc _ true
+  acc
+
+fn tagging acc n false
+  kept = "{acc}{tagging n}"
+  tagged kept (n - 1)
+
+fn tagging n
+  n % 10
+
+pub play = print (tagged "" 40)

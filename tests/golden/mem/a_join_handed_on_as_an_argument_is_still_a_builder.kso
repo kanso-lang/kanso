@@ -1,0 +1,15 @@
+# A string joined onto itself and handed straight to the next group as an
+# argument is the builder the join made, as one bound to a name first is. The
+# emitter knew the bound name was carrying the builder and re-seeded the
+# argument, and seeding copies the whole string, so each lap of the two-group
+# loop copied everything built so far.
+fn built acc n
+  building acc n (n < 1)
+
+fn building acc _ true
+  acc
+
+fn building acc n false
+  built "{acc}xx" (n - 1)
+
+pub play = print (built "" 40)

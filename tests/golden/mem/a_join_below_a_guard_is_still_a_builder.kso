@@ -1,0 +1,14 @@
+# A guard holds the statements after it, so a join bound below
+# `return acc if …` sits inside the guard and not in the function's own list
+# of statements. The walk that finds names bound to a join read only that
+# list, so the name handed to the next group was re-seeded on every lap, a
+# copy of the whole string.
+fn marked acc n
+  return acc if n < 1
+  kept = "{acc}xx"
+  handed kept n
+
+fn handed acc n
+  marked acc (n - 1)
+
+pub play = print (marked "" 40)

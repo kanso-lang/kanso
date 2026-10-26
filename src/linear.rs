@@ -289,6 +289,8 @@ struct Mentions<'a> {
     bare: HashSet<&'a str>,
     /// For each name, the argument counts it heads an application with.
     heads: HashMap<&'a str, Vec<usize>>,
+    /// For each name, the arities the program declares a group at.
+    declared: HashMap<&'a str, Vec<usize>>,
     /// For each name, the declarations whose body mentions it at all, as
     /// indices into `program.fns`. A declaration that never names a group
     /// cannot hold a call to it, so `callers_hand_over` has nothing to find
@@ -299,6 +301,12 @@ struct Mentions<'a> {
 impl<'a> Mentions<'a> {
     fn of(program: &'a Program) -> Self {
         let mut m = Mentions::default();
+        for decl in &program.fns {
+            let at = m.declared.entry(decl.name.as_str()).or_default();
+            if !at.contains(&decl.params.len()) {
+                at.push(decl.params.len());
+            }
+        }
         for (d, decl) in program.fns.iter().enumerate() {
             for stmt in &decl.body {
                 let e = match stmt {
@@ -358,10 +366,17 @@ impl<'a> Mentions<'a> {
 
     /// The same answer `mentioned_as_value` gave, read off the two sets: a bare
     /// occurrence escapes at every arity, and an application head escapes at
-    /// every arity but its own.
+    /// every arity but its own. A head whose count is another group's arity
+    /// calls that group, so it says nothing about this one: regexp's
+    /// `swapped c` turned off the builder in its seven-argument `swapped`, and
+    /// `replace_all` copied its whole answer once per match.
     fn escapes(&self, name: &str, arity: usize) -> bool {
+        let declared = self.declared.get(name).map_or(&[][..], |v| v.as_slice());
         self.bare.contains(name)
-            || self.heads.get(name).is_some_and(|ks| ks.iter().any(|k| *k != arity))
+            || self
+                .heads
+                .get(name)
+                .is_some_and(|ks| ks.iter().any(|k| *k != arity && !declared.contains(k)))
     }
 }
 
@@ -2516,16 +2531,41 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> 
 }
 
 /// Names this arm binds to the join itself — the builder made right here.
+/// A guard holds the statements after it, so a join bound below a
+/// `return acc if …` sits inside the guard rather than in the body's own list,
+/// and a bound branch holds its own block; both are walked. Missing them
+/// re-seeded the builder at the call that handed it on, a copy of the whole
+/// string on every lap.
 fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
-    decl.body
-        .iter()
-        .filter_map(|s| match s {
-            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
-                .contains(&(decl.file.clone(), span.line as usize, span.col as usize))
-                .then(|| name.to_string()),
-            _ => None,
-        })
-        .collect()
+    fn in_stmts(joins: &Sites, decl: &FnDecl, stmts: &[Stmt], out: &mut HashSet<String>) {
+        for s in stmts {
+            let e = match s {
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => {
+                    if joins.contains(&(decl.file.clone(), span.line as usize, span.col as usize)) {
+                        out.insert(name.to_string());
+                    }
+                    continue;
+                }
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+            };
+            in_expr(joins, decl, e, out);
+        }
+    }
+    fn in_expr(joins: &Sites, decl: &FnDecl, e: &Expr, out: &mut HashSet<String>) {
+        match e {
+            Expr::Guard { rest, .. } => in_stmts(joins, decl, rest, out),
+            Expr::Block(stmts, _) => in_stmts(joins, decl, stmts, out),
+            Expr::Lambda { .. } => {}
+            _ => {
+                for c in child_exprs(e) {
+                    in_expr(joins, decl, c, out);
+                }
+            }
+        }
+    }
+    let mut out = HashSet::default();
+    in_stmts(joins, decl, &decl.body, &mut out);
+    out
 }
 
 /// Does any call site in the program name this group?
