@@ -1,0 +1,3 @@
+import "./kata"
+
+kata/run
