@@ -299,6 +299,7 @@ fn every_wasm32_line_is_one_the_emitter_writes() {
         + &read("src/codegen.rs")
         + &read("src/codegen/module.rs")
         + &read("src/codegen/emit.rs")
+        + &read("src/codegen/calls.rs")
         + &read("src/codegen/declares.rs");
     for (native, _) in kanso::codegen::WASM32_LINES {
         let hits = emitter.matches(native).count();

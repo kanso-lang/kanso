@@ -5,9 +5,9 @@
 # same; the witness is the run program's arena peak.
 set -e
 line='                || (self.reaches_cycle.contains(name)'
-grep -qxF "$line" src/codegen/emit.rs || {
+grep -qxF "$line" src/codegen/calls.rs || {
   echo "the cohort license for calls into a loop moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                || (self.reaches_cycle.contains(name)$/                || (false \&\& self.reaches_cycle.contains(name)/' src/codegen/emit.rs
-if grep -qxF "$line" src/codegen/emit.rs; then exit 1; fi
+sed -i 's/^                || (self.reaches_cycle.contains(name)$/                || (false \&\& self.reaches_cycle.contains(name)/' src/codegen/calls.rs
+if grep -qxF "$line" src/codegen/calls.rs; then exit 1; fi

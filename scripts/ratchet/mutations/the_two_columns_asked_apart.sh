@@ -7,6 +7,6 @@
 # column is its own call and its own allocation, and every such call
 # allocates twice.
 set -e
-sed -i.bak 's/f.lookup(map).is_some() \&\& !declared("keys") \&\& !declared("values")/false \&\& f.lookup(map).is_some()/' src/codegen/emit.rs
-rm -f src/codegen/emit.rs.bak
-grep -q 'false && f.lookup(map).is_some()' src/codegen/emit.rs
+sed -i.bak 's/f.lookup(map).is_some() \&\& !declared("keys") \&\& !declared("values")/false \&\& f.lookup(map).is_some()/' src/codegen/calls.rs
+rm -f src/codegen/calls.rs.bak
+grep -q 'false && f.lookup(map).is_some()' src/codegen/calls.rs

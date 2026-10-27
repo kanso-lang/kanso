@@ -110136,3 +110136,80 @@ run_push_mut_slow 1,579,785 -> 1,579,791, run_put_mut_grow 22 -> 30,
 run_sh_buf 86,615,200 -> 86,746,592, run_sh_rec 3,906,672 -> 3,906,784 and
 run_sh_str 16,642,592 -> 16,769,952. Welfare re-bases the six terms the phase
 moves, each keeping its ratio to its baseline, and the floor stays at 94.33.
+
+## 2026-10-25 — an overwrite leaves the log a duplicate
+
+A native map keeps an append log of every put and, once something reads it,
+a sorted view holding each key's last value. An in-place put of a key the
+view already held set the view's slot and then walked the log back from its
+end to set that key's entry too, so the second sighting of a word in a word
+count cost the number of words counted so far. #2115 put the shape in the
+corpus.
+
+The put now sets the view's slot and appends the pair to the log, which is
+the state a persistent put already leaves: the log may hold a key more than
+once, and the view decides. A log that has to grow starts again from the
+view. Copied in order it holds each key once, sorted, so it becomes the
+map's view and the old view is freed; overwrites after that are set in the
+log itself. The restart takes room for as many keys again, because a key
+arriving out of order gives the map a separate view back and the overwrites
+after it append, so the next restart is that many puts away. Without that
+room a restart could follow on the very next put.
+
+Two smaller changes came out of measuring it. #2112's compare tested for
+two machine ints before anything else, and kq's keys are strings, so every
+compare in kq paid the test. Keys of one kind now compare directly, two
+ints or two strings. On this container kq's print_small reads 24,631,248,
+against 24,695,778 on main and 24,648,174 on main with the int test taken
+out. A search of
+the view tests an int key's kind once rather than at every probe, which
+took the scattered-key tally under main again after the restart had moved
+`k_map_find` out of line.
+
+Probes at two sizes, natively, instructions:
+- `list/tally` over 20,000 ints each seen twice: 1,193,001,970 → 42,779,901.
+- The same over 20,000 strings: 3,829,711,628 → 76,451,701.
+- 5,000 strings over 500 keys: 93,576,007 → 9,291,779.
+
+The mem vein moves where maps are overwritten, because a log now keeps a
+duplicate until it restarts and a restart takes room. tally_shape_put_mut_grow
+3 -> 5, tally_shape_allocs 19 -> 21, tally_shape_alloc_bytes 133,280 ->
+139,456 and tally_shape_sh_buf 2,128 -> 8,304. fused_tally_put_mut_grow 5 ->
+6, fused_tally_allocs 68 -> 69, fused_tally_alloc_bytes 36,192 -> 44,400 and
+fused_tally_sh_buf 9,568 -> 17,776. readwrite_map_put_mut_grow 1 -> 3,
+readwrite_map_allocs 308 -> 310, readwrite_map_alloc_bytes 11,056 -> 12,624
+and readwrite_map_sh_buf 448 -> 2,016. repeated_key_shape_put_mut_grow 4 ->
+6, repeated_key_shape_allocs 7,387 -> 7,389, repeated_key_shape_alloc_bytes
+248,160 -> 260,480 and repeated_key_shape_sh_buf 4,080 -> 16,400.
+a_read_handed_to_a_call_stays_in_place takes 100 keys in no order while it
+overwrites them, so a key out of order keeps handing the map a separate view
+back: a_read_handed_to_a_call_stays_in_place_put_mut_grow 5 -> 8,
+a_read_handed_to_a_call_stays_in_place_allocs 17 -> 26,
+a_read_handed_to_a_call_stays_in_place_alloc_bytes 19,904 -> 50,544 and
+a_read_handed_to_a_call_stays_in_place_sh_buf 8,192 -> 24,336. It now frees
+every view it allocates, 17 of 17 where main freed 7 of 9, and its
+held_peak_bytes falls 7,184 -> 6,112. Every fixture that moved runs in fewer
+instructions than on main.
+
+A differential over 120 generated programs builds maps by in-place puts in
+four key orders, with ints and strings and from one key to every key
+distinct. It reads each map back by length, keys, values, a persistent put,
+a delete and equality, on the interpreter and on both native tiers: 0 of
+120 disagree. With the restart copying from the log instead of the view,
+30 of 120 disagree.
+
+CI's rows. work_runbench 843,623,597 -> 801,847,883 (-5.0%), work_basket
+30,619,856 -> 18,214,855 (-40.5%), and browser_run_instructions 60,166,290
+-> 41,265,571 (-31.4%), since the tab runs the same runtime. run_peak_bytes
+falls 5,709,617 -> 5,671,457. The run program's allocation vein:
+run_evac_allocs 8,626 -> 1,760, run_held_peak_bytes 254,240 -> 216,080,
+run_put_mut_grow 30 -> 32, run_sh_buf 86,746,592 -> 86,829,600,
+run_buf_reuse 150 -> 149 and run_carry_dedup 1 -> 0. basket's:
+basket_put_mut_grow 18 -> 24, basket_allocs 27,270 -> 27,272,
+basket_alloc_bytes 6,162,417 -> 6,176,273 and basket_sh_buf 689,808 ->
+703,664, with basket_held_peak_bytes 71,136 -> 64,016. The runtime's machine
+code grows by 7,728 bytes in every benchmark binary, text 5,496,337 ->
+5,604,529, from the compare and the search inlined where they are called,
+and building that code costs codegen_instructions_dev 116,456,086 ->
+116,458,530 and codegen_instructions_release 370,239,646 -> 370,260,066.
+Welfare rises 94.33 -> 94.49 and the rise is banked.

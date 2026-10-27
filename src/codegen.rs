@@ -4091,6 +4091,7 @@ impl<'a> Backend<'a> {
 include!("codegen/dispatchers.rs");
 
 include!("codegen/emit.rs");
+include!("codegen/calls.rs");
 
 impl<'a> Backend<'a> {
     fn emit_lifted(
