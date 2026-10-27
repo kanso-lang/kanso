@@ -5,7 +5,7 @@
 # should name `find`.
 set -e
 old='        let lost = reads(d) & !kept;'
-[ "$(grep -cxF "$old" src/codegen.rs)" -eq 1 ]
-sed -i.bak 's#^        let lost = reads(d) \& !kept;$#        let lost = reads(d) \& !kept \& 0;#' src/codegen.rs
-rm -f src/codegen.rs.bak
-grep -qF 'let lost = reads(d) & !kept & 0;' src/codegen.rs
+[ "$(grep -cxF "$old" src/codegen/unbuilt.rs)" -eq 1 ]
+sed -i.bak 's#^        let lost = reads(d) \& !kept;$#        let lost = reads(d) \& !kept \& 0;#' src/codegen/unbuilt.rs
+rm -f src/codegen/unbuilt.rs.bak
+grep -qF 'let lost = reads(d) & !kept & 0;' src/codegen/unbuilt.rs
