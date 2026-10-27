@@ -1829,10 +1829,13 @@ made only for fields some type in the program declares. `entry` is built
 into the language, so `e.key` had no getter: the checker refused it, and
 `e.value` got past the checker only when std/list happened to declare a
 `value` of its own, then failed in the interpreter. The checker now counts
-`key` and `value` as declared, the way it counts an err's three readers, and
-the reader groups gain an `entry` arm for each. An arm a dependency already
-wrote is kept, and a program that never reads the fields has both pruned
-with the other unused getters.
+`key` and `value` as declared, the way it counts an err's three readers.
+`prune_unused_getters` already gathers every getter a program names, and
+when `Get_key` or `Get_value` is among them it writes that group an `entry`
+arm, keeping one a dependency already wrote. A program that never reads the
+fields builds neither arm. The first version built both in every compile and
+pruned them after, which CI read as 63 more allocations in the interpreter's
+corpus and 502,143 more browser compile instructions.
 
 tests/golden/micro/an_entry_reads_its_key_and_value_by_name reads both
 fields beside a local type that declares a `key` of its own; on main it was
