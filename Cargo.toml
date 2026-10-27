@@ -39,6 +39,15 @@ wat = "1.254"
 # the third engine's corpus run from seconds into minutes. Only the dependency
 # is optimised; kanso itself still builds debug, so a test still gets a
 # readable backtrace.
+# One codegen unit and fat LTO, so the optimizer sees the whole crate and
+# its dependencies when it inlines. rustc's default of sixteen units splits
+# the crate by module, which made the compiler slower and made a pure move
+# between modules change what was inlined, and with it every compile row.
+# A release build takes about a minute longer.
+[profile.release]
+codegen-units = 1
+lto = "fat"
+
 [profile.dev.package.wasmi]
 opt-level = 3
 
