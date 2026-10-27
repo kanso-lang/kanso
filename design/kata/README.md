@@ -34,6 +34,11 @@ becomes a constant. Markup and holes are packed into string literals that fit
 kanso's 80 columns, and a comment above each literal names the template lines
 its holes came from.
 
+Partials and layouts need nothing of their own, because every template in a
+views directory is a function in one module. A layout is a template that
+takes the page as a local and writes it with `== body`, and a page uses it
+with `== layout "Profile" (card user)`.
+
 The generated views lean on three functions in `app/views/kata.kso`:
 `escape`, `each` and `joined`. They belong in the standard library once the
 design settles.
@@ -43,5 +48,4 @@ design settles.
 - Diagnostics point at the generated file. The comments make the trip back to
   the template short, but a compiler that read `.slim` files itself could
   report `page.slim:18` directly.
-- No `- case`, no partials beyond calling another view's
-  function with `==`, no layouts, and no whitespace control.
+- No `- case` and no whitespace control.
