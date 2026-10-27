@@ -60,6 +60,11 @@ bench/history_series.jsonl
 /compile_ir_want.txt
 /compile_ir_got.txt
 /entry_ir_got.txt
+/library_ir_got.txt
+/startup_ir_got.txt
+/interp_ir_got.txt
+/interp_mem_got.txt
+/interp_mem_want.txt
 /compile_libraries_want.txt
 /compile_libraries_got.txt
 /emit_got.txt
