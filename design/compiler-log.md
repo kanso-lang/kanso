@@ -1718,3 +1718,14 @@ is gone, and the split can be retried.
 The interpreter gate anchors its count on `run_interpreted_on_stack`, and the
 one-unit build inlined it into its thread's closure, so the gate read a drop
 glue carrying its name. It is now `#[inline(never)]`, as `emit_ir_for` is.
+
+CI's rows, on main after #2180. Every row the compiler's own build reaches
+falls: compile_instructions 24,874,251 -> 24,057,877 (-3.28%),
+entry_instructions 73,701,590 -> 71,165,551, library_instructions
+73,338,936 -> 70,852,827, emit_instructions 5,715,797 -> 5,597,787,
+startup_instructions 52,528 -> 50,254, interp_instructions 577,237,254 ->
+571,649,741 and, in the tab, browser_compile_instructions 353,555,358 ->
+343,131,848 (-2.95%). codegen_instructions_release moves 371,551,607 ->
+371,551,576; it counts clang and the linker, and nothing here isolates why
+they did 31 fewer. No allocation, memory or runtime row moved. Welfare rises
+95.55 -> 95.57 and is banked.
