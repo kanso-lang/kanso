@@ -480,6 +480,10 @@ pub fn getter_field(name: &str) -> Option<&str> {
 /// piece instead of passing the failure through. Ruled 2026-08-29.
 pub const ERR_READERS: [&str; 3] = ["cause", "origin", "reason"];
 
+/// The two fields of the `entry` a map's `entries` answers, read by name on
+/// every engine like any record's. Ruled 2026-10-26 on #2163.
+pub const ENTRY_FIELDS: [&str; 2] = ["key", "value"];
+
 /// The err field a getter reads, when it is one of the three.
 pub fn err_reader(name: &str) -> Option<&str> {
     getter_field(name).filter(|field| ERR_READERS.contains(field))

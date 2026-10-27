@@ -2165,6 +2165,41 @@ fn synthesize_reader_groups(program: &mut ast::Program) {
             shades: None,
         });
     }
+    // An entry's `key` and `value` read by name (#2163). The group may already
+    // hold arms for records that declare the field, so the entry arm is asked
+    // about by its pattern, and one a dependency already wrote is kept.
+    for (at, field) in ast::ENTRY_FIELDS.iter().enumerate() {
+        let name = ast::getter_name(field);
+        let written = program.fns.iter().any(|f| {
+            ast::split_qual(&f.name).map_or(f.name.as_str(), |(_, short)| short) == name
+                && matches!(f.params.first(), Some(ast::Pattern::Ctor { ty, .. }) if ty.as_str() == "entry")
+        });
+        if written {
+            continue;
+        }
+        let span = crate::diag::Span::at(0, 0);
+        let fields = (0..ast::ENTRY_FIELDS.len())
+            .map(|i| match i == at {
+                true => ast::Pattern::Var(Name::new(ast::GETTER_BINDER), span),
+                false => ast::Pattern::Wildcard(span),
+            })
+            .collect();
+        program.fns.push(ast::FnDecl {
+            name,
+            is_pub: true,
+            written_pub: false,
+            span,
+            params: vec![ast::Pattern::Ctor { ty: Name::new("entry"), fields, whole: None }],
+            body: vec![ast::Stmt::Expr(ast::Expr::Ident(
+                Name::new(ast::GETTER_BINDER),
+                span,
+                crate::ast::Resolution::default(),
+            ))],
+            file: crate::ast::unstamped(),
+            synthetic: false,
+            shades: None,
+        });
+    }
 }
 
 fn desugar_stmt(stmt: &mut ast::Stmt) {

@@ -448,12 +448,14 @@ fn check_per_node<'a>(
         scan: FieldScan {
             program,
             root,
-            // an err answers its three readers whatever the program declares
+            // an err answers its three readers and an entry its two fields,
+            // whatever the program declares
             declared: program
                 .types
                 .iter()
                 .flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str()))
                 .chain(crate::ast::ERR_READERS)
+                .chain(crate::ast::ENTRY_FIELDS)
                 .collect(),
             plain: program
                 .types

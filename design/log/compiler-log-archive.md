@@ -109852,3 +109852,100 @@ rises one block, 3,670,032 -> 4,718,608, and run_perm_peak_bytes 146,913 ->
 isolated here. The basket vein loses two evacuations: basket_allocs 27,270,
 basket_alloc_bytes 6,162,417, basket_evac_allocs 3, basket_evac_bytes 192 and
 basket_sh_rec 130,112.
+
+## 2026-10-25 — a slice that starts before the value answers none
+
+From #2088's last item, bc's port. Under the 2026-10-13 gavel on #1890, a
+`text/slice` whose range runs past the end of the value, or starts past it,
+answers `none`. A range that started before position 1 answered the empty
+result on every engine: `text/slice "abc" 0 2` was `""`, and so was a start
+of -1, where `"abc"[0]` answers `none`. bc's journal called the edges
+inconsistent. A shortened answer at the front is the silent loss the gavel
+ruled against at the back, so a start before 1 now answers `none` too, and
+`slice!` refuses it. The empty range at the start, `1 0`, is inside the value
+and still answers empty. `text/to_span` already answered `none` for a start
+before 1, so a span and a slice now agree on where a range may sit.
+
+The native test is one unsigned compare, `from - 1 > len`, which a start
+below 1 fails by wrapping to the top of the range. It replaces `from > len +
+1` in `k_b_slice` and `k_b_slice_raw`, so the hot path gains no instruction.
+The cheaper test made LLVM inline `k_b_slice` into the four fused doors'
+fallbacks, and CI read every binary 7,216 bytes larger for code that runs
+only on a bad range, so `k_b_slice` is marked out of line. On this container
+indexbench's text is 64 bytes smaller than before the change, and the run
+program 961 instructions lighter.
+
+CI's rows, against #2106's. The library's `past?` reads one more comparison
+and the interpreter's builtin one more test, so the front end and the
+interpreter move a little: compile_instructions 24,664,014 -> 24,664,426,
+entry_instructions 72,772,292 -> 72,794,039, library_instructions 72,435,518
+-> 72,459,948, browser_compile_instructions 218,703,716 -> 218,730,086,
+interp_instructions 385,420,176 -> 385,422,816 and browser_run_instructions
+33,345,263 -> 33,347,903. Programs that slice emit the extra comparison too:
+the run program's emitted_other_branches 17,310 -> 17,312 and
+emitted_other_lines 163,950 -> 163,955. Natively every binary's machine code
+is 64 bytes smaller, text 5,523,025 -> 5,522,129 over the fourteen, and
+building it costs codegen_instructions_dev 116,456,350 -> 116,455,729 and
+codegen_instructions_release 370,087,521 -> 370,086,817. The run rows move by
+under 0.02% each: work_runbench 797,623,329 -> 797,622,606, work_encodebench
+2,327,445,961 -> 2,327,403,174, work_widebench 28,445,165 -> 28,413,165,
+work_livebench 936,030,663 -> 936,030,838, work_oneshot 10,050,755 ->
+10,050,461 and work_digestbench 4,122,953 -> 4,122,823. No allocation counter
+moves. Welfare falls by less than a hundredth, and the floor follows: this
+builds the 2026-10-13 ruling on #1890 at the start of the range, which #2088
+asked for.
+The interpreter reads a start no machine word holds as 0, as before, and 0 is
+now outside. `past?`, which the compiler asks before reading a range that
+`slice!` hands straight to a door, adds `from < 1`. std's own `slice_in`
+calls all start at 1 or above.
+
+`micro/a_slice_that_starts_before_the_value_answers_none` covers text, wide
+text, a list and bytes from 0, a start of -1, the empty range at the start,
+and `slice!` from 0. On main every line prints `[]` or `<>`.
+
+Five micro goldens had pinned the old edge, and each line that moves is a
+start below 1 going from the empty result to `none`: `slice_at_its_edges`,
+`utf8_of_a_byte_slice_at_its_edges`, `an_append_of_a_slice_reads_the_range_in_place`
+(`below one` and `both zero`), `a_number_read_from_a_slice_reads_the_range_in_place`
+(`int below one` and `float below one`, which read the empty string and
+answered an err) and `a_slice_bang_chain_opens_its_door_in_place`, where
+`slice! "kanso" 0 5` now fails inside its box. The interpreter, the native
+build and the wasm translator agree on all five.
+
+## 2026-10-25 — a list handed to put is refused wherever the list is certain
+
+#2091's fifth item, the `put` half. `put` writes a key of a map, and on a
+list it stops at run time on every engine with "put takes a map, a key, and
+a value". The literal check refused `put [1 2 3] 2 9`, because the list is
+written in place, and passed `xs = [1 2 3]` followed by `put xs 2 9`. diff's
+and inflate's ports met the second shape. #2086 asks whether `put` should
+write a list at an index, and says this inconsistency is cloud's to fix
+whatever it rules.
+
+The after-inference walk now refuses a list handed to `put`, `delete`,
+`keys`, `values` or `entries` when the list is certain: a name the same
+declaration binds once to a list literal, or a call of a group whose every
+arm answers a list and nothing else. A parameter, or a name bound to
+anything less certain, is left to the run, as the walk's other kind checks
+leave theirs. The message is the literal check's: "`put` takes a map here,
+not a list". The callee's name is tested first, by its last byte and then
+the word where it ends, and the declaration's list bindings are read only
+after a call of `put` or its kin turns up. The first version split every
+callee's name on `/` and collected every declaration's list bindings up
+front, which cost the front end 130,307 instructions on compile_instructions;
+this one costs 24,741.
+
+`errors/a_list_handed_to_put` holds both shapes. Main checks it as ok. No
+program in the tree, the book's samples or kq is refused. One run-time
+golden met the new check: `runtime/delete_takes_a_map_at_run_time` handed
+`delete` a list through an identity function, which inference sees answer
+nothing but a list in that program. It hands an int now, and its stderr is
+unchanged.
+
+CI's rows, against #2107's: compile_instructions 24,664,426 -> 24,689,167,
+entry_instructions 72,794,039 -> 72,851,547, library_instructions
+72,459,948 -> 72,517,015 and browser_compile_instructions 218,730,086 ->
+218,996,814. No run row, allocation counter or mem golden moves. Welfare
+falls by less than a hundredth and the floor follows: check now refuses what
+every engine refuses at run time, which #2086 named a checker bug whatever
+it rules.
