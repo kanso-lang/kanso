@@ -651,6 +651,10 @@ fn run_interpreted(program: &ast::Program, args: Vec<String>) -> ExitCode {
     })
 }
 
+// The interpreter gates anchor their count on this frame, so it stays out of
+// line: built as one codegen unit, the compiler inlined it into its thread's
+// closure and the gate read a drop glue that carries its name.
+#[inline(never)]
 fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCode {
     let interp = eval::Interp::new(program);
     // Mirror the native runtime's KANSO_COUNTERS convention: semantic thunk

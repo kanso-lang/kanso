@@ -23,49 +23,6 @@
 
 
 
-## 2026-10-25 — a word count joins the run program and the interpreted corpus
-
-A probe built each list, text and map function natively at two sizes, four
-times apart, and counted the instructions of each. Every one grew linearly
-or as n log n except `list/tally` over keys that come round more than once:
-4× the items cost 15× the instructions, with string keys and with int keys
-alike. Tallying 20,000 ints, each seen twice, took 1.19 billion
-instructions natively, and 80,000 took 1.49 s against 0.11 s for 20,000.
-The interpreter keeps its maps in a B-tree and is linear on the same
-program, 0.15 s and 0.44 s. Under the 2026-09-05 corpus-first gavel the
-shape joins the corpus here, measured on main at kanso#2112 before its fix.
-
-`counted` is a word count, `list/tally` over 2,000 words that each come
-round twice in no order. The tally reads a word's count and puts it back one
-higher. When the map already holds the key, the in-place put sets the
-value in the map's sorted view and then walks the map's append log back
-from its end to set the same key's entry there, so a word's second sighting
-costs the number of words already counted.
-
-On this container the run program reads 843,728,377 with the phase and
-799,281,633 without it, a column of 44,446,744 (5.27%). The interpreted
-corpus counts 1,000 words, 440,075,578 → 462,532,645. That corpus is the
-tab's program too, and the tab runs the native runtime built for wasm32,
-where the walk is the same.
-
-CI's rows for the corpus with the phase. work_runbench 799,174,946 ->
-843,623,597, a rise of 44,448,651. The interpreted corpus reads
-interp_instructions 399,115,104 -> 424,511,367, interp_peak_bytes 734,933 ->
-741,380 and interp_allocs 420,622 -> 457,070. The tab compiles and runs the
-same corpus: browser_compile_instructions 239,691,017 -> 263,967,351,
-browser_compile_peak_bytes 610,760 -> 699,180, and browser_run_instructions
-34,483,426 -> 60,166,290, where 1,000 words cost three quarters as much again
-as the rest of the corpus because the tab's runtime walks the log too. The
-run program's emitted code grows by the phase: emitted_other_defines 2,188 ->
-2,196, emitted_other_calls 19,914 -> 19,957, emitted_other_branches 17,407 ->
-17,435, emitted_other_lines 164,739 -> 165,000 and text 5,492,433 ->
-5,496,337. Its allocation vein: run_allocs 1,445,901 -> 1,449,911,
-run_alloc_bytes 215,212,648 -> 215,555,576, run_perm_allocs 102 -> 103,
-run_push_mut_slow 1,579,785 -> 1,579,791, run_put_mut_grow 22 -> 30,
-run_sh_buf 86,615,200 -> 86,746,592, run_sh_rec 3,906,672 -> 3,906,784 and
-run_sh_str 16,642,592 -> 16,769,952. Welfare re-bases the six terms the phase
-moves, each keeping its ratio to its baseline, and the floor stays at 94.33.
-
 ## 2026-10-25 — an overwrite leaves the log a duplicate
 
 A native map keeps an append log of every put and, once something reads it,
@@ -1742,3 +1699,22 @@ checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
 entry_instructions 73,693,860 -> 73,701,590 and library_instructions
 73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
 banked.
+
+## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
+
+The release profile had no settings, so rustc split the crate into sixteen
+codegen units by module and optimized each without the others. Cargo.toml
+now asks for one unit and fat LTO. The optimizer sees the whole crate and
+its dependencies when it inlines, and a release build takes about a minute
+longer, 2m34s against 1m41s on this container.
+
+It came out of #2137. Moving call emission out of emit.rs had been declined
+because the browser row moved 52 units with no code changed, and the guess
+was the file path in panic strings. Neither a longer path nor a shifted line
+number moves the row. The units do: they are cut along module lines, so a
+move between modules changed what was inlined. With one unit that coupling
+is gone, and the split can be retried.
+
+The interpreter gate anchors its count on `run_interpreted_on_stack`, and the
+one-unit build inlined it into its thread's closure, so the gate read a drop
+glue carrying its name. It is now `#[inline(never)]`, as `emit_ir_for` is.
