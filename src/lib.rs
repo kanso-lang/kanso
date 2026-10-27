@@ -35,6 +35,27 @@ pub mod wasm_encode;
 /// it here.
 pub const RUNTIME_C: &str = include_str!(concat!(env!("OUT_DIR"), "/runtime.c"));
 
+/// The merged check's diagnostics, each quoting its own file's line. One about
+/// a dependency names that dependency's file, and the text is read again here,
+/// on the path that is about to fail, the way a module compile rereads its own
+/// files. An embedded file is named bare, with no directory, and is never read
+/// from disk: a file of that name in the working directory is somebody else's.
+fn render_merged(diags: &[diag::Diagnostic], file: &str, source: &str) -> String {
+    let mut named: Vec<(String, String)> = Vec::new();
+    for d in diags {
+        let Some(own) = d.file.as_deref() else { continue };
+        if own == file || named.iter().any(|(f, _)| f == own) {
+            continue;
+        }
+        let on_disk = std::path::Path::new(own).parent().is_some_and(|p| !p.as_os_str().is_empty());
+        if let Some(text) = on_disk.then(|| std::fs::read_to_string(own).ok()).flatten() {
+            named.push((own.to_string(), text));
+        }
+    }
+    let borrowed: Vec<(&str, &str)> = named.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
+    diag::render_across(diags, file, source, &borrowed)
+}
+
 pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Program, String> {
     let lexed =
         phase::watched("lex", || lexer::lex(source)).map_err(|d| diag::render(&d, file, source))?;
@@ -242,7 +263,7 @@ fn compile_parsed_entry(
             merged.root = root_name(std::path::Path::new(file));
             Ok(merged)
         }
-        false => Err(diag::render(&merged_diags, file, source)),
+        false => Err(render_merged(&merged_diags, file, source)),
     }
 }
 
@@ -436,7 +457,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     let rewritten = canonicalize_bare_aliases(&mut program);
     let merged_diags = check::check_merged_after_aliases(&program, false, true, &rewritten);
     if !merged_diags.is_empty() {
-        return Err(diag::render(&merged_diags, file, source));
+        return Err(render_merged(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
     hoist_repeated_strings(&mut program);
@@ -642,7 +663,7 @@ fn compile_library_beside(
     let rewritten = canonicalize_bare_aliases(&mut program);
     let merged_diags = check::check_merged_after_aliases(&program, false, root, &rewritten);
     if !merged_diags.is_empty() {
-        return Err(diag::render(&merged_diags, file, source));
+        return Err(render_merged(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
     hoist_repeated_strings(&mut program);

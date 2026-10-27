@@ -1,0 +1,5 @@
+type box
+  size
+
+pub fn shown n
+  label (box n)
