@@ -1732,3 +1732,13 @@ fields beside a local type that declares a `key` of its own; on main it was
 refused at `e.key`. tests/golden/errors/an_entry_has_no_field_but_its_key_and_value
 pins the refusal of a field an entry does not have. Appendix B names the two
 fields.
+
+CI's rows, on main after #2179. The tab compiles the corpus in fewer
+instructions, browser_compile_instructions 353,638,408 -> 353,555,358, and
+the interpreter's run allocates less, interp_allocs 653,377 -> 653,375, as
+does the front end, compile_allocs 13,940 -> 13,939; nothing here isolates
+why any of the three fell. The compile rows rise with the new code in the
+checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
+entry_instructions 73,693,860 -> 73,701,590 and library_instructions
+73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
+banked.
