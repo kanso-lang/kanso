@@ -110213,3 +110213,57 @@ code grows by 7,728 bytes in every benchmark binary, text 5,496,337 ->
 and building that code costs codegen_instructions_dev 116,456,086 ->
 116,458,530 and codegen_instructions_release 370,239,646 -> 370,260,066.
 Welfare rises 94.33 -> 94.49 and the rise is banked.
+
+## 2026-10-25 — a drained map and an admitting set join the corpus
+
+The probe that found the word count timed six more accumulation shapes at
+two sizes: a string joined onto itself, a list concatenated onto, a map of
+maps, a record carrying a list through a fold, a map drained by `delete`,
+and a set kept as a map that admits a key only when it does not hold it.
+The first four grow linearly. The last two do not, on either engine.
+
+`delete` answers a fresh map (ruled 2026-10-13, kanso#1914), so each call
+copies the whole map, and a loop that drains a map costs the square of its
+size. Taking half the keys out of a map of 5,000 in no order took 1.26
+billion instructions natively and 0.21 s on the interpreter; of 20,000,
+27.9 billion and 3.76 s.
+
+The admitting set is `if (m[k] == none) (put m k true) m`. The linearity
+analysis counts the read in the condition as a second holder of the map, so
+the put copies it. Natively the copy has no sorted view, and the next read
+sorts the whole map again. Admitting 5,000 keys took 9.39 billion
+instructions natively and 0.30 s on the interpreter; 20,000 took 178
+billion and 5.1 s. The guard spelling, `return m if m[k] != none` above
+`put m k true`, is refused the same way.
+
+Under the 2026-09-05 corpus-first gavel both shapes join the corpus here,
+measured on #2116's tree before their fixes. `drained` deletes 550 keys
+from a map of 1,100 and `admitted` admits 430 keys. On this container the
+run program reads 894,638,261 with both. Without `drained` it reads
+848,089,560, a column of 46,548,701 (5.20%), and without `admitted`
+847,672,459, a column of 46,965,802 (5.25%). The interpreted corpus drains
+600 keys and admits 500, and reads 509,290,842 with both. The tab runs the
+same corpus.
+
+CI's rows for the corpus with both phases. work_runbench 801,847,883 ->
+894,533,250 and run_peak_bytes 5,671,457 -> 6,780,801. The interpreted
+corpus reads interp_instructions 424,511,367 -> 471,505,162,
+interp_peak_bytes 741,380 -> 767,647 and interp_allocs 457,070 -> 499,002.
+The tab compiles and runs it: browser_compile_instructions 263,967,351 ->
+272,981,946, browser_compile_peak_bytes 699,180 -> 715,283,
+browser_run_instructions 41,265,571 -> 456,882,925 and
+browser_run_peak_bytes 1,376,256 -> 2,162,688. The tab's run grows elevenfold.
+Its runtime is the native one built for wasm32, so both shapes reach it,
+and the corpus runs them at 600 and 500 keys; which of the two takes the
+most there is not measured here. The run program's emitted code grows by the two phases:
+emitted_other_defines 2,196 -> 2,204, emitted_other_calls 19,957 -> 20,078,
+emitted_other_branches 17,435 -> 17,572, emitted_other_lines 165,000 ->
+165,915 and text 5,604,529 -> 5,606,161. Its allocation vein: run_allocs
+1,446,913 -> 1,449,888, run_alloc_bytes 215,551,096 -> 248,821,464,
+run_arena_blocks 4 -> 5, run_arena_peak_bytes 4,718,608 -> 5,767,184,
+run_spare_peak_bytes 2,621,456 -> 3,670,032, run_held_peak_bytes 216,080 ->
+276,848, run_beat_iters 111,493 -> 112,473, run_evac_allocs 1,760 -> 1,978,
+run_evac_bytes 4,603,072 -> 7,175,760, run_put_mut_grow 32 -> 41, run_sh_buf
+86,829,600 -> 116,309,488 and run_sh_map 12,160 -> 25,920. Welfare re-bases
+the eight terms the phases move, each keeping its ratio to its baseline, and
+the floor stays at 94.49.
