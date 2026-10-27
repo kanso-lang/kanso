@@ -1,0 +1,5 @@
+# An entry reads `key` and `value` by name (ruled on #2163), and a field it
+# does not have is refused like any record's.
+m = { 1:2 }
+
+pub play = print (entries m)[1].size

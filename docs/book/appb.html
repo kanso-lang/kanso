@@ -348,7 +348,7 @@ missing: index out of range</code></pre>
 
 <h3 id="b-entries"><code>entries</code></h3>
 <p class="builtin-sig"><code>entries map → entry[]</code></p>
-<p>the key–value pairs of a map, each an <code>entry key value</code> record, returned in sorted key order. the order is deterministic, always—iteration over a map never depends on insertion history. to read a single value by key, use the subscript <code>m[k]</code>.</p>
+<p>the key–value pairs of a map, each an <code>entry key value</code> record, returned in sorted key order. the order is deterministic, always—iteration over a map never depends on insertion history. an entry reads its two fields by name, <code>e.key</code> and <code>e.value</code>, and a parameter can take it apart with the pattern <code>(entry k v)</code> instead. to read a single value by key, use the subscript <code>m[k]</code>.</p>
 
 <h3 id="b-keys"><code>keys</code></h3>
 <p class="builtin-sig"><code>keys map → key[]</code></p>

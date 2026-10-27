@@ -1,0 +1,13 @@
+# An entry reads its `key` and `value` by name on every engine, beside a local
+# type that declares a `key` of its own (ruled on #2163).
+import "std/list"
+
+type pair
+  key
+  other
+
+m = { "a":1 "b":2 }
+
+pub play = print "{list/to_list (list/map (entries m) (e -> e.key))}"
+  .> (_ -> print "{list/to_list (list/map (entries m) (e -> e.value))}")
+  .> (_ -> print "{(pair 5 6).key}")

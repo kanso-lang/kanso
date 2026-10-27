@@ -2263,7 +2263,7 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
     // whole program, not every distinct name — and a second for each qualified
     // read's bare half. The keep mask exists so the borrow ends before the
     // retain needs the program mutably.
-    let keep: Vec<bool> = {
+    let (keep, wanted): (Vec<bool>, [bool; 2]) = {
         let mut mentioned: crate::hash::Set<&str> = crate::hash::Set::default();
         for decl in &program.fns {
             if decl.is_getter() {
@@ -2273,10 +2273,62 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
                 mentions_in_stmt(stmt, &mut mentioned);
             }
         }
-        program.fns.iter().map(|d| !d.is_getter() || mentioned.contains(d.name.as_str())).collect()
+        // asked of the names already gathered, so no getter name is formatted
+        let wanted =
+            ast::ENTRY_FIELDS.map(|f| mentioned.iter().any(|m| ast::getter_field(m) == Some(f)));
+        let keep = program
+            .fns
+            .iter()
+            .map(|d| !d.is_getter() || mentioned.contains(d.name.as_str()))
+            .collect();
+        (keep, wanted)
     };
     let mut mask = keep.into_iter();
     program.fns.retain(|_| mask.next().unwrap_or(true));
+    entry_readers(program, wanted);
+}
+
+/// An entry's `key` and `value` read by name (#2163). The arms are written
+/// only for a program that reads the field, so one that never does pays
+/// nothing for them. The group may already hold arms for records that declare
+/// the field, so the entry arm is asked about by its pattern, and one a
+/// dependency already wrote is kept.
+fn entry_readers(program: &mut ast::Program, wanted: [bool; 2]) {
+    for (at, field) in ast::ENTRY_FIELDS.iter().enumerate() {
+        if !wanted[at] {
+            continue;
+        }
+        let name = ast::getter_name(field);
+        let written = program.fns.iter().any(|f| {
+            ast::split_qual(&f.name).map_or(f.name.as_str(), |(_, short)| short) == name
+                && matches!(f.params.first(), Some(ast::Pattern::Ctor { ty, .. }) if ty.as_str() == "entry")
+        });
+        if written {
+            continue;
+        }
+        let span = crate::diag::Span::at(0, 0);
+        let fields = (0..ast::ENTRY_FIELDS.len())
+            .map(|i| match i == at {
+                true => ast::Pattern::Var(Name::new(ast::GETTER_BINDER), span),
+                false => ast::Pattern::Wildcard(span),
+            })
+            .collect();
+        program.fns.push(ast::FnDecl {
+            name,
+            is_pub: true,
+            written_pub: false,
+            span,
+            params: vec![ast::Pattern::Ctor { ty: Name::new("entry"), fields, whole: None }],
+            body: vec![ast::Stmt::Expr(ast::Expr::Ident(
+                Name::new(ast::GETTER_BINDER),
+                span,
+                crate::ast::Resolution::default(),
+            ))],
+            file: crate::ast::unstamped(),
+            synthetic: false,
+            shades: None,
+        });
+    }
 }
 
 fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {

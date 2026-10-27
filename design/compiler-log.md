@@ -23,150 +23,6 @@
 
 
 
-## 2026-10-25 — two cliffs join the run program and the interpreted corpus
-
-Profiling the run program after #2106 turned up two shapes no corpus held.
-Both are quadratic, and each is measured here on main before its fix, under
-the 2026-09-05 corpus-first gavel.
-
-`branched` is a list held in a record and pushed onto from one arm of an
-`if` whose other arm answers the record whole:
-`if (k == 0) b (fill (bag (push b.items k) (b.n + 1)) (k - 1))`. kanso#1926
-moves the list out of the record when every mention of the record is a
-field read, and #2106 let a guard's early answer off that rule. The `if`
-arm still counted, so every push copied the list, on both engines: 80,000
-pushes took 14 seconds natively and 30 on the interpreter, where the
-guard's spelling and the two-arm spelling took a tenth of a second.
-
-`padded` lays out a column with `text/pad_start`. The library grew the
-padding one copy of the fill at a time and counted its characters on every
-step, so a width of 40,000 allocated 801 MB natively.
-
-In the run program `branched` has a knee like `guarded`'s: linear at about
-260 instructions a push below 22,290 pushes, and about a million and a half
-a push past 22,310. The count is 22,305. `padded` pads 75 rows to widths of
-37 to 2,775 characters. Against #2106's tree with both phases,
-880,945,062, the columns are 40,556,036 (4.60%) and 42,367,338 (4.81%).
-
-The interpreted corpus runs both too, at 680 pushes and 18 rows: 392,521,332
-with the code and neither run, 425,717,899 with both. The tab runs the same
-corpus, so its run row moves with it.
-
-CI's rows for the corpus with both shapes. work_runbench 797,623,329 ->
-880,946,052. The run program's emitted code grows by the two phases,
-runbench defines 771 -> 781, calls 7,818 -> 7,956, branches 6,791 -> 6,886,
-lines 60,113 -> 60,916, and its machine code 779,308 -> 785,212 bytes. Over
-every benchmark that is emitted_other_defines 2,178 -> 2,188,
-emitted_other_calls 19,778 -> 19,916, emitted_other_branches 17,310 ->
-17,405, emitted_other_lines 163,950 -> 164,753 and text 5,523,025 ->
-5,528,929. Its
-allocation vein: run_allocs 1,444,950 -> 1,541,511, run_alloc_bytes
-213,685,416 -> 290,828,216, run_arena_blocks 4 -> 5, run_arena_peak_bytes
-4,718,608 -> 5,767,200, run_spare_peak_bytes 2,621,456 -> 3,670,048,
-run_cohort_frees 5 -> 68, run_perm_allocs 101 -> 102, run_beat_iters 89,113
--> 111,493, run_evac_allocs 8,626 -> 8,970, run_evac_bytes 4,822,160 ->
-13,592,736, run_str_scans 1,023 -> 53,763, run_str_scan_bytes 17,930,494 ->
-67,106,410, run_sh_str 16,193,568 -> 66,689,376, run_sh_rec 3,906,544 ->
-5,268,656 and run_sh_buf 86,615,088 -> 111,082,496. The interpreted corpus:
-interp_instructions 385,420,176 -> 425,717,899, interp_allocs 401,614 ->
-445,515 and interp_peak_bytes 637,429 -> 735,045. The tab compiles and runs
-the larger corpus: browser_compile_instructions 218,703,716 -> 239,148,990,
-browser_compile_peak_bytes 532,354 -> 610,900 and browser_run_instructions
-33,345,263 -> 38,837,644.
-
-Each welfare term these move keeps its ratio to its baseline, as the four
-#2089 phases did: run_instructions, run_peak_bytes, interp_instructions,
-interp_peak_bytes, browser_compile_instructions, browser_compile_peak_bytes
-and browser_run_instructions. The floor's history records each old and new
-baseline. The fixes score against them.
-
-## 2026-10-25 — three quadratics in the core fixed
-
-The fixes for the two shapes the entry above added to the corpus, and one
-for a map taking keys in no order, which the run program's `scatter` phase
-has held since kanso#1820.
-
-**A list in a record grows in place from an `if` arm.** kanso#1926 moves a
-list out of a record when every mention of the record is a field read, and
-#2106 let a guard's early answer off that rule because it runs instead of
-the push. An arm of `if c a b` runs instead of the other arm in the same
-way, so `FieldTally` now tallies each arm on its own and lets an arm that
-never reads the field keep only its refusal. 80,000 pushes written with the
-`if` went from 14.2 seconds to 0.068 natively and from 30.3 to 0.11 on the
-interpreter. `mem/a_list_in_a_record_grows_from_an_if_arm` pins it: 20,000
-pushes made 51,814 allocations of 9,160,000,528 bytes on main and make 13 of
-1,044,944.
-
-**Padding doubles its fill.** `text/pad_start` and `text/pad_end` grew
-their padding one copy of the fill at a time and counted its characters on
-every step. The fill now doubles until it covers the width and the front of
-it is kept, which answers the same string. A width of 300,000 takes 0.06
-seconds. `mem/a_wide_padding_doubles_its_fill` pins a width of 40,000 with
-a two-character fill: 20,005 allocations of 400,600,128 bytes on main, 21
-of 211,696 now.
-
-**Two int keys compare directly, and a map's side run grows longer.**
-`k_key_cmp` unwrapped subtypes and tested for a bignum before it compared
-two machine ints, and every probe of a view search and every step of a
-merge asks it. The side run that takes keys out of order merged into the
-view once it passed the square root of the view's length. An insert into
-the side is one memmove and a merge walks both runs, so the side now waits
-for four times the square root. 2,340 scrambled int keys went from
-7,703,440 instructions to 6,039,707 with the compare alone and to 4,575,844
-with both; eight times the square root read 4,631,595. The longer side
-holds more: `a_tally_of_scattered_keys_merges_its_view` reads
-held_peak_bytes 273,328 where it read 206,448.
-
-On this container the run program goes from 880,945,062 with the two new
-phases to 799,175,414 with the three fixes, and the interpreted corpus from
-425,717,899 to 399,112,446.
-
-CI's rows, against #2111's tree with #2107 and #2108 under it. The run
-program falls 9.3%, work_runbench 880,946,052 -> 799,174,946, and the two
-phases cost what their neighbours do. The interpreted corpus falls 6.2%,
-interp_instructions 425,717,899 -> 399,115,104, interp_allocs 445,515 ->
-420,622 and interp_peak_bytes 735,045 -> 734,933, and the tab running it
-11.2%, browser_run_instructions 38,837,644 -> 34,483,426. Of the other run
-rows work_basket falls 31,039,077 -> 30,619,856 on the int compare, and
-work_oneshot 10,050,755 -> 10,098,604, work_livebench 936,030,663 ->
-936,077,833 and work_encodebench 2,327,445,961 -> 2,327,451,296 rise by
-layout. Over every benchmark the emitted code lands on
-emitted_other_calls 19,914, emitted_other_branches 17,407 and
-emitted_other_lines 164,739, the two phases' code less what the arm rule
-lets the emitter drop. Three map fixtures keep a longer side and allocate
-for it: growing_map_allocs 1,615 -> 1,617, growing_map_alloc_bytes 189,312
--> 200,608, growing_map_held_peak_bytes 55,408 -> 63,536,
-a_tally_of_scattered_keys_merges_its_view_allocs 29 -> 31,
-a_tally_of_scattered_keys_merges_its_view_alloc_bytes 536,368 -> 620,752,
-a_tally_of_scattered_keys_merges_its_view_held_peak_bytes 206,448 ->
-273,328, fused_tally_allocs 66 -> 68, fused_tally_alloc_bytes 33,872 ->
-36,192 and fused_tally_held_peak_bytes 7,648 -> 8,464. #2106's fixture
-does the same: a_read_handed_to_a_call_stays_in_place_allocs 15 -> 17,
-a_read_handed_to_a_call_stays_in_place_alloc_bytes 16,800 -> 19,904 and
-a_read_handed_to_a_call_stays_in_place_held_peak_bytes 6,112 -> 7,184.
-
-The run program's allocation vein: run_allocs 1,541,511 -> 1,445,901,
-run_alloc_bytes 290,828,216 -> 215,212,648, run_arena_blocks 5 -> 4,
-run_arena_peak_bytes 5,767,200 -> 4,718,608, run_spare_peak_bytes 3,670,048
--> 2,621,456, run_cohort_frees 68 -> 5, run_evac_allocs 8,970 -> 8,626,
-run_evac_bytes 13,592,736 -> 4,822,160, run_str_scans 53,763 -> 1,885,
-run_str_scan_bytes 67,106,410 -> 18,352,322, run_sh_str 66,689,376 ->
-16,642,592, run_sh_rec 5,268,656 -> 3,906,672 and run_sh_buf 111,082,496 ->
-86,615,200. run_push_mut_slow rises 1,557,480 -> 1,579,785, by exactly the
-22,305 pushes `branched` now makes in place, and run_bytes_malloc 7,885 ->
-7,893 and run_bytes_freed 7,755 -> 7,763 with them. The list it grows lives
-in a permanent buffer, so run_perm_peak_bytes rises 212,465 -> 736,769, and
-the longer side run holds more, run_held_peak_bytes 233,760 -> 254,240 and
-run_view_allocs and run_view_frees 399 -> 403. The run program's peak still
-falls, from 6,213,425 bytes to 5,709,617.
-
-The front end reads the doubled padding in the library it includes and the
-new arm rule: compile_instructions lands on 24,695,561, entry_instructions
-72,875,969, library_instructions 72,547,701 and browser_compile_instructions
-239,691,017, with browser_compile_peak_bytes 610,760, and
-codegen_instructions_dev on 116,456,086 and codegen_instructions_release on
-370,239,646. Welfare rises 0.32, which this pull request banks.
-
 ## 2026-10-25 — a word count joins the run program and the interpreted corpus
 
 A probe built each list, text and map function natively at two sizes, four
@@ -1847,3 +1703,42 @@ tests/golden/errors_module gains a_field_read_in_a_modules_second_file,
 which on main printed no line. field_read_in_a_deep_library and
 two_owners_tie_on_a_traveling_call gain the line their goldens had pinned
 as missing.
+
+## 2026-10-26 — gavel: an entry reads its key and value by name
+
+#2163, option 1. An entry is an ordinary record, so `e.key` and `e.value`
+read by name on every engine and are checked like any record's fields. The
+pattern `(entry k v)` keeps working. Clay asked about Ruby's two-argument
+blocks (`|k, v|`); destructuring the entry in a parameter already gives that,
+and a two-argument walk over maps would need a twin of every list function.
+
+## 2026-10-27 — an entry reads its key and value by name
+
+#2163. A field read becomes a call on the field's getter, and getters were
+made only for fields some type in the program declares. `entry` is built
+into the language, so `e.key` had no getter: the checker refused it, and
+`e.value` got past the checker only when std/list happened to declare a
+`value` of its own, then failed in the interpreter. The checker now counts
+`key` and `value` as declared, the way it counts an err's three readers.
+`prune_unused_getters` already gathers every getter a program names, and
+when `Get_key` or `Get_value` is among them it writes that group an `entry`
+arm, keeping one a dependency already wrote. A program that never reads the
+fields builds neither arm. The first version built both in every compile and
+pruned them after, which CI read as 63 more allocations in the interpreter's
+corpus and 502,143 more browser compile instructions.
+
+tests/golden/micro/an_entry_reads_its_key_and_value_by_name reads both
+fields beside a local type that declares a `key` of its own; on main it was
+refused at `e.key`. tests/golden/errors/an_entry_has_no_field_but_its_key_and_value
+pins the refusal of a field an entry does not have. Appendix B names the two
+fields.
+
+CI's rows, on main after #2179. The tab compiles the corpus in fewer
+instructions, browser_compile_instructions 353,638,408 -> 353,555,358, and
+the interpreter's run allocates less, interp_allocs 653,377 -> 653,375, as
+does the front end, compile_allocs 13,940 -> 13,939; nothing here isolates
+why any of the three fell. The compile rows rise with the new code in the
+checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
+entry_instructions 73,693,860 -> 73,701,590 and library_instructions
+73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
+banked.

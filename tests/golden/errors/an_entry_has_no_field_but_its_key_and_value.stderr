@@ -1,0 +1,4 @@
+error[name]: no record type has a field `size`
+  --> tests/golden/errors/an_entry_has_no_field_but_its_key_and_value.kso:5:32
+   5 | pub play = print (entries m)[1].size
+                                      ^
