@@ -4,9 +4,9 @@
 # the emitted goldens read the assumes that went.
 set -e
 old='                assume_length(f, &len);'
-[ "$(grep -cxF "$old" src/codegen/emit.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$old" src/codegen/calls.rs)" -eq 1 ] || {
   echo "the inline length's bound moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i '/^                assume_length(f, &len);$/d' src/codegen/emit.rs
-! grep -qxF "$old" src/codegen/emit.rs
+sed -i '/^                assume_length(f, &len);$/d' src/codegen/calls.rs
+! grep -qxF "$old" src/codegen/calls.rs

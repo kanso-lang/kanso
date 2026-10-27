@@ -6,9 +6,9 @@
 # emitted gate, where every program that encodes JSON loses the inline path.
 set -e
 line='                "append_key_fast"'
-grep -qxF "$line" src/codegen/emit.rs || {
+grep -qxF "$line" src/codegen/calls.rs || {
   echo "the key builtin's fast route moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                "append_key_fast"$/                "append_key_mut"/' src/codegen/emit.rs
-[ "$(grep -cxF '                "append_key_mut"' src/codegen/emit.rs)" -eq 1 ]
+sed -i 's/^                "append_key_fast"$/                "append_key_mut"/' src/codegen/calls.rs
+[ "$(grep -cxF '                "append_key_mut"' src/codegen/calls.rs)" -eq 1 ]
