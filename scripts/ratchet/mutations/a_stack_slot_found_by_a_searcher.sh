@@ -6,7 +6,7 @@
 # 258,016,805 on this tree, 259,885,584 under it.
 set -e
 target="    match text.bytes().position(|b| b == b' ') {"
-n=$(grep -cxF "$target" src/codegen.rs)
+n=$(grep -cxF "$target" src/codegen/fn_emit.rs)
 [ "$n" -eq 1 ] || { echo "is_a_stack_slot changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i "s/^    match text.bytes().position(|b| b == b' ') {\$/    match text.find(' ') {/" src/codegen.rs
-grep -qxF "    match text.find(' ') {" src/codegen.rs
+sed -i "s/^    match text.bytes().position(|b| b == b' ') {\$/    match text.find(' ') {/" src/codegen/fn_emit.rs
+grep -qxF "    match text.find(' ') {" src/codegen/fn_emit.rs
