@@ -33,6 +33,13 @@ type helped
   call
   helpers
 
+# An `if` expression a branch compiles to, the helpers its arms became, and
+# the row after the last of its branches.
+type forked
+  test
+  helpers
+  next
+
 type packing
   chunks
   current
@@ -129,29 +136,40 @@ fn step rows r i last stop scope o acc
   return stepped (texted acc (after b 2) at) last if text/starts_with? b "| "
   stepped (tagged rows r i last scope o acc) last
 
-# `- if` takes the rows indented under it, and an `- else` at its own depth
-# right after them takes the rows under that.
+# `- if` takes the rows indented under it. An `- else if` at its own depth
+# right after them chains another test, and an `- else` takes what is left.
 fn branched rows r i last stop scope o acc
-  cond = after r.body 5
-  yes = helper rows (i + 1) last scope o r.line
-  return chosen acc cond yes [] "\"\"" r last if not else_at? rows last r
-  past = block_end rows (last + 1) stop r.depth
-  other = rows_line rows last
-  no = helper rows (last + 1) past scope o other
-  chosen acc cond yes no.helpers (wrapped no.call) r past
+  f = forked_at rows r i last stop scope o
+  helpers = list/concat acc.helpers f.helpers
+  hole = unit "\{{f.test}}" r.line true
+  stepped (woven (push acc.units hole) helpers) f.next
 
-fn else_at? rows j r
-  return false if j < 1 or length rows < j
-  rows[j].depth == r.depth and rows[j].body == "- else"
+fn forked_at rows r i last stop scope o
+  from = if (text/starts_with? r.body "- else if ") 10 5
+  yes = helper rows (i + 1) last scope o r.line
+  head = "if {wrapped (after r.body from)} {wrapped yes.call}"
+  kind = follower rows last r
+  return forked "{head} \"\"" yes.helpers last if kind == ""
+  past = block_end rows (last + 1) stop r.depth
+  return chained rows last past stop scope o head yes if kind == "else if"
+  no = helper rows (last + 1) past scope o (rows_line rows last)
+  forked "{head} {wrapped no.call}" (list/concat yes.helpers no.helpers) past
+
+fn chained rows j past stop scope o head yes
+  return forked "{head} \"\"" yes.helpers j if j < 1 or length rows < j
+  sub = forked_at rows rows[j] j past stop scope o
+  forked "{head} ({sub.test})" (list/concat yes.helpers sub.helpers) sub.next
+
+fn follower rows j r
+  return "" if j < 1 or length rows < j
+  return "" if rows[j].depth != r.depth
+  b = rows[j].body
+  return "else" if b == "- else"
+  if (text/starts_with? b "- else if ") "else if" ""
 
 fn rows_line rows j
   return 0 if j < 1 or length rows < j
   rows[j].line
-
-fn chosen acc cond yes others otherwise r next
-  hole = "\{if {wrapped cond} {wrapped yes.call} {otherwise}}"
-  helpers = list/concat (list/concat acc.helpers yes.helpers) others
-  stepped (woven (push acc.units (unit hole r.line true)) helpers) next
 
 # `- for x in xs` writes the rows under it once for each element of `xs`,
 # with `x` in scope.

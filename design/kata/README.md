@@ -20,7 +20,8 @@ kanso run app
   `name=expr` for a value.
 - `= expr` writes a value escaped, `== expr` writes it raw, and text after a
   tag or a `|` may hold `#{expr}`, also escaped.
-- `- if expr` with an optional `- else`, and `- for x in xs`.
+- `- if expr`, any number of `- else if expr`, an optional `- else`, and
+  `- for x in xs`.
 - `/` comments, which drop the rows under them too, and `doctype html`.
 - A first line `- locals a b c` names the template's parameters, in order.
 
@@ -42,5 +43,5 @@ design settles.
 - Diagnostics point at the generated file. The comments make the trip back to
   the template short, but a compiler that read `.slim` files itself could
   report `page.slim:18` directly.
-- No `- else if`, no `- case`, no partials beyond calling another view's
+- No `- case`, no partials beyond calling another view's
   function with `==`, no layouts, and no whitespace control.
