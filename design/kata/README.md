@@ -42,7 +42,5 @@ design settles.
 - Diagnostics point at the generated file. The comments make the trip back to
   the template short, but a compiler that read `.slim` files itself could
   report `page.slim:18` directly.
-- The free-name scan skips string literals inside an expression, so a local
-  named only inside `"{...}"` in a hole is not passed to a helper.
 - No `- else if`, no `- case`, no partials beyond calling another view's
   function with `==`, no layouts, and no whitespace control.

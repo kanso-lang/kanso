@@ -207,8 +207,28 @@ fn raw e
 fn escaped e
   "\{escape {wrapped e}}"
 
+# An expression passed as an argument needs parentheses when it has a space
+# outside every bracket and string literal, and is refused with them when it
+# does not.
 fn wrapped e
-  if (length (text/split e " ") > 1) "({e})" e
+  if (spaced? (text/chars e) 1 ["code"]) "({e})" e
+
+fn spaced? cs i modes
+  return false if i < 1 or length cs < i
+  c = cs[i]
+  next = i + 1
+  text_mode = top modes == "text"
+  return spaced? cs (i + 2) modes if text_mode and c == "\\"
+  return spaced? cs next (push modes "code") if text_mode and c == "\{"
+  return spaced? cs next (popped modes) if text_mode and c == "\""
+  return spaced? cs next modes if text_mode
+  return true if c == " " and length modes == 1
+  opens = c == "(" or c == "[" or c == "\{"
+  return spaced? cs next (push modes "code") if opens
+  closes = c == ")" or c == "]" or c == "}"
+  return spaced? cs next (popped modes) if closes
+  return spaced? cs next (push modes "text") if c == "\""
+  spaced? cs next modes
 
 # Text with `#\{expr}` in it: the markup is copied and each expression is
 # escaped into the page.
@@ -379,19 +399,41 @@ fn free_in units scope
   list/to_list (list/select scope (n -> list/any? seen (m -> m == n)))
 
 fn idents s
-  scanned (text/chars s) 1 "" "" false []
+  scanned (text/chars s) 1 "" "" ["code"] []
 
 # `cur` is the name being read and `before` the character in front of it, so
-# a field after `.` and a module before `/` are not taken for names.
-fn scanned cs i cur before inside acc
+# a field after `.` and a module before `/` are not taken for names. `modes`
+# says what the scan is inside, innermost last: code, or a string literal,
+# whose `{` opens code again until its `}`.
+fn scanned cs i cur before modes acc
   return ended acc cur before "" if i < 1 or length cs < i
+  return in_text cs i modes acc if top modes == "text"
   c = cs[i]
   next = i + 1
-  quote = c == "\""
-  return scanned cs next "" "" (not inside) (ended acc cur before c) if quote
-  return scanned cs next "" "" true acc if inside
-  return scanned cs next "{cur}{c}" before false acc if name_char? c
-  scanned cs next "" c false (ended acc cur before c)
+  return scanned cs next "{cur}{c}" before modes acc if name_char? c
+  closed_name = ended acc cur before c
+  return scanned cs next "" "" (push modes "text") closed_name if c == "\""
+  return scanned cs next "" c (push modes "code") closed_name if c == "\{"
+  return scanned cs next "" c (popped modes) closed_name if c == "}"
+  scanned cs next "" c modes closed_name
+
+# Inside a string literal a `\` escapes the character after it, `{` opens
+# code, and `"` closes the literal.
+fn in_text cs i modes acc
+  return acc if i < 1 or length cs < i
+  c = cs[i]
+  return scanned cs (i + 2) "" "" modes acc if c == "\\"
+  return scanned cs (i + 1) "" "\{" (push modes "code") acc if c == "\{"
+  return scanned cs (i + 1) "" "" (popped modes) acc if c == "\""
+  scanned cs (i + 1) "" "" modes acc
+
+fn top modes
+  return "code" if length modes < 1
+  modes[length modes]
+
+fn popped modes
+  return ["code"] if length modes < 2
+  list/to_list (list/take modes (length modes - 1))
 
 fn ended acc "" _ _
   acc
