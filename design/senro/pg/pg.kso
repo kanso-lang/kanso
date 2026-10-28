@@ -1,5 +1,9 @@
+import "std/base64"
+import "std/bits"
 import "std/list"
+import "std/math"
 import "std/net"
+import "std/sha256"
 import "std/text"
 
 # A Postgres client written against the wire protocol, version 3.0. Every
@@ -43,10 +47,33 @@ type column
   name
   oid
 
+# A SCRAM exchange so far: the connection, the password, the client's first
+# message without its header, and the server's first message.
+type exchange
+  conn
+  password
+  bare
+  server
+
+# What a SCRAM client sends in its final message, and the signature it
+# expects the server to answer with.
+type proven
+  final
+  proof
+  server
+
 pub null = nothing 0
 
-pub fn connect host at user database
-  net/dial host at .> (c -> started c user database)
+unchallenged = err "the server's challenge is not one SCRAM-SHA-256 sends"
+
+# Two draws below this make a nonce of about 120 bits.
+wide = 1000000000000000000
+
+# A password of "" is for a server that trusts the connection, as Docker's
+# development images do. Any other password is sent by SCRAM-SHA-256, which
+# never puts the password itself on the wire.
+pub fn connect host at user database password
+  net/dial host at .> (c -> started c user database password)
 
 # A statement and its values, sent apart: Parse carries the SQL with $1, $2
 # where the values go, and Bind carries the values, so nothing a user typed is
@@ -101,12 +128,12 @@ pub fn close s
   net/write s.conn (text/to_bytes (framed 88 []))
     .> (_ -> net/close_conn s.conn)
 
-fn started c user database
+fn started c user database password
   wanted = list/concat (setting "user" user) (setting "database" database)
   body = list/concat (be32 196608) (list/concat wanted [0])
   net/write c (text/to_bytes (list/concat (be32 (length body + 4)) body))
     .> (_ -> replies c opened?)
-    .> (ms -> admitted c ms)
+    .> (ms -> admitted c password ms)
 
 fn setting name value
   list/concat (cstring name) (cstring value)
@@ -122,14 +149,112 @@ fn asks_password? m
 fn ready? m
   m.kind == 90
 
-fn admitted c ms
-  refused = list/find ms (m -> m.kind == 69 or asks_password? m)
-  return session c if refused == none
-  refusal refused
+fn admitted c password ms
+  refused = list/find ms (m -> m.kind == 69)
+  return failure refused.body if refused != none
+  request = list/find ms asks_password?
+  return session c if request == none
+  authenticated c password (be32_at request.body 1)
 
-fn refusal m
-  return failure m.body if m.kind == 69
-  err "the server asks for password method {be32_at m.body 1}"
+# SCRAM-SHA-256, RFC 5802 and 7677, which is what Postgres asks for by
+# default. Method 10 is the server naming the mechanisms it accepts.
+fn authenticated c password 10
+  math/random wide .> (a -> math/random wide .> (b -> nonced c password a b))
+
+fn nonced c password a b
+  scram c password "{a}{b}"
+
+fn authenticated _ _ method
+  err "the server asks for password method {method}; this client speaks SCRAM"
+
+fn scram c password nonce
+  first_bare = "n=,r={nonce}"
+  first = text/bytes "n,,{first_bare}"
+  counted = list/concat (be32 (length first)) first
+  body = list/concat (cstring "SCRAM-SHA-256") counted
+  net/write c (text/to_bytes (framed 112 body))
+    .> (_ -> replies c challenged?)
+    .> (ms -> challenged c password first_bare ms)
+
+fn challenged? m
+  m.kind == 82 or m.kind == 69
+
+fn ended? m
+  m.kind == 90 or m.kind == 69
+
+fn challenged c password first_bare ms
+  refused = list/find ms (m -> m.kind == 69)
+  return failure refused.body if refused != none
+  challenge = list/find ms (m -> m.kind == 82)
+  server_first = text/utf8 (slice challenge.body 5 (length challenge.body - 4))
+  attrs = attributes server_first
+  first = exchange c password first_bare server_first
+  asked first attrs attrs["r"]
+
+# The server's first message: its nonce, the salt, and the rounds. A
+# challenge missing any of the three is not one SCRAM-SHA-256 sends.
+fn asked _ _ none
+  unchallenged
+
+fn asked first attrs r
+  salted first attrs r attrs["s"]
+
+fn salted _ _ _ none
+  unchallenged
+
+fn salted first attrs r s
+  rounded first r s attrs["i"]
+
+fn rounded _ _ _ none
+  unchallenged
+
+fn rounded first r s i
+  base64/decode! s .> (salt -> text/to_int! i .> (n -> answered first r salt n))
+
+fn answered first r salt times
+  proved = proof first r (list/to_list salt) times
+  answer = text/bytes "{proved.final},p={base64/encode proved.proof}"
+  net/write first.conn (text/to_bytes (framed 112 answer))
+    .> (_ -> replies first.conn ended?)
+    .> (ms -> concluded first.conn proved.server ms)
+
+# The keys RFC 5802 derives from the password, and the message both sides
+# sign: the client's first message, the server's, and the client's final one
+# without its proof.
+fn proof first r salt times
+  key = sha256/pbkdf2 (text/bytes first.password) salt times 32
+  client_key = sha256/hmac key (text/bytes "Client Key")
+  stored = sha256/digest client_key
+  final = "c=biws,r={r}"
+  signed = text/bytes "{first.bare},{first.server},{final}"
+  signature = sha256/hmac stored signed
+  server_key = sha256/hmac key (text/bytes "Server Key")
+  server = base64/encode (sha256/hmac server_key signed)
+  proven final (text/to_bytes (xored client_key signature 1 [])) server
+
+fn attributes s
+  list/fold (text/split s ",") {} (acc p -> put acc (key_of p) (after p))
+
+fn key_of p
+  text/slice p 1 1
+
+fn after p
+  text/slice p 3 (length p)
+
+fn xored a b at acc
+  return acc if at < 1 or at > length a or at > length b
+  xored a b (at + 1) (push acc (bits/xor a[at] b[at]))
+
+# The server proves it knew the password too: its final message carries a
+# signature only a holder of the salted password could make.
+fn concluded c server ms
+  refused = list/find ms (m -> m.kind == 69)
+  return failure refused.body if refused != none
+  final = list/find ms (m -> m.kind == 82 and be32_at m.body 1 == 12)
+  return err "the server never proved it knew the password" if final == none
+  verdict = text/utf8 (slice final.body 5 (length final.body - 4))
+  return session c if verdict == "v={server}"
+  err "the server's proof does not match; this is not the server you think"
 
 # An error's body is a run of fields, each a code byte and a string, ending
 # in a zero. The human-readable one has the code M.

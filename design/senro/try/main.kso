@@ -1,4 +1,6 @@
 import "../pg"
 import "./steps"
 
-pg/connect "127.0.0.1" 5432 "postgres" "postgres" .> steps/walked
+# A trusting server, as Docker's development image runs; give a password to
+# log in by SCRAM-SHA-256.
+pg/connect "127.0.0.1" 5432 "postgres" "postgres" "" .> steps/walked
