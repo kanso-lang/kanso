@@ -1440,3 +1440,11 @@ Chapter 11 of the book gains a section on `derive`, with the route table as
 an executed sample, and the book's highlighter and the editor grammar paint
 `derive` as a keyword.
 
+Every compile that derives loads the larger std/derive, so the entry row
+rises to entry_instructions 83,914,234 (+185,394); on one binary here
+load_dependencies took 129K of a 188K rise and the merged check 37K. The
+other compile rows move by layout: compile_instructions 24,063,854 (-324),
+library_instructions 70,862,041 (-1,244) and browser_compile_instructions
+343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
+under the rule for a feature a ruling requires.
+
