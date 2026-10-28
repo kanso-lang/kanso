@@ -15,7 +15,9 @@
 //! the description. No executor is supplied, so a derivation that answers an
 //! effect is refused rather than run.
 
-use crate::ast::{Derive, Expr, FnDecl, Pattern, Program, Resolution, Stmt, TemplatePart, TypeDecl};
+use crate::ast::{
+    Derive, Expr, FnDecl, Pattern, Program, Resolution, Stmt, TemplatePart, TypeDecl,
+};
 use crate::diag::{Diagnostic, Span};
 use crate::eval::{Entries, Interp, MapKey, Value};
 use crate::name::Name;
@@ -353,7 +355,8 @@ fn declared_type(interp: &Interp, d: &Derive, fields: &[Value]) -> Result<TypeDe
     let listed = match interp.demand(&fields[2]) {
         Ok(Value::List(items)) => items,
         _ => {
-            let msg = format!("`{}` declared type `{name}` with fields that are not a list", d.name);
+            let msg =
+                format!("`{}` declared type `{name}` with fields that are not a list", d.name);
             return Err(Diagnostic::new("derive", msg, d.span));
         }
     };
