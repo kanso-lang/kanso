@@ -9,6 +9,13 @@ import "std/text"
 # kanso integers do not wrap, so every word operation ends by masking back to
 # thirty-two bits — `whole` is that mask, and it appears wherever a sum or a
 # shift could have carried past the top.
+#
+# `pads` is the state HMAC's two key blocks leave, kept so every HMAC under one
+# key starts from there.
+type pads
+  inner
+  outer
+
 whole = 4294967295
 
 hexits = "0123456789abcdef"
@@ -159,9 +166,15 @@ fn gathered padded at i w false
 # The message with its terminator, its zero fill, and its length in bits as a
 # big-endian sixty-four bit number — the padding the standard names.
 fn padded_bytes b
+  padded_after b 0
+
+# The padding for a message that follows `before` bytes already hashed. The
+# fill depends on the message alone, since `before` is whole blocks, and the
+# length in bits counts both.
+fn padded_after b before
   n = length b
   zeros = 63 - (n + 8 & 63)
-  filled (push (list/to_list b) 128) zeros n
+  filled (push (list/to_list b) 128) zeros (n + before)
 
 fn filled acc 0 n
   eight_bytes acc (n * 8) 7
@@ -219,9 +232,26 @@ fn word_bytes w
 # one is filled out to the block's sixty-four bytes with zeros. The key is
 # mixed into both hashes, once with each pad.
 pub fn hmac key message
+  mac (keyed_pads key) message
+
+# Each pad is one whole block, so the state it leaves can be kept and every
+# HMAC under the same key starts from there: two compressions instead of
+# four for a short message, which is most of what PBKDF2 does.
+fn keyed_pads key
   k = keyed (list/to_list key)
-  inner = digest (list/concat (xored k 54) message)
-  digest (list/concat (xored k 92) inner)
+  pads (state_after (xored k 54)) (state_after (xored k 92))
+
+fn state_after block
+  blocked block h0 h1 h2 h3 h4 h5 h6 h7 1
+
+fn mac p message
+  digest_from p.outer (digest_from p.inner message)
+
+fn digest_from s message
+  return [] if length s < 8
+  padded = padded_after message 64
+  words = blocked padded s[1] s[2] s[3] s[4] s[5] s[6] s[7] s[8] 1
+  list/to_list (list/fold words [] (acc w -> list/concat acc (word_bytes w)))
 
 fn keyed k
   return keyed (digest k) if length k > 64
@@ -244,15 +274,16 @@ fn all_blocks password salt times i last acc
   all_blocks password salt times (i + 1) last more
 
 fn stretched password salt times i
-  first = hmac password (list/concat salt (word_bytes i))
-  chained password first first (times - 1)
+  p = keyed_pads password
+  first = mac p (list/concat salt (word_bytes i))
+  chained p first first (times - 1)
 
 fn chained _ _ acc 0
   acc
 
-fn chained password u acc left
-  next = hmac password u
-  chained password next (paired_xor acc next 1 []) (left - 1)
+fn chained p u acc left
+  next = mac p u
+  chained p next (paired_xor acc next 1 []) (left - 1)
 
 fn paired_xor a b at acc
   return acc if at < 1 or at > length a or at > length b
