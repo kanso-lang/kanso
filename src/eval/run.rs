@@ -148,6 +148,14 @@ impl<'a> Interp<'a> {
                 Ok(text) => Value::Str(Text::from(text)),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            Desc::ReceiveBytes(conn) => Ok(match executor.receive_bytes(*conn) {
+                Ok(raw) => Value::Bytes(Rc::new(raw)),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
+            Desc::Dial(host, port) => Ok(match executor.dial(host, *port) {
+                Ok(handle) => Value::int(handle),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
                 Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
@@ -390,6 +398,8 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::SocketPort(l) => out.push_str(&format!("  port {l}\n")),
         Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
         Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
+        Desc::ReceiveBytes(conn) => out.push_str(&format!("  receive_bytes {conn}\n")),
+        Desc::Dial(host, port) => out.push_str(&format!("  dial {host:?} {port}\n")),
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::SendBytes(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
