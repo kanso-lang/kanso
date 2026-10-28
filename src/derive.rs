@@ -46,7 +46,7 @@ pub const MODULE: &str = "std/derive";
 /// or the diagnostics a refusal or a misbehaving derivation produced.
 pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagnostic>> {
     let description = describe(entry, deps);
-    let interp = Interp::new(deps);
+    let interp = Interp::copying(deps);
     let mut made = Vec::new();
     let mut diags = Vec::new();
     for d in &entry.derives {
