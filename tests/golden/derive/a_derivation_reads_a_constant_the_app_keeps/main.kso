@@ -1,0 +1,6 @@
+import "./conventions"
+import "./tables"
+
+derive conventions/counted
+
+print "{columns}"

@@ -49,8 +49,8 @@ pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagno
     if !diags.is_empty() {
         return Err(diags);
     }
-    let description = describe(entry, deps);
     let interp = Interp::copying(deps);
+    let description = describe(entry, deps, &interp)?;
     let mut made = Vec::new();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
@@ -72,12 +72,16 @@ pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagno
     }
 }
 
-/// The app's own modules the entry imports, each with its pub functions and its
-/// record types. The modules a derivation lives in are left out: they hold
-/// the convention, not the program it describes.
-fn describe(entry: &Program, deps: &Program) -> Value {
-    let modules = described(entry).iter().map(|name| module(deps, name)).collect();
-    record("derive/program", vec![list(modules)])
+/// The app's own modules the entry imports, each with its pub functions, its
+/// pub constants and its record types. The modules a derivation lives in are
+/// left out: they hold the convention, not the program it describes.
+fn describe(entry: &Program, deps: &Program, interp: &Interp) -> Result<Value, Vec<Diagnostic>> {
+    let modules = described(entry)
+        .iter()
+        .map(|name| module(deps, name, interp))
+        .collect::<Result<_, _>>()
+        .map_err(|d| vec![d])?;
+    Ok(record("derive/program", vec![list(modules)]))
 }
 
 /// The modules a derivation is shown, by the qualifier the entry reaches each
@@ -150,10 +154,11 @@ fn names_in(e: &Expr, named: &mut Vec<(String, Span)>) {
     crate::for_each_child(e, |child| names_in(child, named));
 }
 
-fn module(deps: &Program, name: &str) -> Value {
+fn module(deps: &Program, name: &str, interp: &Interp) -> Result<Value, Diagnostic> {
     let prefix = format!("{name}/");
     let mut seen: Vec<&str> = Vec::new();
     let mut functions = Vec::new();
+    let mut constants = Entries::new();
     for decl in &deps.fns {
         let Some(bare) = decl.name.strip_prefix(&prefix) else { continue };
         if !decl.is_pub || decl.synthetic || bare.contains('/') || seen.contains(&bare) {
@@ -163,6 +168,20 @@ fn module(deps: &Program, name: &str) -> Value {
             continue;
         }
         seen.push(bare);
+        // A constant is handed over as its value, which is how a derivation
+        // reads data the app keeps, such as a list of migrations.
+        if decl.params.is_empty() {
+            let reference = Value::FnRef(Rc::from(decl.name.as_str()));
+            let value = interp
+                .call_value(reference, Vec::new(), decl.span)
+                .and_then(|v| interp.demand(&v))
+                .map_err(|e| {
+                    let msg = format!("`{}` could not be read: {}", decl.name, e.message);
+                    Diagnostic::new("derive", msg, decl.span).about(&decl.file)
+                })?;
+            constants.insert(MapKey::Str(bare.to_string().into()), value);
+            continue;
+        }
         let params = decl.params.iter().map(param).collect();
         let reference = Value::FnRef(Rc::from(decl.name.as_str()));
         functions.push(record("derive/function", vec![text(bare), list(params), reference]));
@@ -178,7 +197,8 @@ fn module(deps: &Program, name: &str) -> Value {
             record("derive/record", vec![text(bare), list(fields)])
         })
         .collect();
-    record("derive/module", vec![text(name), list(functions), list(records)])
+    let constants = Value::Map(Rc::new(constants));
+    Ok(record("derive/module", vec![text(name), list(functions), constants, list(records)]))
 }
 
 fn param(p: &Pattern) -> Value {
