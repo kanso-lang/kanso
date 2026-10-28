@@ -1,0 +1,4 @@
+error[derive]: `conventions/routing` failed: no conventions here
+  --> tests/golden/derive/a_derivation_that_fails/main.kso:4:1
+   4 | derive conventions/routing
+       ^

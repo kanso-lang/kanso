@@ -1,0 +1,5 @@
+import "std/os"
+
+# A derivation runs while the program compiles, so reading a file is refused.
+pub fn routing _
+  os/read_file "routes.txt"
