@@ -282,7 +282,16 @@ fn run(
             return Err(Diagnostic::new("derive", msg, d.span));
         }
     };
-    items.iter().map(|v| interp.demand(v).map_err(|e| failed(d, &e.message))).collect()
+    // An err in the list is the derivation failing partway, and says so with
+    // its reason rather than as a declaration it does not recognise.
+    let answer = |v: &Value| match interp.demand(v) {
+        Ok(Value::ErrV(e) | Value::Unboxed(e)) => {
+            Err(failed(d, &crate::eval::render(interp, &e.reason, false)))
+        }
+        Ok(v) => Ok(v),
+        Err(e) => Err(failed(d, &e.message)),
+    };
+    items.iter().map(answer).collect()
 }
 
 fn failed(d: &Derive, reason: &str) -> Diagnostic {
