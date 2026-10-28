@@ -1,7 +1,8 @@
 //! Derivations (#2186): an entry's `derive` lines, run while it compiles.
 //!
 //! Each case in tests/golden/derive is a program directory: an entry, the
-//! module holding the convention, and the modules it describes. A case with a
+//! module holding the convention, and the modules it describes. A case whose
+//! program reaches a library through `../` keeps the program in `app/`. A case with a
 //! `.stdout` golden compiles and prints that; a case with a `.stderr` golden is
 //! refused with exactly that text. Both engines run every case, because the
 //! derivation itself always runs on the interpreter, and what it declares has
@@ -30,9 +31,15 @@ fn every_derivation_case_says_what_its_golden_says_on_both_engines() {
     let cases = cases();
     assert!(cases.len() >= 6, "the derive corpus moved: {cases:?}");
     for name in cases {
-        let case = format!("tests/golden/derive/{name}");
-        let stdout = std::fs::read_to_string(format!("{case}.stdout")).ok();
-        let stderr = std::fs::read_to_string(format!("{case}.stderr")).ok();
+        let golden = format!("tests/golden/derive/{name}");
+        let stdout = std::fs::read_to_string(format!("{golden}.stdout")).ok();
+        let stderr = std::fs::read_to_string(format!("{golden}.stderr")).ok();
+        // A case that needs a library beside the app keeps the app in `app/`.
+        let app = format!("{golden}/app");
+        let case = match std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(&app).is_dir() {
+            true => app,
+            false => golden,
+        };
         for engine in [&[][..], &["--interp"][..]] {
             let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
                 .arg("run")

@@ -69,7 +69,7 @@ pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagno
     }
 }
 
-/// The local modules the entry imports, each with its pub functions and its
+/// The app's own modules the entry imports, each with its pub functions and its
 /// record types. The modules a derivation lives in are left out: they hold
 /// the convention, not the program it describes.
 fn describe(entry: &Program, deps: &Program) -> Value {
@@ -78,15 +78,17 @@ fn describe(entry: &Program, deps: &Program) -> Value {
 }
 
 /// The modules a derivation is shown, by the qualifier the entry reaches each
-/// under. The entry reads them through its derivations, so their imports are
-/// in use whether or not a statement names them.
+/// under: the app's own, imported from beside or below the entry. A library
+/// reached through `../` belongs to something else and is left out. The entry
+/// reads these through its derivations, so their imports are in use whether
+/// or not a statement names them.
 pub fn described(entry: &Program) -> Vec<String> {
     let deriving: Vec<&str> =
         entry.derives.iter().filter_map(|d| d.name.split_once('/').map(|(m, _)| m)).collect();
     entry
         .imports
         .iter()
-        .filter(|i| i.path.starts_with("./") || i.path.starts_with("../"))
+        .filter(|i| i.path.starts_with("./"))
         .map(|i| match &i.alias {
             Some(alias) => alias.to_string(),
             None => i.path.rsplit('/').next().unwrap_or_default().to_string(),
