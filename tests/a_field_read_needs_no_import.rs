@@ -42,3 +42,25 @@ fn a_field_no_type_in_the_program_declares_is_refused() {
     assert_eq!(String::from_utf8_lossy(&done.stderr), expected);
     assert_eq!(done.status.code(), Some(2));
 }
+
+/// `home` declares `index` and imports `entries`, which exports an `index`
+/// too, so `home/index` is home's own arm and the import's is moved aside.
+/// What told the two apart was the file each came from, and the getter for
+/// `entries`' field was counted as one of home's own declarations. Its file
+/// is entries', so the import's `index` read as home's, took `home/index`
+/// first, and was not pub (#2189). Watched red: "`index` is private to module
+/// `home`" on both engines.
+#[test]
+fn a_field_read_in_an_import_leaves_the_importers_names_its_own() {
+    for engine in [&[][..], &["--interp"][..]] {
+        let mut args = vec!["run", "a_name_the_import_shares/main.kso"];
+        args.extend_from_slice(engine);
+        let done = kanso(&args);
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout),
+            "2\n",
+            "{engine:?}: {}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+}
