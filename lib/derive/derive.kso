@@ -14,9 +14,12 @@
 pub type program
   modules
 
+# `constants` maps each pub constant's name to its value, which is how a
+# derivation reads data the app keeps, such as its migrations.
 pub type module
   name
   functions
+  constants
   records
 
 # A pub function as its first arm declares it. An unannotated parameter
