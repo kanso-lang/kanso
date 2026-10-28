@@ -1,15 +1,19 @@
 import "../pg"
 
+added = "insert into notes (body, seen) values ($1, $2)"
+
 fn shown r
   print "{r.command} {r.columns} {r.rows}"
 
 pub fn walked s
-  pg/query s "create temporary table notes (id serial, body text)"
+  pg/run s "create temporary table notes (id serial, body text, seen bool)"
     .> shown
-    .> (_ -> pg/query s "insert into notes (body) values ('one'), ('two')")
+    .> (_ -> pg/query s added ["it's; drop table notes" true])
     .> shown
-    .> (_ -> pg/query s "select id, body from notes order by id")
+    .> (_ -> pg/query s added [pg/null false])
     .> shown
-    .> (_ -> pg/query s "select * from missing")
+    .> (_ -> pg/query s "select id, body, seen from notes where id > $1" [0])
+    .> shown
+    .> (_ -> pg/query s "select * from missing" [])
     .> shown
     .> (_ -> pg/close s)

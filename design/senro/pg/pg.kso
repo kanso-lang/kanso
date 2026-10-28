@@ -22,6 +22,11 @@ type message
   kind
   body
 
+# SQL's NULL as a parameter. A list cannot hold none, so a statement's values
+# name this instead.
+type nothing
+  marker
+
 # What a reader took from a buffer and where the next field starts.
 type taken
   value
@@ -38,16 +43,63 @@ type column
   name
   oid
 
+pub null = nothing 0
+
 pub fn connect host at user database
   net/dial host at .> (c -> started c user database)
 
-pub fn query s sql
-  net/write s.conn (framed 81 (cstring sql))
+# A statement and its values, sent apart: Parse carries the SQL with $1, $2
+# where the values go, and Bind carries the values, so nothing a user typed is
+# ever read as SQL.
+pub fn query s sql params
+  net/write s.conn (extended sql params)
     .> (_ -> replies s.conn ready?)
     .> answered
 
+# A statement with no values, sent whole. Schema changes and anything else
+# that takes no parameters can go this way, several statements at once.
+pub fn run s sql
+  net/write s.conn (text/to_bytes (framed 81 (cstring sql)))
+    .> (_ -> replies s.conn ready?)
+    .> answered
+
+fn extended sql params
+  parse = framed 80 (list/concat (cstring "") (list/concat (cstring sql) [0 0]))
+  binding = framed 66 (bound params)
+  describe = framed 68 (list/concat [80] (cstring ""))
+  execute = framed 69 (list/concat (cstring "") (be32 0))
+  sync = framed 83 []
+  steps = [parse binding describe execute sync]
+  text/to_bytes (list/fold steps [] (acc step -> list/concat acc step))
+
+fn bound params
+  each = list/fold params [] (acc v -> list/concat acc (encoded v))
+  counted = list/concat (be16 (length params)) each
+  list/concat [0 0 0 0] (list/concat counted [0 0])
+
+# A value as Postgres reads one in text format: its length, then its bytes,
+# with a length of -1 standing for NULL.
+fn encoded true
+  sized (text/bytes "t")
+
+fn encoded false
+  sized (text/bytes "f")
+
+fn encoded _:nothing
+  [255 255 255 255]
+
+fn encoded v:string
+  sized (text/bytes v)
+
+fn encoded v
+  sized (text/bytes "{v}")
+
+fn sized bs
+  list/concat (be32 (length bs)) bs
+
 pub fn close s
-  net/write s.conn (framed 88 []) .> (_ -> net/close_conn s.conn)
+  net/write s.conn (text/to_bytes (framed 88 []))
+    .> (_ -> net/close_conn s.conn)
 
 fn started c user database
   wanted = list/concat (setting "user" user) (setting "database" database)
@@ -175,13 +227,16 @@ fn split_off buf at ms done?
 
 # Bytes, written big-endian as the protocol has them.
 fn framed kind body
-  text/to_bytes (list/concat [kind] (list/concat (be32 (length body + 4)) body))
+  list/to_list (list/concat [kind] (list/concat (be32 (length body + 4)) body))
 
 fn be32 n
   [(n / 16777216 % 256) (n / 65536 % 256) (n / 256 % 256) (n % 256)]
 
 fn be32_at bs at
   bs[at] * 16777216 + bs[at + 1] * 65536 + bs[at + 2] * 256 + bs[at + 3]
+
+fn be16 n
+  [(n / 256 % 256) (n % 256)]
 
 fn be16_at bs at
   bs[at] * 256 + bs[at + 1]
