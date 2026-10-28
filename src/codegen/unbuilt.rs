@@ -244,6 +244,7 @@ fn kept_arms(program: Given<'_>, keep: &[bool]) -> Program {
             types: lent.types.clone(),
             imports: lent.imports.clone(),
             reexports: lent.reexports.clone(),
+            derives: lent.derives.clone(),
             root: lent.root.clone(),
         },
     }

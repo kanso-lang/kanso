@@ -1,0 +1,5 @@
+pub fn index page
+  "all posts, page {page}"
+
+pub fn show id:int
+  "post {id}"

@@ -1,0 +1,4 @@
+error[derive]: `conventions/routing` answered an effect; a derivation runs while the program compiles, so it may only compute
+  --> tests/golden/derive/a_derivation_that_answers_an_effect/main.kso:4:1
+   4 | derive conventions/routing
+       ^

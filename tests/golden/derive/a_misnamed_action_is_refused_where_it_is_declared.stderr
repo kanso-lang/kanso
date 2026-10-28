@@ -1,0 +1,4 @@
+error[derive]: `destory` is not an action: name it one of index or show
+  --> tests/golden/derive/a_misnamed_action_is_refused_where_it_is_declared/posts.kso:7:8
+   7 | pub fn destory id:int
+              ^

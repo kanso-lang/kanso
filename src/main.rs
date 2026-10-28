@@ -332,7 +332,8 @@ fn interpreter_counters() -> String {
     )
 }
 
-const VERBS: [&str; 8] = ["run", "check", "test", "build", "install", "list", "update", "repl"];
+const VERBS: [&str; 9] =
+    ["run", "check", "derived", "test", "build", "install", "list", "update", "repl"];
 
 const USAGE: &str = "usage: kanso <verb> [arguments]
 
@@ -341,6 +342,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
   play <file> [--interp]             run a little program: definitions and
                                      statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
+  derived <file|dir>                 print what the entry's `derive` lines
+                                     declared, then stop
   test <file|dir>                    run the `test_*` constants in each
                                      `*_test.kso` file, which sees only pub names
   build <file|dir> [--release]       write a native binary here, named for
@@ -445,7 +448,7 @@ fn driven() -> ExitCode {
     // library, compiled as the module it is.
     let entry_inside = std::path::Path::new(&file).join("main.kso");
     let rerouted_dir =
-        matches!(command.as_str(), "run" | "check" | "build") && entry_inside.is_file();
+        matches!(command.as_str(), "run" | "check" | "derived" | "build") && entry_inside.is_file();
     // A build rerouted through a directory keeps the directory's name: the
     // program is `bench/jsonbench`, and `main` names nothing.
     // `.` and `..` address a directory without naming it, so the name comes
@@ -521,6 +524,9 @@ fn driven() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
+            if command == "derived" {
+                kanso::derive::show();
+            }
             match kanso::compile_source(&command, &file, &source) {
                 Ok(program) => (program, source),
                 Err(rendered) => {
@@ -536,6 +542,12 @@ fn driven() -> ExitCode {
         for line in kanso::beat::report(&program, &inference, &mut_sites) {
             eprintln!("beat: {line}");
         }
+    }
+    if command == "derived" {
+        for line in kanso::derive::shown() {
+            println!("{line}");
+        }
+        return ExitCode::SUCCESS;
     }
     if command == "check" {
         for advisory in kanso::advisory::door_advisories(&program) {
@@ -572,6 +584,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
     if command != "run"
         && command != "check"
+        && command != "derived"
         && command != "test"
         && command != "build"
         && command != "install"
