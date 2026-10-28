@@ -9,8 +9,8 @@
 # higher arena peak. std/json's encoder no longer builds anything there, so
 # a_nested_map_gives_back_its_entries stopped seeing this on 2026-10-22.
 set -e
-f=src/runtime/core.c
-grep -q 'KValue k_region_pop(KValue r)' src/runtime/core.c
+f=src/runtime/regions.c
+grep -q 'KValue k_region_pop(KValue r)' src/runtime/regions.c
 line='KValue k_region_pop(KValue r) {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the region pop moved; this mutation needs rewriting" >&2

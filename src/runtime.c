@@ -9,6 +9,9 @@
 // build.rs refuses any line here that is not a comment, a blank line or a
 // part, so the two ways in compile the same thing.
 #include "runtime/core.c"
+#include "runtime/evacuate.c"
+#include "runtime/regions.c"
+#include "runtime/perm.c"
 #include "runtime/values.c"
 #include "runtime/effects.c"
 #include "runtime/collections.c"
