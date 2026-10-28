@@ -1,0 +1,19 @@
+import "std/derive"
+import "std/list"
+
+# Every pub function of every module, keyed by its path.
+pub fn routing p
+  rows = list/fold p.modules {} (acc m -> list/fold m.functions acc (row m))
+  [(derive/declare "routes" "routes" rows)]
+
+fn row m
+  (acc f -> put acc "/{m.name}/{f.name}" f.reference)
+
+pub fn handle table path arg
+  called table[path] path arg
+
+fn called none path _
+  "no route for {path}"
+
+fn called f _ arg
+  f arg

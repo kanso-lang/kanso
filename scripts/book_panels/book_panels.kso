@@ -39,7 +39,7 @@ type outcome
 
 chapters = "docs/book"
 
-keywords = ["fn" "pub" "type" "import"]
+keywords = ["fn" "pub" "type" "import" "derive"]
 
 ops = ["->" "==" "!=" "<=" ">=" "=" "<" ">" "+" "-" "*" "/" "."]
 
