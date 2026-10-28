@@ -1,0 +1,16 @@
+type member
+  name
+  admin
+
+type post
+  kind
+  url
+  title
+  summary
+
+pub owner = member "Clay <owner>" true
+
+pub posts = [
+  post "note" "/p/1" "Templates & types" "<em>compiled</em>"
+  post "link" "/p/2" "Slim, but checked" "plain"
+]

@@ -1,0 +1,20 @@
+import "std/io"
+import "std/os"
+import "std/path"
+
+# kata page.slim: the kanso function the template compiles to, on stdout.
+pub run = os/args .> compiled_from
+
+fn compiled_from args
+  return err "usage: kata <template.slim>" if length args < 1
+  file = args[1]
+  os/read_file! file .> (src -> written file src)
+
+fn written file src
+  io/write (compiled (stem_of (path/stem file)) (path/basename file) src)
+
+fn stem_of none
+  "view"
+
+fn stem_of s
+  s

@@ -1,0 +1,27 @@
+# written by kata from page.slim: edit the template, not this file
+
+pub fn page title user posts
+  joined [
+    # page.slim:6
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>{escape title}"
+    # page.slim:9
+    "</title></head><body><header class=\"top\"><h1>Hello, {escape user.name}"
+    # page.slim:10
+    "</h1>{if user.admin page_10 page_12}</header><ul id=\"posts\">"
+    # page.slim:16
+    "{each posts (post -> page_16 post)}</ul><footer>Signed in as "
+    # page.slim:21
+    "{escape user.name}.</footer></body></html>"
+  ]
+
+page_10 = "<a href=\"/admin\" class=\"badge\">admin</a>"
+
+page_12 = "<span class=\"badge\">member</span>"
+
+fn page_16 post
+  joined [
+    # page.slim:17, 18
+    "<li class=\"post {escape post.kind}\"><a href=\"{escape post.url}\">"
+    # page.slim:18, 19
+    "{escape post.title}</a><p class=\"summary\">{post.summary}</p></li>"
+  ]

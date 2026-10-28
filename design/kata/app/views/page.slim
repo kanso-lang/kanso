@@ -1,0 +1,21 @@
+- locals title user posts
+doctype html
+html
+  head
+    meta charset="utf-8"
+    title = title
+  body
+    header.top
+      h1 Hello, #{user.name}
+      - if user.admin
+        a.badge href="/admin" admin
+      - else
+        span.badge member
+    / posts, newest first
+    ul#posts
+      - for post in posts
+        li.post class="#{post.kind}"
+          a href=post.url = post.title
+          p.summary == post.summary
+    footer
+      | Signed in as #{user.name}.

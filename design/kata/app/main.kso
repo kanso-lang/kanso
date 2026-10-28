@@ -1,0 +1,4 @@
+import "./models"
+import "./views"
+
+print (views/page "Home" models/owner models/posts)

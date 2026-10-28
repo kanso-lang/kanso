@@ -1,0 +1,470 @@
+import "std/list"
+import "std/text"
+
+# A template line: where it sits in the file, how deep it is indented, and
+# what follows the indent.
+type row
+  line
+  depth
+  body
+
+# One piece of a generated string literal. Markup arrives a character at a
+# time, already escaped for a kanso string; a hole splices an expression in
+# and remembers its template line, so the generated file can point back.
+type unit
+  text
+  line
+  hole
+
+# What a run of rows compiles to: the pieces of its string, and the helper
+# functions its control lines asked for.
+type woven
+  units
+  helpers
+
+# A step answers what it wove and the row the walk resumes at.
+type stepped
+  done
+  next
+
+# A helper function's call, without parentheses, and every helper function
+# written on the way to it, its own source among them.
+type helped
+  call
+  helpers
+
+# An `if` expression a branch compiles to, the helpers its arms became, and
+# the row after the last of its branches.
+type forked
+  test
+  helpers
+  next
+
+type packing
+  chunks
+  current
+  width
+
+# A tag's name, the start of its opening tag with any id its shorthand
+# spelled, and the shorthand's classes, which a `class` attribute joins.
+type shaped
+  name
+  open
+  classes
+
+# The template's name, which prefixes every helper, and the file it came
+# from, which the generated comments cite.
+type origin
+  name
+  file
+
+# The generated source for template `name`, read from `file`, whose text is
+# `src`. The first line may declare the template's locals, which become the
+# function's parameters in the order written.
+pub fn compiled name file src
+  rows = rows_of src
+  declared = locals_of rows
+  from = if (length declared == 0) 1 2
+  o = origin name file
+  w = walk rows from (length rows + 1) declared o (woven [] [])
+  main = emitted "pub fn {name} {params_of declared}" w.units o
+  heading = "# written by kata from {file}: edit the template, not this file"
+  "{text/join (list/concat [heading main] w.helpers) "\n\n"}\n"
+
+fn rows_of src
+  numbered (text/split src "\n") 1 []
+
+fn numbered lines i acc
+  return acc if i < 1 or length lines < i
+  numbered lines (i + 1) (kept_row acc lines[i] i)
+
+fn kept_row acc l i
+  trimmed = text/trim l
+  return acc if trimmed == ""
+  push acc (row i (spaces (text/chars l) 1) trimmed)
+
+fn spaces cs i
+  return i - 1 if i < 1 or length cs < i
+  if (cs[i] == " ") (spaces cs (i + 1)) (i - 1)
+
+fn locals_of rows
+  return [] if length rows < 1
+  first_body = rows[1].body
+  return [] if not text/starts_with? first_body "- locals "
+  words (after first_body 9)
+
+fn words s
+  list/to_list (list/select (text/split s " ") (w -> w != ""))
+
+fn after b n
+  remainder (text/slice b (n + 1) (length b))
+
+fn remainder none
+  ""
+
+fn remainder s
+  s
+
+fn params_of names
+  if (length names == 0) "_" (text/join names " ")
+
+fn walk rows i stop scope o acc
+  return acc if stop <= i or i < 1 or length rows < i
+  r = rows[i]
+  last = block_end rows (i + 1) stop r.depth
+  s = step rows r i last stop scope o acc
+  walk rows s.next stop scope o s.done
+
+fn block_end rows j stop d
+  return j if stop <= j or j < 1 or length rows < j
+  if (rows[j].depth <= d) j (block_end rows (j + 1) stop d)
+
+fn step rows r i last stop scope o acc
+  b = r.body
+  at = r.line
+  return stepped acc last if text/starts_with? b "/"
+  doctype = lit acc "<!DOCTYPE html>" at
+  return stepped doctype last if b == "doctype html"
+  if_line = text/starts_with? b "- if "
+  return branched rows r i last stop scope o acc if if_line
+  for_line = text/starts_with? b "- for "
+  return stepped (looped rows r i last scope o acc) last if for_line
+  raw_line = text/starts_with? b "== "
+  return stepped (spliced acc (raw (after b 3)) at) last if raw_line
+  out_line = text/starts_with? b "= "
+  return stepped (spliced acc (escaped (after b 2)) at) last if out_line
+  return stepped (texted acc (after b 2) at) last if text/starts_with? b "| "
+  stepped (tagged rows r i last scope o acc) last
+
+# `- if` takes the rows indented under it. An `- else if` at its own depth
+# right after them chains another test, and an `- else` takes what is left.
+fn branched rows r i last stop scope o acc
+  f = forked_at rows r i last stop scope o
+  helpers = list/concat acc.helpers f.helpers
+  hole = unit "\{{f.test}}" r.line true
+  stepped (woven (push acc.units hole) helpers) f.next
+
+fn forked_at rows r i last stop scope o
+  from = if (text/starts_with? r.body "- else if ") 10 5
+  yes = helper rows (i + 1) last scope o r.line
+  head = "if {wrapped (after r.body from)} {wrapped yes.call}"
+  kind = follower rows last r
+  return forked "{head} \"\"" yes.helpers last if kind == ""
+  past = block_end rows (last + 1) stop r.depth
+  return chained rows last past stop scope o head yes if kind == "else if"
+  no = helper rows (last + 1) past scope o (rows_line rows last)
+  forked "{head} {wrapped no.call}" (list/concat yes.helpers no.helpers) past
+
+fn chained rows j past stop scope o head yes
+  return forked "{head} \"\"" yes.helpers j if j < 1 or length rows < j
+  sub = forked_at rows rows[j] j past stop scope o
+  forked "{head} ({sub.test})" (list/concat yes.helpers sub.helpers) sub.next
+
+fn follower rows j r
+  return "" if j < 1 or length rows < j
+  return "" if rows[j].depth != r.depth
+  b = rows[j].body
+  return "else" if b == "- else"
+  if (text/starts_with? b "- else if ") "else if" ""
+
+fn rows_line rows j
+  return 0 if j < 1 or length rows < j
+  rows[j].line
+
+# `- for x in xs` writes the rows under it once for each element of `xs`,
+# with `x` in scope.
+fn looped rows r i last scope o acc
+  ws = words (after r.body 6)
+  return acc if length ws < 3
+  name = ws[1]
+  over = text/join (list/to_list (list/drop ws 2)) " "
+  body = helper rows (i + 1) last (push scope name) o r.line
+  bound = if (list/any? (text/split body.call " ") (w -> w == name)) name "_"
+  hole = "\{each {wrapped over} ({bound} -> {body.call})}"
+  helpers = list/concat acc.helpers body.helpers
+  woven (push acc.units (unit hole r.line true)) helpers
+
+# The rows from `from` up to `to` become a function of the names in scope
+# they mention, so a branch or a loop body reads exactly what it uses. Rows
+# that mention none become a constant.
+fn helper rows from to scope o line
+  body = walk rows from to scope o (woven [] [])
+  args = free_in body.units scope
+  called = "{o.name}_{line}"
+  head = if (length args == 0) "{called} =" "fn {called} {params_of args}"
+  source = emitted head body.units o
+  helped (call_of called args) (push body.helpers source)
+
+fn call_of called args
+  if (length args == 0) called "{called} {text/join args " "}"
+
+fn lit acc s at
+  woven (list/concat acc.units (marked s at)) acc.helpers
+
+fn marked s at
+  list/to_list (list/map (text/chars s) (c -> unit (quoted c) at false))
+
+fn quoted "\\"
+  "\\\\"
+
+fn quoted "\""
+  "\\\""
+
+fn quoted "\{"
+  "\\\{"
+
+fn quoted c
+  c
+
+fn spliced acc hole at
+  woven (push acc.units (unit hole at true)) acc.helpers
+
+fn raw e
+  "\{{e}}"
+
+fn escaped e
+  "\{escape {wrapped e}}"
+
+# An expression passed as an argument needs parentheses when it has a space
+# outside every bracket and string literal, and is refused with them when it
+# does not.
+fn wrapped e
+  if (spaced? (text/chars e) 1 ["code"]) "({e})" e
+
+fn spaced? cs i modes
+  return false if i < 1 or length cs < i
+  c = cs[i]
+  next = i + 1
+  text_mode = top modes == "text"
+  return spaced? cs (i + 2) modes if text_mode and c == "\\"
+  return spaced? cs next (push modes "code") if text_mode and c == "\{"
+  return spaced? cs next (popped modes) if text_mode and c == "\""
+  return spaced? cs next modes if text_mode
+  return true if c == " " and length modes == 1
+  opens = c == "(" or c == "[" or c == "\{"
+  return spaced? cs next (push modes "code") if opens
+  closes = c == ")" or c == "]" or c == "}"
+  return spaced? cs next (popped modes) if closes
+  return spaced? cs next (push modes "text") if c == "\""
+  spaced? cs next modes
+
+# Text with `#\{expr}` in it: the markup is copied and each expression is
+# escaped into the page.
+fn texted acc s at
+  pieces = text/split s "#\{"
+  return acc if length pieces < 1
+  start = lit acc pieces[1] at
+  list/fold (list/drop pieces 1) start (a p -> interpolated a p at)
+
+fn interpolated acc p at
+  halves = text/split p "}"
+  return lit acc "#\{{p}" at if length halves < 2
+  tail = text/join (list/to_list (list/drop halves 1)) "}"
+  lit (spliced acc (escaped halves[1]) at) tail at
+
+# A tag line: `tag.class#id attr=value attr="text"`, then `= expr`,
+# `== expr` or text on the same line, then the rows indented under it.
+fn tagged rows r i last scope o acc
+  ws = text/split r.body " "
+  return acc if length ws < 1
+  head = shorthand ws[1]
+  tail = text/join (list/to_list (list/drop ws 1)) " "
+  started = lit acc head.open r.line
+  opened = attributes tail head.classes started r.line
+  inner = walk rows (i + 1) last scope o opened
+  closing = if (void? head.name) "" "</{head.name}>"
+  lit inner closing r.line
+
+fn shorthand h
+  pieces = text/split (text/join (text/split h "#") ".#") "."
+  return shaped "div" "<div" [] if length pieces < 1
+  tag = if (pieces[1] == "") "div" pieces[1]
+  marks = list/to_list (list/drop pieces 1)
+  ids = list/to_list (list/select marks (m -> text/starts_with? m "#"))
+  classes = list/to_list (list/select marks (m -> not id? m))
+  shaped tag "<{tag}{named "id" (stripped ids)}" classes
+
+fn id? m
+  text/starts_with? m "#"
+
+fn stripped ids
+  list/to_list (list/map ids (m -> after m 1))
+
+fn named key vals
+  return "" if length vals == 0
+  " {key}=\"{text/join vals " "}\""
+
+voids = ["area" "base" "br" "col" "hr" "img" "input" "link" "meta" "source"]
+
+fn void? name
+  list/any? voids (v -> v == name)
+
+# The words after a tag's head: attributes while they last, then the tag's
+# own content. A `class` attribute is joined onto the shorthand's classes,
+# and classes nothing joined are written when the tag closes.
+fn attributes rest classes acc at
+  s = text/trim rest
+  first = first_word s
+  shut_tag = lit acc "{named "class" classes}>" at
+  return content s shut_tag at if not attribute? first
+  halves = text/split s "="
+  return acc if length halves < 1
+  key = halves[1]
+  value = text/join (list/to_list (list/drop halves 1)) "="
+  joins = key == "class" and length classes > 0
+  lead = if joins "{text/join classes " "} " ""
+  left = if joins [] classes
+  opened = lit acc " {key}=\"{lead}" at
+  return lettered value left opened at if text/starts_with? value "\""
+  word = first_word value
+  shut = lit (spliced opened (escaped word) at) "\"" at
+  attributes (after value (length word)) left shut at
+
+# A quoted value is text, with `#\{expr}` holes like any other.
+fn lettered value classes acc at
+  pieces = text/split (after value 1) "\""
+  return acc if length pieces < 1
+  shut = lit (texted acc pieces[1] at) "\"" at
+  tail = text/join (list/to_list (list/drop pieces 1)) "\""
+  attributes tail classes shut at
+
+fn first_word s
+  ws = text/split s " "
+  return "" if length ws < 1
+  ws[1]
+
+fn attribute? w
+  halves = text/split w "="
+  return false if length halves < 2
+  halves[1] != "" and list/all? (text/chars halves[1]) (c -> key_char? c)
+
+fn key_char? c
+  length (text/split "abcdefghijklmnopqrstuvwxyz-" c) > 1
+
+fn content "" acc _
+  acc
+
+fn content s acc at
+  return spliced acc (raw (after s 3)) at if text/starts_with? s "== "
+  return spliced acc (escaped (after s 2)) at if text/starts_with? s "= "
+  texted acc s at
+
+# A function's source: its head, then its units packed into string literals
+# short enough for the line, each preceded by the template lines its holes
+# came from.
+fn emitted head units o
+  chunks = packed units
+  return constant_of head chunks o if text/ends_with? head " ="
+  "{head}\n{body_of chunks o}"
+
+fn constant_of head chunks o
+  return "{head} \"\"" if length chunks < 1
+  one = "{head} {literal chunks[1]}"
+  fits = length chunks == 1 and length one <= 80
+  return "{cited chunks[1] o ""}{one}" if fits
+  lines = list/to_list (list/map chunks (c -> element c o "  "))
+  "{head} joined [\n{text/join lines "\n"}\n]"
+
+fn body_of chunks o
+  return "  \"\"" if length chunks < 1
+  return "{cited chunks[1] o "  "}  {literal chunks[1]}" if length chunks == 1
+  lines = list/to_list (list/map chunks (c -> element c o "    "))
+  "  joined [\n{text/join lines "\n"}\n  ]"
+
+fn element c o indent
+  "{cited c o indent}{indent}{literal c}"
+
+fn literal chunk
+  "\"{text/join (list/to_list (list/map chunk (u -> u.text))) ""}\""
+
+fn cited chunk o indent
+  holes = list/to_list (list/select chunk (u -> u.hole))
+  lines = distinct (list/to_list (list/map holes (u -> u.line))) []
+  return "" if length lines == 0
+  shown = list/to_list (list/map lines (n -> "{n}"))
+  "{indent}# {o.file}:{text/join shown ", "}\n"
+
+fn distinct ns acc
+  list/fold ns acc (a n -> if (list/any? a (m -> m == n)) a (push a n))
+
+fn packed units
+  p = list/fold units (packing [] [] 0) (p u -> packed_one p u)
+  if (length p.current == 0) p.chunks (push p.chunks p.current)
+
+# A full chunk breaks after its last tag, space or hole, so a word is not cut
+# in two; a chunk with none of those breaks where it is.
+fn packed_one p u
+  w = length u.text
+  return packing p.chunks (push p.current u) (p.width + w) if p.width + w <= 72
+  return packing p.chunks [u] w if length p.current == 0
+  k = break_at p.current (length p.current)
+  kept = list/to_list (list/take p.current k)
+  carried = push (list/to_list (list/drop p.current k)) u
+  packing (push p.chunks kept) carried (width_of carried)
+
+fn break_at cs i
+  return length cs if i < 1 or length cs < i
+  u = cs[i]
+  if (u.hole or u.text == ">" or u.text == " ") i (break_at cs (i - 1))
+
+fn width_of us
+  list/fold us 0 (n u -> n + length u.text)
+
+# The names in `scope` that the holes mention, in scope order.
+fn free_in units scope
+  holes = list/to_list (list/select units (u -> u.hole))
+  seen = list/fold holes [] (a u -> list/concat a (idents u.text))
+  list/to_list (list/select scope (n -> list/any? seen (m -> m == n)))
+
+fn idents s
+  scanned (text/chars s) 1 "" "" ["code"] []
+
+# `cur` is the name being read and `before` the character in front of it, so
+# a field after `.` and a module before `/` are not taken for names. `modes`
+# says what the scan is inside, innermost last: code, or a string literal,
+# whose `{` opens code again until its `}`.
+fn scanned cs i cur before modes acc
+  return ended acc cur before "" if i < 1 or length cs < i
+  return in_text cs i modes acc if top modes == "text"
+  c = cs[i]
+  next = i + 1
+  return scanned cs next "{cur}{c}" before modes acc if name_char? c
+  closed_name = ended acc cur before c
+  return scanned cs next "" "" (push modes "text") closed_name if c == "\""
+  return scanned cs next "" c (push modes "code") closed_name if c == "\{"
+  return scanned cs next "" c (popped modes) closed_name if c == "}"
+  scanned cs next "" c modes closed_name
+
+# Inside a string literal a `\` escapes the character after it, `{` opens
+# code, and `"` closes the literal.
+fn in_text cs i modes acc
+  return acc if i < 1 or length cs < i
+  c = cs[i]
+  return scanned cs (i + 2) "" "" modes acc if c == "\\"
+  return scanned cs (i + 1) "" "\{" (push modes "code") acc if c == "\{"
+  return scanned cs (i + 1) "" "" (popped modes) acc if c == "\""
+  scanned cs (i + 1) "" "" modes acc
+
+fn top modes
+  return "code" if length modes < 1
+  modes[length modes]
+
+fn popped modes
+  return ["code"] if length modes < 2
+  list/to_list (list/take modes (length modes - 1))
+
+fn ended acc "" _ _
+  acc
+
+fn ended acc cur before after_it
+  skip = before == "." or before == "/" or after_it == "/"
+  if (skip or digit? cur) acc (push acc cur)
+
+fn digit? s
+  cs = text/chars s
+  return false if length cs < 1
+  length (text/split "0123456789" cs[1]) > 1
+
+fn name_char? c
+  letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_?!"
+  length (text/split letters c) > 1
