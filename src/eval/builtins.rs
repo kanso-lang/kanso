@@ -276,6 +276,28 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Receive(conn.to_i64().unwrap_or(-1)))))
             }
+            b"net_read_bytes" => {
+                let [conn] = arity(args, name, span)?;
+                let Value::Int(conn) = &conn else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "net_read_bytes takes a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::ReceiveBytes(conn.to_i64().unwrap_or(-1)))))
+            }
+            b"dial" => {
+                let [host, port] = arity(args, name, span)?;
+                let (Value::Str(host), Value::Int(port)) = (&host, &port) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "dial takes a host string and a port number".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Dial(host.to_string(), port.to_i64().unwrap_or(-1)))))
+            }
             b"net_write" => {
                 let [conn, text] = arity(args, name, span)?;
                 match (&conn, &text) {
