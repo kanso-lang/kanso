@@ -87,7 +87,7 @@ fn a_builtin_that_answers_a_description_says_what_it_yields() {
     );
 }
 
-/// And the reading is not vacuous: the twenty-four names are actually found.
+/// And the reading is not vacuous: every effect builtin's name is found.
 #[test]
 fn the_reading_finds_every_effect_builtin() {
     let source = include_str!("../src/infer.rs");
@@ -97,6 +97,7 @@ fn the_reading_finds_every_effect_builtin() {
         [
             "accept",
             "args",
+            "dial",
             "env",
             "exists",
             "is_dir",
@@ -108,6 +109,7 @@ fn the_reading_finds_every_effect_builtin() {
             "net_close",
             "net_port",
             "net_read",
+            "net_read_bytes",
             "net_write",
             "now",
             "print",

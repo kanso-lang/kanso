@@ -105,6 +105,17 @@ pub trait Executor {
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// One read of what has arrived, as the bytes they are. A protocol such
+    /// as Postgres's frames its messages in binary, so text is the wrong
+    /// shape for it.
+    fn receive_bytes(&mut self, _conn: i64) -> Result<Vec<u8>, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    /// A connection out to a host and port, answering the handle the other
+    /// socket effects name.
+    fn dial(&mut self, _host: &str, _port: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
     fn send(&mut self, _conn: i64, _text: &str) -> Result<(), String> {
         Err("this engine has no sockets".to_string())
     }
@@ -313,6 +324,25 @@ impl Executor for RealExecutor {
     /// One read of what has arrived. An HTTP request that spans packets is
     /// the caller's problem to notice, which is what content-length is for.
     fn receive(&mut self, conn: i64) -> Result<String, String> {
+        let raw = self.receive_bytes(conn)?;
+        Ok(String::from_utf8_lossy(&raw).into_owned())
+    }
+
+    /// The reason names the address and nothing from the operating system,
+    /// so both engines word a refusal alike.
+    fn dial(&mut self, host: &str, port: i64) -> Result<i64, String> {
+        let refused = || format!("cannot connect to {host}:{port}");
+        let port = u16::try_from(port).map_err(|_| refused())?;
+        let stream = std::net::TcpStream::connect((host, port)).map_err(|_| refused())?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.conns.insert(handle, stream);
+            Ok(handle)
+        })
+    }
+
+    fn receive_bytes(&mut self, conn: i64) -> Result<Vec<u8>, String> {
         use std::io::Read;
         let mut stream = SOCKETS.with(|s| {
             let s = s.borrow();
@@ -324,7 +354,7 @@ impl Executor for RealExecutor {
         };
         let mut buffer = [0u8; 65536];
         let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
-        Ok(String::from_utf8_lossy(&buffer[..read]).into_owned())
+        Ok(buffer[..read].to_vec())
     }
 
     fn send(&mut self, conn: i64, text: &str) -> Result<(), String> {

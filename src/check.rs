@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 79] = [
+pub const BUILTINS: [&str; 81] = [
     "annotate",
     "built_text",
     "append",
@@ -79,6 +79,8 @@ pub const BUILTINS: [&str; 79] = [
     "net_port",
     "accept",
     "net_read",
+    "net_read_bytes",
+    "dial",
     "net_write",
     "net_close",
     "tie",
@@ -107,7 +109,7 @@ pub const AMBIENT: [&str; 14] = [
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 84] = [
+pub const BUILTIN_ARITY: [(&str, usize); 86] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -129,6 +131,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 84] = [
     ("chars", 1),
     ("concat", 2),
     ("delete", 2),
+    ("dial", 2),
     ("effect", 1),
     ("entries", 1),
     ("entry_count", 1),
@@ -154,6 +157,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 84] = [
     ("net_close", 1),
     ("net_port", 1),
     ("net_read", 1),
+    ("net_read_bytes", 1),
     ("net_write", 2),
     ("now", 0),
     ("number_span", 2),
@@ -2299,6 +2303,8 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("net_port", &[&[Int]]),
         ("accept", &[&[Int]]),
         ("net_read", &[&[Int]]),
+        ("net_read_bytes", &[&[Int]]),
+        ("dial", &[&[Str], &[Int]]),
         ("net_write", &[&[Int], &[Str]]),
         ("net_close", &[&[Int]]),
         ("concat", &[&[List], &[List]]),
