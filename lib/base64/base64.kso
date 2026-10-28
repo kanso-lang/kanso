@@ -1,0 +1,87 @@
+import "std/bits"
+import "std/list"
+import "std/text"
+
+# Base64, RFC 4648: three bytes become four characters from a sixty-four
+# letter alphabet, and `=` fills out a final group of one or two bytes.
+alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+pub fn encode bs
+  encoded (list/to_list bs) 1 ""
+
+fn encoded bs at acc
+  left = length bs - at + 1
+  return acc if left < 1
+  a = byte_at bs at
+  b = byte_at bs (at + 1)
+  c = byte_at bs (at + 2)
+  n = a * 65536 + b * 256 + c
+  group = "{letter n 18}{letter n 12}{tail n 6 (left > 1)}{tail n 0 (left > 2)}"
+  encoded bs (at + 3) "{acc}{group}"
+
+fn byte_at bs at
+  return 0 if at < 1 or at > length bs
+  bs[at]
+
+fn letter n shift
+  i = bits/shr n shift & 63
+  text/slice alphabet (i + 1) (i + 1)
+
+fn tail n shift true
+  letter n shift
+
+fn tail _ _ false
+  "="
+
+# Decoding refuses anything that is not whole groups of the alphabet, with
+# `=` allowed only at the end. `decode` answers none for such text, as
+# json/decode does; `decode!` answers the failure, which says why.
+pub fn decode s
+  plain (bytes_of s)
+
+pub fn decode! s
+  effect (bytes_of s)
+
+fn plain _:<some>effect
+  none
+
+fn plain v
+  v
+
+fn bytes_of s
+  codes = list/to_list (text/bytes s)
+  ragged = length codes % 4 != 0
+  return err "base64 comes in groups of four characters" if ragged
+  decoded codes 1 []
+
+fn decoded codes at acc
+  return acc if at < 1 or at + 3 > length codes
+  a = value_of codes[at]
+  b = value_of codes[at + 1]
+  c = value_of codes[at + 2]
+  d = value_of codes[at + 3]
+  return err "that is not base64" if a < 0 or b < 0 or c < -1 or d < -1
+  n = a * 262144 + b * 4096 + max0 c * 64 + max0 d
+  more = kept acc n c d
+  decoded codes (at + 4) more
+
+fn kept acc n c d
+  one = push acc (bits/shr n 16 & 255)
+  return one if c < 0
+  two = push one (bits/shr n 8 & 255)
+  return two if d < 0
+  push two (n & 255)
+
+fn max0 n
+  if (n < 0) 0 n
+
+# A character's place in the alphabet, -1 for the `=` pad, and -2 for
+# anything else.
+fn value_of c
+  return c - 65 if c >= 65 and c <= 90
+  return c - 71 if c >= 97 and c <= 122
+  return c + 4 if c >= 48 and c <= 57
+  return 62 if c == 43
+  return 63 if c == 47
+  return -1 if c == 61
+  -2

@@ -70,6 +70,8 @@ fn load_dependencies(
             }
             "std/derive" => {
                 Some(("derive", &[("derive.kso", include_str!("../../lib/derive/derive.kso"))]))
+            "std/base64" => {
+                Some(("base64", &[("base64.kso", include_str!("../../lib/base64/base64.kso"))]))
             }
             "std/regexp" => {
                 Some(("regexp", &[("regexp.kso", include_str!("../../lib/regexp/regexp.kso"))]))

@@ -11,7 +11,7 @@
 /// Every module the loader serves from the copy embedded in this binary.
 /// `tests/every_shipped_module_checks_clean.rs` holds this list to the
 /// loader's table and compiles each with its merged check asked.
-pub const SHIPPED_MODULES: [&str; 16] = [
+pub const SHIPPED_MODULES: [&str; 17] = [
     "std/render",
     "std/list",
     "std/time",
@@ -26,6 +26,7 @@ pub const SHIPPED_MODULES: [&str; 16] = [
     "std/path",
     "std/sha256",
     "std/derive",
+    "std/base64",
     "std/regexp",
     "std/json",
 ];
