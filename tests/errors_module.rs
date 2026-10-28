@@ -96,3 +96,24 @@ fn no_diagnostic_names_the_path_a_module_was_reached_through() {
     // A loop that reached nothing would make the assertion above vacuous.
     assert!(checked >= 3, "only {checked} cases were checked");
 }
+
+/// The same diagnostic, asked for from inside the program's directory. A
+/// sibling module that is one file is then stamped with a bare name, and the
+/// renderer took every bare name for an embedded file and quoted nothing.
+/// Watched red: the `-->` line arrived with no source line under it (#2188).
+#[test]
+fn a_sibling_file_quotes_its_line_from_inside_the_program_directory() {
+    let case = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/errors_module/a_field_read_in_a_sibling_file");
+    let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("check")
+        .arg("main.kso")
+        .current_dir(&case)
+        .output()
+        .expect("kanso binary runs");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "error[name]: no record type has a field `weight`\n  --> boxes.kso:8:6\n   \
+         8 |   \"{b.weight}\"\n            ^\n"
+    );
+}
