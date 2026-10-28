@@ -1,0 +1,6 @@
+import "./posts"
+import "std/derive"
+
+# Reads posts directly instead of through the program it is handed.
+pub fn routing _
+  [(derive/declare "routes" "routes" { "/posts/index":posts/index })]
