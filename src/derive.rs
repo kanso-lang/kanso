@@ -45,10 +45,13 @@ pub const MODULE: &str = "std/derive";
 /// What the derivations an entry names add to it: constants for the entry,
 /// or the diagnostics a refusal or a misbehaving derivation produced.
 pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagnostic>> {
+    let mut diags = reads_around(entry, deps);
+    if !diags.is_empty() {
+        return Err(diags);
+    }
     let description = describe(entry, deps);
     let interp = Interp::copying(deps);
     let mut made = Vec::new();
-    let mut diags = Vec::new();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
             Ok(decls) => {
@@ -95,6 +98,56 @@ pub fn described(entry: &Program) -> Vec<String> {
         })
         .filter(|name| !deriving.contains(&name.as_str()))
         .collect()
+}
+
+/// A derivation that names a module it describes, in its own module's code.
+/// The description is the whole of what a derivation may know about the app,
+/// so that its declarations follow from what `kanso derived` can show; a
+/// convention that imported a model or a controller would read the app around
+/// it. Each such name is refused where it is written.
+fn reads_around(entry: &Program, deps: &Program) -> Vec<Diagnostic> {
+    let described: Vec<String> = described(entry).iter().map(|m| format!("{m}/")).collect();
+    let mut diags = Vec::new();
+    for d in &entry.derives {
+        let Some((home, _)) = d.name.split_once('/') else { continue };
+        let own = format!("{home}/");
+        let files: Vec<&std::sync::Arc<str>> = deps
+            .fns
+            .iter()
+            .filter(|f| !f.synthetic && f.name.starts_with(&own))
+            .map(|f| &f.file)
+            .collect();
+        for f in deps.fns.iter().filter(|f| !f.synthetic && files.contains(&&f.file)) {
+            let mut named = Vec::new();
+            for stmt in &f.body {
+                let e = match stmt {
+                    Stmt::Bind { expr, .. } => expr,
+                    Stmt::Expr(e) => e,
+                };
+                names_in(e, &mut named);
+            }
+            for (name, span) in named {
+                let Some(module) = described.iter().find(|m| name.starts_with(m.as_str())) else {
+                    continue;
+                };
+                let msg = format!(
+                    "`{name}` is in `{}`, which `{}` describes; a derivation \
+                     reads the app only through the program it is handed",
+                    module.trim_end_matches('/'),
+                    d.name
+                );
+                diags.push(Diagnostic::new("derive", msg, span).about(&f.file));
+            }
+        }
+    }
+    diags
+}
+
+fn names_in(e: &Expr, named: &mut Vec<(String, Span)>) {
+    if let Expr::Ident(name, span, _) = e {
+        named.push((name.to_string(), *span));
+    }
+    crate::for_each_child(e, |child| names_in(child, named));
 }
 
 fn module(deps: &Program, name: &str) -> Value {
