@@ -15,7 +15,7 @@
 //! the description. No executor is supplied, so a derivation that answers an
 //! effect is refused rather than run.
 
-use crate::ast::{Derive, Expr, FnDecl, Pattern, Program, Resolution, Stmt, TemplatePart};
+use crate::ast::{Derive, Expr, FnDecl, Pattern, Program, Resolution, Stmt, TemplatePart, TypeDecl};
 use crate::diag::{Diagnostic, Span};
 use crate::eval::{Entries, Interp, MapKey, Value};
 use crate::name::Name;
@@ -42,22 +42,36 @@ pub fn shown() -> Vec<String> {
 /// on the entry's behalf whenever the entry derives anything.
 pub const MODULE: &str = "std/derive";
 
-/// What the derivations an entry names add to it: constants for the entry,
-/// or the diagnostics a refusal or a misbehaving derivation produced.
-pub fn derive(entry: &Program, deps: &Program) -> Result<Vec<FnDecl>, Vec<Diagnostic>> {
+/// What the derivations an entry adds: its constants and record types.
+#[derive(Default)]
+pub struct Derived {
+    pub constants: Vec<FnDecl>,
+    pub types: Vec<TypeDecl>,
+}
+
+/// One declaration a derivation listed, as the entry will hold it.
+enum Made {
+    Constant(FnDecl),
+    Type(TypeDecl),
+}
+
+/// What the derivations an entry names add to it, or the diagnostics a
+/// refusal or a misbehaving derivation produced.
+pub fn derive(entry: &Program, deps: &Program) -> Result<Derived, Vec<Diagnostic>> {
     let mut diags = reads_around(entry, deps);
     if !diags.is_empty() {
         return Err(diags);
     }
     let interp = Interp::copying(deps);
     let description = describe(entry, deps, &interp)?;
-    let mut made = Vec::new();
+    let mut made = Derived::default();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
             Ok(decls) => {
                 for decl in decls {
                     match declared(&interp, deps, d, &decl) {
-                        Ok(Some(constant)) => made.push(constant),
+                        Ok(Some(Made::Constant(c))) => made.constants.push(c),
+                        Ok(Some(Made::Type(t))) => made.types.push(t),
                         Ok(None) => {}
                         Err(diag) => diags.push(diag),
                     }
@@ -273,22 +287,22 @@ fn failed(d: &Derive, reason: &str) -> Diagnostic {
     Diagnostic::new("derive", format!("`{}` failed: {reason}", d.name), d.span)
 }
 
-/// One declaration: a constant for the entry, nothing for a refusal that
-/// became a diagnostic, or a diagnostic for anything else.
+/// One declaration: a constant or a record type for the entry, nothing for a
+/// refusal that became a diagnostic, or a diagnostic for anything else.
 fn declared(
     interp: &Interp,
     deps: &Program,
     d: &Derive,
     decl: &Value,
-) -> Result<Option<FnDecl>, Diagnostic> {
+) -> Result<Option<Made>, Diagnostic> {
+    let kinds = ["derive/constant", "derive/type_declaration", "derive/refusal"];
     let fields = match decl {
-        Value::Record { ty, fields } if matches!(&**ty, "derive/constant" | "derive/refusal") => {
-            fields.borrow().clone()
-        }
+        Value::Record { ty, fields } if kinds.contains(&&**ty) => fields.borrow().clone(),
         other => {
             let msg = format!(
                 "`{}` listed {}, which is not a declaration; a derivation lists \
-                 `derive/constant` and `derive/refusal` records",
+                 `derive/constant`, `derive/type_declaration` and `derive/refusal` \
+                 records",
                 d.name,
                 crate::eval::render(interp, other, true)
             );
@@ -300,6 +314,9 @@ fn declared(
         if &**ty == "derive/refusal" {
             let message = plain_text(interp, &fields[1]);
             return Err(refused_at(deps, &origin, message, d.span));
+        }
+        if &**ty == "derive/type_declaration" {
+            return declared_type(interp, d, &fields).map(|t| Some(Made::Type(t)));
         }
     }
     let name = plain_text(interp, &fields[1]);
@@ -316,7 +333,7 @@ fn declared(
         );
         Diagnostic::new("derive", msg, d.span)
     })?;
-    Ok(Some(FnDecl {
+    Ok(Some(Made::Constant(FnDecl {
         name,
         params: Vec::new(),
         body: vec![Stmt::Expr(value)],
@@ -326,7 +343,53 @@ fn declared(
         file: crate::ast::unstamped(),
         synthetic: false,
         shades: None,
-    }))
+    })))
+}
+
+/// A record type the entry declares, named and with fields as a programmer
+/// could have written them.
+fn declared_type(interp: &Interp, d: &Derive, fields: &[Value]) -> Result<TypeDecl, Diagnostic> {
+    let name = plain_text(interp, &fields[1]);
+    let listed = match interp.demand(&fields[2]) {
+        Ok(Value::List(items)) => items,
+        _ => {
+            let msg = format!("`{}` declared type `{name}` with fields that are not a list", d.name);
+            return Err(Diagnostic::new("derive", msg, d.span));
+        }
+    };
+    let names: Vec<String> = listed.iter().map(|f| plain_text(interp, f)).collect();
+    if let Some(bad) = std::iter::once(&name).chain(&names).find(|n| !a_name(n)) {
+        let msg = format!(
+            "`{}` declared type `{name}` naming `{bad}`, which a program could not \
+             write as a name",
+            d.name
+        );
+        return Err(Diagnostic::new("derive", msg, d.span));
+    }
+    SHOWN.with(|s| {
+        if let Some(lines) = s.borrow_mut().as_mut() {
+            lines.push(format!("type {name} {}    # {}", names.join(" "), d.name));
+        }
+    });
+    Ok(TypeDecl {
+        name,
+        is_pub: false,
+        span: d.span,
+        synthetic: false,
+        origin: None,
+        parent: None,
+        members: Vec::new(),
+        fields: names.into_iter().map(|n| (n, Vec::new(), d.span)).collect(),
+        file: crate::ast::unstamped(),
+    })
+}
+
+/// Whether `n` is spelled as a declared name: a lowercase letter or an
+/// underscore, then lowercase letters, digits and underscores.
+fn a_name(n: &str) -> bool {
+    let mut chars = n.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
 fn plain_text(interp: &Interp, v: &Value) -> String {
