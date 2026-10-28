@@ -1449,7 +1449,7 @@ imported the module it described. bench/entry_corpus now derives a small
 route table, so the entry row, and with it welfare's compile term, prices
 what a derivation costs.
 
-The entry row rises to entry_instructions 83,726,857 (+12,556,771): the
+The entry row rises to entry_instructions 83,728,840 (+12,558,754): the
 corpus gained two modules and a derivation. `lib/derive` is embedded in the
 compiler, so the other compile rows move by layout: compile_instructions
 24,064,178 (+3,144), library_instructions 70,863,285 (+6,049),
