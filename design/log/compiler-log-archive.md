@@ -110267,3 +110267,73 @@ run_evac_bytes 4,603,072 -> 7,175,760, run_put_mut_grow 32 -> 41, run_sh_buf
 86,829,600 -> 116,309,488 and run_sh_map 12,160 -> 25,920. Welfare re-bases
 the eight terms the phases move, each keeping its ratio to its baseline, and
 the floor stays at 94.49.
+
+## 2026-10-25 — a delete takes its key out in place, and a condition's read holds nothing
+
+Fixes for the two shapes #2117 put in the corpus.
+
+**The admitting set.** The linearity analysis counts how often a function
+uses a value on its busiest path, and a put is made in place when the map
+it writes is used once. `count_in_expr` already counted only the larger arm
+of an `if` or a guard, but it counted every mention in the condition, so
+`if (m[k] == none) (put m k true) m` used `m` twice. The condition is
+finished before either arm runs, and a read `m[k]` whose key calls and
+compares nothing answers the element and lets the map go. Those reads no
+longer count, the same discount the read bound to a name already had
+(`read_in_block`). The guard spelling, `return m if m[k] != none` above
+`put m k true`, is proven by the same change. Admitting 20,000 keys took
+177,856,097,875 instructions natively and now takes 61,905,716. The
+interpreter took 5.1 s and now takes 0.02 s.
+
+**The drained map.** `delete` joins `push` and the byte appends as a
+builtin that writes into its first argument where nothing else holds it.
+At such a site the interpreter removes the key from its tree, and the
+native engine calls `k_b_delete_mut`. That makes the map's pairs its sorted
+view, restarting them from the view as an overwrite's growth does, and then
+closes the key's slot by moving the pairs after it down one. A delete still
+answers a fresh map wherever the map has another holder, as the 2026-10-13
+ruling on #1914 requires; that copy now finds the key by a search and moves
+the pairs either side of it in two copies, where it compared every key.
+Draining half of 20,000 keys took 27.9 billion instructions natively and
+1.53 s; it now takes 2.42 billion and 0.066 s. The interpreter took 3.76 s
+and now takes 0.03 s.
+
+The native drain is still quadratic, because closing a slot in a sorted
+array moves the pairs after it: 80,000 keys drain in 0.95 s. glibc moves
+large blocks with `rep movsb`, which callgrind counts a byte at a time, so
+the instruction count overstates the time by more than the wall clock
+does. A view that marked deleted slots and skipped them would make each
+delete a search, but every reader of the view would have to skip the marks.
+That is #2118.
+
+CI's rows, against #2117's corpus: the run program 894,533,250 -> 809,823,849
+(-9.5%), the interpreted corpus 471,505,162 -> 430,978,258 (-8.6%), and the
+tab's run 456,882,925 -> 42,417,870, which puts it near where it stood
+before #2117 added the two phases. Against main, which holds neither the
+phases nor the fix: work_runbench 801,847,883 -> 809,823,849,
+interp_instructions 424,511,367 -> 430,978,258, interp_peak_bytes 741,380 ->
+765,587, interp_allocs 457,070 -> 461,292, browser_run_instructions
+41,265,571 -> 42,417,870, browser_run_peak_bytes 1,376,256 -> 1,310,720 and
+browser_compile_instructions 263,967,351 -> 273,807,879, each the two phases
+less what the fix takes back. The run program's allocation vein against
+main: run_allocs 1,446,913 -> 1,446,946, run_alloc_bytes 215,551,096 ->
+215,868,632, run_sh_buf 86,829,600 -> 86,960,912, run_put_mut_grow 32 -> 48,
+run_beat_iters 111,493 -> 112,473, run_bytes_malloc 7,893 -> 7,901,
+run_perm_live_bytes 15,825 -> 32,049 and run_perm_peak_bytes 736,769 ->
+802,321. Both restarts, the delete's and the put's, take their pairs from
+outside the arena when the map outlives the loop it changes in, and which of
+the two phases accounts for the perm rows is not isolated here. The runtime's
+machine code grows by `k_b_delete_mut` and the searching persistent delete,
+2,848 bytes in every benchmark binary: text 5,604,529 -> 5,646,113,
+emitted_other_lines 165,000 -> 165,914 with the phases' own code, and
+work_oneshot 10,033,444 -> 10,034,004 from the layout that moves with it. The
+front end's condition discount and the new builtin cost entry_instructions
+72,875,969 -> 72,875,974, emit_instructions 5,628,759 -> 5,636,850 and
+codegen_instructions_dev 116,458,530 -> 116,477,304, where
+codegen_instructions_release falls 370,260,066 -> 370,206,363. Welfare rises
+94.49 -> 94.83 and the rise is banked.
+
+The interpreter's in-place delete takes a value on the holder count as push
+and put do, so the ratchet's row "a shared seed copied every lap" now finds
+five such sites in `src/eval/builtins.rs` where it found four, and disables
+the delete's with the others. Its spec still turns red under it.

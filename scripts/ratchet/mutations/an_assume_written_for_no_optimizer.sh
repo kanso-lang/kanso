@@ -5,9 +5,9 @@
 # every body, and the browser compile row reads heavier.
 set -e
 t='        !self.words'
-[ "$(grep -cxF "$t" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$t" src/codegen/fn_emit.rs)" -eq 1 ] || {
   echo "the assume switch moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i "s/^        !self\\.words\$/        true/" src/codegen.rs
-if grep -qxF "$t" src/codegen.rs; then exit 1; fi
+sed -i "s/^        !self\\.words\$/        true/" src/codegen/fn_emit.rs
+if grep -qxF "$t" src/codegen/fn_emit.rs; then exit 1; fi

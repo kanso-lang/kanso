@@ -5,9 +5,9 @@
 # witness.
 set -e
 kept='        self.out.push_str("  ");'
-[ "$(grep -cF "$kept" src/codegen.rs)" -eq 1 ] || {
+[ "$(grep -cF "$kept" src/codegen/fn_emit.rs)" -eq 1 ] || {
   echo "the line write moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        self.out.push_str("  ");$/        let _ = writeln!(self.out, "  {text}"); return;/' src/codegen.rs
-if grep -qF "$kept" src/codegen.rs; then exit 1; fi
+sed -i 's/^        self.out.push_str("  ");$/        let _ = writeln!(self.out, "  {text}"); return;/' src/codegen/fn_emit.rs
+if grep -qF "$kept" src/codegen/fn_emit.rs; then exit 1; fi
