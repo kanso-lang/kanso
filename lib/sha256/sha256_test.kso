@@ -2,6 +2,7 @@
 # padding boundary. Fifty-five bytes is the last message whose terminator and
 # length still fit its own block; fifty-six is the first that needs another
 # one, and that is where a hand-written padding rule goes wrong.
+import "std/list"
 import "std/text"
 
 empty_sum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -29,3 +30,62 @@ test_two_blocks = hex (text/bytes long) == long_sum
 test_padding_fits = hex (text/bytes fits) == fits_sum
 
 test_padding_overflows = hex (text/bytes over) == over_sum
+
+# HMAC-SHA-256 against RFC 4231's test cases 1, 2 and 6. Case 6's key is
+# longer than a block, so it is hashed before it is used.
+hi = "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+
+jefe = "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+
+big_key = "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
+
+jefe_asks = "what do ya want for nothing?"
+
+big_says = "Test Using Larger Than Block-Size Key - Hash Key First"
+
+# PBKDF2-HMAC-SHA-256: "password" and "salt" at one, two and 4096 rounds,
+# and RFC 7914's "passwd" vector, which is sixty-four bytes and so two blocks.
+once = "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"
+
+twice = "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43"
+
+often = "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a"
+
+first_block = "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc"
+
+next_block = "49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783"
+
+digits = "0123456789abcdef"
+
+fn spelled bs
+  list/fold bs "" (acc b -> "{acc}{digit (b / 16)}{digit (b % 16)}")
+
+fn digit n
+  text/slice digits (n + 1) (n + 1)
+
+fn filled byte n
+  list/to_list (list/take (list/repeat byte) n)
+
+fn keyed key message
+  spelled (hmac (text/bytes key) (text/bytes message))
+
+fn stretched password rounds size
+  spelled (pbkdf2 (text/bytes password) (text/bytes "salt") rounds size)
+
+test_digest_is_the_hex_as_bytes = spelled (digest (text/bytes "abc")) == abc_sum
+
+test_hmac_case_one = spelled (hmac (filled 11 20) (text/bytes "Hi There")) == hi
+
+test_hmac_case_two = keyed "Jefe" jefe_asks == jefe
+
+big_key_hmac = hmac (filled 170 131) (text/bytes big_says)
+
+test_hmac_a_long_key = spelled big_key_hmac == big_key
+
+test_pbkdf2_once = stretched "password" 1 32 == once
+
+test_pbkdf2_twice = stretched "password" 2 32 == twice
+
+test_pbkdf2_often = stretched "password" 4096 32 == often
+
+test_pbkdf2_two_blocks = stretched "passwd" 1 64 == "{first_block}{next_block}"
