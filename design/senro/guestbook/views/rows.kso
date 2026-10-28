@@ -1,8 +1,0 @@
-# A signature in the book, as the page shows it. Declared with the views that
-# read it, until senro/models derives it from the migrations.
-pub type signature
-  name
-  message
-
-pub fn signed_by name message
-  signature name message

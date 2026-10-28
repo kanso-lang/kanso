@@ -23,10 +23,9 @@ kanso derived design/senro/guestbook  # the schema and route table derived
   compile error rather than a route.
 - `../web` serves the table, one connection at a time, and decodes a posted
   form.
-- `entries.kso` declares the `signature` model and stores one with a
-  parameterized insert, so what a
-  visitor types is stored as text and never read as SQL, and renders the
-  list.
+- `entries.kso` declares the `signature` model, stores one with a
+  parameterized insert, so what a visitor types is stored as text and never
+  read as SQL, and renders the list.
 - `views/signed.slim` is the page, compiled by kata to `views/signed.kso`.
-  `views/rows.kso` declares the record the page reads, until senro/models
-  derives it from migrations.
+  It reads the `signature` records `entries.kso` builds by their fields,
+  which needs no import.

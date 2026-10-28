@@ -31,7 +31,7 @@ fn shown rows
   http/html_page (views/signed (list/to_list (list/map rows read)))
 
 fn read row
-  views/signed_by (text_of row["name"]) (text_of row["message"])
+  signature (text_of row["name"]) (text_of row["message"])
 
 fn text_of none
   ""
