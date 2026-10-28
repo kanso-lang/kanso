@@ -699,6 +699,18 @@ static __attribute__((noinline)) KValue k_dial(KValue host, long long port) {
 
 static KValue k_exec(KDesc* d);
 
+/* A listener k_step polled was left non-blocking, so the flag comes off
+   before the wait, and the connection is handed over blocking, as k_step's
+   are. */
+static __attribute__((noinline)) KValue k_accept_waiting(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+    k_out_settle();
+    int taken = accept(fd, NULL, NULL);
+    if (taken < 0) return k_err(k_str("cannot accept"), NULL);
+    return k_int(k_hold_socket(taken));
+}
+
 /* A bind chain entered past the beat stack's last mark. A chain built from the
    left runs each link inside the one before it, so a fold of a hundred effects
    is a hundred chains deep, and the stack holds sixty-four marks. Past the
@@ -833,20 +845,17 @@ static KValue k_exec(KDesc* d) {
             return k_int(k_hold_socket(fd));
         }
         case 21: {
-            /* Only reached outside a parallel group, where nothing else could
-               ever connect; k_step yields instead of arriving here.
+            /* Only reached outside a parallel group; k_step yields instead of
+               arriving here. No other fiber can connect then, but a client
+               outside the program can, and a server is usually one statement,
+               so this waits for one the way accept(2) does.
 
-               The handle is checked first because this arm used to answer
-               "nothing connected" whatever it was given — a true statement
-               about a listener nobody has dialled, said about a value that is
-               not a listener at all. The interpreter refused it; native
-               described the world instead of the argument. The string is the
-               one k_step already uses for the same fault, which is worth
-               keeping identical: clang folds the two returns together, and a
-               distinct wording costs 128 bytes of .text in every binary. */
-            if (k_socket_of(d->x.payload) < 0)
-                return k_err(k_str("that is not a listener"), NULL);
-            return k_err(k_str("nothing connected"), NULL);
+               The handle is checked first, with the string k_step uses for the
+               same fault: clang folds the two returns together, and a distinct
+               wording costs 128 bytes of .text in every binary. */
+            int fd = k_socket_of(d->x.payload);
+            if (fd < 0) return k_err(k_str("that is not a listener"), NULL);
+            return k_accept_waiting(fd);
         }
         case 22:
             return k_conn_read(d->x.payload, 0);
