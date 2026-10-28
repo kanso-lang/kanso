@@ -1,12 +1,15 @@
+import "../models"
 import "../pg"
 import "../routes"
 import "../web"
 import "./entries"
 import "./home"
+import "./migrations"
 
+derive models/tables
 derive routes/rest
 
-made = "create table if not exists entries (id serial, name text, message text)"
+made = models/made schema
 
 pg/connect "127.0.0.1" 54329 "postgres" "postgres" ""
   .> (db -> pg/run db made .> (_ -> web/serve 3000 routes db))

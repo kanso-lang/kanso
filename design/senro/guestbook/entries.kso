@@ -4,6 +4,12 @@ import "./views"
 import "std/list"
 import "std/net/http"
 
+# A signature as the `signatures` table stores it. senro/models checks each
+# field against the table's columns.
+pub type signature
+  name
+  message
+
 pub fn index _ db
   listed db
 
@@ -14,12 +20,12 @@ pub fn create req db
   wanted = [(web/value f "name") (web/value f "message")]
   pg/query db added wanted .> (_ -> listed db)
 
-added = "insert into entries (name, message) values ($1, $2)"
+added = "insert into signatures (name, message) values ($1, $2)"
 
 fn listed db
   pg/query db newest [] .> (r -> shown r.rows)
 
-newest = "select name, message from entries order by id desc"
+newest = "select name, message from signatures order by id desc"
 
 fn shown rows
   http/html_page (views/signed (list/to_list (list/map rows read)))

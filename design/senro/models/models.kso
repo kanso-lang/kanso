@@ -1,0 +1,152 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# senro's model convention, run while an app compiles (#2186). The app's
+# migrations are values built from the changes below, listed in order by a
+# module named `migrations` as `pub all`. The derivation folds them into the
+# schema, declares it as `schema`, and checks each record type in the app's
+# other modules against the table its plural names: a model whose table is
+# missing, or with a field the table has no column for, is refused at the
+# model.
+type new_table
+  name
+  columns
+
+type added_column
+  table
+  column
+
+type renamed_column
+  table
+  from
+  to
+
+type dropped_column
+  table
+  name
+
+type column_def
+  name
+  kind
+
+pub fn create_table name columns
+  new_table name columns
+
+pub fn add_column table definition
+  added_column table definition
+
+pub fn rename_column table from to
+  renamed_column table from to
+
+pub fn drop_column table name
+  dropped_column table name
+
+pub fn column name kind
+  column_def name kind
+
+pub fn tables p
+  schema = list/fold (migrations_of p) {} applied
+  refused = list/fold p.modules [] (acc m -> list/concat acc (models m schema))
+  list/concat [(derive/declare "schema" "schema" schema)] refused
+
+fn migrations_of p
+  found = list/select p.modules (m -> m.name == "migrations")
+  list/fold found [] (acc m -> list/concat acc (listed m))
+
+fn listed m
+  changes_in m.constants["all"]
+
+fn changes_in none
+  []
+
+fn changes_in changes
+  changes
+
+fn applied schema c:new_table
+  put schema c.name (list/to_list (list/map c.columns spelled))
+
+fn applied schema c:added_column
+  put schema c.table (list/concat (held schema c.table) [(spelled c.column)])
+
+fn applied schema c:renamed_column
+  put schema c.table (list/to_list (list/map (held schema c.table) (renamed c)))
+
+fn applied schema c:dropped_column
+  kept = list/select (held schema c.table) (col -> name_of col != c.name)
+  put schema c.table (list/to_list kept)
+
+fn held schema table
+  present schema[table]
+
+fn present none
+  []
+
+fn present columns
+  columns
+
+fn spelled c
+  "{c.name} {c.kind}"
+
+fn name_of col
+  (text/split col " ")[1]
+
+fn renamed c
+  (col -> moved col c)
+
+fn moved col c
+  return col if name_of col != c.from
+  "{c.to} {(text/split col " ")[2]}"
+
+fn models m schema
+  list/fold m.records [] (acc r -> list/concat acc (refusals m r schema))
+
+fn refusals m r schema
+  table = plural r.name
+  checked "{m.name}/{r.name}" table r.fields schema[table]
+
+fn checked origin table _ none
+  [(missing origin table)]
+
+fn checked origin table fields columns
+  names = list/to_list (list/map columns name_of)
+  unknown = list/select fields (f -> not list/any? names (n -> n == f))
+  list/to_list (list/map unknown (f -> stray origin table f))
+
+fn missing origin table
+  derive/refuse origin "no table `{table}` in the schema the migrations build"
+
+fn stray origin table f
+  derive/refuse origin "`{f}` is not a column of `{table}`"
+
+# The inflector: enough English for table names.
+pub fn plural word
+  return "{text/slice word 1 (length word - 1)}ies" if consonant_y? word
+  return "{word}es" if sibilant? word
+  "{word}s"
+
+fn consonant_y? word
+  n = length word
+  before = text/slice word (n - 1) (n - 1)
+  n > 1 and text/ends_with? word "y" and not vowel? before
+
+fn vowel? none
+  false
+
+fn vowel? c
+  list/any? ["a" "e" "i" "o" "u"] (v -> v == c)
+
+fn sibilant? word
+  list/any? ["s" "x" "z" "ch" "sh"] (end -> text/ends_with? word end)
+
+# The SQL that makes each table in `schema` where it is missing, as one
+# query for an app to run as it starts.
+pub fn made schema
+  each = list/map (keys schema) (t -> making t schema[t])
+  text/join (list/to_list each) "; "
+
+fn making table none
+  "create table if not exists {table} ()"
+
+fn making table columns
+  "create table if not exists {table} ({text/join columns ", "})"

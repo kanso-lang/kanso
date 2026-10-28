@@ -1,0 +1,13 @@
+import "../models"
+
+# The guestbook's schema, as the changes that built it, oldest first. The
+# models derivation folds these into the schema the app is compiled against.
+pub all = [signed]
+
+signed = models/create_table "signatures" [id name message]
+
+id = models/column "id" "serial"
+
+name = models/column "name" "text"
+
+message = models/column "message" "text"
