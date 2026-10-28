@@ -1,0 +1,19 @@
+import "std/list"
+import "std/text"
+
+# What every generated view leans on: the escape that keeps a value from
+# being read as markup, a loop body joined once per element, and the join of
+# a function's parts.
+fn escape x
+  s = "{x}"
+  amp = text/join (text/split s "&") "&amp;"
+  lt = text/join (text/split amp "<") "&lt;"
+  gt = text/join (text/split lt ">") "&gt;"
+  quot = text/join (text/split gt "\"") "&quot;"
+  text/join (text/split quot "'") "&#39;"
+
+fn each xs f
+  text/join (list/to_list (list/map xs f)) ""
+
+fn joined parts
+  text/join parts ""

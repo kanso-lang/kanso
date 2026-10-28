@@ -1,0 +1,45 @@
+import "std/derive"
+import "std/list"
+
+# senro's routing convention, run while an app compiles (#2186). A pub
+# function in one of the app's modules is an action, and its module's name
+# and its own name place it: `entries/index` answers GET /entries,
+# `entries/create` answers POST /entries, and `home/index` answers GET /.
+# Any other pub function is refused where it is declared, so a misspelled
+# action is a compile error and never a dead route.
+pub fn rest p
+  rows = list/fold p.modules {} (acc m -> list/fold m.functions acc (row m))
+  odd = list/fold p.modules [] (acc m -> list/concat acc (strays m))
+  list/concat [(derive/declare "routes" "routes" rows)] odd
+
+fn row m
+  (acc f -> placed acc f (path_of m.name f.name))
+
+fn placed acc _ none
+  acc
+
+fn placed acc f key
+  put acc key f.reference
+
+fn path_of "home" "index"
+  "GET /"
+
+fn path_of m "index"
+  "GET /{m}"
+
+fn path_of m "new"
+  "GET /{m}/new"
+
+fn path_of m "create"
+  "POST /{m}"
+
+fn path_of _ _
+  none
+
+fn strays m
+  unplaced = list/select m.functions (f -> path_of m.name f.name == none)
+  list/to_list (list/map unplaced (f -> refused m f))
+
+fn refused m f
+  said = "`{f.name}` is not an action: name it index, new or create"
+  derive/refuse "{m.name}/{f.name}" said

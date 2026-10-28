@@ -1,0 +1,66 @@
+import "std/list"
+import "std/net"
+import "std/net/http"
+import "std/text"
+
+# A server for an app's route table: one connection at a time, each request
+# looked up by its method and path and handed to the action with the
+# database. An action answers an effect that yields the response.
+pub fn serve at routes db
+  net/listen at .> (l -> net/port l .> (p -> opened l p routes db))
+
+fn opened l p routes db
+  print "senro on port {p}" .> (_ -> served l routes db)
+
+fn served l routes db
+  net/accept l
+    .> (c -> net/read c .> (raw -> answered c routes db (http/parsed raw)))
+    .> (_ -> served l routes db)
+
+fn answered c routes db req
+  routed routes["{req.method} {req.path}"] req db
+    .> (r -> net/write c (http/rendered r))
+    .> (_ -> net/close_conn c)
+
+fn routed none _ _
+  effect http/not_found
+
+fn routed action req db
+  action req db
+
+# A form posted as application/x-www-form-urlencoded, as a map from each
+# field's name to its value. A field the form did not send reads as "".
+pub fn form body
+  pairs = text/split body "&"
+  list/fold pairs {} (acc pair -> field acc (text/split pair "="))
+
+fn field acc parts
+  return acc if length parts < 2
+  put acc (decoded parts[1]) (decoded parts[2])
+
+pub fn value f name
+  given f[name]
+
+fn given none
+  ""
+
+fn given v
+  v
+
+# `+` is a space, and `%` and two hex digits are one byte.
+fn decoded s
+  bytes = list/to_list (text/bytes (text/join (text/split s "+") " "))
+  text/utf8 (unescaped bytes 1 [])
+
+fn unescaped bs at acc
+  return acc if at < 1 or at > length bs
+  return unescaped bs (at + 1) (push acc bs[at]) if bs[at] != 37
+  return acc if at + 2 > length bs
+  byte = hex bs[at + 1] * 16 + hex bs[at + 2]
+  unescaped bs (at + 3) (push acc byte)
+
+fn hex c
+  return c - 48 if c >= 48 and c <= 57
+  return c - 55 if c >= 65 and c <= 70
+  return c - 87 if c >= 97 and c <= 102
+  0

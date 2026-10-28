@@ -1,0 +1,17 @@
+- locals signatures
+doctype html
+html
+  head
+    meta charset="utf-8"
+    title Guestbook
+  body
+    h1 Guestbook
+    form method="post" action="/entries"
+      input name="name" placeholder="your name"
+      input name="message" placeholder="say something"
+      button Sign
+    ul
+      - for e in signatures
+        li
+          strong = e.name
+          |  wrote #{e.message}

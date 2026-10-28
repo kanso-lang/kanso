@@ -1,0 +1,34 @@
+import "../pg"
+import "../web"
+import "./views"
+import "std/list"
+import "std/net/http"
+
+pub fn index _ db
+  listed db
+
+# The form's two fields go to Postgres as parameters, so what a visitor
+# types is stored as text and never read as SQL.
+pub fn create req db
+  f = web/form req.body
+  wanted = [(web/value f "name") (web/value f "message")]
+  pg/query db added wanted .> (_ -> listed db)
+
+added = "insert into entries (name, message) values ($1, $2)"
+
+fn listed db
+  pg/query db newest [] .> (r -> shown r.rows)
+
+newest = "select name, message from entries order by id desc"
+
+fn shown rows
+  http/html_page (views/signed (list/to_list (list/map rows read)))
+
+fn read row
+  views/signed_by (text_of row["name"]) (text_of row["message"])
+
+fn text_of none
+  ""
+
+fn text_of v
+  v

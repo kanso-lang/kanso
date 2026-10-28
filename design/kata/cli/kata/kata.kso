@@ -59,17 +59,33 @@ type origin
   file
 
 # The generated source for template `name`, read from `file`, whose text is
-# `src`. The first line may declare the template's locals, which become the
-# function's parameters in the order written.
+# `src`. The template may open with `- import "path"` lines, which become the
+# file's imports, so a view can read the records a module beside it declares;
+# then a line declaring the template's locals, which become the function's
+# parameters in the order written.
 pub fn compiled name file src
-  rows = rows_of src
+  all = rows_of src
+  imports = imports_of all 1 []
+  rows = list/to_list (list/drop all (length imports))
   declared = locals_of rows
   from = if (length declared == 0) 1 2
   o = origin name file
   w = walk rows from (length rows + 1) declared o (woven [] [])
   main = emitted "pub fn {name} {params_of declared}" w.units o
   heading = "# written by kata from {file}: edit the template, not this file"
-  "{text/join (list/concat [heading main] w.helpers) "\n\n"}\n"
+  headed imports heading (text/join (list/concat [main] w.helpers) "\n\n")
+
+# With no imports the note stands alone at the top; after imports it sits on
+# the function, since a comment set apart below them is refused.
+fn headed imports heading body
+  return "{heading}\n\n{body}\n" if length imports == 0
+  "{text/join imports "\n"}\n\n{heading}\n{body}\n"
+
+fn imports_of rows i acc
+  return acc if i < 1 or length rows < i
+  b = rows[i].body
+  return acc if not text/starts_with? b "- import "
+  imports_of rows (i + 1) (push acc "import {after b 9}")
 
 fn rows_of src
   numbered (text/split src "\n") 1 []

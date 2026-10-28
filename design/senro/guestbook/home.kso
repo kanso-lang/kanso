@@ -1,0 +1,5 @@
+import "./entries"
+
+# The front page is the book itself.
+pub fn index req db
+  entries/index req db
