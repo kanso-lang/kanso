@@ -8,12 +8,14 @@
 # every golden holds and the work vein is the only thing that can see it,
 # which is what the row asserts.
 set -e
-n=$(grep -c "^    if (K_COUNTING) k_stat_beat_iters++;" src/runtime/core.c || true)
+n=$(cat src/runtime/core.c src/runtime/regions.c | grep -c "^    if (K_COUNTING) k_stat_beat_iters++;" || true)
 [ "$n" = "2" ] || {
   echo "the beat iteration counter's sites changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-sed -e "s/^    if (K_COUNTING) k_stat_beat_iters++;/    k_stat_beat_iters++;/" \
-    src/runtime/core.c > src/runtime/core.c.mut
-mv src/runtime/core.c.mut src/runtime/core.c
-grep -q "^    k_stat_beat_iters++;" src/runtime/core.c
+for f in src/runtime/core.c src/runtime/regions.c; do
+  sed -e "s/^    if (K_COUNTING) k_stat_beat_iters++;/    k_stat_beat_iters++;/" \
+      "$f" > "$f.mut"
+  mv "$f.mut" "$f"
+  grep -q "^    k_stat_beat_iters++;" "$f"
+done
