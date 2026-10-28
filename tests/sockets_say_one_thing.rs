@@ -1,10 +1,10 @@
-//! Six socket failures, and the two engines that can reach them.
+//! Seven socket failures, and the two engines that can reach them.
 //!
-//! A program hands `net/port`, `net/read`, `net/write`, `net/close_*`,
-//! `net/accept` or `os/kill` a value that is not the handle it wants. Native
-//! and the interpreter both speak here — neither refuses — so the differential
-//! law requires the same sentence from both, and until this spec they gave
-//! seven different ones:
+//! A program hands `net/port`, `net/read`, `net/read_bytes`, `net/write`,
+//! `net/close_*`, `net/accept` or `os/kill` a value that is not the handle it
+//! wants. Native and the interpreter both speak here — neither refuses — so the
+//! differential law requires the same sentence from both, and until this spec
+//! they gave seven different ones:
 //!
 //!     net/port            native "that is not an open socket"  interp "that is not an open listener"
 //!     net/accept          native "nothing connected"           interp "7 is not a listener"
@@ -96,6 +96,11 @@ fn an_accept_on_something_that_is_not_a_listener() {
 #[test]
 fn a_read_from_something_that_is_not_a_connection() {
     agreed("net/read (opaque (stand_in 7))", "net", "that is not a connection");
+}
+
+#[test]
+fn a_byte_read_from_something_that_is_not_a_connection() {
+    agreed("net/read_bytes (opaque (stand_in 7))", "net", "that is not a connection");
 }
 
 #[test]

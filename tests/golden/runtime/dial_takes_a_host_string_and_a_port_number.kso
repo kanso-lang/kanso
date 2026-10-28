@@ -1,0 +1,6 @@
+import "std/net"
+
+pub fn opaque x
+  x
+
+pub play = net/dial (opaque 7) 5432 .> (r -> print "{r}")

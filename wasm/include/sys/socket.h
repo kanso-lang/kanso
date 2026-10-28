@@ -5,6 +5,7 @@
 typedef uint32_t socklen_t;
 typedef uint16_t sa_family_t;
 struct sockaddr { sa_family_t sa_family; char sa_data[14]; };
+#define AF_UNSPEC 0
 #define AF_INET 2
 #define SOCK_STREAM 1
 #define SOL_SOCKET 1
@@ -15,4 +16,5 @@ int bind(int fd, const struct sockaddr* addr, socklen_t len);
 int listen(int fd, int backlog);
 int accept(int fd, struct sockaddr* addr, socklen_t* len);
 int getsockname(int fd, struct sockaddr* addr, socklen_t* len);
+int connect(int fd, const struct sockaddr* addr, socklen_t len);
 #endif

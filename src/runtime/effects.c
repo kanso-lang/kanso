@@ -145,6 +145,18 @@ KValue k_b_net_read(KValue conn) {
     return k_mkdesc(22, conn, k_none());
 }
 
+KValue k_b_net_read_bytes(KValue conn) {
+    if (!k_not_failure(conn)) return conn;
+    if (conn.tag != K_INT) k_die("net_read_bytes takes a connection");
+    return k_mkdesc(35, conn, k_none());
+}
+
+KValue k_b_dial(KValue host, KValue port) {
+    if (__builtin_expect(!k_not_failure(host) || !k_not_failure(port), 0)) return k_failed2(host, port);
+    if (host.tag != K_STR || port.tag != K_INT) k_die("dial takes a host string and a port number");
+    return k_mkdesc(34, host, port);
+}
+
 KValue k_b_net_write(KValue conn, KValue text) {
     if (__builtin_expect(!k_not_failure(conn) || !k_not_failure(text), 0)) return k_failed2(conn, text);
     if (conn.tag != K_INT || (text.tag != K_STR && text.tag != K_BYTES))
@@ -644,14 +656,45 @@ static char** k_argv_global = NULL;
    the buffer was part of every k_exec frame, and a bind chain built from the
    left enters k_exec once a link, so each link held 64 KiB of stack it never
    used and 8 MiB ran out near the 120th. */
-static __attribute__((noinline)) KValue k_conn_read(long long h) {
+static __attribute__((noinline)) KValue k_conn_read(long long h, int raw) {
     int fd = k_socket_of(h);
     if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
     char buf[65536];
     k_out_settle();
     ssize_t got = read(fd, buf, sizeof(buf));
     if (got < 0) return k_err(k_str("cannot read"), NULL);
-    return k_str_n(buf, (long long)got);
+    if (!raw) return k_str_n(buf, (long long)got);
+    unsigned char* data = (unsigned char*)k_alloc((size_t)(got > 0 ? got : 1));
+    memcpy(data, buf, (size_t)got);
+    return k_bytes_view(data, (long long)got);
+}
+
+/* A connection out. The reason names the address and nothing from the
+   operating system, so both engines word a refusal alike. */
+static __attribute__((noinline)) KValue k_dial(KValue host, long long port) {
+    char said[512];
+    snprintf(said, sizeof said, "cannot connect to %s:%lld", k_cstr(k_as_str(host)), port);
+    if (port <= 0 || port > 65535) return k_err(k_str(said), NULL);
+    char service[8];
+    snprintf(service, sizeof service, "%lld", port);
+    struct addrinfo hints, *found = NULL;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    k_out_settle();
+    if (getaddrinfo(k_cstr(k_as_str(host)), service, &hints, &found) != 0)
+        return k_err(k_str(said), NULL);
+    int fd = -1;
+    for (struct addrinfo* a = found; a; a = a->ai_next) {
+        fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+        if (fd < 0) continue;
+        if (connect(fd, a->ai_addr, a->ai_addrlen) == 0) break;
+        close(fd);
+        fd = -1;
+    }
+    freeaddrinfo(found);
+    if (fd < 0) return k_err(k_str(said), NULL);
+    return k_int(k_hold_socket(fd));
 }
 
 static KValue k_exec(KDesc* d);
@@ -806,7 +849,11 @@ static KValue k_exec(KDesc* d) {
             return k_err(k_str("nothing connected"), NULL);
         }
         case 22:
-            return k_conn_read(d->x.payload);
+            return k_conn_read(d->x.payload, 0);
+        case 35:
+            return k_conn_read(d->x.payload, 1);
+        case 34:
+            return k_dial(d->x, d->y.payload);
         case 23: {
             int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);

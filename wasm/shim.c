@@ -29,6 +29,12 @@ int bind(int fd, const struct sockaddr* a, socklen_t s) { (void)fd; (void)a; (vo
 int listen(int fd, int b) { (void)fd; (void)b; errno = ENOSYS; return -1; }
 int accept(int fd, struct sockaddr* a, socklen_t* s) { (void)fd; (void)a; (void)s; errno = ENOSYS; return -1; }
 int getsockname(int fd, struct sockaddr* a, socklen_t* s) { (void)fd; (void)a; (void)s; errno = ENOSYS; return -1; }
+int connect(int fd, const struct sockaddr* a, socklen_t s) { (void)fd; (void)a; (void)s; errno = ENOSYS; return -1; }
+
+/* No name resolves, so a dial fails at its first step. */
+struct addrinfo;
+int getaddrinfo(const char* n, const char* s, const struct addrinfo* h, struct addrinfo** f) { (void)n; (void)s; (void)h; *f = 0; return -1; }
+void freeaddrinfo(struct addrinfo* f) { (void)f; }
 
 /* 128-bit helpers, in 64-bit halves. */
 typedef unsigned __int128 u128;

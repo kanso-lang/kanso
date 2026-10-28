@@ -2275,10 +2275,10 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _, _) if base(n) == "read_line" => STR | DONE,
                 // status, stdout, stderr — the std wrapper reads them into a record
                 Expr::Ident(n, _, _) if base(n) == "run" => LIST,
-                // the handle a later kill names, and the three socket
-                // handles the net wrappers read into their records
+                // the handle a later kill names, a listener's port, and the
+                // socket handles the net wrappers read into their records
                 Expr::Ident(n, _, _)
-                    if matches!(base(n), "start" | "listen" | "accept" | "net_port") =>
+                    if matches!(base(n), "start" | "listen" | "accept" | "net_port" | "dial") =>
                 {
                     INT
                 }
@@ -2286,6 +2286,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _, _) if base(n) == "random" => INT,
                 // the bytes a connection had waiting, as text
                 Expr::Ident(n, _, _) if base(n) == "net_read" => STR,
+                // the same read, as the bytes they are
+                Expr::Ident(n, _, _) if base(n) == "net_read_bytes" => BYTES,
                 // an unset variable yields none, which is a value the consumer
                 // dispatches on rather than a failure it has to trap
                 Expr::Ident(n, _, _) if base(n) == "env" => STR | NONE,
@@ -2491,6 +2493,8 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "net_port"
             | "accept"
             | "net_read"
+            | "net_read_bytes"
+            | "dial"
             | "net_write"
             | "net_close"
             | "args"
