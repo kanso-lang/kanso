@@ -1470,3 +1470,11 @@ print the same nine values. Watched red with the native byte read decoding
 as text (the 0xff arrived as U+FFFD) and with the interpreter's refusal
 worded differently. tests/sockets_say_one_thing.rs gains `read_bytes` on a
 handle that is not a connection.
+
+Every binary links the runtime, so each benchmark's text grows by 752 bytes,
+and its instructions by a few hundred, which is layout: no benchmark dials
+out. `lib/net` is embedded in the compiler, so the compile rows rise too:
+compile +3,157, entry +4,535, library +4,409, emit +1,738, dev-tier codegen
++63,365, release-tier codegen +222, interpreter +137,169, browser compile
++28,230 and browser run +27. Welfare fell by less than 0.01, and the floor
+moves to 95.568 under the rule for a feature a ruling requires.
