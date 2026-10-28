@@ -15,15 +15,15 @@
 #
 # THE WORKLOAD IS NAMED, NOT INHERITED, for the reason compile_corpus's
 # header gives at length: a row measured on a library moves when that library
-# changes its imports. These ten are named here, and each is used below,
+# changes its imports. These twelve are named here, and each is used below,
 # because an unused import is a refusal.
 #
-# It also derives (#2186): conventions/routing reads the local posts module and
+# It also derives (#2186): conventions/routing reads the posts module and
 # declares a route table, so what a derivation costs -- the description, the
 # interpreter's call and the constant written back -- is in this row, and
 # through it in welfare's compile term.
 #
-# It imports ten where compile_corpus imports four, and the reason is
+# It imports twelve where compile_corpus imports four, and the reason is
 # sensitivity rather than appetite: the entry path's own work is the merge and
 # the whole-program check over everything the imports bring, so a corpus with
 # one small import measures mostly the module path underneath it.

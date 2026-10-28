@@ -23,85 +23,6 @@
 
 
 
-## 2026-10-25 — a map of maps is written in place
-
-The count per pair of keys from #2125, `inner = or_map m[a]` then
-`put m a (put inner b (or_zero inner[b] + 1))`, now writes both maps in
-place natively (#2122). Four changes in `src/linear.rs` do it.
-
-- **The outer write.** `fed_to_consumer` discounted a read binding only when
-  every later mention reached the write as an arithmetic or comparison
-  operand. A sibling that writes into the binding, `put inner b …`, forces it
-  before the outer write runs, and a binding forced once answers every later
-  mention from its value, so the binding's read of `m` is discounted there
-  too. This alone took the probe at 5,000 counts from 189 million
-  instructions to 101 million.
-- **Values alone.** `elems_params` is a greatest fixpoint over map
-  parameters: every caller hands in a map literal of unique values, a write
-  of a unique value into a map nobody else holds, or a parameter or binding
-  that is one, and no arm keeps an element. An element read may be compared,
-  interpolated or read further; any other read drops the parameter. A
-  parameter may also be written into, counted with `length` or `keys`,
-  answered whole, or handed to another parameter that keeps the promise.
-  `returns_elems` carries the promise through a helper's answer, so a loop
-  that calls `bump m a b` gets it from the helper.
-- **The take.** `m[k]` read into a name that is written into and goes back
-  into `m` at the same key, with nothing else mentioning the name but reads,
-  moves the element out (`element_moves`). The map is linear, so the arm
-  uses it once and the outer write is in place, and its values are alone, so
-  the map's slot is the element's only other holder until the write replaces
-  it.
-- **Pass-through.** A function whose every arm answers one parameter,
-  mentioned nowhere else, or a fresh literal answers a unique value wherever
-  that argument is unique. `or_map` is one. It is asked per call, so one
-  caller handing it a shared map refuses only that call; the first version
-  needed `or_map`'s parameter linear for every caller, and a fixture that
-  shared `or_map` across six loops proved none of them.
-
-The seeding is gated on a take existing anywhere in the program, so a
-program without the shape builds no map facts. The probe at 20,000 counts
-took 2,275,554,111 instructions and takes 35,953,409, and 5,000 to 20,000 is
-a ratio of 4.7. A mem fixture of 2,000 counts over 20 inner maps allocates
-325 times and 401,472 bytes, where main allocated 12,202 times and 6,618,224
-bytes, and at 1,000 counts 220 and 164,752 against 6,089 and 2,300,544.
-
-`an_inner_map_held_elsewhere_keeps_what_it_held` gives each refusal a loop
-of its own, because a parameter is proven for every caller or none and a
-shared loop let one refusal hide another. Its output came from main's
-interpreter. Three ratchet mutations each turn it red on both engines: a map
-literal's values taken as alone whatever they are, an arm allowed to keep an
-element, and a take put back at another key. A check that the take arm uses
-the map once was removed rather than pinned: a written map parameter is
-linear only if every arm uses it once, so the check could not fail.
-
-A loop whose arms are spelled with `return m if i == 0` is proven the same
-way. The interpreter writes in place at these sites on the analysis' word,
-so a wrong proof would be wrong identically on both engines; the fixture's
-expected output is main's interpreter for that reason.
-
-Grouping into a map of lists, `put m k (push (or_list m[k]) i)`, is the same
-take with `push` as the write, and it is proven by the same change: 8,000
-numbers in 20 groups allocated 32,786 times and now 129.
-`a_map_of_lists_groups_in_place` pins it.
-
-CI's rows, against #2125. The run program reads work_runbench 851,781,946 →
-814,679,425 (−4.4%), run_allocs 1,456,758 → 1,447,392, run_alloc_bytes
-221,484,024 → 216,354,904, run_held_peak_bytes 4,120,448 → 248,688 and
-run_sh_map 120,960 → 12,160. run_put_mut_grow rises 55 → 260, because the
-inner maps now grow in place where each copy had been sized afresh. The
-interpreter reads interp_instructions 478,102,371 → 473,127,289 and
-interp_allocs 516,759 → 507,913, and interp_peak_bytes rises 1,233,920 →
-1,263,998. The tab's run falls browser_run_instructions 130,514,490 →
-47,716,164 and browser_run_peak_bytes 4,325,376 → 1,376,256.
-
-The analysis costs the front end. The interpreted corpus holds a take, so
-the tab's compile seeds the map facts and runs their fixpoint:
-browser_compile_instructions 314,821,332 → 324,458,065 (+3.1%). Native
-compiles read compile_instructions 24,731,131 → 24,741,552, entry_instructions
-72,970,344 → 72,986,583, library_instructions 72,642,115 → 72,659,822 and
-emit_instructions 5,641,862 → 5,655,748, and the machine code reads text
-5,649,473 → 5,649,809. Welfare rises 95.01 → 95.15 and the rise is banked.
-
 ## 2026-10-25 — a list built by concat, and a map of records, join the corpus
 
 A list built one number at a time with `list/concat acc [i]` costs about ten
@@ -1489,3 +1410,55 @@ codegen_instructions_release 371,551,798 (+222), interp_instructions
 and browser_run_instructions 64,598,060 (+27). Welfare fell by less than
 0.01, and the floor moves to 95.568 under the rule for a feature a ruling
 requires.
+
+## 2026-10-28 — derivations: a convention runs while the program compiles
+
+#2186, the first slice of the ruling. An entry may write `derive
+conventions/routing` after its imports. The compiler builds a
+`derive/program` describing the app's own modules, which are the ones the
+entry imports by a `./` path. Each module is listed with its pub functions,
+their parameters and annotations, and the function itself, and with each
+record type and its fields. The compiler calls the named function on the
+interpreter and reads back a list of declarations. `derive/declare` makes a
+constant in the entry, written out as the literal its value spells, with a
+function written as its name, so a route table names real handlers and the
+checker resolves each one. `derive/refuse` makes a compile error at the item
+it names, in that item's own file.
+
+The derivation's module is compiled as an ordinary dependency. No executor
+is supplied, so a derivation that answers an effect is refused. A name in
+the deriving module that reaches a module it describes is refused where it
+is written, because the description is the whole of what a derivation may
+know about the app; what it declares then follows from what `kanso derived`
+shows. The modules it describes count as used imports, because the
+convention reads them. `kanso derived` prints each declared constant with
+functions spelled by name.
+
+The derivation runs on an interpreter that copies at every container write.
+The first build asked the linearity analysis which writes could go in place,
+and that analysis covers every function the program holds: on
+bench/entry_corpus it was 24M of the derivation's 25.8M instructions. Without
+it the derivation costs 1.8M.
+
+tests/golden/derive holds nine programs, each run on both engines: a route
+table that dispatches to real functions, a misspelled action refused on its
+own line, a library beside the app left out of the description, and six ways
+a derivation can be wrong. It was watched red with function references
+written as none, with `../` libraries described, and with a derivation that
+imported the module it described. bench/entry_corpus now derives a small
+route table, so the entry row, and with it welfare's compile term, prices
+what a derivation costs.
+
+The entry row rises to entry_instructions 83,726,857 (+12,556,771): the
+corpus gained two modules and a derivation. `lib/derive` is embedded in the
+compiler, so the other compile rows move by layout: compile_instructions
+24,064,178 (+3,144), library_instructions 70,863,285 (+6,049),
+codegen_instructions_release 371,551,844 (+46), emit_instructions 5,598,851
+(-674), interp_instructions 571,786,909 (-1), compile_peak_bytes 598,588 (+96)
+and browser_compile_instructions 343,190,365 (+30,287). Welfare fell by 0.018
+and the floor moves to 95.550 under the rule for a feature a ruling requires;
+the fall is past what `--set` takes, so the floor was edited by hand and
+`--set` recorded the reason.
+
+Still owed on #2186: the browser compile's derivation golden, a record type
+or table binding as a declaration, and the senro derivations themselves.
