@@ -1,0 +1,10 @@
+import "std/derive"
+import "std/list"
+
+# The names of the modules the program is described with.
+pub fn named p
+  names = list/to_list (list/map p.modules name)
+  [(derive/declare "modules" "modules" names)]
+
+fn name m
+  m.name
