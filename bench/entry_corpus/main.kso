@@ -18,10 +18,17 @@
 # changes its imports. These ten are named here, and each is used below,
 # because an unused import is a refusal.
 #
+# It also derives (#2186): conventions/routing reads the local posts module and
+# declares a route table, so what a derivation costs -- the description, the
+# interpreter's call and the constant written back -- is in this row, and
+# through it in welfare's compile term.
+#
 # It imports ten where compile_corpus imports four, and the reason is
 # sensitivity rather than appetite: the entry path's own work is the merge and
 # the whole-program check over everything the imports bring, so a corpus with
 # one small import measures mostly the module path underneath it.
+import "./conventions"
+import "./posts"
 import "std/bits"
 import "std/io"
 import "std/json"
@@ -33,6 +40,8 @@ import "std/render"
 import "std/sha256"
 import "std/text"
 
+derive conventions/routing
+
 a = bits/complement 1
 b = json/encode 1
 c = list/first [1 2 3]
@@ -41,4 +50,5 @@ e = path/basename "/a/b"
 f = regexp/matches "a" "a"
 g = render/to_string 1
 h = sha256/hex (text/bytes "x")
-io/write "{a}{b}{c}{d}{e}{f}{g}{h}\n"
+i = conventions/handle routes "/posts/show" 7
+io/write "{a}{b}{c}{d}{e}{f}{g}{h}{i}\n"
