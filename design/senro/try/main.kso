@@ -1,0 +1,4 @@
+import "../pg"
+import "./steps"
+
+pg/connect "127.0.0.1" 5432 "postgres" "postgres" .> steps/walked

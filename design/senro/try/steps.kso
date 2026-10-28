@@ -1,0 +1,15 @@
+import "../pg"
+
+fn shown r
+  print "{r.command} {r.columns} {r.rows}"
+
+pub fn walked s
+  pg/query s "create temporary table notes (id serial, body text)"
+    .> shown
+    .> (_ -> pg/query s "insert into notes (body) values ('one'), ('two')")
+    .> shown
+    .> (_ -> pg/query s "select id, body from notes order by id")
+    .> shown
+    .> (_ -> pg/query s "select * from missing")
+    .> shown
+    .> (_ -> pg/close s)

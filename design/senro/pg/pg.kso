@@ -1,0 +1,201 @@
+import "std/list"
+import "std/net"
+import "std/text"
+
+# A Postgres client written against the wire protocol, version 3.0. Every
+# message after the first is a type byte, a four-byte length that counts
+# itself, and a body. A reply ends with ReadyForQuery, so a reader collects
+# messages until one of those arrives and then makes sense of the list.
+#
+# Values travel as text, and a column's type oid says how to read one: ints
+# and bools become kanso's own, a NULL becomes none, and anything this client
+# does not know yet stays the string Postgres sent.
+pub type session
+  conn
+
+pub type result
+  columns
+  rows
+  command
+
+type message
+  kind
+  body
+
+# What a reader took from a buffer and where the next field starts.
+type taken
+  value
+  next
+
+# The whole messages found so far, where the unread bytes begin, and whether
+# the last message ended the reply.
+type gathered
+  messages
+  rest
+  finished
+
+type column
+  name
+  oid
+
+pub fn connect host at user database
+  net/dial host at .> (c -> started c user database)
+
+pub fn query s sql
+  net/write s.conn (framed 81 (cstring sql))
+    .> (_ -> replies s.conn ready?)
+    .> answered
+
+pub fn close s
+  net/write s.conn (framed 88 []) .> (_ -> net/close_conn s.conn)
+
+fn started c user database
+  wanted = list/concat (setting "user" user) (setting "database" database)
+  body = list/concat (be32 196608) (list/concat wanted [0])
+  net/write c (text/to_bytes (list/concat (be32 (length body + 4)) body))
+    .> (_ -> replies c opened?)
+    .> (ms -> admitted c ms)
+
+fn setting name value
+  list/concat (cstring name) (cstring value)
+
+# A startup ends at ReadyForQuery, at an error, or at a request for a
+# password this client cannot answer yet.
+fn opened? m
+  m.kind == 90 or m.kind == 69 or asks_password? m
+
+fn asks_password? m
+  m.kind == 82 and be32_at m.body 1 != 0
+
+fn ready? m
+  m.kind == 90
+
+fn admitted c ms
+  refused = list/find ms (m -> m.kind == 69 or asks_password? m)
+  return session c if refused == none
+  refusal refused
+
+fn refusal m
+  return failure m.body if m.kind == 69
+  err "the server asks for password method {be32_at m.body 1}"
+
+# An error's body is a run of fields, each a code byte and a string, ending
+# in a zero. The human-readable one has the code M.
+fn failure body
+  err (said body 1)
+
+fn said body at
+  return "the server refused without a message" if body[at] == 0
+  text = cstring_at body (at + 1)
+  return text.value if body[at] == 77
+  said body text.next
+
+fn answered ms
+  refused = list/find ms (m -> m.kind == 69)
+  return failure refused.body if refused != none
+  columns = described ms
+  rows = list/to_list (list/map (picked ms 68) (m -> row columns m.body))
+  names = list/to_list (list/map columns (k -> k.name))
+  result names rows (completed ms)
+
+fn picked ms kind
+  list/select ms (m -> m.kind == kind)
+
+fn completed ms
+  tagged = list/find ms (m -> m.kind == 67)
+  return "" if tagged == none
+  (cstring_at tagged.body 1).value
+
+fn described ms
+  head = list/find ms (m -> m.kind == 84)
+  return [] if head == none
+  fields head.body 3 (be16_at head.body 1) []
+
+fn fields _ _ 0 acc
+  acc
+
+fn fields body at left acc
+  name = cstring_at body at
+  oid = be32_at body (name.next + 6)
+  more = list/concat acc [(column name.value oid)]
+  fields body (name.next + 18) (left - 1) more
+
+fn row columns body
+  cells columns body 3 {}
+
+fn cells columns body at acc
+  return acc if length columns == 0
+  k = list/first columns
+  size = be32_at body at
+  rest = list/to_list (list/drop columns 1)
+  return cells rest body (at + 4) (put acc k.name none) if size > 2147483647
+  raw = text/utf8 (slice body (at + 4) size)
+  cells rest body (at + 4 + size) (put acc k.name (typed k.oid raw))
+
+fn typed 16 raw
+  raw == "t"
+
+fn typed 20 raw
+  text/to_int raw
+
+fn typed 21 raw
+  text/to_int raw
+
+fn typed 23 raw
+  text/to_int raw
+
+fn typed _ raw
+  raw
+
+# Reading. A read is whatever the network delivered, which may be part of a
+# message or several of them, so the bytes left over are carried into the
+# next read.
+fn replies c done?
+  reading c done? [] []
+
+fn reading c done? buf ms
+  net/read_bytes c .> (more -> landed c done? buf ms more)
+
+fn landed c done? buf ms more
+  return err "the server closed the connection" if length more == 0
+  whole = list/to_list (list/concat buf more)
+  g = split_off whole 1 ms done?
+  return g.messages if g.finished
+  reading c done? (slice whole g.rest (length whole - g.rest + 1)) g.messages
+
+fn split_off buf at ms done?
+  left = length buf - at + 1
+  return gathered ms at false if left < 5
+  size = be32_at buf (at + 1)
+  return gathered ms at false if left < size + 1
+  m = message buf[at] (slice buf (at + 5) (size - 4))
+  more = list/concat ms [m]
+  return gathered more (at + size + 1) true if done? m
+  split_off buf (at + size + 1) more done?
+
+# Bytes, written big-endian as the protocol has them.
+fn framed kind body
+  text/to_bytes (list/concat [kind] (list/concat (be32 (length body + 4)) body))
+
+fn be32 n
+  [(n / 16777216 % 256) (n / 65536 % 256) (n / 256 % 256) (n % 256)]
+
+fn be32_at bs at
+  bs[at] * 16777216 + bs[at + 1] * 65536 + bs[at + 2] * 256 + bs[at + 3]
+
+fn be16_at bs at
+  bs[at] * 256 + bs[at + 1]
+
+fn cstring s
+  list/concat (text/bytes s) [0]
+
+fn cstring_at bs at
+  end = zero_from bs at
+  taken (text/utf8 (slice bs at (end - at))) (end + 1)
+
+fn zero_from bs at
+  return at if bs[at] == 0
+  zero_from bs (at + 1)
+
+fn slice bs from n
+  list/to_list (list/take (list/drop bs (from - 1)) n)
