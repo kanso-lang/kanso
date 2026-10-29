@@ -1422,7 +1422,10 @@ digestbench compiles four more functions (emitted defines=118 calls=871
 branches=923 lines=7998) and its run rises to work_digestbench 4,104,363
 (+52), text 341,377 (+16); runbench carries the same module and reads
 work_runbench 825,011,765 (+717), text 819,297 (+16), with emitted defines=856
-calls=8793 branches=7545 lines=67140. Welfare fell by about
+calls=8793 branches=7545 lines=67140. Summed over
+the benchmarks the emitted counters read emitted_other_defines 2,278 (+2),
+emitted_other_calls 20,709 (+9), emitted_other_branches 17,933 (+8) and
+emitted_other_lines 171,268 (+133), and text 5,635,131 (+32). Welfare fell by about
 0.001 and the floor follows under the rule for a feature a ruling requires.
 
 ## 2026-10-29 — a field read in an import no longer makes the importer's name private
