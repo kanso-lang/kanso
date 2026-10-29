@@ -616,9 +616,10 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run print.kso --plan</div>
-    <pre><code>first
-second
-third</code></pre>
+    <pre><code>plan:
+  print "first"    # from line 1
+  print "second"    # from line 1
+  print "third"    # from line 1</code></pre>
   </div>
 </div>
 
@@ -645,7 +646,10 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run timing.kso --plan</div>
-    <pre><code>rolled 2</code></pre>
+    <pre><code>plan:
+  sleep 10
+  random 6
+  . &lt;continuation&gt;</code></pre>
   </div>
 </div>
 

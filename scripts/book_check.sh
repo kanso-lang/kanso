@@ -6,7 +6,6 @@
 #   name_test.out       kanso test name.kso
 #   name_build.out      kanso build name.kso   (run from a temp dir)
 #   name_plan.out       kanso run name.kso --plan
-#   name.plan.out       kanso run name.kso --plan
 #   name_counters.out   KANSO_COUNTERS=1 kanso run name.kso
 # A sibling name.manual file (holding one line of why) exempts an .out the
 # harness cannot replay — repl transcripts, wall-clock timings, IR greps.
@@ -31,7 +30,6 @@ for out in docs/book/samples/*/*.out; do
     *_test)     mode=test;  stripped="${base%_test}" ;;
     *_build)    mode=build; stripped="${base%_build}" ;;
     *_plan)     mode=run; extra="--plan"; stripped="${base%_plan}" ;;
-    *.plan)     mode=run; extra="--plan"; stripped="${base%.plan}" ;;
     *_counters) mode=run; env_prefix="KANSO_COUNTERS=1"; stripped="${base%_counters}" ;;
   esac
   src=""

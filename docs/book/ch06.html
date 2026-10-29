@@ -98,9 +98,12 @@ serving</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run join.kso --plan</div>
-    <pre><code>steeping the sencha
-warming the cups
-serving</code></pre>
+    <pre><code>plan:
+  join {
+  print "steeping the sencha"    # from line 4
+  print "warming the cups"    # from line 5
+  } # unordered; both run
+  print "serving"    # from line 1</code></pre>
   </div>
 </div>
 
@@ -147,13 +150,22 @@ brew: poured</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">kanso run concurrency.kso --plan</div>
-  <pre><code>brew: steeping
-roll 1: a 3
-roll 2: a 1
-roll 3: a 4
-roll 4: a 1
-roll 5: a 1
-brew: poured</code></pre>
+  <pre><code>plan:
+  join {
+  print "brew: steeping"    # from line 4
+  sleep 60
+  print "brew: poured"    # from line 6
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  } # unordered; both run</code></pre>
 </div>
 
 <p>both threads live inside one <code>join</code>: the brew chain, and the five throws chained into a single sequence. nothing hangs below the block, because nothing in this program waits for the group—order exists only inside each thread. <code>ordered.kso</code> is the same program with the rolls bound after the brew:</p>

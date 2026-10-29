@@ -16,9 +16,10 @@ extra_css: /book/book.css
   <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso --plan</div>
-    <pre><code>brewing
-steeping
-pouring</code></pre>
+    <pre><code>plan:
+  print "brewing"    # from line 1
+  print "steeping"    # from line 1
+  print "pouring"    # from line 1</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso</div>
@@ -39,7 +40,7 @@ pouring</code></pre>
   <pre><code><span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run quiet.kso --plan</div>
-    <pre><code></code></pre>
+    <pre><code>error: main is not an io; there is no plan to show</code></pre>
   </div>
 </div>
 
@@ -54,9 +55,10 @@ pouring</code></pre>
 <span class="f">knock</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso --plan</div>
-    <pre><code>kon kon
-kon kon
-kon kon</code></pre>
+    <pre><code>plan:
+  print "kon kon"    # from line 1
+  print "kon kon"    # from line 1
+  print "kon kon"    # from line 1</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso</div>
@@ -159,7 +161,11 @@ hojicha</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run count.kso --plan</div>
-    <pre><code>flavors.txt has 3 lines</code></pre>
+    <pre><code>plan:
+  read_file "flavors.txt"
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;</code></pre>
   </div>
 </div>
 
@@ -285,7 +291,11 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/read_file!</span> <span class="s">"order.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
-    <pre><code>one taiyaki, extra custard</code></pre>
+    <pre><code>plan:
+  write_file "order.txt"
+  read_file "order.txt"
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso</div>

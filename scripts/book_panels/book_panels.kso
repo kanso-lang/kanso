@@ -188,9 +188,8 @@ fn recording ms dir paths at acc false
   return acc if at < 1 or length ms < at
   gs = ms[at].groups
   return acc if length gs < 3
-  parts = text/split gs[3] "/"
-  base = "{parts[length parts]}{counters_of gs[2]}"
-  wanted_out ms dir paths (at + 1) (noted acc (out_at paths dir base))
+  found = out_at paths dir (recorded_as gs)
+  wanted_out ms dir paths (at + 1) (noted acc found)
 
 fn noted acc ""
   acc
@@ -306,13 +305,26 @@ fn fixed raw m name dir files write 1
 fn fixed raw m name dir files write _
   gs = m.groups
   return outcome (whole_of raw m) 0 "" if length gs < 3
-  parts = text/split gs[3] "/"
-  base = "{parts[length parts]}{counters_of gs[2]}"
+  base = recorded_as gs
   found = out_at (path_list files) dir base
   no_recorded raw m base name files write found (found == "")
 
 fn path_list files
   list/to_list (list/map files (f -> f.path))
+
+# The recording an output panel quotes. The title's flags pick the file: a
+# panel titled `kanso run brew.kso --plan` quotes brew_plan.out, and matched
+# against brew.out it was regenerated to show the run instead of the plan.
+fn recorded_as gs
+  parts = text/split (present gs[3]) "/"
+  plan = plan_of (regexp/match? " --plan\\b" (present gs[1]))
+  "{parts[length parts]}{counters_of (present gs[2])}{plan}"
+
+fn plan_of true
+  "_plan"
+
+fn plan_of false
+  ""
 
 fn counters_of ""
   ""

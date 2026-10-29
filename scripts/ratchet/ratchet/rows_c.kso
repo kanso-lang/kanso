@@ -6,7 +6,7 @@ rows_c1a = list/concat rows_c1 [perf_row trend_runtime trend_joined]
 
 rows_c1t = list/concat rows_c1a [trend_adrift trend_rebased trend_read]
 
-rows_c1p = list/concat rows_c1t [published_numbers]
+rows_c1p = list/concat rows_c1t [book_plans published_numbers]
 
 rows_c1b = list/concat rows_c1p [diagnostics accumulator]
 
