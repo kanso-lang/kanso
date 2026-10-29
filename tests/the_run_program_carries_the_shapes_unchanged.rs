@@ -34,7 +34,8 @@ const CARRIED: &[(&str, &str)] = &[
 /// `guarded`, `handed`, `overwrite` and `reentered` joined on 2026-10-25 from
 /// kanso#2089, measured on main before their fixes, and `branched` and
 /// `padded` later that day, measured on main before theirs. `relayed` joined
-/// on 2026-10-26, measured on main before its fix.
+/// on 2026-10-26, measured on main before its fix, and `worded` on
+/// 2026-10-29, measured on main before kanso#2214's.
 const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/admitted/admitted.kso",
     "bench/runbench/runbench/appended/appended.kso",
@@ -61,6 +62,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/rewind/rewind.kso",
     "bench/runbench/runbench/scatter/scatter.kso",
     "bench/runbench/runbench/stack/stack.kso",
+    "bench/runbench/runbench/worded/worded.kso",
 ];
 
 fn read(rel: &str) -> String {

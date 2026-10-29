@@ -111258,3 +111258,26 @@ unboxed err behaving as a value on every engine, with goldens; the ports'
 hand-back arms removed, and #2088's migration using the `!` form at reads that
 must succeed; ch04, ch05 and appendix B rewritten where they describe bare
 errs as data, and the error goldens regenerated.
+
+## 2026-10-26 — the linearity fixpoints drop an entry as its check fails
+
+The linearity analysis settles three fixpoints over parameters, record fields
+and map elements. Each collected a lap's refusals and applied them at the
+end, so a refusal that cascades through a chain of calls took a lap per link:
+`field_fixpoint` ran 18 laps on the interpreted corpus, re-asking the 54
+records that had settled by the fourth, and `drop_elems` re-ran the main
+fixpoint after each of its laps, nine runs that found nothing new. Each entry
+now goes as soon as its check fails, so the next entry asked already sees it
+gone. A check only turns from yes to no as the sets lose entries, so a no read
+against a larger set is a no against the fixpoint, and the order cannot
+change what is left. The emitted IR is byte-identical on 430 programs: the
+examples, the micro corpus and every benchmark.
+
+CI's rows, against main at #2162. The compile rows fall: compile_instructions
+25,156,569 -> 25,048,015, entry_instructions 73,811,949 -> 73,539,324,
+library_instructions 73,482,714 -> 73,209,499, emit_instructions 5,725,463 ->
+5,688,182 and browser_compile_instructions 360,520,776 -> 344,137,759. The
+interpreter runs the analysis before each program, so interp_instructions
+falls 571,553,496 -> 563,210,772, and interp_allocs rises 628,009 -> 630,870,
+the lists of entries a drop collects while it walks a set it is changing.
+Welfare rises 95.38 -> 95.40 and the rise is banked.
