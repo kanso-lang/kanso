@@ -1267,6 +1267,15 @@ book_titles = row
   (breaking "a_title_names_a_command_that_refuses")
   release
 
+# The same harness, over the site pages that quote examples/.
+site_examples = row
+  "a landing panel quoting an example it no longer matches"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_landing_panel_drifts_from_its_example")
+  release
+
 # book_check.sh runs two harnesses, and they fail for different reasons. The
 # first regenerates a panel from the sample it renders; the second reads the
 # panels that harness cannot resolve — a title naming a file this repository

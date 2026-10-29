@@ -120,7 +120,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
       <div class="feature">
         <span class="feature-num">01</span>
         <h3>effects are values</h3>
-        <p><code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description. effect sets are inferred and propagate up the call graph—no async/await, no function coloring, zero overhead for pure calls. tests assert on descriptions; no mocks.</p>
+        <p><code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives the program's description. effect sets are inferred and propagate up the call graph—no async/await, no function coloring, zero overhead for pure calls. tests assert on descriptions; no mocks.</p>
       </div>
       <div class="feature">
         <span class="feature-num">02</span>
@@ -165,7 +165,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 <span class="c"># reasonably-written rust   1.04</span>
 <span class="c"># go encoding/json          2.05</span></code></pre>
     </div>
-    <p>the speed is also a <em>golden file</em>. the gauntlet performs exactly <strong data-golden="decode.allocs">1,125,014</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. <strong data-golden="decode.arena_blocks">2</strong> arena blocks across 150 decodes is the flat-memory guarantee as a constant; <strong data-golden="decode.beat_iters">150</strong> beat iterations is one rewind per decode plus one for the program itself, on the record. in a deterministic language a performance regression shows up as a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">both scoreboards</a> and <a href="book/ch07.html">chapter 07</a>.</p>
+    <p>the speed is also a <em>golden file</em>. the gauntlet performs exactly <strong data-golden="decode.allocs">1,125,014</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. <strong data-golden="decode.arena_blocks">2</strong> arena blocks across 150 decodes is the flat-memory guarantee as a constant; <strong data-golden="decode.beat_iters">150</strong> beat iterations are on the record beside them. in a deterministic language a performance regression shows up as a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the harness to reproduce them, are on the compiler page beside <a href="compiler.html#c04">both scoreboards</a>.</p>
   </div>
 </section>
 
@@ -219,44 +219,49 @@ no divisor: division by zero</code></pre>
   <span class="n">1</span>
 
 <span class="k">fn</span> <span class="f">fact</span> n
-  n <span class="o">*</span> <span class="f">fact</span> (n <span class="o">-</span> <span class="n">1</span>)
+  n <span class="o">*</span> fact (n <span class="o">-</span> <span class="n">1</span>)
 
-<span class="f">main</span> <span class="o">=</span>
-  answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
-  <span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
+answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
+<span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
             <pre><code>20! = 2432902008176640000</code></pre>
           </div>
         </div>
-        <p>literal <code>0</code> outranks the generic overload—the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by design, so 20! just works — the interpreter is exact today and the native build refuses rather than wrapping while its bignum arithmetic is built.</p>
+        <p>the literal <code>0</code> outranks the generic arm, so the base case is an overload and the recursive case needs no <code>if</code>. <code>int</code> has no ceiling on any engine, so 20! prints all nineteen digits.</p>
       </div>
 
       <div class="showcase-cell">
         <div class="code-panel">
           <div class="code-panel-title">examples/records.kso</div>
-          <pre><code><span class="k">type</span> <span class="t">user</span>
-  admin:<span class="t">bool</span>
-  name:<span class="t">string</span>
+          <pre><code><span class="k">type</span> employee
+  <span class="f">age</span>
+  <span class="f">name</span>
+  <span class="f">salary</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  clay <span class="o">=</span> <span class="t">user</span> <span class="t">true</span> <span class="s">"clay"</span>
-  <span class="f">print</span> (<span class="f">welcome</span> clay)
+<span class="k">type</span> user
+  <span class="f">age</span>
+  <span class="f">name</span>
 
-<span class="k">fn</span> <span class="f">welcome</span> (<span class="t">user</span> <span class="o">_</span> name)
-  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span></code></pre>
+<span class="k">fn</span> <span class="f">welcome</span> (<span class="f">employee</span> _ name _)
+  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
+
+clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+<span class="f">user</span> age name <span class="o">=</span> <span class="f">clay</span>
+worker <span class="o">=</span> <span class="f">employee</span> age name <span class="n">90000</span>
+<span class="f">print</span> (<span class="f">welcome</span> worker)</code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
             <pre><code>irasshaimase, clay</code></pre>
           </div>
         </div>
-        <p>every type is a single-constructor record; its fields come in the order you declare them, and construction is positional in that order and destructuring is how you take records apart.</p>
+        <p>every type is a record with one constructor. its fields come in the order you declare them, construction is positional in that order, and <code>user age name = clay</code> takes one apart by the same shape. a function head can do the same, ignoring what it does not need with <code>_</code>.</p>
       </div>
 
       <div class="showcase-cell">
         <div class="code-panel">
           <div class="code-panel-title">examples/effects.kso</div>
-          <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
+          <pre><code><span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
             <pre><code>one
@@ -272,35 +277,39 @@ three</code></pre>
           <div class="code-panel-title">examples/lists.kso</div>
           <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 
-<span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+<span class="k">fn</span> <span class="f">describe</span> none
   <span class="s">"no ninth price"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"ninth price: <span class="i">{x}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
-  doubled <span class="o">=</span> <span class="f">map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-  ninth <span class="o">=</span> prices[<span class="n">9</span>]
-  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span>
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth))</code></pre>
+prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
+doubled <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>))
+ninth <span class="o">=</span> prices[<span class="n">9</span>]
+<span class="f">print</span> <span class="s">"sorted: <span class="i">{list/sort prices}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth))</code></pre>
+          <div class="code-output">
+            <div class="code-panel-title">output</div>
+            <pre><code>sorted: [10 20 30]
+doubled: [60 20 40]
+no ninth price</code></pre>
+          </div>
         </div>
-        <p>one import enrolls <code>std/list</code>'s names into the file's overload space—<code>map</code> and <code>sort</code> arrive bare, and dispatch resolves shared names by specificity, the same mechanism as everything else. no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (insist with <code>prices[9]!</code> and the read answers an effect whose failure is the miss). indexing is 1-based, everywhere, no exceptions.</p>
+        <p>the list functions live in <code>std/list</code> and are called by their module's name. <code>list/map</code> answers a recipe that runs when something consumes it, and <code>list/to_list</code> is the consumer that makes it a list. an index past the end is not a crash: <code>prices[9]</code> answers <code>none</code>, and a <code>describe</code> arm takes it. a program that knows the element is there writes <code>prices[9]!</code>, and a miss is then a failure that reaches the top with where it was born. indexing starts at 1.</p>
       </div>
 
       <div class="showcase-cell">
         <div class="code-panel">
           <div class="code-panel-title">examples/custom_render.kso</div>
-          <pre><code><span class="k">type</span> <span class="t">money</span>
-  cents:<span class="t">int</span>
+          <pre><code><span class="k">type</span> money
+  <span class="f">cents</span>
 
-<span class="k">pub</span> play =
-  price = <span class="f">money</span> <span class="n">350</span>
-  <span class="f">print</span> <span class="s">"that costs <span class="i">{price}</span>"</span>
+<span class="k">fn</span> <span class="f">to_string</span> (<span class="f">money</span> cents)
+  <span class="s">"$<span class="i">{cents / 100}</span>.<span class="i">{cents - cents / 100 * 100}</span>"</span>
 
-<span class="k">fn</span> <span class="f">to_string</span> (<span class="t">money</span> cents)
-  <span class="s">"${cents / 100}.{cents - (cents / 100 * 100)}"</span></code></pre>
+price <span class="o">=</span> <span class="f">money</span> <span class="n">350</span>
+<span class="f">print</span> <span class="s">"that costs <span class="i">{price}</span>"</span></code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
             <pre><code>that costs $3.50</code></pre>
@@ -348,7 +357,7 @@ three</code></pre>
         <ul>
           <li><a href="https://github.com/kanso-lang/kanso-json">kanso-json</a>—the decoder that edges serde_json, at the smallest footprint on the board</li>
           <li><strong>kq</strong>—a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code> on the 188&nbsp;KB benchmark document, 1.7× jq on path extraction (25/25 interleaved heats)</li>
-          <li>an <a href="book/index.html">eleven-chapter book</a>—every sample executed before it was printed</li>
+          <li><a href="book/index.html">the book</a>—every sample executed before it was printed</li>
           <li>a repl (<code>kanso repl</code>) with <code>it0</code>-history, in your terminal and on the <a href="playground.html">playground</a></li>
         </ul>
       </div>

@@ -24,6 +24,7 @@
   chapters:
     - { num: "13", slug: "ch13", title: "a command-line tool" }
     - { num: "14", slug: "ch14", title: "a web service" }
+    - { num: "15", slug: "ch15", title: "measuring and shipping" }
 - part: "appendices"
   start: 1
   appendix: true
