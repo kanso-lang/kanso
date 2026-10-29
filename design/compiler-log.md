@@ -42,52 +42,6 @@ library; error goldens on every engine for an operator, a builtin and a
 library function reached from a program file; CI's rows and the floor moved
 by them.
 
-## 2026-10-25 — a list walked by its rest joins the corpus
-
-`rest = list/to_list (list/drop xs 1)` is how most of this repository's
-scripts walk a list: the welfare script, the trend gate, `golden_prose` and
-the differentials among them. A battery of list and text shapes run at two
-sizes on both engines found it the worst of them. Each rest is built afresh,
-so a walk costs the square of the list on any engine, and `list/drop` builds
-it by stepping a cursor through the list one record at a time: `fold` has an
-arm that reads a capped cursor by index, which `take` reaches, and none for
-a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
-the interpreter, about 260 instructions an element stepped natively and
-12,700 interpreted.
-
-Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
-500 elements and the interpreted corpus with 70, measured on main at #2148
-before its fix. On this container the run program reads 888,090,230 with it
-and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
-interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
-same line for it.
-
-The rest of the battery is linear or n log n on both engines: `group_by`,
-`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
-elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
-natively and quadratic on the interpreter, 64 ms at 5,000 characters and
-563 ms at 20,000. On #2152's build, which shares a long string and slices
-an ASCII one by byte, the same two read 39 ms and 77 ms.
-
-CI's rows, against main at #2141. The run program reads work_runbench
-828,232,672 -> 869,011,503, and each rest's step records cost it memory as
-well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
-242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
-94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
-23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
-1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
-run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
-emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
-168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
--> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
-interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
-623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
-browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
-1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
-344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
-re-bases the eight terms among these it weighs, each keeping its ratio to
-its baseline, and the floor stays at 95.22.
-
 ## 2026-10-25 — the rest of a list after a drop is one copy
 
 `list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
@@ -1403,3 +1357,18 @@ constant that the parser says and `check` reads.
 tests/check_reads_a_play_file.rs checks one play file that runs and one that
 names an unknown name. The compiler before this change refused both with the
 library's statement error.
+
+## 2026-10-29 — an entry names a group
+
+#2205's second item. ch06 teaches the named group, `prepare =` above
+indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
+concurrent work, and it parsed only as a library constant. An entry or a
+play file refused it with "only `if` opens an indented block", which named
+nothing the reader had written. A binding whose header is `name =` alone,
+above more than one indented line, now parses its body as a constant's body
+is parsed, so its effect lines join into one group and run concurrently as
+the constant's do.
+
+tests/entry_file.rs runs an entry whose group sleeps in one member and prints
+in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
+library constant prints. The compiler before this change refused it.

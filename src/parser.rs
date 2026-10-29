@@ -1118,6 +1118,18 @@ fn parse_block_construct(
     if head_is_build {
         return parse_build(head);
     }
+    // `rolls =` above indented effect lines names a group, as the same lines
+    // do under a library constant: the body is parsed as a constant's is, and
+    // its effects join (#2205).
+    if let [(Tok::Ident(name), span, _), (Tok::Bind, _, _)] = head.tokens.as_slice() {
+        if else_children.is_none() && children.len() > 1 {
+            let body = parse_body(children)?;
+            return Ok(Stmt::Bind {
+                pattern: Pattern::Var(Name::new(name), *span),
+                expr: Expr::Block(body, *span),
+            });
+        }
+    }
     if !head_is_if {
         return Err(Diagnostic::new(
             "syntax",
