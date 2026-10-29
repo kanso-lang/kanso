@@ -1,0 +1,12 @@
+import "std/list"
+
+fn prefer_count voters a b
+  sum (list/map voters (v -> if (score_ballot v b < score_ballot v a) 1 0))
+
+fn star_winner voters
+  totals = to_list (list/map (range ncand) (c -> score_col voters c))
+  a = argmax totals
+  b = argmax_except totals a
+  pa = prefer_count voters a b
+  pb = prefer_count voters b a
+  if (pb < pa) a (if (pa < pb) b a)

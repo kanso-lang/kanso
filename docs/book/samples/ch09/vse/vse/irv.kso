@@ -1,0 +1,31 @@
+import "std/list"
+
+fn first_is v elim c
+  if (rank_first v elim == c) 1 0
+
+fn irv_counts voters elim
+  counted = (c -> sum (list/map voters (v -> first_is v elim c)))
+  to_list (list/map (range ncand) counted)
+
+fn irv_go voters elim
+  counts = irv_counts voters elim
+  top = argmax counts
+  if (nvot < 2 * counts[top]) top (irv_next voters elim counts)
+
+fn irv_next voters elim counts
+  irv_go voters (push elim (min_alive counts elim))
+
+fn irv_winner voters
+  irv_go voters []
+
+fn keep_min counts elim b c
+  if (in? elim c) b (if (b == 0) c (if (counts[c] < counts[b]) c b))
+
+fn keep_top v elim b c
+  if (in? elim c) b (if (b == 0) c (if (v[b] < v[c]) c b))
+
+fn min_alive counts elim
+  fold (range ncand) 0 (b c -> keep_min counts elim b c)
+
+fn rank_first v elim
+  fold (range ncand) 0 (b c -> keep_top v elim b c)
