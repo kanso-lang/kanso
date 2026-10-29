@@ -1,0 +1,5 @@
+import "std/derive"
+
+# A closure has no literal a program could write down.
+pub fn routing p
+  [(derive/declare "routes" "routes" (n -> n + length p.modules))]

@@ -586,6 +586,7 @@ fn emit_written_as(
                     types: p.types.clone(),
                     imports: p.imports.clone(),
                     reexports: p.reexports.clone(),
+                    derives: p.derives.clone(),
                     root: p.root.clone(),
                 },
             };

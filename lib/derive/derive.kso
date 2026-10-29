@@ -1,0 +1,64 @@
+# What a derivation is handed and what it may answer (#2186).
+#
+# An entry that writes `derive conventions/routes` has the compiler call that
+# function, during the build, with a `program` describing the modules the
+# entry imports. The function answers a list of declarations, and the
+# compiler adds them to the entry before it checks anything, so a declaration
+# is checked like code someone wrote.
+#
+# `declare` makes a constant, `name = value`, in the entry. The value is
+# data: ints, strings, bools, lists, maps, records and references to
+# functions, which is how a route table names its handlers and why the
+# checker sees each one. `declare_type` makes a record type in the entry,
+# named `name` with the listed fields. `refuse` makes a compile error at the
+# item `origin` names, which is how a convention reports a function it cannot
+# place.
+pub type program
+  modules
+
+# `constants` maps each pub constant's name to its value, which is how a
+# derivation reads data the app keeps, such as its migrations.
+pub type module
+  name
+  functions
+  constants
+  records
+
+# A pub function as its first arm declares it. An unannotated parameter
+# carries "" for its annotation. `reference` is the function itself, so a
+# table a derivation declares can hold it and call it.
+pub type function
+  name
+  params
+  reference
+
+pub type param
+  name
+  annotation
+
+pub type record
+  name
+  fields
+
+pub type constant
+  origin
+  name
+  value
+
+pub type type_declaration
+  origin
+  name
+  fields
+
+pub type refusal
+  origin
+  message
+
+pub fn declare origin name value
+  constant origin name value
+
+pub fn declare_type origin name fields
+  type_declaration origin name fields
+
+pub fn refuse origin message
+  refusal origin message

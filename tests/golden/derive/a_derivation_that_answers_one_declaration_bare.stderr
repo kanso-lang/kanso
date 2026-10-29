@@ -1,0 +1,4 @@
+error[derive]: `conventions/routing` answered derive/constant "routes" "routes" {}; a derivation answers a list of declarations (make a lazy sequence a list with `list/to_list`)
+  --> tests/golden/derive/a_derivation_that_answers_one_declaration_bare/main.kso:4:1
+   4 | derive conventions/routing
+       ^

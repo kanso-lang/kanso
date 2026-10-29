@@ -1,0 +1,4 @@
+import "std/derive"
+
+pub fn routing _
+  [(derive/declare "routes" "routes" {})]

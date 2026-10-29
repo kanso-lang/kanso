@@ -1,0 +1,12 @@
+import "std/derive"
+import "std/list"
+
+# A record type for each list of column names a module keeps.
+pub fn rows p
+  list/fold p.modules [] (acc m -> list/concat acc (typed m))
+
+fn typed m
+  list/to_list (list/map (entries m.constants) (e -> made m e))
+
+fn made m (entry t columns)
+  derive/declare_type "{m.name}/{t}" t columns

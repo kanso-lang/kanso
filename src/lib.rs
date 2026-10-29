@@ -8,6 +8,7 @@ pub mod codegen;
 pub mod compare;
 pub mod deep;
 pub mod demand;
+pub mod derive;
 pub mod diag;
 pub mod dispatch;
 pub mod escape;
@@ -154,10 +155,44 @@ fn compile_parsed_entry(
     }
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
+    if !program.derives.is_empty() && !import_list.iter().any(|i| i.path == derive::MODULE) {
+        import_list.push(ast::Import {
+            path: derive::MODULE.to_string(),
+            span: diag::Span::at(0, 0),
+            alias: None,
+            renames: Vec::new(),
+        });
+    }
     let mut visited = crate::hash::Set::default();
     let (dep_program, exports, surfaced) = load_dependencies(&base, &import_list, &mut visited)?;
+    // Before anything reads the entry's names: what a derivation declares
+    // mentions the modules it describes, and those imports are in use.
+    if !program.derives.is_empty() {
+        let made = phase::watched("derive", || derive::derive(&program, &dep_program))
+            .map_err(|d| render_merged(&d, file, source))?;
+        let stamp: std::sync::Arc<str> = std::sync::Arc::from(file);
+        program.fns.extend(made.constants.into_iter().map(|mut d| {
+            d.file = std::sync::Arc::clone(&stamp);
+            d
+        }));
+        if !made.types.is_empty() {
+            program.types.extend(made.types.into_iter().map(|mut t| {
+                t.file = std::sync::Arc::clone(&stamp);
+                t
+            }));
+            synthesize_getters(&mut program);
+        }
+    }
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
+    if !program.derives.is_empty() {
+        quals.extend(derive::described(&program));
+        for d in &program.derives {
+            if let Some((module, _)) = d.name.split_once('/') {
+                quals.insert(module.to_string());
+            }
+        }
+    }
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
     let mut diags = unused_imports(&program.imports, &quals);
@@ -213,6 +248,7 @@ fn compile_parsed_entry(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        derives: Vec::new(),
         root: String::new(),
     };
     merged.types.extend(dep_program.types);

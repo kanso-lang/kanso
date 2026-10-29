@@ -1,0 +1,4 @@
+error[derive]: `conventions/rows` declared type `post` with fields that are not a list
+  --> tests/golden/derive/a_derived_type_whose_fields_are_not_a_list/main.kso:3:1
+   3 | derive conventions/rows
+       ^

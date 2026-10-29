@@ -1,0 +1,4 @@
+error[derive]: `posts/index` is in `posts`, which `conventions/routing` describes; a derivation reads the app only through the program it is handed
+  --> tests/golden/derive/a_derivation_that_imports_what_it_describes/conventions.kso:6:55
+   6 |   [(derive/declare "routes" "routes" { "/posts/index":posts/index })]
+                                                             ^
