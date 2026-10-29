@@ -10,6 +10,6 @@
 # mutation lands there; native and wasm keep their licence and the wasm
 # walk disagrees with the interpreter for the same reason.
 set -e
-grep -qF 'Word::Rescue if own_failure(&cause, raised) => Ok(yielded),' src/eval.rs
-sed -i '/Word::Rescue if own_failure(&cause, raised) => Ok(yielded),/d' src/eval.rs
-! grep -qF 'Word::Rescue if own_failure(&cause, raised)' src/eval.rs
+grep -qF 'Word::Rescue if own_failure(&cause, raised) => Ok(yielded),' src/eval/calls.rs
+sed -i '/Word::Rescue if own_failure(&cause, raised) => Ok(yielded),/d' src/eval/calls.rs
+! grep -qF 'Word::Rescue if own_failure(&cause, raised)' src/eval/calls.rs

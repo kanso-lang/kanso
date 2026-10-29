@@ -23,46 +23,6 @@
 
 
 
-## 2026-10-26 — a length handed down a loop bounds its reads
-
-#2174. A loop that walks a list by index usually hands its bound down once,
-`walk xs 1 (length xs) 0`, and guards with `i > n`. The prover had two doors
-for the upper bound of `xs[i]`, a guard written against `length xs` and the
-length a literal list spells out, and the guard against `n` passed neither,
-so a read like `twice xs[i]` was refused unless the loop read `length xs`
-again on every step. #2088 makes that the common case, since a name bound to
-such a read now carries its none too: bench/indexbench, migrated to `i >
-length s`, reads 13% more instructions for it.
-
-`handed_lengths` (`src/infer.rs`) is a third door. It proves that a
-parameter holds another parameter's length for a whole arm on the terms
-`counter_floors` proves a floor: the group is not pub and never travels as a
-value, every call from outside passes `length X` at the bound's position and
-the same name `X` at the list's, every self-call passes both on unchanged,
-and no arm rebinds either. The arm starts with that fact, and a guard `i >
-n` gives the read its upper bound through it.
-
-`a_length_handed_down_bounds_the_read` (micro) prints `20 0` on both
-engines, and main refuses it. `a_length_of_another_list_bounds_nothing` and
-`a_bound_that_grows_bounds_nothing` (errors) keep the two near misses
-refused. The ratchet row `a length handed down a loop proving nothing` drops
-the fact and watches the micro corpus go red.
-
-CI's rows against main at #2170. indexbench goes back to handing its bound
-down, and work_indexbench falls 2,077,157 -> 1,887,164; work_runbench, which
-carries the shape at a larger size, falls 829,234,755 -> 821,299,208. The
-interpreter does a little less, interp_instructions 560,993,797 ->
-560,933,132. The front end pays for the walk and the facts:
-compile_instructions 24,798,984 -> 24,862,623, entry_instructions 73,507,587
--> 73,686,908, library_instructions 73,143,499 -> 73,325,258, compile_allocs
-13,930 -> 13,941, emit_instructions 5,689,859 -> 5,702,866 and the tab's
-browser_compile_instructions 340,825,316 -> 342,497,302. interp_allocs moves
-630,592 -> 630,614, and nothing here isolates why. The emitted and text rows
-fall with the guard's `length` call: emitted_other_calls 20,472 -> 20,468,
-emitted_other_branches 17,764 -> 17,762, emitted_other_lines 169,582 ->
-169,576 and text 5,620,636 -> 5,620,459. Welfare rises 95.38 -> 95.41 and the
-rise is banked.
-
 ## 2026-10-26 — a list read for its last element joins the corpus
 
 A battery of list shapes, each run at 5,000 and 20,000 elements on both
@@ -1164,6 +1124,18 @@ showed one of the two lines the sample prints. book_check's write path now
 copies the example and error goldens into its scratch tree, so a rewrite
 there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
 go red.
+
+## 2026-10-29 — the interpreter's calls section moves into eval/calls.rs
+
+The cleanup owed after #2240 to #2244. `call` through `worded_step`, 888
+lines of the `Interp` impl, move into src/eval/calls.rs as an impl block of
+their own, read with include! where they stood, the way eval.rs already reads
+executor.rs and builtins.rs. eval.rs falls from 3,803 lines to 2,918. The
+removed lines are the body of calls.rs byte for byte. CI's cost-goldens job
+read every vein at main's values, compile_instructions among them, so no row
+moved. Sixteen ratchet mutations patched lines in the moved section by their
+text and now name calls.rs. One of them, the lambda called as a nested call,
+only checked for `closure_flow` there; the arms it deletes stayed in eval.rs.
 
 ## 2026-10-29 — std/expect ships in the binary
 

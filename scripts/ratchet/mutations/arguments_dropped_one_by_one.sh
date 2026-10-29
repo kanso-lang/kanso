@@ -6,9 +6,9 @@
 # row is the witness.
 set -e
 kept='                        release(arg);'
-[ "$(grep -cxF "$kept" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$kept" src/eval/calls.rs)" -eq 1 ] || {
   echo "the released argument moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                        release(arg);$/                        drop(arg);/' src/eval.rs
-if grep -qxF "$kept" src/eval.rs; then exit 1; fi
+sed -i 's/^                        release(arg);$/                        drop(arg);/' src/eval/calls.rs
+if grep -qxF "$kept" src/eval/calls.rs; then exit 1; fi
