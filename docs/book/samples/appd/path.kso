@@ -1,0 +1,4 @@
+import "std/path"
+
+file = path/join "reports" "2026-10.csv"
+print "{file}: stem {path/stem file}, extension {path/extension file}"

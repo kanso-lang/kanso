@@ -1,0 +1,18 @@
+import "std/net"
+import "std/net/http"
+import "std/os"
+
+# A day at the shop. The customer is a separate process, a shell script that
+# sends its requests with curl, and the last one closes the door. What the
+# server answers is the till at closing.
+pub fn day l
+  net/port l
+    .> (port -> os/start "sh" ["customer.sh" "{port}"])
+    .> (_ -> http/serving l handle opening)
+    .> (t -> print "closed after {summary t}")
+
+# The shop for real: on a fixed port, until a request closes it.
+pub fn open port
+  print "serving on http://localhost:{port}"
+    .> (_ -> http/serve_until port handle opening)
+    .> (t -> print "closed after {summary t}")

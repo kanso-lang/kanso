@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 11</span>
 <h1>modules</h1>
 
-<p>every program so far has lived in one directory. that directory is a module: its <code>.kso</code> files share a single namespace, alphabetized within each file, and nothing more is needed until code wants to live somewhere else. this chapter is about the moment it does—what an import means, which names cross, and how two modules share a name without a fight.</p>
+<p>chapter 07 split a program into an entry and one module, a directory whose <code>.kso</code> files share a single namespace. this chapter is about what happens between modules: what an import means, which names cross, and how two modules share a name without a fight.</p>
 
 <h2>an import enrolls names</h2>
 
@@ -77,10 +77,10 @@ a ride: 3.963325623765981</code></pre>
 <span class="f">print</span> <span class="s">"<span class="i">{geo/square 3.0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run nosy</div>
-    <pre><code>error[opacity]: `square` is private to module `geo`—only pub names cross an import
-  --> nosy/main.kso:3:9
+    <pre><code><span class="k">error[opacity]</span>: `square` is private to module `geo` — only pub names cross an import
+<span class="c">  --&gt; nosy/main.kso:3:9</span>
    3 | print "{geo/square 3.0}"
-               ^</code></pre>
+               <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -139,10 +139,10 @@ area came through: 3.14159</code></pre>
 <span class="f">print</span> <span class="s">"<span class="i">{resort/ride_km 1.0 2.0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run sealed</div>
-    <pre><code>error[name]: unknown name `ride_km`
-  --> sealed/main.kso:3:9
-   3 | print "{ride_km 1.0 2.0}"
-               ^</code></pre>
+    <pre><code><span class="k">error[name]</span>: unknown name `resort/ride_km`
+<span class="c">  --&gt; sealed/main.kso:3:9</span>
+   3 | print "{resort/ride_km 1.0 2.0}"
+               <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -235,3 +235,10 @@ no route for /nowhere</code></pre>
 <li>call a private helper of an imported module by its qualified name. read the <code>error[opacity]</code> diagnostic, then make the helper <code>pub</code> and watch the same call succeed.</li>
 <li>geo's <code>ride_km</code> takes two arguments. declare a local <code>ride_km</code> with a different arity (in a library file beside your entry), import geo, and confirm both dispatch by argument count with no qualifier. then match the arity and work out which one answers a bare call—your own declaration outranks the import—and confirm <code>geo/ride_km</code> still reaches the other.</li>
 </ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch10.html">← fast by construction</a>
+  <a href="ch12.html">next: sequences →</a>
+</nav>

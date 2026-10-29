@@ -1,0 +1,305 @@
+---
+layout: book
+title: "appendix d—recipes"
+description: "short programs for everyday jobs: counting, grouping and sorting, a default for a missing key, regular expressions and paths, reading lines and json from files, arguments, environment variables, subprocesses and exit codes."
+extra_css: /book/book.css
+---
+<span class="eyebrow">appendix d</span>
+<h1>recipes</h1>
+
+<p>each recipe here is a complete program for one everyday job, with the output it prints. they are meant to be copied and changed. the chapters explain why each one works; a recipe names the chapter to read when you want that.</p>
+
+<p>every program is a play file, so <code>kanso play</code> runs it as written, and every output below was recorded from a real run.</p>
+
+<h2>collections</h2>
+
+<h3>count how often each item appears</h3>
+
+<p><code>list/tally</code> answers a map from each distinct item to its count. maps keep their keys in order, so the result reads alphabetically.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tally.kso</div>
+  <pre><code>import "std/list"
+import "std/text"
+
+words = text/split "the cat and the hat and the bat" " "
+print "{list/tally words}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play tally.kso</div>
+    <pre><code>{ "and":2 "bat":1 "cat":1 "hat":1 "the":3 }</code></pre>
+  </div>
+</div>
+
+<h3>group items by a key</h3>
+
+<p><code>list/group_by</code> takes a function that computes each item's key, and answers a map from key to the items that share it, in their original order.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">group.kso</div>
+  <pre><code>import "std/list"
+import "std/text"
+
+words = ["apple" "avocado" "banana" "blueberry" "cherry"]
+print "{list/group_by words (w -&gt; text/slice w 1 1)}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play group.kso</div>
+    <pre><code>{ "a":["apple" "avocado"] "b":["banana" "blueberry"] "c":["cherry"] }</code></pre>
+  </div>
+</div>
+
+<h3>sort records by a field</h3>
+
+<p><code>list/sort_by</code> sorts by the key a function computes, here a field read with the dot. <code>list/map</code> answers a lazy sequence, so <code>list/to_list</code> realizes it before printing (chapter 12).</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">sort_by.kso</div>
+  <pre><code>import "std/list"
+
+type order
+  dish
+  price
+
+orders = [(order "ramen" 1200) (order "gyoza" 600) (order "udon" 900)]
+cheapest = list/sort_by orders (o -&gt; o.price)
+print "{list/to_list (list/map cheapest (o -&gt; o.dish))}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play sort_by.kso</div>
+    <pre><code>["gyoza" "udon" "ramen"]</code></pre>
+  </div>
+</div>
+
+<h3>combine a list into one value</h3>
+
+<p><code>list/fold</code> carries an accumulator through the list. for a sum or a mean, <code>list/sum</code> and <code>list/mean</code> already exist; the fold is for anything they don't cover.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fold.kso</div>
+  <pre><code>import "std/list"
+
+prices = [350 500 250]
+total = list/fold prices 0 (sum p -&gt; sum + p)
+print "total {total}, mean {list/mean prices}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play fold.kso</div>
+    <pre><code>total 1100, mean 366.6666666666667</code></pre>
+  </div>
+</div>
+
+<h3>use a default when a key is missing</h3>
+
+<p>a plain subscript answers <code>none</code> for a missing key, so an arm for <code>none</code> supplies the default. no conditional is needed (chapter 04).</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">or_zero.kso</div>
+  <pre><code>fn price_of menu item
+  or_zero menu[item]
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+menu = { "dango":350 "taiyaki":500 }
+print "dango {price_of menu "dango"}, pocky {price_of menu "pocky"}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play or_zero.kso</div>
+    <pre><code>dango 350, pocky 0</code></pre>
+  </div>
+</div>
+
+<h2>text</h2>
+
+<h3>find every match of a pattern</h3>
+
+<div class="code-panel">
+  <div class="code-panel-title">regexp.kso</div>
+  <pre><code>import "std/regexp"
+
+line = "order 17 at 12:05, order 18 at 12:09"
+print "{regexp/find_all "[0-9]+:[0-9]+" line}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play regexp.kso</div>
+    <pre><code>["12:05" "12:09"]</code></pre>
+  </div>
+</div>
+
+<h3>take a file path apart</h3>
+
+<div class="code-panel">
+  <div class="code-panel-title">path.kso</div>
+  <pre><code>import "std/path"
+
+file = path/join "reports" "2026-10.csv"
+print "{file}: stem {path/stem file}, extension {path/extension file}"</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play path.kso</div>
+    <pre><code>reports/2026-10.csv: stem 2026-10, extension csv</code></pre>
+  </div>
+</div>
+
+<h2>files</h2>
+
+<h3>read a file line by line</h3>
+
+<p>read the whole file, split it on newlines, and drop the empty line the final newline leaves. the read is an effect, so <code>.&gt;</code> hands its text to the pure function that does the work (chapter 05).</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">menu.txt</div>
+  <pre><code>dango 350
+taiyaki 500
+mochi 250</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">lines.kso</div>
+  <pre><code>import "std/list"
+import "std/os"
+import "std/text"
+
+fn priced line
+  parts = text/split line " "
+  "{parts[1]} costs {parts[2]}"
+
+fn report body
+  lines = list/reject (text/split body "\n") (l -&gt; l == "")
+  text/join (list/to_list (list/map lines priced)) "\n"
+
+os/read_file! "menu.txt" .&gt; report .&gt; print</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play lines.kso</div>
+    <pre><code>dango costs 350
+taiyaki costs 500
+mochi costs 250</code></pre>
+  </div>
+</div>
+
+<h3>decode json from a file</h3>
+
+<p><code>json/decode!</code> insists the text is json and answers the decoded value; an object becomes a map. chapter 08 builds this decoder.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">order.json</div>
+  <pre><code>{"dish": "ramen", "price": 1200, "tags": ["hot", "noodles"]}</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">order.kso</div>
+  <pre><code>import "std/json"
+import "std/os"
+
+fn described order
+  "{order["dish"]} for {order["price"]}, tagged {order["tags"]}"
+
+os/read_file! "order.json" .&gt; json/decode! .&gt; described .&gt; print</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play order.kso</div>
+    <pre><code>ramen for 1200, tagged ["hot" "noodles"]</code></pre>
+  </div>
+</div>
+
+<p>when the text is not json, the failure says where the decoder stopped and rides to the endpoint like any other err. to handle it instead, use <code>json/decode</code>, which answers <code>none</code> for text that is not json.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">broken.json</div>
+  <pre><code>{"dish": ramen}</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">broken_json.kso</div>
+  <pre><code>import "std/json"
+import "std/os"
+
+fn described order
+  "{order["dish"]} for {order["price"]}, tagged {order["tags"]}"
+
+os/read_file! "broken.json" .&gt; json/decode! .&gt; described .&gt; print</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play broken_json.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: json/parse_failure 10 "unexpected character `r`"
+  born in the entry at broken_json.kso:7
+  passed through json/finish ← json/obj_value</code></pre>
+  </div>
+</div>
+
+<h2>the world outside the program</h2>
+
+<h3>read the command-line arguments</h3>
+
+<p><code>os/args</code> is an effect that answers the arguments as a list of strings. everything after <code>--</code> on the command line is the program's. chapter 13 builds a full command-line tool around this.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">args.kso</div>
+  <pre><code>import "std/os"
+
+os/args .&gt; (a -&gt; print "given: {a}")</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play args.kso -- one two</div>
+    <pre><code>given: ["one" "two"]</code></pre>
+  </div>
+</div>
+
+<h3>read an environment variable</h3>
+
+<p><code>os/env</code> answers <code>none</code> for a variable that is not set, so the default is another arm. with <code>TEA</code> set, the other arm answers.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">env.kso</div>
+  <pre><code>import "std/os"
+
+fn greeting none
+  "hello, stranger"
+
+fn greeting name
+  "hello, {name}"
+
+os/env "TEA" .&gt; greeting .&gt; print</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play env.kso</div>
+    <pre><code>hello, stranger</code></pre>
+  </div>
+</div>
+
+<h3>run another program</h3>
+
+<p><code>os/run</code> waits for the program and answers a record with its <code>status</code>, <code>stdout</code> and <code>stderr</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">run.kso</div>
+  <pre><code>import "std/os"
+import "std/text"
+
+fn said r
+  "status {r.status}, said {text/trim r.stdout}"
+
+os/run "echo" ["steeped"] .&gt; said .&gt; print</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play run.kso</div>
+    <pre><code>status 0, said steeped</code></pre>
+  </div>
+</div>
+
+<h3>report an error and exit with a status</h3>
+
+<p>write the message to standard error, so it stays out of anything the output is piped into, then exit. the exit is built inside the bind's callback, so it runs after the write has finished.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">give_up.kso</div>
+  <pre><code>import "std/io"
+import "std/os"
+
+io/write_err "wordfreq: no such file: notes.txt\n" .&gt; (_ -&gt; os/exit 2)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play give_up.kso</div>
+    <pre><code>wordfreq: no such file: notes.txt</code></pre>
+  </div>
+</div>
+
+<p>the shell sees status 2. for testing these programs, see chapter 07; for running several effects at once, chapter 06.</p>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="appc.html">← canonical form</a>
+  <a href="index.html">contents →</a>
+</nav>

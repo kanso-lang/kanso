@@ -1,0 +1,13 @@
+import "std/list"
+
+fn margin_or_high voters a b
+  if (a == b) nvot (pair voters a b - pair voters b a)
+
+fn minimax_winner voters
+  argmax (to_list (list/map (range ncand) (c -> worst_margin voters c)))
+
+fn pair voters a b
+  sum (list/map voters (v -> if (v[b] < v[a]) 1 0))
+
+fn worst_margin voters a
+  min (list/map (range ncand) (b -> margin_or_high voters a b))

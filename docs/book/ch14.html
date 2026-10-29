@@ -1,0 +1,306 @@
+---
+layout: book
+title: "chapter 14—a web service"
+description: "a small http service on std/net/http: a handler is a function from a request and the server's state to a response and the next state, tested by calling it, run for a scripted day and for real."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 14</span>
+<h1>a web service</h1>
+
+<p>this chapter builds a small http service for the teahouse. it shows the menu, takes orders, reports the day's sales, and closes when it is told to. it is under a hundred lines, and every line of logic in it is tested without opening a socket.</p>
+
+<p>the standard library's <code>std/net/http</code> has the shape of go's <code>net/http</code>, with one difference that runs through the whole chapter: a handler is a plain function. it takes a request and answers a response, and nothing is written to a connection inside it. so a test calls the handler and reads what it answered, and there is no fake connection to build.</p>
+
+<h2>the layout</h2>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop on disk</div>
+  <pre><code>teashop/
+  main.kso             the entry: serve on port 8080 until closed
+  day.kso              a second entry: one scripted day, for this chapter
+  customer.sh          the script that plays the customer
+  shop/
+    menu.kso           prices, and reading an order
+    server.kso         the handler and what it carries
+    server_test.kso
+    day.kso            serving: the scripted day and the real thing</code></pre>
+</div>
+
+<p>a project may hold more than one entry. <code>kanso run .</code> starts <code>main.kso</code>, and <code>kanso run day.kso</code> starts the other one. both import the same module.</p>
+
+<h2>the menu</h2>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/shop/menu.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">pub</span> <span class="k">type</span> sale
+  <span class="f">item</span>
+  <span class="f">qty</span>
+  <span class="f">yen</span>
+
+<span class="k">pub</span> <span class="f">menu</span> <span class="o">=</span> <span class="s">"dango 350\ntaiyaki 500\n"</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"dango"</span>
+  <span class="n">350</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"taiyaki"</span>
+  <span class="n">500</span>
+
+<span class="k">fn</span> <span class="f">price</span> _
+  <span class="f">none</span>
+
+<span class="c"># "dango 2" is two dango. Anything else is not an order.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">order_of</span> body
+  words <span class="o">=</span> <span class="f">text/split</span> (<span class="f">text/trim</span> body) <span class="s">" "</span>
+  <span class="f">return</span> none if length words <span class="o">!=</span> <span class="n">2</span>
+  <span class="f">priced</span> words[<span class="n">1</span>] (<span class="f">text/to_int</span> words[<span class="n">2</span>])
+
+<span class="k">fn</span> <span class="f">priced</span> _ none
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">priced</span> item qty
+  <span class="f">counted</span> item qty (<span class="f">price</span> item)
+
+<span class="k">fn</span> <span class="f">counted</span> _ _ none
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">counted</span> item qty each
+  <span class="f">sale</span> item qty (each <span class="o">*</span> qty)</code></pre>
+</div>
+
+<p>an order arrives as the body of a request, such as <code>dango 2</code>. <code>order_of</code> answers a <code>sale</code> when it can read one and <code>none</code> when it cannot. the body might not be two words, the quantity might not be a number, and the item might not be on the menu. each of those is an arm that takes a <code>none</code>.</p>
+
+<p>the reading is split across two functions, <code>priced</code> and <code>counted</code>, and the split is forced. the first version had one function with an arm for each mistake:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tie_check.kso</div>
+  <pre><code><span class="c"># The first try at reading "dango 2": one function, three arms, and the two</span>
+<span class="c"># ways an order can be wrong as two of them.</span>
+<span class="k">fn</span> <span class="f">counted</span> _ none _
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">counted</span> _ _ none
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">counted</span> item each qty
+  <span class="s">"<span class="i">{qty}</span> <span class="i">{item}</span>: <span class="i">{each * qty}</span> yen"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check tie_check.kso</div>
+    <pre><code><span class="k">error[dispatch]</span>: these `counted` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position
+<span class="c">  --&gt; tie_check.kso:6:4</span>
+   6 | fn counted _ _ none
+          <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>a call where both the price and the quantity are <code>none</code> matches both of the first two arms, and neither arm is more specific than the other everywhere, so dispatch has no way to choose. the compiler refuses the pair rather than picking by position. checking the quantity in one function and the price in the next asks one question per function, and no call can match two arms.</p>
+
+<h2>the handler</h2>
+
+<p>a server answers many requests, and it often needs to remember something between them. this one counts the requests it has answered and keeps the sales. in a language without mutation the memory is a value handed from each request to the next. the handler takes the request and the current value and answers the response and the next value. <code>std/net/http</code> calls the pair a <em>turn</em>, built with <code>http/reply</code>, and the value the shop carries is a <code>till</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/shop/server.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+
+<span class="c"># What the shop knows between requests: how many it has answered and what it</span>
+<span class="c"># has sold. The server hands it from one request to the next.</span>
+<span class="k">pub</span> <span class="k">type</span> till
+  <span class="f">requests</span>
+  <span class="f">sales</span>
+
+<span class="k">pub</span> <span class="f">opening</span> <span class="o">=</span> <span class="f">till</span> <span class="n">0</span> []
+
+<span class="c"># One request in, one response out, and the till carried to the next request.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">bad_request</span> reason) t
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"not a request: <span class="i">{reason}</span>\n"</span>) (<span class="f">seen</span> t)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/menu"</span> _) t
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> menu) (<span class="f">seen</span> t)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/order"</span> body) t
+  <span class="f">sold</span> (<span class="f">order_of</span> body) (<span class="f">seen</span> t)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/sales"</span> _) t
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"<span class="i">{summary t}</span>\n"</span>) (<span class="f">seen</span> t)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/close"</span> _) t
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"closed\n"</span>) (<span class="f">http/stop</span> (<span class="f">seen</span> t))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> _ t
+  <span class="f">http/reply</span> http/not_found (<span class="f">seen</span> t)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">summary</span> (<span class="f">till</span> requests sales)
+  total <span class="o">=</span> <span class="f">list/sum</span> (<span class="f">list/map</span> sales (s <span class="o">-&gt;</span> <span class="f">s</span><span class="o">.</span>yen))
+  <span class="s">"<span class="i">{many requests </span>"</span>request<span class="s">"}, <span class="i">{many (length sales) </span>"</span>sale<span class="s">"}, <span class="i">{total}</span> yen"</span>
+
+<span class="k">fn</span> <span class="f">many</span> <span class="n">1</span> word
+  <span class="s">"1 <span class="i">{word}</span>"</span>
+
+<span class="k">fn</span> <span class="f">many</span> n word
+  <span class="s">"<span class="i">{n}</span> <span class="i">{word}</span>s"</span>
+
+<span class="k">fn</span> <span class="f">seen</span> (<span class="f">till</span> requests sales)
+  <span class="f">till</span> (requests <span class="o">+</span> <span class="n">1</span>) sales
+
+<span class="k">fn</span> <span class="f">sold</span> none t
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"we do not sell that\n"</span>) t
+
+<span class="k">fn</span> <span class="f">sold</span> s t
+  said <span class="o">=</span> <span class="s">"<span class="i">{s.qty}</span> <span class="i">{s.item}</span>: <span class="i">{s.yen}</span> yen\n"</span>
+  <span class="f">http/reply</span> (<span class="f">http/text_page</span> said) (<span class="f">merge</span> t { <span class="s">"sales"</span>:(<span class="f">push</span> t<span class="o">.</span><span class="f">sales</span> s) })</code></pre>
+</div>
+
+<p>routing is dispatch. each arm of <code>handle</code> names a method and a path as literals in a <code>request</code> pattern. the arm that takes <code>bad_request</code> answers the bytes that did not parse as a request, which the library hands over as a value. the last arm catches everything else with <code>http/not_found</code>. adding an endpoint is adding an arm.</p>
+
+<p><code>/close</code> carries <code>http/stop</code> wrapped around the till. that ends the server, and the till inside is what the server answers when it is done.</p>
+
+<p>every arm answers 200 except the catch-all's 404, including the one that refuses an order. that is not what a good service does: an order for something the shop does not sell should be a 400 or a 422. today <code>std/net/http</code> can build only a 200 or a 404 (<a href="https://github.com/kanso-lang/kanso/issues/2209">#2209</a>), so the refusal goes in the body.</p>
+
+<h2>testing it</h2>
+
+<p>the handler is a function, so testing it is calling it. <code>http/parsed</code> turns raw request text into the value a server would hand over, and the turn that comes back has the response in <code>answer</code> and the next till in <code>carried</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/shop/server_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/net/http"</span>
+
+order <span class="o">=</span> <span class="s">"POST /order HTTP/1.1\r\n\r\n"</span>
+
+<span class="k">fn</span> <span class="f">body_of</span> raw
+  (<span class="f">handle</span> (<span class="f">http/parsed</span> raw) opening)<span class="o">.</span><span class="f">answer</span><span class="o">.</span><span class="f">body</span>
+
+test_menu <span class="o">=</span> <span class="f">body_of</span> <span class="s">"GET /menu HTTP/1.1\r\n\r\n"</span> <span class="o">==</span> menu
+
+test_an_order <span class="o">=</span> <span class="f">body_of</span> <span class="s">"<span class="i">{order}</span>dango 2"</span> <span class="o">==</span> <span class="s">"2 dango: 700 yen\n"</span>
+
+test_nothing_we_sell <span class="o">=</span> <span class="f">body_of</span> <span class="s">"<span class="i">{order}</span>mochi 1"</span> <span class="o">==</span> <span class="s">"we do not sell that\n"</span>
+
+test_close_stops <span class="o">=</span> (<span class="f">handle</span> (<span class="f">http/parsed</span> <span class="s">"POST /close"</span>) opening)<span class="o">.</span><span class="f">carried</span>
+  <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">summary</span> c<span class="o">.</span>value <span class="o">==</span> <span class="s">"1 request, 0 sales, 0 yen"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test shop</div>
+    <pre><code>test_menu ... ok
+test_an_order ... ok
+test_nothing_we_sell ... ok
+test_close_stops ... ok
+4 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>these tests run in milliseconds, need no port and cannot collide with another program on the machine. the last one checks what <code>/close</code> carries: the till inside the stop, with the closing request counted.</p>
+
+<h2>a day at the shop</h2>
+
+<p>the tests cover the handler. the server around it is the library's, so this section runs it with a real client. the scripted day serves on a port the operating system picks and starts a customer as a separate process. the customer is a shell script that sends six requests with <code>curl</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/customer.sh</div>
+  <pre><code># The day's customers, one request at a time.
+at=http://127.0.0.1:$1
+curl -s $at/menu
+curl -s -d 'dango 2' $at/order
+curl -s -d 'mochi 1' $at/order
+curl -s -d 'taiyaki 1' $at/order
+curl -s $at/sales
+curl -s -X POST $at/close</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/shop/day.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/net"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="c"># A day at the shop. The customer is a separate process, a shell script that</span>
+<span class="c"># sends its requests with curl, and the last one closes the door. What the</span>
+<span class="c"># server answers is the till at closing.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">day</span> l
+  <span class="f">net/port</span> l
+    <span class="o">.&gt;</span> (port <span class="o">-&gt;</span> <span class="f">os/start</span> <span class="s">"sh"</span> [<span class="s">"customer.sh"</span> <span class="s">"<span class="i">{port}</span>"</span>])
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">http/serving</span> l handle opening)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"closed after <span class="i">{summary t}</span>"</span>)
+
+<span class="c"># The shop for real: on a fixed port, until a request closes it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">open</span> port
+  <span class="f">print</span> <span class="s">"serving on http://localhost:<span class="i">{port}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">http/serve_until</span> port handle opening)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"closed after <span class="i">{summary t}</span>"</span>)</code></pre>
+</div>
+
+<p><code>net/listen 0</code> asks for a free port, so the day cannot collide with a server you already run. <code>day</code> reads the port back, starts the customer with it, and serves. <code>http/serving</code> folds the handler over the requests as they arrive, starting from <code>opening</code>, until a turn carries a stop, and then answers the till. from inside the project:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/day.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./shop"</span>
+<span class="k">import</span> <span class="s">"std/net"</span>
+
+<span class="f">net/listen</span> <span class="n">0</span> <span class="o">.&gt;</span> <span class="f">shop/day</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run day.kso</div>
+    <pre><code>closed after 6 requests, 2 sales, 1200 yen</code></pre>
+  </div>
+</div>
+
+<p>six requests, and two of the three orders were for things the shop sells: 700 yen of dango and 500 of taiyaki. the customer's own output goes to the process it started, so what you see is the server's account of the day.</p>
+
+<p>the obvious way to write the scripted day is a customer inside the program, as a second green thread beside the server. today that deadlocks: a fiber waiting on <code>net/read</code> stops the other fibers, the server's among them (<a href="https://github.com/kanso-lang/kanso/issues/2208">#2208</a>). a separate process sidesteps that, and it is also how a real client behaves.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p>the handler never touches a socket, so most of a service's bugs live where i can answer for them: call it with a request and look at what came back. the server is the library's loop, and the loop is the same for every handler.</p>
+</div>
+</div>
+
+<h2>serving for real</h2>
+
+<p>the project's main entry serves on a fixed port until a request closes it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teashop/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./shop"</span>
+
+<span class="f">shop/open</span> <span class="n">8080</span></code></pre>
+</div>
+
+<p>run it in one terminal and talk to it from another:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code><span class="prompt">$ </span>kanso run .
+serving on http://localhost:8080
+
+<span class="prompt">$ </span>curl -s localhost:8080/menu
+dango 350
+taiyaki 500
+<span class="prompt">$ </span>curl -s -d 'dango 3' localhost:8080/order
+3 dango: 1050 yen
+<span class="prompt">$ </span>curl -s -X POST localhost:8080/close
+closed</code></pre>
+</div>
+
+<p>and the first terminal prints <code>closed after 3 requests, 1 sale, 1050 yen</code> and exits. to deploy it, build it the way chapter 13 built <code>wordfreq</code>: <code>kanso build . --release</code> from inside the project gives one binary, which runs anywhere the same operating system does and needs nothing beside it.</p>
+
+<h2>what you can do now</h2>
+
+<p>you can write an http service as a handler: a function from a request and the state the server carries to a response and the next state, with routing done by dispatch on the method and path. you can test every endpoint by calling the handler with parsed request text, and check what it carries forward as well as what it answers. and you can serve it on a free port beside a client process, or on a fixed one for real.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>add <code>GET /sales/dango</code>, answering the number of dango sold today. write its test first, then the arm.</li>
+  <li>make the menu a map from item to price and serve it as json with <code>std/json</code>, so <code>GET /menu</code> answers <code>{"dango":350,"taiyaki":500}</code>. what does the test compare now?</li>
+  <li>an order of <code>dango 0</code> is accepted today and sells nothing. decide whether that is right, write the test that says so, and change <code>menu.kso</code> if it is not.</li>
+  <li>the till grows by one record per sale and lives for the whole day. estimate how many orders a day the shop could take before that matters, then measure it with <code>KANSO_COUNTERS=1</code> on a customer script that sends a thousand orders.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch13.html">← a command-line tool</a>
+  <a href="ch15.html">next: measuring and shipping →</a>
+</nav>

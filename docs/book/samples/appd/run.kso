@@ -1,0 +1,7 @@
+import "std/os"
+import "std/text"
+
+fn said r
+  "status {r.status}, said {text/trim r.stdout}"
+
+os/run "echo" ["steeped"] .> said .> print

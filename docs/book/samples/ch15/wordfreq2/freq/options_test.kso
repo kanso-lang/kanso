@@ -1,0 +1,8 @@
+no_number = "--top wants a number after it"
+
+test_defaults = (options_of []).top == 5
+
+test_top_and_path = options_of ["--top" "3" "notes.txt"]
+  . (o -> o.top == 3 and o.path == "notes.txt")
+
+test_top_needs_a_number = (options_of ["--top" "many"]).reason == no_number

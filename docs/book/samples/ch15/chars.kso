@@ -1,0 +1,16 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+fn spaced c
+  if (word_char? c) c " "
+
+fn word_char? c
+  ("a" <= c and c <= "z") or c == "'"
+
+fn words text
+  marked = list/map (text/chars (text/lowercase text)) spaced
+  pieces = text/split (text/join (list/to_list marked) "") " "
+  list/to_list (list/reject pieces (w -> w == ""))
+
+io/stdin .> (t -> print "{length (words t)} words")

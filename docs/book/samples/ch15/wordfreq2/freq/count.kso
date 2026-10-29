@@ -1,0 +1,32 @@
+import "std/list"
+import "std/text"
+
+pub type ranked
+  count
+  word
+
+# The words of a text, lowercased, in the order they appear. Every character
+# that cannot be part of a word becomes a space, and the spaces split it.
+pub fn words text
+  marked = list/map (text/chars (text/lowercase text)) spaced
+  pieces = text/split (text/join (list/to_list marked) "") " "
+  list/to_list (list/reject pieces (w -> w == ""))
+
+fn spaced c
+  if (word_char? c) c " "
+
+fn word_char? c
+  ("a" <= c and c <= "z") or c == "'"
+
+# The n most common words, the most common first. A map's entries come in
+# key order and sort_by keeps ties in the order they arrived, so words with
+# the same count stay alphabetical.
+pub fn top n ws
+  ranks = list/map (entries (list/tally ws)) (e -> ranked e.value e.key)
+  list/to_list (list/take (list/sort_by ranks (r -> 0 - r.count)) n)
+
+pub fn render rows
+  text/join (list/to_list (list/map rows line)) "\n"
+
+fn line (ranked count word)
+  "{text/pad_start "{count}" 4 " "}  {word}"

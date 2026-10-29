@@ -1,12 +1,6 @@
-error[naming]: `is_number_char` answers only true or false: name it `is_number_char?`
-  --> numbers.kso:10:4
-  10 | fn is_number_char 43
-          ^
-error[naming]: `mark_from` answers only true or false: name it `mark_from?`
-  --> numbers.kso:31:4
-  31 | fn mark_from cs p q
-          ^
-error[naming]: `mark_step` answers only true or false: name it `mark_step?`
-  --> numbers.kso:34:4
-  34 | fn mark_step _ 46 _ _
-          ^
+42 -> int 42
+-17 -> int -17
+3.25 -> float64 3.25
+6e3 -> float64 6000.0
+007 -> refused
+1. -> refused

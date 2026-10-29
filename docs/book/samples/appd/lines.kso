@@ -1,0 +1,13 @@
+import "std/list"
+import "std/os"
+import "std/text"
+
+fn priced line
+  parts = text/split line " "
+  "{parts[1]} costs {parts[2]}"
+
+fn report body
+  lines = list/reject (text/split body "\n") (l -> l == "")
+  text/join (list/to_list (list/map lines priced)) "\n"
+
+os/read_file! "menu.txt" .> report .> print

@@ -1,0 +1,3 @@
+dango 350
+taiyaki 500
+mochi 250

@@ -1236,6 +1236,46 @@ book_outputs = row
   (breaking "drifted_book_output")
   release
 
+# A panel titled with --plan quotes the plan, and the harness once matched it
+# against the plain run's recording instead: --write then filled nine plan
+# panels with what the program prints, under prose describing join braces and
+# <continuation> steps that were no longer on the page.
+book_plans = row
+  "a plan panel showing what the program prints instead of its plan"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_plan_panel_shows_the_run")
+  release
+
+# The same harness, for a title naming a directory module rather than a file.
+book_modules = row
+  "a module panel showing a run the module no longer produces"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_module_panel_drifts_from_its_run")
+  release
+
+# book_check runs a sample with the verb it needs; a title is what a reader
+# types, and it has to be that verb.
+book_titles = row
+  "a panel title naming a command the toolchain refuses"
+  true
+  "sh scripts/book_check.sh"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_title_names_a_command_that_refuses")
+  release
+
+# The same harness, over the site pages that quote examples/.
+site_examples = row
+  "a landing panel quoting an example it no longer matches"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_landing_panel_drifts_from_its_example")
+  release
+
 # book_check.sh runs two harnesses, and they fail for different reasons. The
 # first regenerates a panel from the sample it renders; the second reads the
 # panels that harness cannot resolve — a title naming a file this repository
@@ -1248,6 +1288,16 @@ book_quotes = row
   "./target/release/kanso run scripts/book_quotes"
   "book samples (every panel executed, outputs verified)"
   (breaking "a_quoting_panel_stops_matching_its_file")
+  release
+
+# The same harness, on what the panel does to the text it quotes: a name a
+# file declares, written with a mark the file does not have.
+book_verbatim = row
+  "a panel quoting a library file edits a declaration it shows"
+  true
+  "./target/release/kanso run scripts/book_quotes"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_quoting_panel_edits_what_it_quotes")
   release
 
 diagnostics = row
@@ -1450,6 +1500,14 @@ landing = row
   "./target/release/kanso run scripts/site_smoke"
   "site (landing sample and playground run in a browser)"
   (breaking "a_landing_sample_that_breaks_its_promise")
+  with_blob
+
+tab_guard = row
+  "a book panel that needs a filesystem offered a run button in the tab"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_tab_guard_that_names_the_old_module")
   with_blob
 
 in_the_page = row

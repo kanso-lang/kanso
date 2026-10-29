@@ -1,0 +1,35 @@
+import "std/text"
+
+pub type sale
+  item
+  qty
+  yen
+
+pub menu = "dango 350\ntaiyaki 500\n"
+
+fn price "dango"
+  350
+
+fn price "taiyaki"
+  500
+
+fn price _
+  none
+
+# "dango 2" is two dango. Anything else is not an order.
+pub fn order_of body
+  words = text/split (text/trim body) " "
+  return none if length words != 2
+  priced words[1] (text/to_int words[2])
+
+fn priced _ none
+  none
+
+fn priced item qty
+  counted item qty (price item)
+
+fn counted _ _ none
+  none
+
+fn counted item qty each
+  sale item qty (each * qty)

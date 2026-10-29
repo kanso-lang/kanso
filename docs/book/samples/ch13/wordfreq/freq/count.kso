@@ -1,0 +1,25 @@
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+pub type ranked
+  count
+  word
+
+# The words of a text, lowercased, in the order they appear.
+pub fn words text
+  regexp/split "[^a-z']+" (text/lowercase text)
+    .> (parts -> list/to_list (list/reject parts (w -> w == "")))
+
+# The n most common words, the most common first. A map's entries come in
+# key order and sort_by keeps ties in the order they arrived, so words with
+# the same count stay alphabetical.
+pub fn top n ws
+  ranks = list/map (entries (list/tally ws)) (e -> ranked e.value e.key)
+  list/to_list (list/take (list/sort_by ranks (r -> 0 - r.count)) n)
+
+pub fn render rows
+  text/join (list/to_list (list/map rows line)) "\n"
+
+fn line (ranked count word)
+  "{text/pad_start "{count}" 4 " "}  {word}"

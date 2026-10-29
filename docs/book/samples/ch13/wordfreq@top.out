@@ -1,0 +1,2 @@
+wordfreq: --top wants a number after it
+usage: wordfreq [--top N] [file]
