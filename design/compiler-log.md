@@ -23,33 +23,6 @@
 
 
 
-## 2026-10-25 — entry and play files keep the blank-line policy
-
-`check_blank_policy` judged libraries only. `parse_entry` never called it,
-and `parse_play` called it on a declaration half whose blank lines it made
-up, one per gap. So an entry or play file could begin with a blank line, hold
-one inside a body, and put any number between two declarations or two
-statements, and every engine ran it (#2143). Both now judge the file as
-written. A top-level `x = …` there is a statement of the run, so it may pack
-against its neighbours, and at most one blank line separates two statements.
-An import below a statement is refused for its place, and the blank above it
-adds nothing.
-
-Eleven examples had a double blank between declarations, and two began with
-a blank line; their output is unchanged. Four error goldens cover the new
-refusals, each of which main ran: two blanks between a play file's
-declarations, two between statements, a blank inside an entry's `if` body,
-and a leading blank in an entry file. kq's three entries pass.
-
-CI's rows. Five compile rows fell: compile_instructions 24,741,552 ->
-24,657,263, entry_instructions 72,986,583 -> 72,734,084,
-library_instructions 72,659,822 -> 72,405,561, emit_instructions 5,655,748
--> 5,654,777 and browser_compile_instructions 334,007,116 -> 333,912,133.
-interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
-entry is now judged line by line. Nothing here separates the part of each
-move that is the new check from the part that is the binary's layout.
-Welfare holds the net rise at 95.15.
-
 ## 2026-10-25 — a concat of numbers crosses the rewind where it stands
 
 `is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
@@ -1448,3 +1421,19 @@ library_instructions 70,862,041 (-1,244) and browser_compile_instructions
 343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
 under the rule for a feature a ruling requires.
 
+
+## 2026-10-29 — sha256 gains HMAC and PBKDF2, and base64 joins the library
+
+Postgres logs a client in with SCRAM-SHA-256 (#2178), which needs HMAC,
+PBKDF2 and base64. `std/sha256` gains `digest`, the hash as bytes, `hmac key
+message` and `pbkdf2 password salt times size`, and the new `std/base64` has
+`encode`, `decode` (none on input that is not base64) and `decode!`. HMAC
+hashes each of its two key blocks once and keeps the state it leaves, so
+every HMAC under one key starts from there, which is most of what PBKDF2
+does: each of its rounds compresses two blocks instead of four.
+
+The tests are the published vectors: FIPS 180-4 and the two lengths either
+side of the padding boundary, RFC 4231's HMAC cases 1, 2 and 6 (6 has a key
+longer than a block), PBKDF2 at one, two and 4096 rounds and RFC 7914's
+two-block vector, and RFC 4648's base64 cases both ways. The guestbook
+prototype logs in to Postgres 16 with these.
