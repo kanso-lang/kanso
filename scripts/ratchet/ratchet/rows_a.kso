@@ -1492,6 +1492,14 @@ landing = row
   (breaking "a_landing_sample_that_breaks_its_promise")
   with_blob
 
+tab_guard = row
+  "a book panel that needs a filesystem offered a run button in the tab"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_tab_guard_that_names_the_old_module")
+  with_blob
+
 in_the_page = row
   "the engine in the page answering what no other engine answers"
   true
