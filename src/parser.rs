@@ -316,11 +316,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             _ => diags.push(Diagnostic::new(
                 "syntax",
                 match line.tokens.first() {
-                    Some((Tok::Ident(_), _, _)) => {
-                        "a file with declarations is a library, and a library has no \
-                         statements to run — `kanso play` runs declarations beside \
-                         statements in one file"
-                    }
+                    Some((Tok::Ident(_), _, _)) => crate::STATEMENT_IN_A_LIBRARY,
                     _ => "a top-level line must begin with `fn`, `type`, or a constant binding",
                 }
                 .to_string(),
@@ -1121,6 +1117,18 @@ fn parse_block_construct(
         );
     if head_is_build {
         return parse_build(head);
+    }
+    // `rolls =` above indented effect lines names a group, as the same lines
+    // do under a library constant: the body is parsed as a constant's is, and
+    // its effects join (#2205).
+    if let [(Tok::Ident(name), span, _), (Tok::Bind, _, _)] = head.tokens.as_slice() {
+        if else_children.is_none() && children.len() > 1 {
+            let body = parse_body(children)?;
+            return Ok(Stmt::Bind {
+                pattern: Pattern::Var(Name::new(name), *span),
+                expr: Expr::Block(body, *span),
+            });
+        }
     }
     if !head_is_if {
         return Err(Diagnostic::new(

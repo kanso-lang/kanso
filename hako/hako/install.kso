@@ -140,12 +140,12 @@ fn from_where dir wanted names held root
   os/env "KANSO_HAKO_REMOTE" .> start
 
 fn each_hako dir wanted names held root origin lines report
-  finished = recorded dir lines report (length names)
+  finished = recorded dir lines report
   more = one_hako dir wanted names held root origin lines report
   if (length names == 0) finished more
 
 fn one_hako dir wanted names held root origin lines report
-  return recorded dir lines report 0 if length names < 1
+  return recorded dir lines report if length names < 1
   n = names[1]
   rest = list/to_list (list/drop names 1)
   onward = (two -> next_hako dir wanted rest held root origin lines report two)
@@ -203,6 +203,9 @@ fn fetched_as n tag sha root origin
   two = ["{n} {tag} {sha} git\n" "  {n} {tag}{mark}\n"]
   fetched root n tag sha (url origin n) .> (_ -> answered two)
 
-fn recorded dir lines report count
+# The report holds a line per hako pinned, so its lines are the count. The
+# names left to walk, which this once printed, are none by the time it runs.
+fn recorded dir lines report
+  count = length (text/split report "\n") - 1
   said = io/write "installed {count} hako(s):\n{report}"
   os/write_file "{dir}/hako.lock" lines .> (_ -> said)

@@ -771,6 +771,11 @@ fn local_import(source: &str) -> Option<String> {
 /// definitions is a library, which `check` and `test` compile and the running
 /// verbs refuse with the route that would run it. The CLI and the browser
 /// share this so the engines never diverge on which compile a file gets.
+/// What the library parse says at a top-level statement. `kanso check` reads
+/// it as the sign of a play file and checks the file as play instead.
+pub const STATEMENT_IN_A_LIBRARY: &str = "a file with declarations is a library, and a library \
+     has no statements to run — `kanso play` runs declarations beside statements in one file";
+
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
     // main.kso is an entry by NAME (the module-shape gavel): the filename
     // states the intent, so a definition inside one gets the entry
@@ -787,7 +792,16 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
         .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
     let library_verb = command == "test";
     match (command, has_defs) {
-        ("check", true) => compile_library(file, source),
+        // A play file (declarations beside statements) is checked as `kanso
+        // play` would compile it. The library parse refuses its first
+        // statement, and that refusal is the one sign of the shape, so a file
+        // it stops for that reason alone is checked again as play (#2205).
+        ("check", true) => compile_library(file, source).or_else(|refused| {
+            match refused.contains(STATEMENT_IN_A_LIBRARY) {
+                true => compile_play_file(file, source),
+                false => Err(refused),
+            }
+        }),
         (_, true) if !library_verb && declares_tests(source) => {
             Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
         }
@@ -1161,12 +1175,22 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     let cache = hako_cache();
     if let Some((name, module)) = hako::split_name(path) {
         if let Some(pin) = LOCK.with(|l| l.borrow().get(&name).cloned()) {
-            let mut dir = hako::cached(&cache, &name, &pin.sha);
-            if let Some(rest) = module {
-                dir = dir.join(rest);
-            }
+            let tree = hako::cached(&cache, &name, &pin.sha);
+            let dir = match &module {
+                Some(rest) => tree.join(rest),
+                None => tree.clone(),
+            };
             if dir.is_dir() {
                 return Ok(dir);
+            }
+            // Installed and locked, so `kanso install`, which the message
+            // below would advise, changes nothing (#2234).
+            if let (Some(rest), true) = (&module, tree.is_dir()) {
+                return Err(format!(
+                    "error: cannot resolve import \"{path}\" — `{name}` is installed, \
+                     and has no module `{rest}` (its modules: {})\n",
+                    modules_in(&tree, &name)
+                ));
             }
         }
     }
@@ -1178,6 +1202,41 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         "error: cannot resolve import \"{path}\" — a bare path names a hako, and \
          it is not in the cache (run `kanso install`)\n"
     ))
+}
+
+/// The import paths a fetched tree answers: the tree itself when it holds
+/// `.kso` files, and each directory below it that does, sorted.
+fn modules_in(tree: &std::path::Path, name: &str) -> String {
+    let holds_source = |dir: &std::path::Path| {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| e.path().extension().is_some_and(|x| x == "kso"))
+    };
+    let mut found = Vec::new();
+    let mut pending = vec![tree.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        if holds_source(&dir) {
+            let rel = dir.strip_prefix(tree).unwrap_or(&dir).to_string_lossy().into_owned();
+            found.push(match rel.is_empty() {
+                true => format!("`{name}`"),
+                false => format!("`{name}/{rel}`"),
+            });
+        }
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let hidden = entry.file_name().to_string_lossy().starts_with('.');
+            if path.is_dir() && !hidden {
+                pending.push(path);
+            }
+        }
+    }
+    found.sort();
+    match found.is_empty() {
+        true => "none".to_string(),
+        false => found.join(", "),
+    }
 }
 
 /// Where fetched hakos live. KANSO_HAKO moves it, which is how a test gets a

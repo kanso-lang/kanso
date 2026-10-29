@@ -278,6 +278,16 @@ impl<'a> Interp<'a> {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
                 }
             },
+            // A read with nothing arrived yet waits the same way, so a program
+            // can be both ends of a connection: the fiber reading yields, and
+            // the one that will write runs.
+            Desc::Receive(conn) | Desc::ReceiveBytes(conn) => match executor.readable(*conn) {
+                Ok(false) => Ok(Step::Blocked(1, desc.clone())),
+                Ok(true) => Ok(Step::Done(self.execute(desc, executor)?)),
+                Err(reason) => {
+                    Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
+                }
+            },
             // Same shape for a process: start it, then wait by yielding, so
             // the other statements of the group run while it does.
             Desc::Run(cmd, argv) => match executor.start(cmd, argv) {

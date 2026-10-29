@@ -1,11 +1,10 @@
 //! The three verbs describe the same file the same way.
 //!
-//! A file holding declarations *and* top-level statements is a library with
-//! statements it cannot run — `kanso play` is the relaxed form that takes
-//! both. `run` said so already. `check` complained that blank lines may not
-//! appear inside a body, pointing at a line that is not in a body, and
-//! removing the blank moved it to "a top-level line must begin with `fn`" —
-//! two diagnostics, neither naming the rule or the verb that does the job.
+//! A file holding declarations *and* top-level statements is a play file, and
+//! `kanso play` runs it. `check` once complained that blank lines may not
+//! appear inside a body, pointing at a line that is not in a body, and later
+//! named `kanso play` as the verb for the file. Since #2205 it checks the file
+//! the way `play` compiles it, so the two verbs give one verdict.
 
 use std::process::Command;
 
@@ -27,19 +26,16 @@ fn verb(verb: &str, dir: &std::path::Path) -> String {
 /// Watched red: check answered `error[formatting]: blank lines may not appear
 /// inside a body` for line 4, which is a top-level statement.
 #[test]
-fn check_names_the_verb_that_runs_a_declaration_beside_a_statement() {
+fn check_passes_the_file_play_runs() {
     let dir = std::env::temp_dir().join("kanso-verbs-agree");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to work in");
     std::fs::write(dir.join("one.kso"), DECLARATION_AND_STATEMENT).expect("the file writes");
 
-    let said = verb("check", &dir);
-
-    assert!(said.contains("kanso play"), "check did not name the verb: {said}");
-    assert!(!said.contains("blank lines"), "check blamed the blank line: {said}");
+    assert_eq!(verb("check", &dir), "one.kso: ok\n");
 }
 
-/// And `play` is that verb, so the advice is followed by something that works.
+/// And `play` runs the file `check` passed.
 #[test]
 fn play_runs_what_check_points_at() {
     let dir = std::env::temp_dir().join("kanso-verbs-agree-play");
