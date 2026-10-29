@@ -1181,56 +1181,6 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
 
-## 2026-10-29 — a play file shows its plan
-
-#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
-`run` refuses a file that holds definitions, so a program small enough for
-one file, which is how the book and the playground teach, had no plan to
-show. Three of the book's panels are about what a plan shows and were getting
-theirs through a stub entry no reader could type. `kanso play <file> --plan`
-now prints the plan `run --plan` would, from the play file, and skips the
-cached build.
-
-Asking for it before had answered "`play` is not a verb". `play` was missing
-from the list of verbs the usage message checks, and a known verb refused for
-a flag fell to "wants a file or directory". The message now names the flag:
-"`check` does not take `--plan`".
-
-tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
-plan with a golden; tests/front_door.rs gains `play` with no file and `check`
-with `--plan`. Both were watched red on the compiler before the change.
-
-## 2026-10-29 — check reads a play file as play
-
-#2205's first item, filed by the docs worker. `kanso check` sent any file
-with a declaration in it to the library compile, which refused a play file's
-first statement and checked nothing else, so a play file had no check at all
-and the book's `_check` samples had to stay `pub play` libraries. A file the
-library parse stops at a statement, and for that reason alone, is now
-checked as `kanso play` compiles it: a play file that would run reads `ok`,
-and one that would not is refused with what `play` says. The library parse's
-refusal is the one sign of the shape, so its wording now lives in one
-constant that the parser says and `check` reads.
-
-tests/check_reads_a_play_file.rs checks one play file that runs and one that
-names an unknown name. The compiler before this change refused both with the
-library's statement error.
-
-## 2026-10-29 — an entry names a group
-
-#2205's second item. ch06 teaches the named group, `prepare =` above
-indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
-concurrent work, and it parsed only as a library constant. An entry or a
-play file refused it with "only `if` opens an indented block", which named
-nothing the reader had written. A binding whose header is `name =` alone,
-above more than one indented line, now parses its body as a constant's body
-is parsed, so its effect lines join into one group and run concurrently as
-the constant's do.
-
-tests/entry_file.rs runs an entry whose group sleeps in one member and prints
-in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
-library constant prints. The compiler before this change refused it.
-
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
 #2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
@@ -1296,3 +1246,53 @@ keyed the derived files on every module load, which cost compile_allocs 14
 and interp_allocs 12 on programs that derive nothing; the key is asked for
 only while arms load, and neither row moves. Welfare falls by less than
 0.001, and the floor follows under the rule for a feature a ruling requires.
+
+## 2026-10-29 — a play file shows its plan
+
+#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
+`run` refuses a file that holds definitions, so a program small enough for
+one file, which is how the book and the playground teach, had no plan to
+show. Three of the book's panels are about what a plan shows and were getting
+theirs through a stub entry no reader could type. `kanso play <file> --plan`
+now prints the plan `run --plan` would, from the play file, and skips the
+cached build.
+
+Asking for it before had answered "`play` is not a verb". `play` was missing
+from the list of verbs the usage message checks, and a known verb refused for
+a flag fell to "wants a file or directory". The message now names the flag:
+"`check` does not take `--plan`".
+
+tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
+plan with a golden; tests/front_door.rs gains `play` with no file and `check`
+with `--plan`. Both were watched red on the compiler before the change.
+
+## 2026-10-29 — check reads a play file as play
+
+#2205's first item, filed by the docs worker. `kanso check` sent any file
+with a declaration in it to the library compile, which refused a play file's
+first statement and checked nothing else, so a play file had no check at all
+and the book's `_check` samples had to stay `pub play` libraries. A file the
+library parse stops at a statement, and for that reason alone, is now
+checked as `kanso play` compiles it: a play file that would run reads `ok`,
+and one that would not is refused with what `play` says. The library parse's
+refusal is the one sign of the shape, so its wording now lives in one
+constant that the parser says and `check` reads.
+
+tests/check_reads_a_play_file.rs checks one play file that runs and one that
+names an unknown name. The compiler before this change refused both with the
+library's statement error.
+
+## 2026-10-29 — an entry names a group
+
+#2205's second item. ch06 teaches the named group, `prepare =` above
+indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
+concurrent work, and it parsed only as a library constant. An entry or a
+play file refused it with "only `if` opens an indented block", which named
+nothing the reader had written. A binding whose header is `name =` alone,
+above more than one indented line, now parses its body as a constant's body
+is parsed, so its effect lines join into one group and run concurrently as
+the constant's do.
+
+tests/entry_file.rs runs an entry whose group sleeps in one member and prints
+in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
+library constant prints. The compiler before this change refused it.

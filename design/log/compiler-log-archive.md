@@ -78135,7 +78135,8 @@ One did not, and what it cost is the point.
 
 The HTML was left unmerged. A script then rewrote the file for an unrelated
 reason — renumbering a section — which wrote the working tree's contents back
-out, markers included, and the commit went in with `and `>>>>>>> origin/main` sitting in the published page.
+out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+and `>>>>>>> origin/main` sitting in the published page.
 
 **All three page gates then ran on that tree and all three passed.**
 `golden_prose` reads the `data-golden` spans and there were none in the hunk.
@@ -84075,7 +84076,8 @@ and no work here moves it.
 ## 2026-09-18 — three conflict markers shipped in the published page, and what did not catch them
 
 **A MISTAKE, caught by `no_published_page_carries_a_conflict_marker` on CI.**
-kanso#1504's `docs/compiler.html` went to CI carrying ``>>>>>>> origin/main` and `=======`. Main never had them and no other branch
+kanso#1504's `docs/compiler.html` went to CI carrying `<<<<<<< HEAD`,
+`>>>>>>> origin/main` and `=======`. Main never had them and no other branch
 did; it was this one resolution.
 
 **HOW.** The merge left the page unmerged with main's new section on one side
@@ -110843,8 +110845,6 @@ sharing of helpers between a module's files.
 
 Owes, on #2085: the refusal names the colliding declaration's file and line;
 an error golden for a two-file module.
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
