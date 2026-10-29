@@ -110979,3 +110979,95 @@ emitted_other_branches 17,946, emitted_other_calls 20,494 and
 emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
 list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
 Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-25 — a delete marks its pair dead where it stands
+
+`k_b_delete_mut` took a key out of a map nobody else holds by moving every
+pair after it down one slot. In the run program's `drained` phase that move
+was 87% of the phase's instructions, and draining half of 80,000 keys took
+0.92 s (#2118).
+
+Now the deleted pair keeps its slot. Its key moves into the value's slot, and
+the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
+stay sorted by key, so the next delete finds its key with a binary search
+that reads a dead pair by the key it kept. Dead pairs at the end of the map
+are dropped at once. The header records the state in `sorted_len`, which is
+negative while the map has no view: -(len + 1) while the pairs are what the
+deletes left, and any other negative once an in-place put appends past them.
+A lookup searches past the dead pairs. Every other reader closes the gaps
+first, in one pass at the top of `k_map_sort_build`. A persistent put closes
+them before it can share the pairs with a new header, and so do the deep copy
+and the carry's evacuation, whose headers start with no view.
+
+Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
+takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
+6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
+
+`delete_marks` counts the pairs marked dead. It is printed only by a run that
+marked one, so the veins that never delete in place, the sibling
+repositories' among them, read as before. The run program reads 550 and
+`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
+`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
+reader: a lookup, the length, the keys, an in-place put and a delete after
+it, a delete of a key already gone, a drain to empty, and two persistent
+puts beside the maps they copy. Three mutations turn it red: a search that
+answers a dead pair, a persistent put that shares dead pairs, and gaps
+closed as though nothing had been appended.
+
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
+
+## 2026-10-26 — a refused binding names the line its name is declared on
+
+The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
+asks the refusal to name the declaration it collides with. One declared in
+another file of the module was already named, with its file and line, since
+de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
+A collision inside one file still said only "`greet` is already a
+declaration", so the reader had to find it. It now says "`greet` is already
+a declaration, at line 1". A name no file declares, such as `length` from
+the library or `done`, keeps the message without a line.
+
+`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
+carry the new line, as does appendix A's panel. Adding a space to the message
+turns both red.
+
+CI's rows, against main at #2155. The rewrite runs only on a refusal, so
+what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
+entry_instructions 73,813,902 -> 73,811,997, library_instructions
+73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
+359,922,521. Welfare rises by less than a hundredth and the rise is banked.

@@ -445,3 +445,24 @@ fn a_view_left_in_a_carry_buffer_is_not_handed_up() {
     assert_eq!(native, "2\n< b\n---\n> B\n7\n< g\n---\n> G\n> hstatus 1\n");
     assert_eq!(interp, native, "the engines disagree on the carried diff");
 }
+
+/// `rolls =` above indented effect lines names a group in an entry, as it
+/// does under a library constant, and the group's members run concurrently:
+/// the sleeper prints after the line beside it (#2205). An entry refused the
+/// shape with a message about `if` and indented arguments, neither of which
+/// the reader wrote.
+#[test]
+fn an_entry_names_a_group() {
+    let fixture = "tests/golden/entryfile/a_named_group_in_the_entry/main.kso";
+    for engine in [&[][..], &["--interp"][..]] {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        assert_eq!(String::from_utf8_lossy(&done.stderr), "", "{engine:?}");
+        assert_eq!(String::from_utf8_lossy(&done.stdout), "fast\nslow\ndone\n", "{engine:?}");
+    }
+}

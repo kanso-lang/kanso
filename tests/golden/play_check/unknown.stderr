@@ -1,0 +1,4 @@
+error[name]: unknown name `y`
+  --> tests/golden/play_check/unknown.kso:2:7
+   2 |   x + y
+             ^

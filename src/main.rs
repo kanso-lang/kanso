@@ -332,14 +332,14 @@ fn interpreter_counters() -> String {
     )
 }
 
-const VERBS: [&str; 9] =
-    ["run", "check", "derived", "test", "build", "install", "list", "update", "repl"];
+const VERBS: [&str; 10] =
+    ["run", "play", "check", "derived", "test", "build", "install", "list", "update", "repl"];
 
 const USAGE: &str = "usage: kanso <verb> [arguments]
 
   run <file|dir> [--plan|--interp]   compile and run; --plan shows the effects
                                      it would perform, --interp uses the oracle
-  play <file> [--interp]             run a little program: definitions and
+  play <file> [--plan|--interp]      run a little program: definitions and
                                      statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
   derived <file|dir>                 print what the entry's `derive` lines
@@ -393,8 +393,15 @@ fn driven() -> ExitCode {
             // dump makes the reader diff it against what they typed.
             match args.first() {
                 None => eprintln!("kanso: no verb given"),
+                // A known verb with its file given was refused for a flag, and
+                // the flag is what the reader has to change.
                 Some(verb) if VERBS.contains(&verb.as_str()) => {
-                    eprintln!("kanso: `{verb}` wants a file or directory")
+                    match args.iter().skip(2).find(|a| a.starts_with("--")) {
+                        Some(flag) if args.len() > 1 => {
+                            eprintln!("kanso: `{verb}` does not take `{flag}`")
+                        }
+                        _ => eprintln!("kanso: `{verb}` wants a file or directory"),
+                    }
                 }
                 Some(verb) => eprintln!("kanso: `{verb}` is not a verb"),
             }
@@ -424,7 +431,7 @@ fn driven() -> ExitCode {
                 return ExitCode::from(2);
             }
         };
-        if !interp {
+        if !interp && !plan {
             if let Some(played) = played_before(&file, &source) {
                 return execute(&played, ended_by_signal);
             }
@@ -436,6 +443,9 @@ fn driven() -> ExitCode {
                 return ExitCode::from(2);
             }
         };
+        if plan {
+            return run_plan(&program, &file, &source);
+        }
         if interp {
             return run_interpreted(&program, program_args());
         }
@@ -625,7 +635,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             _ => return None,
         }
     }
-    if plan && command != "run" {
+    if plan && command != "run" && command != "play" {
         return None;
     }
     if interp && command != "run" && command != "play" {
