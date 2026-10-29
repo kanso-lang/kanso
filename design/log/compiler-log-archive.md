@@ -111426,3 +111426,61 @@ because this branch touches lib/json. Its mutation now makes the encoder
 copy each string before it writes it: livebench writes the same bytes and
 the live vein reads 858,314 allocations where it reads 8,314. `escape_onto`
 and its two helpers are dead in the library.
+
+## 2026-10-26 — a none carried through a name is checked
+
+#2088. A none handed straight to a call is refused at check when the
+receiver has no arm for it, and the same none bound to a name first passed
+check and stopped at run time. Since #1890 a slice past the end answers none,
+so the ports hit the hole wherever they slice: regex broke 42 of 43 fixtures
+at run time through one named slice. A name bound once to something that
+provably answers none now carries the none into the check, so binding a
+value never changes what compiles. A builtin has no arms to give a none to,
+so the positions its demand table constrains refuse one: `length`, `push`,
+`print`, the os builtins and the rest of the table, called directly or
+through a name.
+
+The tree had about 130 reads the checker cannot bound, most of them a bound
+decided in one function and handed to the next as a boolean, the shape the
+house rule asks a branch to take. Each read must succeed, so each now goes
+through a `none` arm that answers an err. Since #2087 that err is a box that
+passes everything above it, so no caller gains an arm. Most scripts take one
+helper, `present`, and the library, the book's escapes sample and five
+benchmarks each take a small arm beside the read. A default value in the arm
+would have hidden the bug the check exists to catch, and no site takes one.
+Where a none was an expected outcome, welfare_rescore and grammar_check name
+it with a marker or keep its arm. kq and kanso-json carry the same change on
+branches of this name.
+
+Six error fixtures pin the refusal, named and inline, for a group with no
+arm, `length`, `push` and `list/concat`, each seen passing check on the
+#2087 tree.
+
+The test corpora read the same way. Nine micro samples and nine mem
+fixtures route a read through a none arm, and none of their outputs or
+counters moved. `a_box_where_a_value_is_expected` gains one leading
+diagnostic, since `print os/args[1]` hands `print` a none. The test verb's
+`fails_in_std` carries its slice in a record field so the none still reaches
+`text/split` at run time, and its called-from line moves from 13 to 18. The
+last item on #2088, bc's slice edges, was built on 2026-10-25: a start before
+1 answers none, as a range past the end does.
+
+CI's rows against main at #2169. The check costs the front end:
+compile_instructions 24,604,939 -> 24,798,984, entry_instructions 72,571,754
+-> 73,507,587, library_instructions 72,232,245 -> 73,143,499 and the tab's
+browser_compile_instructions 339,964,747 -> 340,825,316. indexbench reads its
+bound at the guard on every step, `if (i > length s)`, because the prover
+cannot see a bound handed down (#2174), so work_indexbench rises 1,837,160 ->
+2,077,157, and work_runbench, which carries the shape at a larger size,
+819,572,053 -> 829,234,755. The none arms the library and the benchmarks
+gained move the rest by small amounts: work_jsonbench 549,333,568 ->
+549,337,021, work_widebench 28,685,100 -> 28,701,099, work_basket 18,294,810
+-> 18,294,814, work_encodebench 2,335,339,266 -> 2,335,338,865,
+work_scanbench 274,243 -> 274,220 and interp_allocs 630,584 -> 630,592. The
+emitted and text rows grow with the same arms: for the decoder
+emitted_defines 160 -> 161, emitted_calls 1,519 -> 1,528, emitted_branches
+1,293 -> 1,308 and emitted_lines 14,150 -> 14,240; for the other benchmarks
+emitted_other_defines 2,243 -> 2,253, emitted_other_calls 20,311 -> 20,472,
+emitted_other_branches 17,723 -> 17,764 and emitted_other_lines 168,876 ->
+169,582; and text 5,619,835 -> 5,620,636 over every benchmark. The check is the 2026-09-15 gavel's part 3
+carried to none, so the floor drops by what it costs, 95.42 to 95.38.
