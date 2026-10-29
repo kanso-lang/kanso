@@ -235,3 +235,10 @@ no route for /nowhere</code></pre>
 <li>call a private helper of an imported module by its qualified name. read the <code>error[opacity]</code> diagnostic, then make the helper <code>pub</code> and watch the same call succeed.</li>
 <li>geo's <code>ride_km</code> takes two arguments. declare a local <code>ride_km</code> with a different arity (in a library file beside your entry), import geo, and confirm both dispatch by argument count with no qualifier. then match the arity and work out which one answers a bare call—your own declaration outranks the import—and confirm <code>geo/ride_km</code> still reaches the other.</li>
 </ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch10.html">← fast by construction</a>
+  <a href="ch12.html">next: sequences →</a>
+</nav>

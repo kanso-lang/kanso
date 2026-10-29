@@ -19,6 +19,10 @@
     - { num: "10", slug: "ch10", title: "fast by construction" }
     - { num: "11", slug: "ch11", title: "modules" }
     - { num: "12", slug: "ch12", title: "sequences" }
+- part: "part iv — shipping"
+  start: 13
+  chapters:
+    - { num: "13", slug: "ch13", title: "a command-line tool" }
 - part: "appendices"
   start: 1
   appendix: true
