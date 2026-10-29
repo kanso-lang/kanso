@@ -76,25 +76,24 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 
 <p>this is error handling as yagni. not-handling is the correct default, because a handler for a failure that never recurs is speculative complexity. you add coping <em>reactively</em>, one place at a time, when a real failure earns it—the exact inverse of defensive code, which pays the tax on every line up front to guard against things that mostly never happen. the happy path stays happy not because failures can't occur, but because you refused to complicate it for failures you judged too rare to warrant it.</p>
 
-<h2>nothing in kanso rescues</h2>
+<h2>an unhandled err rises</h2>
 
 <p>an <code>err</code> is the failure you <em>declined</em> to handle. so it does the only sensible thing: it rises. it rides the rails out through every function that never mentioned it, carrying where it was born and everywhere it passed through, until it reaches a boundary.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">an err reaching the top<span class="fk-tag fk-real">shipped</span></div>
-  <pre><code><span class="f">menu</span> <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
-
-<span class="k">fn</span> <span class="f">base_price</span> item
-  <span class="f">menu</span>[item]<span class="o">!</span>
+  <div class="code-panel-title">pocky.kso<span class="fk-tag fk-real">shipped</span></div>
+  <pre><code><span class="k">fn</span> <span class="f">base_price</span> item
+  menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
+  menu[item]<span class="o">!</span>
 
 <span class="k">fn</span> <span class="f">price</span> item
-  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span>     <span class="c"># + 50 never runs on the sad track</span>
+  <span class="f">base_price</span> item <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> p <span class="o">+</span> <span class="n">50</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+<span class="f">price</span> <span class="s">"pocky"</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run</div>
+    <div class="code-panel-title">kanso play pocky.kso</div>
     <pre><code>error[endpoint]: unhandled err reached the entry: "missing index "pocky""
-  born in base_price at pocky.kso:4</code></pre>
+  born in base_price at pocky.kso:3</code></pre>
   </div>
 </div>
 
@@ -102,14 +101,14 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 
 <p>compare the language that made "ignored the error" famous. go returns a pair, <code>(value, error)</code>—a product type, so four states exist, and two of them are lies. the idiomatic lie is <code>("", err)</code>: the error is right there beside a perfectly usable zero value, the caller grabs the value half, and the type system waves it through. <code>errcheck</code> exists because go's types can't say "you got one or the other." one channel dissolves this: when a kanso function fails, the err isn't <em>beside</em> your value, it's <em>instead of</em> it. there is no valid half to grab. using the result means scrutinizing it, and scrutiny has exactly two outcomes—a rescue you deliberately wrote, or the ride continuing. ignoring an error is unspellable here.</p>
 
-<p>an err nobody claims rides to the <strong>endpoint</strong>—the executor, the top of <code>main</code>—and ends the program with its receipts: where it was born, everywhere it passed. that is the default fate of every unhandled failure, and it costs nothing to arrange because it's what happens when you write nothing.</p>
+<p>an err nobody claims rides to the <strong>endpoint</strong>, where the executor finishes running the entry, and ends the program with its receipts: where it was born, everywhere it passed. that is the default fate of every unhandled failure, and it costs nothing to arrange because it's what happens when you write nothing.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">policy is data-in, effect-out<span class="fk-tag fk-proposed">proposed</span></div>
   <pre><code><span class="k">fn</span> <span class="f">report</span> failure              <span class="c"># Failure -&gt; Description. a normal function.</span>
   <span class="f">respond</span> <span class="n">500</span> (<span class="f">page</span> (<span class="f">reason</span> failure))
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">serve</span> app <span class="o">.</span> <span class="f">on_failure</span> report</code></pre>
+<span class="f">serve</span> app <span class="o">.</span> <span class="f">on_failure</span> report</code></pre>
 </div>
 
 <p><code>report</code> takes a <code>Failure</code> and returns a description—an ordinary function on inert data. the endpoint hands it the failure and asks only what happens next; passing <code>report</code> around is harmless because it holds no special power, just an argument type. that's the shape of every policy in the language: data in, effect out, and the machinery that delivered the data stays out of your hands.</p>
@@ -155,7 +154,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 
 <h2>the compiler can see which is which</h2>
 
-<p>which means kanso doesn't have to <em>ask</em> you whether a failure is retryable. it can see it. effects are descriptions—a <code>K_DESC</code> the executor runs—and pure computation is values; the runtime already records where every err was born. born executing a description, at an io that couldn't complete → a not-yet, and retry is meaningful. born in pure reduction → a wrong, and retry is a category error.</p>
+<p>which means kanso doesn't have to <em>ask</em> you whether a failure is retryable. it can see it. effects are descriptions the executor runs, and pure computation is values; the runtime already records where every err was born. born executing a description, at an io that couldn't complete → a not-yet, and retry is meaningful. born in pure reduction → a wrong, and retry is a category error.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">retry only means something for events<span class="fk-tag fk-proposed">proposed</span></div>
