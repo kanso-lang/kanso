@@ -23,42 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: `put` writes a list at an index
-
-Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
-`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
-list, so the ports built vectors from maps with integer keys and paid for
-keys they did not need.
-
-**The ruling.** `put xs i v` answers the list with element `i` replaced,
-1-based like `xs[i]`. An index outside the list answers `none`, as a read
-there does. A list nothing else holds is written in place, as a map already
-is.
-
-Owes, on #2086: `put` on a list on every engine; the in-place write under
-the existing uniqueness analysis; the checker accepting a list for `put`, and
-refusing at check what it refuses at run time (diff F9, inflate F8); micro and
-mem goldens; appendix B.
-
-## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
-
-Clay ruled #2099. Under #1975 a run-time failure names the line it happened
-on, so a failure inside the standard library named a library line, such as
-`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
-program. Every port asked for its own line.
-
-**The ruling.** A failure inside the library keeps its library line and adds
-`called from <file>:<line>`, the nearest line in the program's own files. The
-library line is still what a library author needs, and the program's line is
-what its author needs. Native records that line on each call from a program
-file into a library function. Its cost is the cost of a ruled feature: the
-floor moves by what CI measures, as CLAUDE.md's language exception says.
-
-Owes, on #2099: the caller's line on every engine for a failure born in the
-library; error goldens on every engine for an operator, a builtin and a
-library function reached from a program file; CI's rows and the floor moved
-by them.
-
 ## 2026-10-25 — a list walked by its rest joins the corpus
 
 `rest = list/to_list (list/drop xs 1)` is how most of this repository's
@@ -1359,6 +1323,32 @@ compile_instructions 24,083,702 (+18,776), library_instructions 71,386,812
 (+60,840) and browser_compile_instructions 343,219,110 (+22,172). Welfare fell
 by 0.002, and the floor follows under the rule for a feature a ruling
 requires.
+
+## 2026-10-29 — a parameter is not the function it shares a name with
+
+The none check asks, at each call whose argument can be a none, whether the
+callee's group has an arm for one. It found the group by name and arity
+alone. std/list's merge sort takes its key as a parameter named `key` and
+calls it on an element it reads by index, so a program with a one-argument
+function named `key` had that parameter read as its own function, and the
+read was refused twice inside std/list, at a line the program's author
+cannot change. The proof that the index is in bounds usually kept the
+question from being asked. A dispatch tie elsewhere in the program took that
+proof away, so the tie arrived with two errors nobody wrote. The senro
+routing prototype found it.
+
+The check now asks first whether the declaration binds the name, the
+question the box check already asks through the same per-declaration set.
+
+tests/golden/errors gains the program: a function named `key`, a tie, and a
+call into std/list. It was watched red through the corpus runner with the
+test switched off, reporting the two refusals in list.kso, and passes with it.
+
+The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
+browser_compile_instructions 343,289,574 (+70,464), entry_instructions
+85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
+falls by less than 0.001, and the floor follows under the rule for a change
+that makes the language do what its specification says.
 
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
