@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
-
-Clay ruled #2085. Every function in a module is visible from every file of
-it, so a local in one file that reuses a name declared in another file
-shadows a callable name, which is what no-shadowing forbids. Eighteen of the
-twenty ports met it as action at a distance: a declaration added in `b.kso`
-refused a parameter in `a.kso`, and the refusal pointed at the parameter
-without naming the declaration.
-
-**The ruling.** The rule stands across files. The refusal names the
-declaration it collides with, by file and line, so the fix is a rename made
-knowing what clashed. Letting a local reuse a name declared only in another
-file was declined, because inside the local's scope the name would mean two
-things. File-scoped private names were declined, because they would end the
-sharing of helpers between a module's files.
-
-Owes, on #2085: the refusal names the colliding declaration's file and line;
-an error golden for a two-file module.
-
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
 Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
@@ -1404,3 +1385,22 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — a play file shows its plan
+
+#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
+`run` refuses a file that holds definitions, so a program small enough for
+one file, which is how the book and the playground teach, had no plan to
+show. Three of the book's panels are about what a plan shows and were getting
+theirs through a stub entry no reader could type. `kanso play <file> --plan`
+now prints the plan `run --plan` would, from the play file, and skips the
+cached build.
+
+Asking for it before had answered "`play` is not a verb". `play` was missing
+from the list of verbs the usage message checks, and a known verb refused for
+a flag fell to "wants a file or directory". The message now names the flag:
+"`check` does not take `--plan`".
+
+tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
+plan with a golden; tests/front_door.rs gains `play` with no file and `check`
+with `--plan`. Both were watched red on the compiler before the change.
