@@ -110785,3 +110785,44 @@ compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
 -> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
 emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
 343,748,020 -> 343,857,683. Welfare stays at 95.15.
+
+## 2026-10-25 — a scanned string is read where it stands on the interpreter
+
+The interpreter's `Text` held a long string as a `String`, so handing one to
+a function copied it. A long string is now an `Rc` around the bytes and a
+flag saying whether they are all ASCII, computed once when the string is
+made. A call shares it.
+
+`text/slice` on an ASCII string indexes bytes, and so does `s.i`. On other
+strings `text/slice` counted the characters and collected them all into a
+`Vec<char>` to take one. It now walks from a cursor the interpreter keeps:
+the last string sliced and the character and byte offsets where the slice
+ended, so a scanner that reads the next character walks one character.
+
+An 80,000-character scan ran in 6.9 s and runs in 0.089 s, against native's
+0.08 s. A scan of non-ASCII text took 660 million instructions and takes 89
+million. `a_scanned_string_reads_each_character` scans a string that mixes
+ASCII with two- and three-byte characters, forwards and back, so a cursor
+that kept a stale offset prints the wrong characters.
+
+CI's rows, against #2151. The interpreter reads interp_instructions
+629,524,864 -> 568,584,597 (-9.7%) and interp_allocs 643,872 -> 632,223,
+and interp_peak_bytes holds at 1,298,476. The compile rows move with the
+binary's layout: compile_instructions 24,694,028 -> 24,711,192,
+entry_instructions 72,837,734 -> 72,889,740, library_instructions 72,508,468
+-> 72,563,065, emit_instructions 5,657,388 -> 5,654,754 and
+browser_compile_instructions 343,857,683 -> 343,738,623. Against #2151
+welfare read 95.15 -> 95.17.
+
+Merged with main at #2141, CI reads the three together against main. The
+interpreter reads interp_instructions 520,276,149 -> 564,058,857,
+interp_allocs 578,088 -> 624,771 and interp_peak_bytes 1,281,313 ->
+1,298,495. The tab runs and compiles the two corpus phases:
+browser_run_instructions 54,006,705 -> 61,205,256, browser_run_peak_bytes
+1,507,328 -> 1,572,864, browser_compile_instructions 334,848,599 ->
+344,676,704 and browser_compile_peak_bytes 743,876 -> 751,764. The compile
+rows move by layout: compile_instructions 24,735,836 -> 24,747,458,
+entry_instructions 72,954,229 -> 72,992,046, library_instructions
+72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
+corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
+95.22 -> 95.24 and the rise is banked.
