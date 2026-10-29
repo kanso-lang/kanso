@@ -1379,3 +1379,12 @@ std/list, refused. With the second load switched off the first case printed
 "no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
 first case in the page; it was watched red with the derived files keyed so
 the module could not find them.
+
+The rows: bench/entry_corpus derives, so it pays for each call's strings and
+for the larger `lib/derive`: entry_instructions 85,282,135 (+134,173),
+compile_instructions 24,096,578 (+1,025), library_instructions 71,383,015
+(+2,479), and browser_compile_instructions 343,289,572 (-2). The first build
+keyed the derived files on every module load, which cost compile_allocs 14
+and interp_allocs 12 on programs that derive nothing; the key is asked for
+only while arms load, and neither row moves. Welfare falls by less than
+0.001, and the floor follows under the rule for a feature a ruling requires.
