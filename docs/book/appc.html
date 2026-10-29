@@ -7,9 +7,9 @@ extra_css: /book/book.css
 <span class="eyebrow">appendix c</span>
 <h1>canonical form</h1>
 
-<p>most languages ship a formatter—a second program that rewrites your source into the house style. kanso ships none, because it would have nothing to do. canonical form is not a convention layered on top of the grammar; it <em>is</em> the grammar. a program has exactly one legal rendering, and every deviation is a compile error with a caret under it. this appendix is the reference for that law: each rule stated plainly, the reason it exists, and the diagnostic you get when you break it. every broken sample here was run through <code>kanso check</code>; every error text is copied from the machine, not typed from memory.</p>
+<p>most languages ship a formatter—a second program that rewrites your source into the house style. kanso ships none, because the grammar itself fixes the layout. a program has exactly one legal rendering, and every deviation is a compile error with a caret under it. this appendix is the reference for that law: each rule stated plainly, the reason it exists, and the diagnostic you get when you break it. every broken sample here was run through <code>kanso check</code>; every error text is copied from its output.</p>
 
-<p>the founding principle is one sentence: <em>anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error.</em> the payoff is concrete. there is no style debate, because there is no style to debate. there is no formatter to configure, run, or argue about. and every diff you will ever review is purely semantic—no reflowed lines, no whitespace churn, no "nit: spacing" comments. the source contains only decisions.</p>
+<p>the founding principle is one sentence: <em>anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error.</em> so there is no formatter to configure or run, and a diff between two versions of a file never contains reflowed lines or whitespace changes.</p>
 
 <p>here is a whole, legal file. read it, then spend the rest of the appendix learning why each character sits where it does:</p>
 
@@ -389,7 +389,7 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 
 <ol>
   <li>take <code>wrap_pipe.kso</code> and remove enough elements from the list that the <code>ranked</code> binding would fit on one line unwrapped. predict which diagnostic <code>kanso check</code> produces before you run it, then confirm.</li>
-  <li>write a file with a type named <code>widget</code>, a function named <code>build</code>, and <code>main</code>—deliberately in the wrong order. run <code>kanso check</code> and note how many separate ordering errors you can provoke, and in what sequence you must fix them to reach <code>ok</code>.</li>
+  <li>write a library file with a function named <code>build</code> followed by a type named <code>widget</code>. run <code>kanso check</code> and read what it asks you to move. then put two types in reverse alphabetical order and check again: which orderings does the compiler enforce, and which does it leave to you?</li>
   <li>a body has a binding you want to set visually apart from the effects below it. you reach for a blank line and the compiler rejects it. what does the grammar offer instead, and what does that say about when a blank line would ever have been the right tool?</li>
   <li>construct a single statement that is exactly 80 characters and one that is exactly 81. verify the boundary is where the diagnostic claims it is, and read the character count it reports back.</li>
 </ol>
