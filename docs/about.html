@@ -50,11 +50,11 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>what does <code>print "one"</code> do when it is evaluated?</p>
 
-<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>.&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives <code>main</code>'s description and walks it. the same program, run two ways:</p>
+<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>.&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives the program's description and walks it. the same program, run two ways:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/effects.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso</div>
     <pre><code>one
@@ -64,13 +64,13 @@ three</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso --plan</div>
     <pre><code>plan:
-  print "one"    // from line 1
-  print "two"    // from line 1
-  print "three"    // from line 1</code></pre>
+  print "one"    # from line 1
+  print "two"    # from line 1
+  print "three"    # from line 1</code></pre>
   </div>
 </div>
 
-<p><code>--plan</code> falls out of that. the description already exists as inspectable data, so the flag renders it instead of handing it to the executor. each step carries its origin span, which is where the <code>// from line 1</code> provenance comes from.</p>
+<p><code>--plan</code> falls out of that. the description already exists as inspectable data, so the flag renders it instead of handing it to the executor. each step carries its origin span, which is where the <code># from line 1</code> provenance comes from.</p>
 
 <p>the payoff lands in testing. in most languages, testing effectful code means mocks: intercept the i/o call, record what would have happened, hope the interception is faithful. in kanso there is nothing to intercept, because evaluation never does i/o. the interpreter's runtime is a trait with two implementations—a real executor that prints, and a scripted one that appends each effect to a transcript:</p>
 
@@ -102,25 +102,25 @@ three</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/trailing_whitespace.stderr</div>
   <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; trailing_whitespace.kso:2:13</span>
-   2 |   print "hi" 
-                   <span class="k">^</span></code></pre>
+  --&gt; trailing_whitespace.kso:1:11
+   1 | print "hi" 
+                 ^</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/import_order.stderr</div>
   <pre><code><span class="k">error[formatting]</span>: imports appear in alphabetical order
-<span class="c">  --&gt; import_order.kso:2:8</span>
+  --&gt; import_order.kso:2:8
    2 | import "kanso-lang/vse"
-              <span class="k">^</span></code></pre>
+              ^</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/unused_expression.stderr</div>
-  <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `.&gt;`)
-<span class="c">  --&gt; unused_expression.kso:2:5</span>
-   2 |   1 + 1
-           <span class="k">^</span></code></pre>
+  <pre><code><span class="k">error[unused]</span>: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --&gt; unused_expression.kso:1:3
+   1 | 1 + 1
+         ^</code></pre>
 </div>
 
 <p>the error corpus is maintained as carefully as the success corpus, because a good share of this language's value is in its diagnostics. each message states the rule it is applying. there is no style left to have an opinion about, so a diagnostic can afford to be calm.</p>
@@ -129,7 +129,7 @@ three</code></pre>
 
 <p>none of this was designed for language models. kanso's founding principle—anything a style guide or linter would enforce by convention becomes a compile error or unrepresentable—was written for human readers, so that no reviewer ever spends attention adjudicating style. but follow the consequence to its end and you arrive somewhere interesting.</p>
 
-<p>think about what teams actually write into their llm system prompts today: don't leave unused variables, delete dead code, match the project's formatting, don't drift from the house style. it's the same list that used to live in style guides and code-review checklists, migrated to a third home. in kanso that list has nowhere to live, because every item on it fails to compile. unused bindings, unused expressions, non-canonical whitespace, out-of-order declarations—the compiler already rejects them, for everyone, with the diagnostics you just read. there is nothing subjective left to teach a model, and no slop for it to gradually accumulate: the classic failure mode where generated code is <em>correct but slightly off</em>—an orphaned binding here, a dead expression there—is a compile error, caught before any reviewer sees it.</p>
+<p>think about what teams actually write into their llm system prompts today: don't leave unused variables, delete dead code, match the project's formatting, don't drift from the house style. it's the same list that used to live in style guides and code-review checklists, migrated to a third home. in kanso that list has nowhere to live, because every item on it fails to compile. unused bindings, unused expressions, non-canonical whitespace, out-of-order imports—the compiler already rejects them, for everyone, with the diagnostics you just read. there is nothing subjective left to teach a model, and no slop for it to gradually accumulate: the classic failure mode where generated code is <em>correct but slightly off</em>—an orphaned binding here, a dead expression there—is a compile error, caught before any reviewer sees it.</p>
 
 <p>one rendering per program has a second-order effect on review itself. if a program has exactly one canonical form, then no diff between two versions of a file is ever formatting churn—no reflowed lines, no argument about where the blank line goes, no imports to re-sort. what remains is real: a changed decision, a renamed thing, a helper extracted or inlined. review, whether the reviewer is a human or a machine, no longer spends attention on form and shrinks toward the thing it was always supposed to be about: decisions.</p>
 
