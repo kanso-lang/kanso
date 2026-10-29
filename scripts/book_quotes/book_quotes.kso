@@ -16,14 +16,16 @@ import "std/text"
 # no longer spells that way, one named `_is_ws` for a function since renamed to
 # `ws?`, and two named byte-array constants the library had replaced.
 #
-# A panel of this kind is an excerpt carrying editorial changes: a private
-# declaration gains a leading `_`, a module qualifier is dropped, a field gains
-# a `:type` the file leaves bare. So its text cannot be compared to the file's
-# and cannot be regenerated from it. What can be checked is structural, and
-# survives every one of those changes:
+# A panel of this kind is an excerpt: whole declarations chosen from the file
+# and left as the file writes them. Three checks read it:
 #
-#   every declaration the panel shows is declared in the file it names, and
-#   every name the panel uses is a name that file can reach.
+#   every block of the panel, as blank lines divide it, is text the files
+#   hold; every declaration the panel shows is declared in the file it
+#   names; and every name the panel uses is a name that file can reach.
+#
+# The first is the strict one. The other two predate it, from when panels
+# were allowed to add a leading `_` or a `:type`, and they still name what a
+# drifted panel got wrong in terms a reader can act on.
 #
 # The reachable set is read off the package rather than listed here: the
 # package's own declarations and bindings, the tail of every qualified name it
@@ -245,7 +247,30 @@ fn found_for q file bodies
   gone = missing declared (shown panel)
   loose = missing (reachable bodies) (named_in panel)
   named = as_findings q lead "names" loose []
-  named .> (acc -> as_findings q lead "declares" gone acc)
+  blocks = blocks_of panel
+  edited = list/to_list (list/reject blocks (b -> verbatim? bodies b))
+  named
+    .> (acc -> as_findings q lead "declares" gone acc)
+    .> (acc -> as_findings q lead "edits" (lines_heading edited) acc)
+
+# An excerpt is whole declarations, chosen and not changed: every block of
+# the panel, as blank lines divide it, is text one of the files holds. The
+# panels this was written for had typed fields and underscored names the
+# library never had, which the structural checks above were built to forgive
+# and the book now teaches as errors.
+fn blocks_of panel
+  pieces = text/split panel "\n\n"
+  list/to_list (list/select pieces (b -> text/trim b != ""))
+
+fn verbatim? bodies block
+  wanted = text/trim block
+  list/any? bodies (b -> length (text/split b wanted) > 1)
+
+fn lines_heading blocks
+  list/to_list (list/map blocks first_line)
+
+fn first_line block
+  present (text/split (text/trim block) "\n")[1]
 
 fn leading names
   first names (length names == 0)

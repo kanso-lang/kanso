@@ -5,7 +5,7 @@ brew = print "brew: steeping"
   .> (_ -> time/sleep 60)
   .> (_ -> print "brew: poured")
 
-pub play = brew
+brew
   .> (_ -> roll 1)  # brew runs first now, and every roll
   .> (_ -> roll 2)  # is bound after it, so each one
   .> (_ -> roll 3)  # waits for the steep to finish

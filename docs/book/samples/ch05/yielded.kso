@@ -11,4 +11,4 @@ fn report yield
     .> (_ -> print "an arm named {name yield} caught it")
     .> (_ -> print "yield == none is {yield == none}")
 
-pub play = os/write_file "receipt.txt" "one taiyaki" .> report
+os/write_file "receipt.txt" "one taiyaki" .> report

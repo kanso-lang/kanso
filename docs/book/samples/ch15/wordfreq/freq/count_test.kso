@@ -1,0 +1,8 @@
+import "std/expect"
+
+sample = "The cat and the hat, and THE bat."
+
+test_words_are_lowercased = words "The CAT" .> (ws -> ws == ["the" "cat"])
+
+test_top_two = words sample
+  .> (ws -> expect (render (top 2 ws)) . to (equal "   3  the\n   2  and"))

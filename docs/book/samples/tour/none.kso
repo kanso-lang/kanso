@@ -1,0 +1,8 @@
+fn describe none
+  "not on the menu"
+
+fn describe price
+  "{price} yen"
+
+menu = { "dango":350 }
+print (describe menu["dango"]) .> (_ -> print (describe menu["pocky"]))

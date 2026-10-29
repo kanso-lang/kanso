@@ -1,0 +1,317 @@
+---
+layout: book
+title: "chapter 13—a command-line tool"
+description: "build wordfreq from an empty directory: an entry and a module, a pure core, arguments, standard input, error messages and exit codes, tests, and a native binary you can copy to another machine."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 13</span>
+<h1>a command-line tool</h1>
+
+<p>this chapter builds a complete program from an empty directory. <code>wordfreq</code> reads some text and prints the words it uses most, with how many times each appears. it takes a file name or reads standard input, accepts a <code>--top</code> option, prints a usage message to standard error when it is called wrongly, and exits with a status a shell script can test. at the end it is a native binary of about 700 KB that runs on a machine with no kanso installed.</p>
+
+<p>nothing here is new language. the program uses records and dispatch (chapter 03), failure as a value (chapter 04), effects (chapter 05), and an entry with a module (chapter 07). the new material is how those pieces fit into a program you would ship.</p>
+
+<h2>the layout</h2>
+
+<p>a project is a directory holding an entry and the modules it imports. <code>wordfreq</code> has one module, <code>freq</code>, split into three files by job, each with tests beside it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq on disk</div>
+  <pre><code>wordfreq/
+  main.kso              the entry: hands the arguments to freq/main
+  freq/
+    count.kso           words, counting and ranking, rendering: no i/o
+    count_test.kso
+    options.kso         reading the command line
+    options_test.kso
+    cli.kso             the edges: files, standard input, exit codes</code></pre>
+</div>
+
+<p>two names in that tree are chosen with care. the module is <code>freq</code> rather than <code>wordfreq</code>, because <code>kanso build</code> names the binary after the project directory, and it refuses to write a file named <code>wordfreq</code> beside a directory of the same name. and no file inside the module is called <code>main.kso</code>: that name marks an entry wherever it appears, so a module that contains one is refused for holding statements.</p>
+
+<h2>the core</h2>
+
+<p>start with the part that has no i/o in it. <code>count.kso</code> turns text into words, counts them, picks the most common, and renders them as lines:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/freq/count.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/regexp"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">pub</span> <span class="k">type</span> ranked
+  <span class="f">count</span>
+  <span class="f">word</span>
+
+<span class="c"># The words of a text, lowercased, in the order they appear.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">words</span> text
+  <span class="f">regexp/split</span> <span class="s">"[^a-z']+"</span> (<span class="f">text/lowercase</span> text)
+    <span class="o">.&gt;</span> (parts <span class="o">-&gt;</span> <span class="f">list/to_list</span> (<span class="f">list/reject</span> parts (w <span class="o">-&gt;</span> w <span class="o">==</span> <span class="s">""</span>)))
+
+<span class="c"># The n most common words, the most common first. A map's entries come in</span>
+<span class="c"># key order and sort_by keeps ties in the order they arrived, so words with</span>
+<span class="c"># the same count stay alphabetical.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">top</span> n ws
+  ranks <span class="o">=</span> <span class="f">list/map</span> (<span class="f">entries</span> (<span class="f">list/tally</span> ws)) (e <span class="o">-&gt;</span> <span class="f">ranked</span> e<span class="o">.</span><span class="f">value</span> e<span class="o">.</span>key)
+  <span class="f">list/to_list</span> (<span class="f">list/take</span> (<span class="f">list/sort_by</span> ranks (r <span class="o">-&gt;</span> <span class="n">0</span> <span class="o">-</span> r<span class="o">.</span>count)) n)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">render</span> rows
+  <span class="f">text/join</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> rows line)) <span class="s">"\n"</span>
+
+<span class="k">fn</span> <span class="f">line</span> (<span class="f">ranked</span> count word)
+  <span class="s">"<span class="i">{text/pad_start </span>"</span>{count}<span class="s">" 4 "</span> <span class="s">"}  <span class="i">{word}</span>"</span></code></pre>
+</div>
+
+<p><code>words</code> lowercases the text and splits it on every run of characters that cannot be part of a word, then drops the empty strings a split leaves at the edges. <code>regexp/split</code> answers an effect, because a pattern that does not compile is a failure, so <code>words</code> opens it with <code>.&gt;</code> and answers an effect too. everything after it is plain values.</p>
+
+<p><code>top</code> is three standard-library calls. <code>list/tally</code> counts each word into a map, and <code>entries</code> hands back the map's pairs in key order, so the words arrive alphabetical. <code>list/sort_by</code> orders by the negated count and keeps equal keys in the order they arrived, so words with the same count stay alphabetical without a second sort key. <code>list/take</code> keeps the first <code>n</code>. <code>ranked</code> is a record so the rest of the module can say <code>r.count</code> rather than remembering which end of a pair holds what.</p>
+
+<p><code>render</code> right-aligns each count in four columns with <code>text/pad_start</code>, the way <code>uniq -c</code> does, so a column of numbers lines up.</p>
+
+<h2>reading the command line</h2>
+
+<p>a command line is a list of strings, and reading one is a small parser. it can fail, and the failure is something the person at the keyboard did, so it is a value: <code>bad_usage</code> carries a reason written for them. this is chapter 04's rule about designing the sad path. a verdict the caller acts on ships as a value, and <code>err</code> is kept for what nobody should handle.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/freq/options.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># What the command line asked for: a path, or none for standard input, and</span>
+<span class="c"># how many words to show.</span>
+<span class="k">pub</span> <span class="k">type</span> options
+  <span class="f">path</span>
+  <span class="f">top</span>
+
+<span class="c"># The command line could not be read. The reason is for the person who typed</span>
+<span class="c"># it, so it says what was wrong in their terms.</span>
+<span class="k">pub</span> <span class="k">type</span> bad_usage
+  <span class="f">reason</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">options_of</span> args
+  <span class="f">flags</span> args <span class="n">1</span> (<span class="f">options</span> none <span class="n">5</span>)
+
+<span class="k">fn</span> <span class="f">flags</span> args at opts
+  <span class="f">flag</span> args at opts args[at]
+
+<span class="k">fn</span> <span class="f">flag</span> _ _ opts none
+  <span class="f">opts</span>
+
+<span class="k">fn</span> <span class="f">flag</span> args at opts <span class="s">"--top"</span>
+  <span class="f">with_top</span> args at opts (<span class="f">number</span> args[at <span class="o">+</span> <span class="n">1</span>])
+
+<span class="k">fn</span> <span class="f">flag</span> args at opts word
+  <span class="f">with_path</span> args at opts word opts<span class="o">.</span><span class="f">path</span>
+
+<span class="k">fn</span> <span class="f">number</span> none
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">number</span> word
+  <span class="f">text/to_int</span> word
+
+<span class="k">fn</span> <span class="f">with_top</span> _ _ _ none
+  <span class="f">bad_usage</span> <span class="s">"--top wants a number after it"</span>
+
+<span class="k">fn</span> <span class="f">with_top</span> args at opts n
+  <span class="f">flags</span> args (at <span class="o">+</span> <span class="n">2</span>) (<span class="f">merge</span> opts { <span class="s">"top"</span>:n })
+
+<span class="k">fn</span> <span class="f">with_path</span> args at opts word none
+  <span class="f">flags</span> args (at <span class="o">+</span> <span class="n">1</span>) (<span class="f">merge</span> opts { <span class="s">"path"</span>:word })
+
+<span class="k">fn</span> <span class="f">with_path</span> _ _ _ word _
+  <span class="f">bad_usage</span> <span class="s">"one file at a time, and <span class="i">{word}</span> is a second"</span></code></pre>
+</div>
+
+<p>the walk is one function per decision. <code>flags</code> reads the argument at a position, and a plain index answers <code>none</code> past the end, which is how the walk stops: <code>flag</code>'s first arm takes the <code>none</code> and answers what was gathered. a literal arm catches <code>"--top"</code>, and the last arm takes anything else as the path. the number after <code>--top</code> may be missing or may not be a number, and both read as <code>none</code>, so <code>with_top</code> has one arm for the mistake and one for the number. <code>merge</code> builds the next <code>options</code> with one field changed. there is no mutable state, and no loop variable to get wrong.</p>
+
+<h2>the edges</h2>
+
+<p>the last file is the only one that touches the world. <code>main</code> reads the options and dispatches on what came back:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/freq/cli.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+
+usage <span class="o">=</span> <span class="s">"usage: wordfreq [--top N] [file]"</span>
+
+<span class="c"># The whole program: read the command line, then do what it asked.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">main</span> args
+  <span class="f">start</span> (<span class="f">options_of</span> args)
+
+<span class="k">fn</span> <span class="f">start</span> (<span class="f">bad_usage</span> reason)
+  <span class="f">io/write_err</span> <span class="s">"wordfreq: <span class="i">{reason}</span>\n<span class="i">{usage}</span>\n"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/exit</span> <span class="n">2</span>)
+
+<span class="k">fn</span> <span class="f">start</span> (<span class="f">options</span> none n)
+  <span class="f">io/stdin</span> <span class="o">.&gt;</span> (text <span class="o">-&gt;</span> <span class="f">report</span> n text)
+
+<span class="k">fn</span> <span class="f">start</span> (<span class="f">options</span> path n)
+  <span class="f">os/read_file</span> path <span class="o">.&gt;</span> (got <span class="o">-&gt;</span> <span class="f">opened</span> path n got)
+
+<span class="k">fn</span> <span class="f">opened</span> path _ (<span class="f">file_not_found</span> _)
+  <span class="f">io/write_err</span> <span class="s">"wordfreq: cannot open <span class="i">{path}</span>\n"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/exit</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">opened</span> _ n text
+  <span class="f">report</span> n text
+
+<span class="k">fn</span> <span class="f">report</span> n text
+  <span class="f">words</span> text <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">render</span> (<span class="f">top</span> n ws)))</code></pre>
+</div>
+
+<p>each arm of <code>start</code> is one way the program can begin. <code>bad_usage</code> writes the reason and the usage line to standard error and exits with status 2, the convention for being called wrongly. an <code>options</code> with no path reads standard input. an <code>options</code> with a path reads the file, and <code>os/read_file</code> answers <code>file_not_found</code> for a missing file, an outcome the program plans for (chapter 05), so <code>opened</code> takes it in an arm and exits with status 1.</p>
+
+<p><code>os/exit</code> is a failure, and it stops the program by the rule that stops every failure: whatever was bound after it does not run. the bind in <code>io/write_err "…" .&gt; (_ -&gt; os/exit 2)</code> is what makes the message appear first, because the exit is built only once the write has finished.</p>
+
+<p>the entry is a single line. it opens the argument list and hands it to <code>freq/main</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./freq"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">freq/main</span></code></pre>
+</div>
+
+<h2>running it</h2>
+
+<p>here is a short text to count, in the directory above the project:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tea.txt</div>
+  <pre><code>The kettle sang, and the tea was poured.
+The cups were warm, and the tea was green.
+Mugi drank the tea and asked for more tea.</code></pre>
+</div>
+
+<p>everything after <code>--</code> is the program's own arguments. with a file name and nothing else, it prints the top five:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq -- tea.txt</div>
+  <pre><code>   5  the
+   4  tea
+   3  and
+   2  was
+   1  asked</code></pre>
+</div>
+
+<p><code>asked</code> is fifth of the words that appear once because it is first alphabetically. <code>--top</code> changes how many it shows:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq -- --top 2 tea.txt</div>
+  <pre><code>   5  the
+   4  tea</code></pre>
+</div>
+
+<p>with no file name it reads standard input, so it works at the end of a pipe:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq &lt; tea.txt</div>
+  <pre><code>   5  the
+   4  tea
+   3  and
+   2  was
+   1  asked</code></pre>
+</div>
+
+<p>and the two mistakes a person can make each get a message on standard error and an exit status. <code>--top</code> without a number exits with 2, and a file that is not there exits with 1:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq -- --top</div>
+  <pre><code>wordfreq: --top wants a number after it
+usage: wordfreq [--top N] [file]</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq -- nope.txt</div>
+  <pre><code>wordfreq: cannot open nope.txt</code></pre>
+</div>
+
+<p>neither message is an <code>error[endpoint]</code> report. those are for failures nobody planned for, and they are addressed to the programmer. a missing file and a bad option were planned for, so the program words them for the person who ran it.</p>
+
+<h2>testing it</h2>
+
+<p>the tests sit beside the files they test and see the module as any importer does. <code>count_test.kso</code> checks the core:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/freq/count_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/expect"</span>
+
+sample <span class="o">=</span> <span class="s">"The cat and the hat, and THE bat."</span>
+
+test_words_are_lowercased <span class="o">=</span> <span class="f">words</span> <span class="s">"The CAT"</span> <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> ws <span class="o">==</span> [<span class="s">"the"</span> <span class="s">"cat"</span>])
+
+test_top_two <span class="o">=</span> <span class="f">words</span> sample
+  <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">expect</span> (<span class="f">render</span> (<span class="f">top</span> <span class="n">2</span> ws)) <span class="o">.</span> <span class="f">to</span> (<span class="f">equal</span> <span class="s">"   3  the\n   2  and"</span>))</code></pre>
+</div>
+
+<p><code>words</code> answers an effect, so each test opens it with <code>.&gt;</code> and answers the boolean from inside. the runner opens a test's effect the way the program's own executor would. <code>test_top_two</code> compares the rendered text, which is what a user sees. a test cannot build a <code>ranked</code> to compare against, because only the module that declares a type may construct one (<code>error[opacity]</code>), and the rendered text is the better thing to pin in any case.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq/freq/options_test.kso</div>
+  <pre><code>no_number <span class="o">=</span> <span class="s">"--top wants a number after it"</span>
+
+test_defaults <span class="o">=</span> (<span class="f">options_of</span> [])<span class="o">.</span>top <span class="o">==</span> <span class="n">5</span>
+
+test_top_and_path <span class="o">=</span> <span class="f">options_of</span> [<span class="s">"--top"</span> <span class="s">"3"</span> <span class="s">"notes.txt"</span>]
+  <span class="o">.</span> (o <span class="o">-&gt;</span> <span class="f">o</span><span class="o">.</span>top <span class="o">==</span> <span class="n">3</span> and o<span class="o">.</span>path <span class="o">==</span> <span class="s">"notes.txt"</span>)
+
+test_top_needs_a_number <span class="o">=</span> (<span class="f">options_of</span> [<span class="s">"--top"</span> <span class="s">"many"</span>])<span class="o">.</span>reason <span class="o">==</span> no_number</code></pre>
+</div>
+
+<p>a test may read a record's fields, so <code>options_test.kso</code> checks what the parser answered field by field. <code>kanso test</code> pointed at the project runs every test file in its modules:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso test wordfreq</div>
+  <pre><code>test_words_are_lowercased ... ok
+test_top_two ... ok
+test_defaults ... ok
+test_top_and_path ... ok
+test_top_needs_a_number ... ok
+5 passed, 0 failed</code></pre>
+</div>
+
+<p>none of the five tests touches a file, standard input or an exit status. the logic that could be wrong is in <code>count.kso</code> and <code>options.kso</code>, where it is plain functions. <code>cli.kso</code> is a switchboard from outcomes to effects, short enough to check by reading. the runs above cover it, and every one of them is re-run against the program each time this book is built.</p>
+
+<h2>building a binary</h2>
+
+<p><code>kanso run</code> compiles to native code and caches the result, which is the right tool while you work. to ship, build from inside the project with <code>--release</code>, which optimizes the whole program at once:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code><span class="prompt">$ </span>cd wordfreq
+<span class="prompt">$ </span>kanso build . --release
+built ./wordfreq (llvm ir at wordfreq.ll)
+<span class="prompt">$ </span>./wordfreq --top 3 ../tea.txt
+   5  the
+   4  tea
+   3  and</code></pre>
+</div>
+
+<p>the result is one executable. on linux x86-64 it is about 700 KB and links against nothing but the c library and the maths library, so it can be copied to another machine of the same kind and run there with no kanso installed. the <code>.ll</code> file beside it is the llvm ir the compiler wrote, kept for reading; nothing needs it at run time.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 56 58" role="img" aria-label="tsuru" shape-rendering="crispEdges"><title>tsuru - folds your program until it is small enough to fly</title><rect x="39" y="3" width="1" height="1" fill="#dfc9a2"/><rect x="39" y="4" width="1" height="1" fill="#dfc9a2"/><rect x="38" y="5" width="3" height="1" fill="#dfc9a2"/><rect x="38" y="6" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="7" width="1" height="1" fill="#f03a00"/><rect x="37" y="7" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="8" width="3" height="1" fill="#f03a00"/><rect x="37" y="8" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="9" width="5" height="1" fill="#f03a00"/><rect x="36" y="9" width="5" height="1" fill="#dfc9a2"/><rect x="3" y="10" width="2" height="1" fill="#f2e3c8"/><rect x="5" y="10" width="4" height="1" fill="#f03a00"/><rect x="36" y="10" width="6" height="1" fill="#dfc9a2"/><rect x="2" y="11" width="2" height="1" fill="#f2e3c8"/><rect x="4" y="11" width="2" height="1" fill="#f03a00"/><rect x="6" y="11" width="4" height="1" fill="#f2e3c8"/><rect x="35" y="11" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="12" width="1" height="1" fill="#2b2320"/><rect x="3" y="12" width="10" height="1" fill="#f2e3c8"/><rect x="35" y="12" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="13" width="1" height="1" fill="#2b2320"/><rect x="3" y="13" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="13" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="14" width="2" height="1" fill="#2b2320"/><rect x="3" y="14" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="14" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="15" width="3" height="1" fill="#2b2320"/><rect x="4" y="15" width="8" height="1" fill="#f2e3c8"/><rect x="33" y="15" width="10" height="1" fill="#dfc9a2"/><rect x="0" y="16" width="4" height="1" fill="#2b2320"/><rect x="4" y="16" width="9" height="1" fill="#f2e3c8"/><rect x="33" y="16" width="10" height="1" fill="#dfc9a2"/><rect x="2" y="17" width="2" height="1" fill="#2b2320"/><rect x="4" y="17" width="9" height="1" fill="#f2e3c8"/><rect x="32" y="17" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="18" width="6" height="1" fill="#f2e3c8"/><rect x="32" y="18" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="19" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="19" width="12" height="1" fill="#dfc9a2"/><rect x="7" y="20" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="20" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="21" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="22" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="23" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="23" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="24" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="24" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="25" width="8" height="1" fill="#f2e3c8"/><rect x="28" y="25" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="26" width="7" height="1" fill="#f2e3c8"/><rect x="28" y="26" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="27" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="27" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="28" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="28" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="29" width="8" height="1" fill="#f2e3c8"/><rect x="25" y="29" width="1" height="1" fill="#f2e3c8"/><rect x="26" y="29" width="19" height="1" fill="#dfc9a2"/><rect x="10" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="24" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="30" width="15" height="1" fill="#dfc9a2"/><rect x="10" y="31" width="8" height="1" fill="#f2e3c8"/><rect x="23" y="31" width="18" height="1" fill="#f2e3c8"/><rect x="41" y="31" width="5" height="1" fill="#dfc9a2"/><rect x="10" y="32" width="8" height="1" fill="#f2e3c8"/><rect x="22" y="32" width="25" height="1" fill="#f2e3c8"/><rect x="10" y="33" width="8" height="1" fill="#f2e3c8"/><rect x="20" y="33" width="27" height="1" fill="#f2e3c8"/><rect x="11" y="34" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="35" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="36" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="37" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="38" width="37" height="1" fill="#f2e3c8"/><rect x="12" y="39" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="40" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="41" width="1" height="1" fill="#dfc9a2"/><rect x="13" y="41" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="42" width="2" height="1" fill="#dfc9a2"/><rect x="14" y="42" width="37" height="1" fill="#f2e3c8"/><rect x="10" y="43" width="4" height="1" fill="#dfc9a2"/><rect x="15" y="43" width="37" height="1" fill="#f2e3c8"/><rect x="9" y="44" width="5" height="1" fill="#dfc9a2"/><rect x="16" y="44" width="33" height="1" fill="#f2e3c8"/><rect x="8" y="45" width="6" height="1" fill="#dfc9a2"/><rect x="17" y="45" width="27" height="1" fill="#f2e3c8"/><rect x="7" y="46" width="8" height="1" fill="#dfc9a2"/><rect x="18" y="46" width="19" height="1" fill="#f2e3c8"/><rect x="37" y="46" width="2" height="1" fill="#2b2320"/><rect x="6" y="47" width="9" height="1" fill="#dfc9a2"/><rect x="19" y="47" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="47" width="2" height="1" fill="#2b2320"/><rect x="29" y="47" width="5" height="1" fill="#f2e3c8"/><rect x="37" y="47" width="2" height="1" fill="#2b2320"/><rect x="5" y="48" width="10" height="1" fill="#dfc9a2"/><rect x="20" y="48" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="48" width="2" height="1" fill="#2b2320"/><rect x="37" y="48" width="2" height="1" fill="#2b2320"/><rect x="4" y="49" width="12" height="1" fill="#dfc9a2"/><rect x="21" y="49" width="3" height="1" fill="#f2e3c8"/><rect x="27" y="49" width="2" height="1" fill="#2b2320"/><rect x="37" y="49" width="2" height="1" fill="#2b2320"/><rect x="3" y="50" width="10" height="1" fill="#dfc9a2"/><rect x="27" y="50" width="2" height="1" fill="#2b2320"/><rect x="37" y="50" width="2" height="1" fill="#2b2320"/><rect x="2" y="51" width="6" height="1" fill="#dfc9a2"/><rect x="27" y="51" width="2" height="1" fill="#2b2320"/><rect x="37" y="51" width="2" height="1" fill="#2b2320"/><rect x="1" y="52" width="2" height="1" fill="#dfc9a2"/><rect x="27" y="52" width="2" height="1" fill="#2b2320"/><rect x="37" y="52" width="2" height="1" fill="#2b2320"/><rect x="27" y="53" width="2" height="1" fill="#2b2320"/><rect x="37" y="53" width="2" height="1" fill="#2b2320"/><rect x="27" y="54" width="2" height="1" fill="#2b2320"/><rect x="37" y="54" width="2" height="1" fill="#2b2320"/><rect x="27" y="55" width="2" height="1" fill="#2b2320"/><rect x="27" y="56" width="2" height="1" fill="#2b2320"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">tsuru</span>
+<p>the binary you ship is the program you tested. <code>kanso run</code>, <code>kanso test</code> and this build all compile the same source, and ci holds every engine to the interpreter's output byte for byte, so nothing changes meaning on its way out the door.</p>
+</div>
+</div>
+
+<h2>what you can do now</h2>
+
+<p>you can lay out a project as an entry and a module, and choose their names so the build and the entry rule stay out of each other's way. you can keep the logic in pure functions and the i/o in one file of edges. you can read a command line into a record, report a mistake as a value, and turn it into a message on standard error and an exit status. and you can test the core with <code>kanso test</code>, run the whole program on fixtures, and build a binary that stands on its own.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>add a <code>--min N</code> option that leaves out words seen fewer than <code>N</code> times. give it a test in <code>options_test.kso</code> and one in <code>count_test.kso</code>, and make <code>--min</code> without a number a <code>bad_usage</code> with its own reason.</li>
+  <li><code>wordfreq one.txt two.txt</code> is refused today. change <code>options.kso</code> so it accepts several paths, and <code>cli.kso</code> so it counts the words of all of them together. decide what a missing second file should do, and write the test before the code.</li>
+  <li>contractions such as <code>don't</code> count as one word because the pattern keeps <code>'</code>. find a text where that splits a word you think should be whole, or joins two you think should be apart, and change <code>words</code>. which test would have caught it?</li>
+  <li>build the release binary and run it under <code>time</code> on a large text. then run the same text through <code>tr -cs "a-z'" '\n' | sort | uniq -c | sort -rn | head -5</code> after lowercasing it, and compare the two answers before you compare the two times.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch12.html">← sequences</a>
+  <a href="ch14.html">next: a web service →</a>
+</nav>

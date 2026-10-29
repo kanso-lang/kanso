@@ -1,0 +1,5 @@
+import "std/list"
+import "std/text"
+
+words = text/split "the cat and the hat and the bat" " "
+print "{list/tally words}"

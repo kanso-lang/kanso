@@ -1,0 +1,7 @@
+fn shout s
+  "{s}!"
+
+fn twice s
+  "{s} {s}"
+
+"irasshaimase" . shout . twice . print

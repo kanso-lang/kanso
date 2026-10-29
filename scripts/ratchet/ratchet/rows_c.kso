@@ -6,9 +6,11 @@ rows_c1a = list/concat rows_c1 [perf_row trend_runtime trend_joined]
 
 rows_c1t = list/concat rows_c1a [trend_adrift trend_rebased trend_read]
 
-rows_c1p = list/concat rows_c1t [published_numbers]
+rows_c1p = list/concat rows_c1t [book_modules book_plans book_titles]
 
-rows_c1b = list/concat rows_c1p [diagnostics accumulator]
+rows_c1s = list/concat rows_c1p [book_verbatim site_examples]
+
+rows_c1b = list/concat rows_c1s [diagnostics accumulator published_numbers]
 
 # The `goldens` row above covers the micro differential generically, through a
 # golden that drifts. This one covers the direction the corpus could not see
@@ -76,7 +78,7 @@ coverage_printed = row
   (breaking "a_printed_error_kind_arrives_without_a_golden")
   release
 
-rows_c1h = list/concat rows_c1g [dispatch coverage_driver]
+rows_c1h = list/concat rows_c1g [dispatch coverage_driver tab_guard]
 
 # A FOURTH opener, and the file the scan could not see. `source?` took `.rs`
 # only, so src/runtime.c — where a compiled binary gets its runtime messages —

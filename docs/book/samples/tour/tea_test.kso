@@ -1,0 +1,6 @@
+fn steep_for name seconds
+  "steep {name} for {seconds} seconds"
+
+test_steep = steep_for "sencha" 60 == "steep sencha for 60 seconds"
+
+test_wrong_on_purpose = steep_for "sencha" 60 == "steep it"

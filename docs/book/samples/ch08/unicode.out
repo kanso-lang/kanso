@@ -1,3 +1,6 @@
 é
 た
 简
+error[endpoint]: unhandled err reached the executor: "invalid hex digit"
+  born in hex_upper at unicode.kso:26
+  passed through char_of ← hex_on ← hex_on ← hex_on

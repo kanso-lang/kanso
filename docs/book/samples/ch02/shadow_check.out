@@ -1,4 +1,4 @@
-error[unused]: unused binding: each version of `tau` is used before the next
-  --> shadow_check.kso:1:1
-   1 | tau = 5
-       ^
+error[name]: `tau` is already a declaration, at line 1; rename the binding
+  --> shadow_check.kso:4:3
+   4 |   tau = 3
+         ^

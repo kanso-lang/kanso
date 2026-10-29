@@ -1,0 +1,11 @@
+fn share _ 0
+  err "no one to share with"
+
+fn share yen people
+  yen / people
+
+fn with_tip yen
+  yen + yen / 10
+
+print "{with_tip (share 1200 3)}"
+  .> (_ -> share 1200 0 .> with_tip .> (y -> print "{y}"))

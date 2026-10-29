@@ -1,0 +1,3 @@
+name = "mugi"
+cups = 3
+print "{name} has had {cups} cups, and wants {cups + 1}"

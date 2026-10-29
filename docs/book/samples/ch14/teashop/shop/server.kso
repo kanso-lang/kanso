@@ -1,0 +1,49 @@
+import "std/list"
+import "std/net/http"
+
+# What the shop knows between requests: how many it has answered and what it
+# has sold. The server hands it from one request to the next.
+pub type till
+  requests
+  sales
+
+pub opening = till 0 []
+
+# One request in, one response out, and the till carried to the next request.
+pub fn handle (bad_request reason) t
+  http/reply (http/text_page "not a request: {reason}\n") (seen t)
+
+pub fn handle (request "GET" "/menu" _) t
+  http/reply (http/text_page menu) (seen t)
+
+pub fn handle (request "POST" "/order" body) t
+  sold (order_of body) (seen t)
+
+pub fn handle (request "GET" "/sales" _) t
+  http/reply (http/text_page "{summary t}\n") (seen t)
+
+pub fn handle (request "POST" "/close" _) t
+  http/reply (http/text_page "closed\n") (http/stop (seen t))
+
+pub fn handle _ t
+  http/reply http/not_found (seen t)
+
+pub fn summary (till requests sales)
+  total = list/sum (list/map sales (s -> s.yen))
+  "{many requests "request"}, {many (length sales) "sale"}, {total} yen"
+
+fn many 1 word
+  "1 {word}"
+
+fn many n word
+  "{n} {word}s"
+
+fn seen (till requests sales)
+  till (requests + 1) sales
+
+fn sold none t
+  http/reply (http/text_page "we do not sell that\n") t
+
+fn sold s t
+  said = "{s.qty} {s.item}: {s.yen} yen\n"
+  http/reply (http/text_page said) (merge t { "sales":(push t.sales s) })

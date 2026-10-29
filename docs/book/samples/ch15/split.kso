@@ -1,0 +1,9 @@
+import "std/io"
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+io/stdin
+  .> (t -> regexp/split "[^a-z']+" (text/lowercase t))
+  .> (ws -> list/to_list (list/reject ws (w -> w == "")))
+  .> (ws -> print "{length ws} words")

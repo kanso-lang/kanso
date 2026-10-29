@@ -1,0 +1,3 @@
+knock = print "kon kon"
+
+knock .> (_ -> knock) .> (_ -> print "come in")
