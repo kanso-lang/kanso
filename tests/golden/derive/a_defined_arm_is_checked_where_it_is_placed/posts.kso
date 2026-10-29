@@ -1,0 +1,9 @@
+pub type post
+  id
+  title
+
+pub fn show id
+  "post {id}"
+
+pub fn made id
+  post id "hello"

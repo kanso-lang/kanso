@@ -110845,3 +110845,137 @@ sharing of helpers between a module's files.
 
 Owes, on #2085: the refusal names the colliding declaration's file and line;
 an error golden for a two-file module.
+
+## 2026-10-25 — gavel: `put` writes a list at an index
+
+Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
+`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
+list, so the ports built vectors from maps with integer keys and paid for
+keys they did not need.
+
+**The ruling.** `put xs i v` answers the list with element `i` replaced,
+1-based like `xs[i]`. An index outside the list answers `none`, as a read
+there does. A list nothing else holds is written in place, as a map already
+is.
+
+Owes, on #2086: `put` on a list on every engine; the in-place write under
+the existing uniqueness analysis; the checker accepting a list for `put`, and
+refusing at check what it refuses at run time (diff F9, inflate F8); micro and
+mem goldens; appendix B.
+
+## 2026-10-25 — a list walked by its rest joins the corpus
+
+`rest = list/to_list (list/drop xs 1)` is how most of this repository's
+scripts walk a list: the welfare script, the trend gate, `golden_prose` and
+the differentials among them. A battery of list and text shapes run at two
+sizes on both engines found it the worst of them. Each rest is built afresh,
+so a walk costs the square of the list on any engine, and `list/drop` builds
+it by stepping a cursor through the list one record at a time: `fold` has an
+arm that reads a capped cursor by index, which `take` reaches, and none for
+a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
+the interpreter, about 260 instructions an element stepped natively and
+12,700 interpreted.
+
+Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
+500 elements and the interpreted corpus with 70, measured on main at #2148
+before its fix. On this container the run program reads 888,090,230 with it
+and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
+interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
+same line for it.
+
+The rest of the battery is linear or n log n on both engines: `group_by`,
+`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
+elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
+natively and quadratic on the interpreter, 64 ms at 5,000 characters and
+563 ms at 20,000. On #2152's build, which shares a long string and slices
+an ASCII one by byte, the same two read 39 ms and 77 ms.
+
+CI's rows, against main at #2141. The run program reads work_runbench
+828,232,672 -> 869,011,503, and each rest's step records cost it memory as
+well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
+242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
+94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
+23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
+1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
+run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
+emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
+168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
+-> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
+interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
+623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
+browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
+1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
+344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
+re-bases the eight terms among these it weighs, each keeping its ratio to
+its baseline, and the floor stays at 95.22.
+
+## 2026-10-25 — the rest of a list after a drop is one copy
+
+`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
+`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
+a list, and it asks a new internal builtin, `rest_from`. Given a list and a
+position of at least 1, it answers the list's elements from that position
+on, copied in one move. Given anything else it answers none, and std walks
+that a step at a time as before, so a string still drops to its characters,
+bytes to their numbers and a negative count to nothing. `fold` gains the
+indexed arm a capped cursor already had, so a fold over a drop reads by
+index. Before this, each rest was built a step record and an advanced cursor
+per element.
+
+Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
+interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
+so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
+shared its list's storage would be linear, but a list's items pointer is
+also how a push onto it finds its buffer's header, so a list that points
+into the middle of another's items needs a header of its own first.
+
+`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
+the end and a negative count, from lists of numbers, records and lists, and
+from a string, bytes and a map, which keep their step walk; it also folds
+over a drop. Its output is main's interpreter, and both engines agree with
+it. A first draft clamped a negative drop to the whole list, where main
+answers none of it, and the fixture caught the difference. Moving the copy
+one element either way, on either engine, turns it red.
+
+On this container the run program reads 888,090,230 -> 847,406,017 and the
+interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
+phase's 40.8 million instructions natively, and all but 1.7 million of its
+34 million interpreted.
+
+CI's rows, against #2156's phase. The run program reads work_runbench
+869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
+-> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
+20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
+run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
+1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
+list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
+27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
+523,165,714 against the phase. Main at #2152 added `texts` to the
+interpreted corpus, so against main the interpreter's rows carry the phase
+and its fix together: interp_instructions 564,058,857 -> 565,857,214,
+interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
+1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
+61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
+
+The longer std/list and the builtin cost every compile. Against main at
+#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
+72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
+compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
+emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
+116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
+370,222,776. The front end visits compile_corpus more often and holds more
+while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
+598,984 -> 607,213, read on this container, whose rustc is the one the
+golden names. The tab compiles the corpus with `rested` in it as well, so
+its compile rows carry the phase too: browser_compile_instructions
+344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
+839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
+code carries the new runtime function, about 704 bytes each: text
+5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
+two programs that never drop read work_encodebench 2,327,386,052 ->
+2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
+emitted lines of the drop's new arms land at emitted_other_lines 168,907,
+emitted_other_branches 17,946, emitted_other_calls 20,494 and
+emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
+list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
+Welfare rises 95.24 -> 95.36 and the rise is banked.
