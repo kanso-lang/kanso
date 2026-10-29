@@ -7,7 +7,7 @@
 # a_lambda_called_in_tail_position_costs_no_stack runs out of stack.
 set -e
 f=src/eval.rs
-grep -q "fn closure_flow" src/eval.rs
+grep -q "fn closure_flow" src/eval/calls.rs
 arm='(None, Value::Closure(c)) => Ok(Flow::Closure(c, values, *span)),'
 [ "$(grep -cF "$arm" "$f")" -eq 2 ] || {
   echo "the tail call's closure arms moved; this mutation needs rewriting" >&2

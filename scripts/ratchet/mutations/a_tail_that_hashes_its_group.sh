@@ -6,8 +6,8 @@
 # instead, every tail call pays a hash of the name and a compare of its bytes,
 # and the interpreted run's instruction row moves.
 set -e
-f=src/eval.rs
-grep -q 'Flow::Tail(next, group' src/eval.rs
+f=src/eval/calls.rs
+grep -q 'Flow::Tail(next, group' src/eval/calls.rs
 line='                            overloads = group;'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the tail's group moved; this mutation needs rewriting" >&2

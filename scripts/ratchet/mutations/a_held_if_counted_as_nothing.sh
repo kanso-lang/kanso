@@ -6,8 +6,8 @@
 # over `g = &if` prints `<fn>` where it should print the branch, and
 # a_held_if_picks_its_branch goes red.
 set -e
-f=src/eval.rs
-grep -q 'Callee::Builtin if &\*\*name == "if" => vec!\[3\],' src/eval.rs
+f=src/eval/calls.rs
+grep -q 'Callee::Builtin if &\*\*name == "if" => vec!\[3\],' src/eval/calls.rs
 line='                Callee::Builtin if &**name == "if" => vec![3],'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the held if's count moved; this mutation needs rewriting" >&2
