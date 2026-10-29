@@ -1304,4 +1304,6 @@ their own, read with include! where they stood, the way eval.rs already reads
 executor.rs and builtins.rs. eval.rs falls from 3,803 lines to 2,918. The
 removed lines are the body of calls.rs byte for byte. CI's cost-goldens job
 read every vein at main's values, compile_instructions among them, so no row
-moved.
+moved. Sixteen ratchet mutations patched lines in the moved section by their
+text and now name calls.rs. One of them, the lambda called as a nested call,
+only checked for `closure_flow` there; the arms it deletes stayed in eval.rs.
