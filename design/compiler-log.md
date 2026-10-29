@@ -23,55 +23,6 @@
 
 
 
-## 2026-10-25 — a list built by concat, and a map of records, join the corpus
-
-A list built one number at a time with `list/concat acc [i]` costs about ten
-times what `push` costs natively. The concat is made in place, but each lap's
-one-element list is garbage, so the loop stages what it carries, and the
-accumulator is not covered by the license that lets a list of numbers cross
-a rewind by pointer: that license reads in-place pushes only. Each stage then
-deep-copies the accumulator. On its own, 32,000 numbers took 14.6 million
-instructions and 128,000 took 156 million, most of it in `k_deep_copy`, where
-`push` takes 0.9 million and 2.6 million. The interpreter is linear on it.
-
-Under the 2026-09-05 corpus-first gavel `appended` joins the corpus here,
-measured on main at kanso#2126 before its fix. It keeps 64,000 numbers. In
-the run program it grows linearly at about 218 instructions a number. On
-this container the run program reads 828,713,625 with it and 814,784,428
-without it, a column of 13,929,197 (1.68%). The interpreted corpus keeps
-6,000 numbers, and the tab runs the same corpus.
-
-`bucketed` joins beside it: numbers filed into a map of records, each a count
-and a list, `b = or_bucket m[k]` then `put m k (bucket (b.hits + 1) (push
-b.items i))`. Both puts are the persistent `k_b_put`. The record reaches the
-put only through its fields, and the read discount accepts a name that
-reaches the write through arithmetic or a nested write into it, so the map is
-copied for every number. The lists are not copied: on its own the shape
-stays linear as they grow, at about 8,300 instructions a number. It keeps
-2,000 numbers; the run program reads 847,407,464 with both phases, a column
-of 18,693,839 (2.21%), and the interpreted corpus keeps 1,500. With both, the
-interpreted corpus reads 515,277,561 → 567,834,663 on this container.
-
-CI's rows, against #2126. The run program reads work_runbench 814,679,425 →
-847,302,475, run_allocs 1,447,392 → 1,585,686, run_alloc_bytes 216,354,904 →
-224,179,080, run_push_mut_slow 1,580,216 → 1,644,216, run_beat_iters 113,323
-→ 177,323, run_sh_buf 87,169,488 → 89,503,776, run_sh_map 12,160 → 76,160,
-run_sh_rec 3,905,056 → 4,034,336, run_bytes_malloc 7,910 → 7,919 and
-run_bytes_freed 7,768 → 7,777. Its memory rows read run_arena_blocks 4 → 5,
-run_arena_peak_bytes 4,718,608 → 5,767,184, run_held_peak_bytes 248,688 →
-1,863,712, run_perm_peak_bytes 810,225 → 1,858,817 and run_spare_peak_bytes
-2,621,456 → 3,670,032. The interpreter
-reads interp_instructions 473,127,289 → 525,831,073, interp_allocs 507,913 →
-585,540 and interp_peak_bytes 1,263,998 → 1,281,294. The tab reads
-browser_run_instructions 47,716,164 → 107,399,948, browser_run_peak_bytes
-1,376,256 → 3,866,624, browser_compile_instructions 324,458,065 →
-334,007,116 and browser_compile_peak_bytes 728,260 → 743,930. The two
-modules add machine code and emitted lines: text 5,649,809 → 5,652,977,
-emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
-17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
-2,222. Each welfare term these move is re-based to keep its ratio to its
-baseline, so the score stays 95.15.
-
 ## 2026-10-25 — entry and play files keep the blank-line policy
 
 `check_blank_policy` judged libraries only. `parse_entry` never called it,
@@ -1462,3 +1413,38 @@ the fall is past what `--set` takes, so the floor was edited by hand and
 
 Still owed on #2186: the browser compile's derivation golden, a record type
 or table binding as a declaration, and the senro derivations themselves.
+
+## 2026-10-28 — a derivation reads constants, declares types, and runs in the page
+
+#2186's second slice. A module in a derivation's description now carries
+`constants`, mapping each pub constant's name to its value, and constants
+leave `functions`. senro/models needs this: an app keeps its migrations as a
+pub constant, and a constant's function reference could not be called, so
+the fold had nothing to read. A routing convention also stops seeing a
+constant as an action.
+
+`derive/declare_type origin name fields` adds a record type to the entry,
+with getters for its fields, and `kanso derived` prints it as `type name
+fields`. A name or field a program could not write, or fields that are not a
+list, is refused. With it the ruling's three declarations are all here: a
+route and a table binding are constants holding a map, and a record type is
+its own declaration.
+
+The page runs a derivation. tests/wasm_engine.rs hands the route-table case's
+convention and posts module to the compiler in the tab and compiles the
+entry, which derives on the interpreter there, and the program prints the
+native golden's output. It was watched red with derivations switched off:
+"unknown name `routes`".
+
+Chapter 11 of the book gains a section on `derive`, with the route table as
+an executed sample, and the book's highlighter and the editor grammar paint
+`derive` as a keyword.
+
+Every compile that derives loads the larger std/derive, so the entry row
+rises to entry_instructions 83,914,234 (+185,394); on one binary here
+load_dependencies took 129K of a 188K rise and the merged check 37K. The
+other compile rows move by layout: compile_instructions 24,063,854 (-324),
+library_instructions 70,862,041 (-1,244) and browser_compile_instructions
+343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
+under the rule for a feature a ruling requires.
+
