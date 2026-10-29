@@ -1366,6 +1366,13 @@ The reduced program is three files in tests/golden/field_reads, run on both
 engines by `a_field_read_in_an_import_leaves_the_importers_names_its_own`.
 It was watched red with the old filter.
 
+The change moves the compile rows by layout: compile_instructions 24,064,926
+(+1,072), entry_instructions 84,709,988 (+2,279), library_instructions
+71,325,972 (+1,501) and browser_compile_instructions 343,196,940 (+8,965).
+The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
+Welfare fell by less than 0.0001, and the floor follows under the rule for a
+change that makes the language do what its specification says.
+
 ## 2026-10-29 — a server written as one statement waits for its client
 
 Outside a parallel group, `net/accept` answered "nothing connected" at once
