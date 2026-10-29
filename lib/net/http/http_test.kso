@@ -15,6 +15,20 @@ test_content_length_of_ascii = contains? (rendered abc) "content-length: 3"
 
 test_status_line = contains? (rendered not_found) "HTTP/1.1 404 Not Found"
 
+refused = respond 422 [] "we do not sell that\n"
+
+unprocessable = "HTTP/1.1 422 Unprocessable Content\r\n"
+
+test_any_status = contains? (rendered refused) unprocessable
+
+created = respond 201 ["location: /orders/7"] ""
+
+test_a_created_order_says_where = contains? (rendered created) "/orders/7"
+
+odd = respond 299 [] ""
+
+test_a_code_without_a_phrase = contains? (rendered odd) "HTTP/1.1 299 \r\n"
+
 page = html_page "<script>report()</script>"
 
 test_html_page_is_html = contains? (rendered page) "content-type: text/html"
