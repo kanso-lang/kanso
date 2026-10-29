@@ -295,6 +295,15 @@ pub fn hand_source(path: &str, files: Vec<(String, String)>) {
     HANDED_SOURCES.with(|c| c.borrow_mut().insert(path.to_string(), files));
 }
 
+/// The text of a handed-in file by the name its diagnostics carry, so a
+/// refusal in a module the browser was handed quotes its line as one read from
+/// disk does.
+fn handed_text(file: &str) -> Option<String> {
+    HANDED_SOURCES.with(|c| {
+        c.borrow().values().flatten().find(|(name, _)| name == file).map(|(_, text)| text.clone())
+    })
+}
+
 pub fn forget_sources() {
     HANDED_SOURCES.with(|c| c.borrow_mut().clear());
 }

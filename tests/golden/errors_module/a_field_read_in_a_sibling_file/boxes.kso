@@ -1,0 +1,8 @@
+type box
+  size
+
+pub fn shown n
+  label (box n)
+
+fn label b
+  "{b.weight}"
