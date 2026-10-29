@@ -171,7 +171,13 @@ fn reached_at _ _ none
   none
 
 fn reached_at prog at end
-  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
+  hit at end.to (captured prog end)
+
+# A pattern with no groups captures nothing, and every match it made built an
+# empty list to say so.
+fn captured prog end
+  return no_slots if prog.wanted == 0
+  caught_in_order end.caught 1 [] prog.wanted
 
 # The same walk, keeping where each match sat. A caller reporting a finding
 # needs the position to name a line, which the text alone cannot give back.
@@ -366,7 +372,7 @@ fn skipping prog s at false
 fn skipping prog s at true
   end = walked prog.node s at no_slots (to caught -> arrival to caught)
   return probing prog s (at + 1) if end == none
-  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
+  hit at end.to (captured prog end)
 
 # A pattern any character may start is worth trying everywhere, and asking
 # first spares the slice of the character at every position.

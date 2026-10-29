@@ -1290,11 +1290,13 @@ Three changes take a refused letter to none. A pass over the compiled tree
 gives each class its set's bytes once, and the class reads the letter's
 code rather than its bytes. A sequence of one part is replaced by the part,
 since it matches what the part matches. And the walk starts from one empty
-list held as a constant. The 2,600-word page from the issue went from 95,946
-allocations to 15,364, and a scan over 3,000 letters that never matches went
-from 9,058 to 54.
+list held as a constant. A fourth takes a field from four allocations to
+three: a pattern with no groups answers that constant for its captures
+rather than building an empty list per match. The 2,600-word page from the
+issue went from 95,946 allocations to 12,764, and a scan over 3,000 letters
+that never matches went from 9,058 to 54.
 
-The new mem fixture splits 60 lines of prose and reads 1,987 allocations
+The new mem fixture splits 60 lines of prose and reads 1,507 allocations
 where the library before this read 14,283. The four regexp fixtures already
 in the mem vein fall with it. Two runtime goldens quote a line of the
 library and follow the line.
