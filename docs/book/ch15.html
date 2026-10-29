@@ -17,20 +17,20 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=1060</code></pre>
+  <pre><code>allocs=366</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea10.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=8285</code></pre>
+  <pre><code>allocs=1309</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea100.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=85660</code></pre>
+  <pre><code>allocs=15864</code></pre>
 </div>
 
-<p>the count grows in step with the input: about 850 allocations for each copy of a three-line text, or about 33 for each of its 26 words. growth in proportion to the input is the shape you want, since anything faster would mean work repeated for every word already seen. 33 allocations a word is still a lot for splitting and counting.</p>
+<p>the count grows in step with the input: about 160 allocations for each copy of a three-line text, or about 6 for each of its 26 words. growth in proportion to the input is the shape you want, since anything faster would mean work repeated for every word already seen. 6 allocations a word is still more than splitting and counting need.</p>
 
 <h2>finding the stage that costs</h2>
 
@@ -49,12 +49,12 @@ extra_css: /book/book.css
   <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{length ws}</span> words"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 kanso run split.kso &lt; tea100.txt 2&gt;&amp;1 | grep -E '^allocs=|words$'</div>
-    <pre><code>allocs=85481
+    <pre><code>allocs=15685
 2600 words</code></pre>
   </div>
 </div>
 
-<p>the split is almost all of it: 85,481 of the program's 85,660 allocations. counting and rendering cost under two hundred between them. inside the split, the regular-expression engine does the work, and it allocates as it walks.</p>
+<p>the split is almost all of it: 15,685 of the program's 15,864 allocations. counting and rendering cost under two hundred between them. inside the split, the regular-expression engine does the work, and it allocates as it walks.</p>
 
 <p>the pattern <code>[^a-z']+</code> says something simple: every character that is not a letter or an apostrophe separates words. that can be said without a regular expression. turn each such character into a space, and split on spaces:</p>
 
@@ -83,7 +83,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>the same 2,600 words, from 3,128 allocations rather than 85,481. the regular expression was the right first version, because it said what a word is in eight characters. now there is a measurement that says what it costs, and a replacement that is still short enough to read.</p>
+<p>the same 2,600 words, from 3,128 allocations rather than 15,685. the regular expression was the right first version, because it said what a word is in eight characters. now there is a measurement that says what it costs, and a replacement that is still short enough to read.</p>
 
 <h2>making the change</h2>
 
@@ -153,7 +153,7 @@ test_top_needs_a_number ... ok
   <pre><code>allocs=3307</code></pre>
 </div>
 
-<p>85,660 became 3,307, about 26 times fewer. on a 1.27 MB text the release binaries made 8,020,268 and 310,218 allocations. <code>kanso run</code> and a release build count the same events, so the counters above describe the binary you ship. <a href="https://github.com/kanso-lang/kanso/issues/2214">#2214</a> asks whether <code>regexp/split</code> itself can be made cheaper. if it is, these panels will change and the book's build will say so.</p>
+<p>15,864 became 3,307, about a fifth. on a 1.27 MB text the release binaries made 1,040,272 and 310,218 allocations. <code>kanso run</code> and a release build count the same events, so the counters above describe the binary you ship. the regular expression used to cost more: <a href="https://github.com/kanso-lang/kanso/issues/2214">#2214</a> made <code>regexp/split</code> stop allocating at every letter it skips, and before that the first program made 85,660 allocations on the largest text. the book's build reran these panels when it changed.</p>
 
 <h2>the clock, last</h2>
 
@@ -162,12 +162,12 @@ test_top_needs_a_number ... ok
 <div class="code-panel">
   <div class="code-panel-title">shell, on a 4-core x86-64 container, 2026-10-29</div>
   <pre><code><span class="prompt">$ </span>time ./wordfreq big.txt > /dev/null     # regexp/split, three runs
-0.389s  0.349s  0.360s
+0.292s  0.275s  0.339s
 <span class="prompt">$ </span>time ./wordfreq2 big.txt > /dev/null    # chars and text/split, three runs
-0.184s  0.198s  0.217s</code></pre>
+0.216s  0.205s  0.255s</code></pre>
 </div>
 
-<p>about half the time, on a 1.27 MB text. these numbers belong to that machine on that day, which is why the panel says so, and the spread within each set of three runs is between ten and twenty percent. a clock is good for telling you which way a change went and roughly how far. it is a poor way to catch a regression of a few percent, and the counters are how you catch that.</p>
+<p>about three quarters of the time, on a 1.27 MB text. these numbers belong to that machine on that day, which is why the panel says so, and the spread within each set of three runs is between ten and twenty percent. a clock is good for telling you which way a change went and roughly how far. it is a poor way to catch a regression of a few percent, and the counters are how you catch that.</p>
 
 <h2>keeping it cheap</h2>
 
