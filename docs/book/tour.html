@@ -1,0 +1,409 @@
+---
+layout: book
+title: "a tour of kanso"
+description: "eighteen short lessons, each a program you can edit and run in the page: values, records, dispatch, failure, effects, sequences and concurrency, with a pointer to the chapter that goes further."
+extra_css: /book/book.css
+---
+<span class="eyebrow">the tour</span>
+<h1>a tour of kanso</h1>
+
+<p>each lesson below is a program and what it printed. the programs run in your browser: press <em>run</em> in a panel's title to run it, edit it and run it again, and double-click the title to put it back. nothing is installed. each lesson takes a minute and links to the chapter of the book that covers the idea in full.</p>
+
+<p>the tour shows the language. the <a href="index.html">book</a> explains it, and chapter 13 onward builds and ships real programs.</p>
+
+<h2>01 · hello</h2>
+
+<p>a kanso program is a file of statements. <code>print</code> takes one argument, written after it with a space: there are no parentheses around arguments and no semicolons. press <em>run</em> on any panel on this page, change the program, and press it again.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">hello.kso</div>
+  <pre><code><span class="f">print</span> <span class="s">"hello, world"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run hello.kso</div>
+    <pre><code>hello, world</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch01.html">chapter 01</a>.</p>
+
+<h2>02 · names and values</h2>
+
+<p><code>=</code> binds a name to a value. text in double quotes interpolates any expression between braces.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">names.kso</div>
+  <pre><code>name <span class="o">=</span> <span class="s">"mugi"</span>
+cups <span class="o">=</span> <span class="n">3</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span> has had <span class="i">{cups}</span> cups, and wants <span class="i">{cups + 1}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run names.kso</div>
+    <pre><code>mugi has had 3 cups, and wants 4</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch02.html">chapter 02</a>.</p>
+
+<h2>03 · numbers</h2>
+
+<p>an int has no ceiling, so the product prints all twenty-two digits. dividing two ints keeps whole numbers; once a float is involved, the answer is a float.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">numbers.kso</div>
+  <pre><code>big <span class="o">=</span> <span class="n">1000000000</span> <span class="o">*</span> <span class="n">1000000000</span> <span class="o">*</span> <span class="n">1000</span>
+half <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
+widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
+<span class="f">print</span> <span class="s">"<span class="i">{big}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{half}</span> and <span class="i">{widened}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run numbers.kso</div>
+    <pre><code>1000000000000000000000
+3 and 3.5</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch02.html">chapter 02</a>.</p>
+
+<h2>04 · lists</h2>
+
+<p>a list is written in brackets, with spaces between the elements and no commas. indexing starts at 1. the list functions live in <code>std/list</code>: <code>list/map</code> answers a recipe, and <code>list/to_list</code> turns it into a list.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lists.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+teas <span class="o">=</span> [<span class="s">"sencha"</span> <span class="s">"hojicha"</span> <span class="s">"gyokuro"</span>]
+loud <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> teas (t <span class="o">-&gt;</span> <span class="s">"<span class="i">{t}</span>!"</span>))
+<span class="f">print</span> <span class="s">"first: <span class="i">{teas[1]}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{loud}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run lists.kso</div>
+    <pre><code>first: sencha
+["sencha!" "hojicha!" "gyokuro!"]</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch12.html">chapter 12</a>.</p>
+
+<h2>05 · maps</h2>
+
+<p>a map pairs keys with values. <code>put</code> answers a new map; the old one is unchanged, because no value in kanso is ever changed in place. <code>entries</code> lists the pairs in key order.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">maps.kso</div>
+  <pre><code>prices <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
+prices <span class="o">=</span> <span class="f">put</span> prices <span class="s">"mochi"</span> <span class="n">300</span>
+<span class="f">print</span> <span class="s">"<span class="i">{prices[</span>"</span>mochi<span class="s">"]} yen"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{entries prices}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run maps.kso</div>
+    <pre><code>300 yen
+[entry "dango" 350 entry "mochi" 300 entry "taiyaki" 500]</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch02.html">chapter 02</a>.</p>
+
+<h2>06 · records</h2>
+
+<p>a <code>type</code> lists named fields, and its name builds one, with the fields in the order they were declared. a binding pattern takes a record apart; a dot reads one field.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">records.kso</div>
+  <pre><code><span class="k">type</span> tea
+  <span class="f">name</span>
+  <span class="f">steep</span>
+
+t <span class="o">=</span> <span class="f">tea</span> <span class="s">"sencha"</span> <span class="n">60</span>
+<span class="f">tea</span> name seconds <span class="o">=</span> <span class="f">t</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span>, <span class="i">{seconds}</span> seconds"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"or just <span class="i">{t.name}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play records.kso</div>
+    <pre><code>sencha, 60 seconds
+or just sencha</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch03.html">chapter 03</a>.</p>
+
+<h2>07 · functions</h2>
+
+<p><code>fn</code> declares a function, and its body is indented two spaces. the last line is the answer. a call is the function name followed by its arguments, and parentheses group a call that is itself an argument.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">functions.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">steep_for</span> name seconds
+  <span class="s">"steep <span class="i">{name}</span> for <span class="i">{seconds}</span> seconds"</span>
+
+<span class="f">print</span> (<span class="f">steep_for</span> <span class="s">"hojicha"</span> <span class="n">30</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play functions.kso</div>
+    <pre><code>steep hojicha for 30 seconds</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch03.html">chapter 03</a>.</p>
+
+<h2>08 · overloads</h2>
+
+<p>a function can have several arms, and each call goes to the most specific one that fits. the literal <code>0</code> beats the plain <code>n</code>, so the base case of a recursion is an arm, with no <code>if</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">overloads.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
+  <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">fact</span> n
+  n <span class="o">*</span> fact (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="f">print</span> <span class="s">"20! = <span class="i">{fact 20}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play overloads.kso</div>
+    <pre><code>20! = 2432902008176640000</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch03.html">chapter 03</a>.</p>
+
+<h2>09 · if</h2>
+
+<p><code>if</code> is a function of three arguments: a condition and two answers. use it for a question about one value's content. a question about what <em>kind</em> of value something is gets an arm instead.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">if.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">ticket</span> age
+  <span class="f">if</span> (age <span class="o">&lt;</span> <span class="n">13</span>) <span class="s">"child"</span> <span class="s">"adult"</span>
+
+<span class="f">print</span> (<span class="f">ticket</span> <span class="n">9</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">ticket</span> <span class="n">40</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play if.kso</div>
+    <pre><code>child
+adult</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch03.html">chapter 03</a>.</p>
+
+<h2>10 · kinds of a thing</h2>
+
+<p>a type with no fields is a marker: its name is its only value. a typeset names a closed set of types. an arm for each member does the work an enum and a switch do elsewhere.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">markers.kso</div>
+  <pre><code><span class="k">type</span> cold
+
+<span class="k">type</span> hot
+
+<span class="k">type</span> warm
+
+<span class="k">type</span> temperature cold hot warm
+
+<span class="k">fn</span> <span class="f">serve</span> cold
+  <span class="s">"over ice"</span>
+
+<span class="k">fn</span> <span class="f">serve</span> hot
+  <span class="s">"in a warmed cup"</span>
+
+<span class="k">fn</span> <span class="f">serve</span> warm
+  <span class="s">"as it comes"</span>
+
+<span class="f">print</span> (<span class="f">serve</span> hot) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">serve</span> cold))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play markers.kso</div>
+    <pre><code>in a warmed cup
+over ice</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch03.html">chapter 03</a>.</p>
+
+<h2>11 · nothing there</h2>
+
+<p>looking up a key that is not there answers <code>none</code>, an ordinary value. an arm takes it like any other.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">none.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> none
+  <span class="s">"not on the menu"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> price
+  <span class="s">"<span class="i">{price}</span> yen"</span>
+
+menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> }
+<span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"dango"</span>]) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"pocky"</span>]))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play none.kso</div>
+    <pre><code>350 yen
+not on the menu</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch04.html">chapter 04</a>.</p>
+
+<h2>12 · failure</h2>
+
+<p><code>err</code> makes a failure. a failure passes every function it reaches without running it, until it reaches the top of the program, which reports it with where it was born. <code>.&gt;</code> runs its step on a value and steps past a failure.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">failure.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">share</span> _ <span class="n">0</span>
+  <span class="f">err</span> <span class="s">"no one to share with"</span>
+
+<span class="k">fn</span> <span class="f">share</span> yen people
+  yen <span class="o">/</span> people
+
+<span class="k">fn</span> <span class="f">with_tip</span> yen
+  yen <span class="o">+</span> yen <span class="o">/</span> <span class="n">10</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{with_tip (share 1200 3)}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">share</span> <span class="n">1200</span> <span class="n">0</span> <span class="o">.&gt;</span> <span class="f">with_tip</span> <span class="o">.&gt;</span> (y <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{y}</span>"</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play failure.kso</div>
+    <pre><code>440
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: "no one to share with"
+  born in share at failure.kso:2</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch04.html">chapter 04</a>.</p>
+
+<h2>13 · effects</h2>
+
+<p><code>print</code> does not print. it answers a description of printing, so a description can be named and used twice. <code>.&gt;</code> puts one description after another, and the runtime performs the whole thing once the program has been evaluated.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">effects.kso</div>
+  <pre><code>knock <span class="o">=</span> <span class="f">print</span> <span class="s">"kon kon"</span>
+
+<span class="f">knock</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"come in"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run effects.kso</div>
+    <pre><code>kon kon
+kon kon
+come in</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch05.html">chapter 05</a>.</p>
+
+<h2>14 · pipes</h2>
+
+<p><code>x . f</code> is <code>f x</code>, so a chain reads left to right in the order things happen.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pipes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">shout</span> s
+  <span class="s">"<span class="i">{s}</span>!"</span>
+
+<span class="k">fn</span> <span class="f">twice</span> s
+  <span class="s">"<span class="i">{s}</span> <span class="i">{s}</span>"</span>
+
+<span class="s">"irasshaimase"</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">twice</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play pipes.kso</div>
+    <pre><code>irasshaimase! irasshaimase!</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch05.html">chapter 05</a>.</p>
+
+<h2>15 · functions as values</h2>
+
+<p><code>(p -&gt; p &lt; 400)</code> is a function written inline. <code>&amp;add_tax 10</code> supplies the first argument and waits for the rest.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lambdas.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">add_tax</span> rate yen
+  yen <span class="o">+</span> yen <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
+
+with_tax <span class="o">=</span> &amp;add_tax <span class="n">10</span>
+prices <span class="o">=</span> [<span class="n">350</span> <span class="n">500</span> <span class="n">300</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/map prices with_tax)}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/select prices (p -&gt; p &lt; 400))}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play lambdas.kso</div>
+    <pre><code>[385 550 330]
+[350 300]</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch05.html">chapter 05</a>.</p>
+
+<h2>16 · sequences</h2>
+
+<p><code>list/naturals</code> counts forever, and nothing runs until something consumes it. <code>list/take</code> and <code>list/find</code> decide how much of it is computed.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">sequences.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+squares <span class="o">=</span> <span class="f">list/map</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n)
+<span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 5)}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/find squares (s -&gt; s &gt; 50)}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run sequences.kso</div>
+    <pre><code>[1 4 9 16 25]
+64</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch12.html">chapter 12</a>.</p>
+
+<h2>17 · at the same time</h2>
+
+<p>two statements with nothing between them run together, as green threads. a sleep parks one while the other works, and the order of what prints follows the numbers in the program, the same on every run.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">together.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/time"</span>
+
+kettle <span class="o">=</span> <span class="f">print</span> <span class="s">"kettle: on"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">30</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"kettle: boiled"</span>)
+
+cups <span class="o">=</span> <span class="f">print</span> <span class="s">"cups: warming"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">10</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"cups: warm"</span>)
+
+<span class="f">kettle</span>
+<span class="f">cups</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run together.kso</div>
+    <pre><code>kettle: on
+cups: warming
+cups: warm
+kettle: boiled</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch06.html">chapter 06</a>.</p>
+
+<h2>18 · tests</h2>
+
+<p>a test is a constant whose name starts with <code>test_</code> and whose value is a boolean. <code>kanso test</code> evaluates each one. this panel shows what the runner printed; tests run from a terminal rather than the page.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tea_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">steep_for</span> name seconds
+  <span class="s">"steep <span class="i">{name}</span> for <span class="i">{seconds}</span> seconds"</span>
+
+test_steep <span class="o">=</span> <span class="f">steep_for</span> <span class="s">"sencha"</span> <span class="n">60</span> <span class="o">==</span> <span class="s">"steep sencha for 60 seconds"</span>
+
+test_wrong_on_purpose <span class="o">=</span> <span class="f">steep_for</span> <span class="s">"sencha"</span> <span class="n">60</span> <span class="o">==</span> <span class="s">"steep it"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test tea_test.kso</div>
+    <pre><code>test_steep ... ok
+test_wrong_on_purpose ... FAILED (returned false)
+1 passed, 1 failed</code></pre>
+  </div>
+</div>
+
+<p class="tour-more">more in <a href="ch07.html">chapter 07</a>, and <code>std/expect</code> for tests that say what they saw.</p>
+
+<h2>where to go next</h2>
+
+<p>to run kanso on your own machine, <a href="ch01.html">chapter 01</a> builds the toolchain. to learn the language properly, read the book from there in order. to see where it goes, chapter 13 builds a command-line tool from an empty directory, chapter 14 a web service, and chapter 15 measures one and ships both. the <a href="../playground.html">playground</a> has a bigger editor and a repl.</p>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch01.html">start the book: hello, kanso →</a>
+</nav>

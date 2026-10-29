@@ -1,0 +1,7 @@
+type tea
+  name
+  steep
+
+t = tea "sencha" 60
+tea name seconds = t
+print "{name}, {seconds} seconds" .> (_ -> print "or just {t.name}")
