@@ -268,11 +268,25 @@ fn calls_from(e: &Expr, module: &str, caller: &str, calls: &mut Vec<Value>) {
                 Expr::Ident(n, _, _) => text(n.as_str()),
                 _ => text(""),
             };
+            // A string written whole, with nothing interpolated, is a name a
+            // convention can check: `path_to "posts/show" id` (#2198).
+            let written = |a: &Expr| match a {
+                Expr::Str(parts, _) => parts
+                    .iter()
+                    .map(|p| match p {
+                        crate::ast::TemplatePart::Lit(s) => Some(s.as_str()),
+                        crate::ast::TemplatePart::Interp(_) => None,
+                    })
+                    .collect::<Option<String>>()
+                    .map_or_else(|| text(""), |s| text(&s)),
+                _ => text(""),
+            };
             let fields = vec![
                 text(module),
                 text(caller),
                 text(callee.as_str()),
                 list(args.iter().map(named).collect()),
+                list(args.iter().map(written).collect()),
                 Value::Int((span.line as i64).into()),
                 Value::Int((span.col as i64).into()),
             ];
@@ -439,7 +453,7 @@ fn refused_at_call(interp: &Interp, deps: &Program, d: &Derive, fields: &[Value]
         _ => None,
     };
     let caller = format!("{}/{}", plain_text(interp, &call[0]), plain_text(interp, &call[1]));
-    let at = number(&call[4]).zip(number(&call[5]));
+    let at = number(&call[5]).zip(number(&call[6]));
     match (deps.fns.iter().find(|f| f.name == caller), at) {
         (Some(f), Some((line, col))) => {
             Diagnostic::new("derive", message, Span { line, col }).about(&f.file)

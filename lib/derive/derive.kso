@@ -20,8 +20,9 @@ pub type program
 # derivation reads data the app keeps, such as its migrations.
 # `calls` lists every call a function in the module makes to a named
 # function, in the order they are written: the function that makes it, the
-# function it calls, and each argument's name, or "" for an argument that is
-# not a name. `refuse_call` makes a compile error at one of them.
+# function it calls, each argument's name, or "" for an argument that is not
+# a name, and each argument's text, or "" for an argument that is not a string
+# written whole. `refuse_call` makes a compile error at one of them.
 pub type module
   name
   functions
@@ -34,6 +35,7 @@ pub type call
   caller
   callee
   arguments
+  strings
   line
   column
 
