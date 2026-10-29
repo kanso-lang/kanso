@@ -1313,3 +1313,15 @@ others'.
 `lib/` and imports each module from a directory with `KANSO_STD` pointing at
 an empty one, so only the embedded copies can answer. It failed on main
 naming `expect` and nothing else.
+
+tests/a_play_file_is_keyed_by_its_text.rs leaned on `std/expect` being the
+one library module the binary did not carry, to play a file that reads a
+module from disk. It now plays a `std/shout` that exists only under
+`KANSO_STD`. Forcing `play_file_is_self_contained` to true still turns it red
+at the second play.
+
+The binary carries one more module's text, and four compile rows move by
+layout: browser_compile_instructions 343,289,560 -> 343,289,578,
+compile_instructions 24,096,621 -> 24,096,607, entry_instructions 86,700,059
+-> 86,700,038 and library_instructions 72,615,632 -> 72,615,607. Welfare
+rises by less than a hundredth and is banked.
