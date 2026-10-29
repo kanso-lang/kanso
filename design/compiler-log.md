@@ -1023,6 +1023,16 @@ refusal itself stands: `p.kso` holds a `pub fn` and a statement, which is
 neither a library nor a play file. tests/test_verb.rs pins the message,
 watched red with the old path.
 
+With #2209's http change these move the compile rows by layout:
+compile_instructions 24,096,605 -> 24,096,621, library_instructions
+71,383,017 -> 71,383,019, startup_instructions 50,258 -> 50,260 and
+codegen_instructions_release 371,573,437 -> 371,573,350. A first version
+kept the path as typed for every verb, which cost the front end one
+allocation; it is now kept only when a directory is taken to its entry,
+and compile_allocs and interp_allocs are unchanged. Welfare falls by less
+than 0.0001, and the floor follows under the rule for a change that makes
+the tools do what the documentation says.
+
 ## 2026-10-29 — http answers any status, and its suite runs
 
 #2209, filed by the docs worker. `std/net/http` could answer only 200 and
