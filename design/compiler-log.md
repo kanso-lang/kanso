@@ -1413,3 +1413,6 @@ inside its directory; it was watched red with the line missing. One error
 golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
 as a library beside a generated entry, both bare, and it now quotes the line
 it points at.
+
+The browser compile moves by two instructions, browser_compile_instructions
+343,196,938 (-2), and no other row moves.
