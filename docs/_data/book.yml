@@ -23,6 +23,7 @@
   start: 13
   chapters:
     - { num: "13", slug: "ch13", title: "a command-line tool" }
+    - { num: "14", slug: "ch14", title: "a web service" }
 - part: "appendices"
   start: 1
   appendix: true
