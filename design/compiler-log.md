@@ -23,26 +23,6 @@
 
 
 
-## 2026-10-26 — a guard inside a bound branch leaves the branch natively
-
-#2166. `return x if c` inside an `if` branch that is bound to a name leaves
-the branch: the interpreter binds the name to the early answer and the
-function goes on. The native backend refused to build any such program with
-"a return guard sits only in tail position", although `kanso check` accepts
-it, so the engines disagreed. The emitter now reads a guard for its value as
-it reads an `if`: the condition asked as a question, the early answer one arm,
-the rest of the block the other, and a phi over the two and any failure the
-condition carried out. `a_guard_leaves_the_branch_it_is_written_in` holds
-#2166's program with the guard firing and not, in both branches, and prints
-`11 10` and `36 18` on both engines; on main the native build stops.
-
-CI's rows, against main at #2149. No program in the corpora has the shape, so
-nothing runtime moves, and only the emitter's new arm shows, natively and in
-the tab: emit_instructions 5,687,958 -> 5,688,137 and
-browser_compile_instructions 344,137,759 -> 344,146,623. Welfare falls by less
-than a hundredth, and the floor is lowered by exactly that, since this makes native
-build a program the language allows.
-
 ## 2026-10-26 — an err is born boxed
 
 The build of the #2087 gavel. `err "…"` and every builtin that fails answer
@@ -1315,3 +1295,15 @@ a_split_stops_where_the_separator_does_evac_bytes 224 -> 272,
 a_split_stops_where_the_separator_does_perm_allocs 22 -> 23 and
 a_split_stops_where_the_separator_does_sh_rec 1,168 -> 1,232. Welfare rises,
 and the floor is banked at the new score.
+
+## 2026-10-29 — prose_check pairs each page's div tags
+
+Item 3 of #2213. ch07 shipped with a stray `</div>` that the browser forgave
+and every gate passed over. prose_check now walks the `<div>` and `</div>`
+tags of every page it reads and reports a close with nothing open, or an open
+never closed, at its line. On main it found two more, in appendix a after the
+type-order panel, and this change deletes them. No page puts a div inside a
+comment, so the walk reads the raw page. A ratchet row puts a stray close back
+after ch07's first panel and the gate goes red. The summary line counts
+findings rather than tells, and the advice about the slop families prints only
+when one of them was found.
