@@ -10,9 +10,12 @@
 # data: ints, strings, bools, lists, maps, records and references to
 # functions, which is how a route table names its handlers and why the
 # checker sees each one. `declare_type` makes a record type in the entry,
-# named `name` with the listed fields. `refuse` makes a compile error at the
-# item `origin` names, which is how a convention reports a function it cannot
-# place.
+# named `name` with the listed fields. `define` adds an arm, written out as
+# source, to the module `origin` names (`posts/post` puts it in `posts`). The
+# module compiles it as one more of its own files, so the arm may claim the
+# module's own types, and it is checked like code someone wrote there.
+# `refuse` makes a compile error at the item `origin` names, which is how a
+# convention reports a function it cannot place.
 pub type program
   modules
 
@@ -65,6 +68,10 @@ pub type type_declaration
   name
   fields
 
+pub type definition
+  origin
+  source
+
 pub type refusal
   origin
   message
@@ -78,6 +85,9 @@ pub fn declare origin name value
 
 pub fn declare_type origin name fields
   type_declaration origin name fields
+
+pub fn define origin source
+  definition origin source
 
 pub fn refuse origin message
   refusal origin message

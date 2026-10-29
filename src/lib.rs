@@ -169,12 +169,19 @@ fn compile_parsed_entry(
         });
     }
     let mut visited = crate::hash::Set::default();
-    let (dep_program, exports, surfaced) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, mut exports, mut surfaced) =
+        load_dependencies(&base, &import_list, &mut visited)?;
     // Before anything reads the entry's names: what a derivation declares
     // mentions the modules it describes, and those imports are in use.
     if !program.derives.is_empty() {
         let made = phase::watched("derive", || derive::derive(&program, &dep_program, &exports))
             .map_err(|d| render_merged(&d, file, source))?;
+        // An arm a derivation defined belongs to a module the entry imports,
+        // and that module compiles it as one of its own files.
+        if !made.definitions.is_empty() {
+            (dep_program, exports, surfaced) =
+                load_with_definitions(&base, &import_list, &made.definitions)?;
+        }
         let stamp: std::sync::Arc<str> = std::sync::Arc::from(file);
         program.fns.extend(made.constants.into_iter().map(|mut d| {
             d.file = std::sync::Arc::clone(&stamp);

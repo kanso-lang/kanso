@@ -47,17 +47,21 @@ pub fn shown() -> Vec<String> {
 /// on the entry's behalf whenever the entry derives anything.
 pub const MODULE: &str = "std/derive";
 
-/// What the derivations an entry adds: its constants and record types.
+/// What the derivations an entry adds: its constants and record types, and
+/// the arms they defined, each as the import path of the module it belongs
+/// to and its source.
 #[derive(Default)]
 pub struct Derived {
     pub constants: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,
+    pub definitions: Vec<(String, String)>,
 }
 
 /// One declaration a derivation listed, as the entry will hold it.
 enum Made {
     Constant(FnDecl),
     Type(TypeDecl),
+    Definition(String, String),
 }
 
 /// What the derivations an entry names add to it, or the diagnostics a
@@ -78,9 +82,12 @@ pub fn derive(
         match run(&interp, deps, d, &description) {
             Ok(decls) => {
                 for decl in decls {
-                    match declared(&interp, deps, d, &decl) {
+                    match declared(&interp, entry, deps, d, &decl) {
                         Ok(Some(Made::Constant(c))) => made.constants.push(c),
                         Ok(Some(Made::Type(t))) => made.types.push(t),
+                        Ok(Some(Made::Definition(path, source))) => {
+                            made.definitions.push((path, source))
+                        }
                         Ok(None) => {}
                         Err(diag) => diags.push(diag),
                     }
@@ -381,12 +388,18 @@ fn failed(d: &Derive, reason: &str) -> Diagnostic {
 /// refusal that became a diagnostic, or a diagnostic for anything else.
 fn declared(
     interp: &Interp,
+    entry: &Program,
     deps: &Program,
     d: &Derive,
     decl: &Value,
 ) -> Result<Option<Made>, Diagnostic> {
-    let kinds =
-        ["derive/constant", "derive/type_declaration", "derive/refusal", "derive/call_refusal"];
+    let kinds = [
+        "derive/constant",
+        "derive/type_declaration",
+        "derive/definition",
+        "derive/refusal",
+        "derive/call_refusal",
+    ];
     let fields = match decl {
         Value::Record { ty, fields } if kinds.contains(&&**ty) => fields.borrow().clone(),
         other => {
@@ -411,6 +424,9 @@ fn declared(
         }
         if &**ty == "derive/type_declaration" {
             return declared_type(interp, d, &fields).map(|t| Some(Made::Type(t)));
+        }
+        if &**ty == "derive/definition" {
+            return defined(interp, entry, d, &origin, &fields).map(Some);
         }
     }
     let name = plain_text(interp, &fields[1]);
@@ -438,6 +454,42 @@ fn declared(
         synthetic: false,
         shades: None,
     })))
+}
+
+/// An arm a derivation defined, for the module its origin names. The module
+/// has to be one the derivation was shown, because it compiles the arm as one
+/// of its own files, and an arm there may claim the module's own types.
+fn defined(
+    interp: &Interp,
+    entry: &Program,
+    d: &Derive,
+    origin: &str,
+    fields: &[Value],
+) -> Result<Made, Diagnostic> {
+    let module = origin.split_once('/').map_or(origin, |(m, _)| m);
+    let import = entry.imports.iter().filter(|i| i.path.starts_with("./")).find(|i| {
+        let qual = match &i.alias {
+            Some(alias) => alias.as_str(),
+            None => i.path.rsplit('/').next().unwrap_or_default(),
+        };
+        qual == module
+    });
+    let Some(import) = import.filter(|_| described(entry).iter().any(|m| m == module)) else {
+        let msg = format!(
+            "`{}` defined an arm for `{origin}`, and `{module}` is not one of the \
+             modules it describes",
+            d.name
+        );
+        return Err(Diagnostic::new("derive", msg, d.span));
+    };
+    let source = plain_text(interp, &fields[1]);
+    SHOWN.with(|s| {
+        if let Some(lines) = s.borrow_mut().as_mut() {
+            lines.push(format!("# in {module}, by {}", d.name));
+            lines.extend(source.lines().map(str::to_string));
+        }
+    });
+    Ok(Made::Definition(import.path.clone(), source))
 }
 
 /// A refusal at one call a description listed, in the file of the function

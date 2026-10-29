@@ -212,7 +212,7 @@ no route for /nowhere</code></pre>
   </div>
 </div>
 
-<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. two more declarations exist. <code>derive/declare_type</code> adds a record type to the entry, and <code>derive/refuse</code> makes a compile error at the function or type it names, and <code>derive/refuse_call</code> makes one at a call the description listed, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant and type a build derived.</p>
+<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. three more declarations exist. <code>derive/declare_type</code> adds a record type to the entry. <code>derive/define</code> adds an arm, written out as source, to one of the app's modules: an arm <code>fn path_to p:post</code> belongs in the module that declares <code>post</code>, and that module checks it like code someone wrote there. <code>derive/refuse</code> makes a compile error at the function or type it names, and <code>derive/refuse_call</code> makes one at a call the description listed, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant, type and arm a build derived.</p>
 
 <p>a derivation only computes. it cannot read a file or the clock, and it learns about the app only from the description: a convention that imports one of the modules it describes is refused. the same source therefore derives the same declarations every time, on every engine, including the one in the playground.</p>
 

@@ -1390,3 +1390,29 @@ tests/golden/derive gains a convention that refuses a link whose string
 names no route, at the call, on both engines. On the compiler before this
 change it was refused for a different reason, at the convention: no record
 type had a field `strings`.
+
+## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
+
+#2198's record form runs `path_to post` by dispatch on the record's type, so
+the routing convention has to write a `path_to` arm for each model. A
+derivation can now answer `derive/define origin source`: an arm written out as
+source, for the module `origin` names. A module may already add an arm to a
+library's function for a type it declares, so the arm goes there and not in
+the entry, which declares no models.
+
+When any derivation defines an arm, the entry's dependencies load a second
+time, and each module that was given arms reads them as one more of its own
+files, `posts.derived.kso` beside `posts.kso`. The arm is qualified, formatted
+and checked as code someone wrote in that module, and an error in it quotes
+the line the convention wrote. An arm for a module the derivation was not
+shown is refused at the `derive` line. `kanso derived` prints each arm under
+the module it went to. In the tab the modules arrive as text and the arms join
+them the same way.
+
+tests/golden/derive gains three cases, each run on both engines: a `path_to`
+arm defined for each record type in a module with a `show` action, an arm that
+reads a missing field and is refused in the derived file, and an arm for
+std/list, refused. With the second load switched off the first case printed
+"no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
+first case in the page; it was watched red with the derived files keyed so
+the module could not find them.
