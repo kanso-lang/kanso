@@ -8,7 +8,7 @@ rows_c1t = list/concat rows_c1a [trend_adrift trend_rebased trend_read]
 
 rows_c1p = list/concat rows_c1t [book_modules book_plans book_titles]
 
-rows_c1s = list/concat rows_c1p [site_examples]
+rows_c1s = list/concat rows_c1p [book_verbatim site_examples]
 
 rows_c1b = list/concat rows_c1s [diagnostics accumulator published_numbers]
 
