@@ -459,7 +459,6 @@ fn driven() -> ExitCode {
     // directory checks the same program. A directory without an entry is a
     // library, compiled as the module it is.
     let entry_inside = std::path::Path::new(&file).join("main.kso");
-    let asked = file.clone();
     let rerouted_dir =
         matches!(command.as_str(), "run" | "check" | "derived" | "build") && entry_inside.is_file();
     // A build rerouted through a directory keeps the directory's name: the
@@ -474,9 +473,11 @@ fn driven() -> ExitCode {
             .map(|n| n.to_string_lossy().into_owned()),
         false => None,
     };
-    let file = match rerouted_dir {
-        true => entry_inside.to_string_lossy().into_owned(),
-        false => file,
+    // The path as typed, kept only when it was a directory taken to its entry:
+    // a message offering `--interp` should quote what the user wrote.
+    let (file, typed) = match rerouted_dir {
+        true => (entry_inside.to_string_lossy().into_owned(), Some(file)),
+        false => (file, None),
     };
     // Testing a program directory tests its module: the entry holds
     // statements, the tests live in the library beside it. The descent only
@@ -578,7 +579,7 @@ fn driven() -> ExitCode {
     if interp {
         return run_interpreted(&program, program_args());
     }
-    run(&program, &file, &asked, &source, plan)
+    run(&program, &file, typed.as_deref().unwrap_or(&file), &source, plan)
 }
 
 /// `kanso update <dir> [hako]` — the one verb that takes a name after its
