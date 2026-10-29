@@ -1,0 +1,16 @@
+import "std/derive"
+import "std/list"
+
+# Counts the names each module lists in its `wanted` constant.
+pub fn counted p
+  sizes = list/fold p.modules {} (acc m -> put acc m.name (size m.constants))
+  [(derive/declare "columns" "columns" sizes)]
+
+fn size constants
+  length (named constants["wanted"])
+
+fn named none
+  []
+
+fn named names
+  names

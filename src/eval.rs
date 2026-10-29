@@ -800,6 +800,18 @@ impl ThunkStats {
 }
 
 impl<'a> Interp<'a> {
+    /// An interpreter that copies at every container write instead of asking
+    /// the linearity analysis which writes may go in place. A derivation runs
+    /// it once while the program compiles, over a small description of the
+    /// program, and the analysis covers every function the program holds: on
+    /// bench/entry_corpus it cost two thirds of the derivation.
+    pub fn copying(program: &'a Program) -> Self {
+        let interp = Self::new(program);
+        let _ = interp.linearity.set(Default::default());
+        let _ = interp.moved.set(Default::default());
+        interp
+    }
+
     pub fn new(program: &'a Program) -> Self {
         set_root(program);
         let mut groups: Map<&str, Vec<&FnDecl>> = Map::default();

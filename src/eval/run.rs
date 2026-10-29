@@ -134,14 +134,11 @@ impl<'a> Interp<'a> {
                 Ok(port) => Value::int(port),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
-            Desc::Accept(listener) => Ok(match executor.accept(*listener) {
-                Ok(Some(handle)) => Value::int(handle),
-                // Reached only outside a parallel group, where no other fiber
-                // could ever connect; step() yields instead of arriving here.
-                Ok(None) => err_value(
-                    Value::Str(Text::from("nothing connected".to_string())),
-                    Raised::default(),
-                ),
+            // Reached only outside a parallel group; step() yields instead of
+            // arriving here. No other fiber can connect then, but a client
+            // outside the program can, so this waits for one.
+            Desc::Accept(listener) => Ok(match executor.accept_waiting(*listener) {
+                Ok(handle) => Value::int(handle),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
             Desc::Receive(conn) => Ok(match executor.receive(*conn) {

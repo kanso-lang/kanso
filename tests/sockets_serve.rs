@@ -439,3 +439,43 @@ fn a_request_read_off_a_socket_keeps_its_loop() {
     assert_eq!(out, "tallied 1200\nfetched\n");
     assert!(counted.lines().any(|l| l == "beat_iters=200"), "the loop did not bracket: {counted}");
 }
+
+/// A server written as one statement: nothing else in the program runs while
+/// it waits, so its accept is not a scheduling point. It used to answer
+/// "nothing connected" at once on both engines, which was true of the
+/// program and false of the machine: a client outside it can connect, and
+/// that is what a server is for. Watched red on both engines with that err.
+const ONE_STATEMENT_SERVER: &str = r#"import "std/net"
+import "std/os"
+
+fn listening l p
+  os/write_file "port.txt" "{p}" .> (_ -> net/accept l) .> (c -> served l c)
+
+fn served l c
+  net/read c
+    .> (said -> print "heard {said}")
+    .> (_ -> net/close_conn c)
+    .> (_ -> net/close_listener l)
+
+net/listen 0 .> (l -> net/port l .> (p -> listening l p))
+"#;
+
+fn a_client_says_hello(port: u16) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut talking = loop {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(open) => break open,
+            Err(e) if Instant::now() > deadline => panic!("the door never opened: {e}"),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    talking.write_all(b"hello").expect("the greeting goes out");
+}
+
+#[test]
+fn a_server_that_is_one_statement_waits_for_its_client_on_both_engines() {
+    for (slot, engine) in [(8u16, &[][..]), (9, &["--interp"][..])] {
+        let said = printed("sockets-lone", ONE_STATEMENT_SERVER, engine, slot, a_client_says_hello);
+        assert_eq!(said, "heard hello\n", "engine {engine:?}");
+    }
+}

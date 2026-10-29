@@ -1,0 +1,31 @@
+import "std/derive"
+import "std/list"
+
+actions = ["index" "show"]
+
+# Every pub function named for a known action, keyed by its path; any other
+# pub function is refused where it is declared.
+pub fn routing p
+  rows = list/fold p.modules {} (acc m -> list/fold m.functions acc (row m))
+  odd = list/fold p.modules [] (acc m -> list/concat acc (strays m))
+  list/concat [(derive/declare "routes" "routes" rows)] odd
+
+fn row m
+  (acc f -> put acc "/{m.name}/{f.name}" f.reference)
+
+fn strays m
+  unknown = list/reject m.functions (f -> list/any? actions (a -> a == f.name))
+  list/to_list (list/map unknown (f -> refused m f))
+
+fn refused m f
+  message = "`{f.name}` is not an action: name it one of index or show"
+  derive/refuse "{m.name}/{f.name}" message
+
+pub fn handle table path arg
+  called table[path] path arg
+
+fn called none path _
+  "no route for {path}"
+
+fn called f _ arg
+  f arg

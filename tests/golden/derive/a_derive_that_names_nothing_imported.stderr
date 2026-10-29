@@ -1,0 +1,4 @@
+error[derive]: `derive conventions/routes` names no function an import declares with one parameter, the program it is handed
+  --> tests/golden/derive/a_derive_that_names_nothing_imported/main.kso:4:1
+   4 | derive conventions/routes
+       ^

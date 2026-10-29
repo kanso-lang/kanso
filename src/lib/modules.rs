@@ -11,7 +11,7 @@
 /// Every module the loader serves from the copy embedded in this binary.
 /// `tests/every_shipped_module_checks_clean.rs` holds this list to the
 /// loader's table and compiles each with its merged check asked.
-pub const SHIPPED_MODULES: [&str; 15] = [
+pub const SHIPPED_MODULES: [&str; 17] = [
     "std/render",
     "std/list",
     "std/time",
@@ -25,6 +25,8 @@ pub const SHIPPED_MODULES: [&str; 15] = [
     "std/net/http",
     "std/path",
     "std/sha256",
+    "std/base64",
+    "std/derive",
     "std/regexp",
     "std/json",
 ];
@@ -905,6 +907,7 @@ fn compile_module_loaded(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        derives: Vec::new(),
         root: String::new(),
     };
     merged.types.extend(dep_program.types);

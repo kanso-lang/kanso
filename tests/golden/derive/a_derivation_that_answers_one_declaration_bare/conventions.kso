@@ -1,0 +1,5 @@
+import "std/derive"
+
+# One declaration, not a list of them.
+pub fn routing _
+  derive/declare "routes" "routes" {}
