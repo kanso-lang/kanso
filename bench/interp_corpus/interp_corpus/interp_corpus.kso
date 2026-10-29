@@ -1,6 +1,5 @@
 import "std/json"
 import "std/list"
-import "std/regexp"
 import "std/text"
 
 # A list held in a record and pushed onto from one arm of an `if`, which
@@ -23,8 +22,7 @@ pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
-  said = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
-  print "interp {said} {worded 400}"
+  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
 
 fn rounds n
   source = document 220
@@ -238,13 +236,3 @@ fn tagging s
 
 fn relayed n
   length (tagged "ab" 1 "" n)
-
-# A page split into its words by a pattern, as a word count reads its input.
-fn page acc i n
-  return acc if i > n
-  w = ["the" "quick" "fox" "it's" "over" "lazy" "dog" "a" "truth"][i % 9 + 1]
-  m = [" " " " ", " ". " "\n"][i % 5 + 1]
-  page "{acc}{w}{m}" (i + 1) n
-
-fn worded n
-  length (regexp/split "[^a-z']+" (page "" 1 n))
