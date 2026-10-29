@@ -1,0 +1,4 @@
+import "std/derive"
+
+pub fn listed _
+  [(derive/declare "a" "a" 1) (err "no table for `b`")]

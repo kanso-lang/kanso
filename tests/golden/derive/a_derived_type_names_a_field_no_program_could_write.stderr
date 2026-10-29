@@ -1,0 +1,4 @@
+error[derive]: `conventions/rows` declared type `post` naming `Body Text`, which a program could not write as a name
+  --> tests/golden/derive/a_derived_type_names_a_field_no_program_could_write/main.kso:3:1
+   3 | derive conventions/rows
+       ^
