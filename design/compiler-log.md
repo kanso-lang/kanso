@@ -1261,3 +1261,57 @@ emitted_other_branches 17,933 -> 18,066, emitted_other_calls 20,709 ->
 Welfare re-bases run_instructions and
 run_peak_bytes, each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+
+CI's rows for the fix. What falls: run_alloc_bytes 231,013,169 ->
+224,894,993, run_allocs 1,700,863 -> 1,594,553, run_arena_blocks 5 -> 4,
+run_arena_peak_bytes 5,767,184 -> 4,718,608, run_push_mut_fast 1,195,309 ->
+1,195,313, run_sh_buf 93,914,368 -> 91,425,392, run_sh_bytes 1,148,520 ->
+5,112, run_spare_peak_bytes 3,670,032 -> 2,621,456, work_runbench
+851,374,952 -> 846,388,267, scan_push_mut_fast 9 -> 13,
+a_class_asks_by_the_byte_alloc_bytes 507,073 -> 116,737,
+a_class_asks_by_the_byte_allocs 9,266 -> 1,267,
+a_class_asks_by_the_byte_sh_buf 157,168 -> 22,768,
+a_class_asks_by_the_byte_sh_bytes 134,520 -> 168,
+a_scan_keeps_its_place_in_the_text_alloc_bytes 106,537 -> 73,289,
+a_scan_keeps_its_place_in_the_text_allocs 1,742 -> 874,
+a_scan_keeps_its_place_in_the_text_push_mut_fast 5 -> 7,
+a_scan_keeps_its_place_in_the_text_sh_buf 52,896 -> 46,288,
+a_scan_keeps_its_place_in_the_text_sh_bytes 19,752 -> 240,
+a_scan_that_finds_nothing_keeps_nothing_alloc_bytes 2,781,801 -> 1,194,889,
+a_scan_that_finds_nothing_keeps_nothing_allocs 74,006 -> 24,874,
+a_scan_that_finds_nothing_keeps_nothing_push_mut_fast 5 -> 7,
+a_scan_that_finds_nothing_keeps_nothing_sh_buf 18,336 -> 976,
+a_scan_that_finds_nothing_keeps_nothing_sh_bytes 1,175,784 -> 240,
+a_split_stops_where_the_separator_does_alloc_bytes 24,487 -> 4,743,
+a_split_stops_where_the_separator_does_allocs 673 -> 64,
+a_split_stops_where_the_separator_does_push_mut_fast 8 -> 10,
+a_split_stops_where_the_separator_does_sh_buf 1,168 -> 832 and
+a_split_stops_where_the_separator_does_sh_bytes 14,808 -> 240. What rises,
+and why: the pass that gives each class its bytes copies the compiled tree
+once per pattern, and the library is 85 lines longer to compile, so each
+program that uses a pattern holds a few more records and the compile corpora
+read more: run_evac_allocs 1,736 -> 1,738, run_evac_bytes 4,602,496 ->
+4,602,512, run_perm_allocs 127 -> 128, run_sh_rec 4,675,424 -> 4,675,856,
+entry_instructions 85,282,135 -> 86,700,059, library_instructions 71,383,019
+-> 72,615,632, work_scanbench 266,140 -> 266,939, emitted_other_branches
+18,066 -> 18,226, emitted_other_calls 20,888 -> 21,137,
+emitted_other_defines 2,292 -> 2,312, emitted_other_lines 172,430 ->
+173,938, text 5,658,091 -> 5,670,096, scan_alloc_bytes 8,934 -> 9,366,
+scan_allocs 91 -> 97, scan_sh_buf 1,056 -> 1,168, scan_sh_bytes 288 -> 336,
+scan_sh_rec 1,632 -> 1,872, a_class_asks_by_the_byte_evac_allocs 7 -> 9,
+a_class_asks_by_the_byte_evac_bytes 224 -> 272,
+a_class_asks_by_the_byte_perm_allocs 33 -> 34,
+a_class_asks_by_the_byte_sh_rec 87,440 -> 87,536,
+a_scan_keeps_its_place_in_the_text_evac_allocs 7 -> 9,
+a_scan_keeps_its_place_in_the_text_evac_bytes 208 -> 256,
+a_scan_keeps_its_place_in_the_text_perm_allocs 51 -> 52,
+a_scan_keeps_its_place_in_the_text_sh_rec 1,296 -> 1,616,
+a_scan_that_finds_nothing_keeps_nothing_evac_allocs 7 -> 9,
+a_scan_that_finds_nothing_keeps_nothing_evac_bytes 208 -> 256,
+a_scan_that_finds_nothing_keeps_nothing_perm_allocs 50 -> 51,
+a_scan_that_finds_nothing_keeps_nothing_sh_rec 1,296 -> 1,616,
+a_split_stops_where_the_separator_does_evac_allocs 7 -> 9,
+a_split_stops_where_the_separator_does_evac_bytes 224 -> 272,
+a_split_stops_where_the_separator_does_perm_allocs 22 -> 23 and
+a_split_stops_where_the_separator_does_sh_rec 1,168 -> 1,232. Welfare rises,
+and the floor is banked at the new score.
