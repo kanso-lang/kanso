@@ -1,0 +1,5 @@
+import "std/list"
+
+prices = [350 500 250]
+total = list/fold prices 0 (sum p -> sum + p)
+print "total {total}, mean {list/mean prices}"

@@ -37,3 +37,4 @@
     - { num: "a", slug: "appa", title: "the diagnostics catalog" }
     - { num: "b", slug: "appb", title: "builtin reference" }
     - { num: "c", slug: "appc", title: "canonical form" }
+    - { num: "d", slug: "appd", title: "recipes" }

@@ -1,0 +1,5 @@
+import "std/list"
+import "std/text"
+
+words = ["apple" "avocado" "banana" "blueberry" "cherry"]
+print "{list/group_by words (w -> text/slice w 1 1)}"

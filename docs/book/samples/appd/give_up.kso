@@ -1,0 +1,4 @@
+import "std/io"
+import "std/os"
+
+io/write_err "wordfreq: no such file: notes.txt\n" .> (_ -> os/exit 2)
