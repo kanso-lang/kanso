@@ -1,0 +1,6 @@
+import "std/expect"
+
+fn double n
+  n * 2
+
+test_double = expect (double 4) . to (equal 9)

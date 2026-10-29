@@ -1,4 +1,7 @@
 tau = 5
-tau = 3
 
-print "{tau}"
+fn area r
+  tau = 3
+  tau * r
+
+pub play = print "{area 2} {tau}"

@@ -407,7 +407,7 @@ not a flag</code></pre>
 
 <h2>failures in company</h2>
 
-<p>one question remains: what happens when two failures happen at once? chapter 01 established that plain consecutive statements are unordered—parallel by default—and that a bind, <code>.&gt;</code>, is what puts one step after another. an err arriving at a bind skips everything after it, exactly as the railway predicts. but between statements with no order there is no "after," so neither failure can preempt the other. both sides run, and both failures arrive:</p>
+<p>one question remains: what happens when two failures happen at once? plain consecutive statements have no order between them, and a bind, <code>.&gt;</code>, is what puts one step after another; chapter 06 is about that rule. an err arriving at a bind skips everything after it, exactly as the railway predicts. but between statements with no order there is no "after," so neither failure can preempt the other. both sides run, and both failures arrive:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">teas.kso</div>

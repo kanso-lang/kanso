@@ -1,12 +1,6 @@
 import "std/testing"
 
-fn costs? _ (err _)
-  false
-
-fn costs? want n
-  n == want
-
-test_dango_price = costs? 400 (price "dango")
+test_dango_price = price "dango" == 400
 
 test_describe = describe 400 == "400 yen, service included"
 
