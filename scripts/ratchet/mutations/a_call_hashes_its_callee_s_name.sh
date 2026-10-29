@@ -5,9 +5,9 @@
 # interpreted run's instruction row sees the hashing.
 set -e
 line='        let callee = self.callee_of_ref(name);'
-[ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/eval/calls.rs)" -eq 1 ] || {
   echo "the call by reference moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        let callee = self.callee_of_ref(name);$/        let callee = self.callee_named(name);/' src/eval.rs
-grep -qxF '        let callee = self.callee_named(name);' src/eval.rs
+sed -i 's/^        let callee = self.callee_of_ref(name);$/        let callee = self.callee_named(name);/' src/eval/calls.rs
+grep -qxF '        let callee = self.callee_named(name);' src/eval/calls.rs

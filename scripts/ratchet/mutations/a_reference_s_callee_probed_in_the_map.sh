@@ -5,9 +5,9 @@
 # interp_instructions is the witness.
 set -e
 line='            if *k == key {'
-[ "$(grep -cxF "$line" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/eval/calls.rs)" -eq 1 ] || {
   echo "the recent-callee test moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^            if \*k == key {$/            if *k == key \&\& false {/' src/eval.rs
-if grep -qxF "$line" src/eval.rs; then exit 1; fi
+sed -i 's/^            if \*k == key {$/            if *k == key \&\& false {/' src/eval/calls.rs
+if grep -qxF "$line" src/eval/calls.rs; then exit 1; fi

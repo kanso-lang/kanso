@@ -4,6 +4,6 @@
 # interpreted run's instruction count.
 set -e
 target='                    Some(*decl)'
-n=$(grep -cxF "$target" src/eval.rs)
+n=$(grep -cxF "$target" src/eval/calls.rs)
 [ "$n" -eq 1 ] || { echo "the lone arm's answer moved or multiplied ($n); rewrite this" >&2; exit 1; }
-awk -v t="$target" '$0 == t { print "                    { let _ = decl; None::<&FnDecl> }"; next } { print }' src/eval.rs > src/eval.rs.mut && mv src/eval.rs.mut src/eval.rs
+awk -v t="$target" '$0 == t { print "                    { let _ = decl; None::<&FnDecl> }"; next } { print }' src/eval/calls.rs > src/eval/calls.rs.mut && mv src/eval/calls.rs.mut src/eval/calls.rs
