@@ -111050,3 +111050,24 @@ Owes, on #2099: the caller's line on every engine for a failure born in the
 library; error goldens on every engine for an operator, a builtin and a
 library function reached from a program file; CI's rows and the floor moved
 by them.
+
+## 2026-10-26 — a refused binding names the line its name is declared on
+
+The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
+asks the refusal to name the declaration it collides with. One declared in
+another file of the module was already named, with its file and line, since
+de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
+A collision inside one file still said only "`greet` is already a
+declaration", so the reader had to find it. It now says "`greet` is already
+a declaration, at line 1". A name no file declares, such as `length` from
+the library or `done`, keeps the message without a line.
+
+`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
+carry the new line, as does appendix A's panel. Adding a space to the message
+turns both red.
+
+CI's rows, against main at #2155. The rewrite runs only on a refusal, so
+what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
+entry_instructions 73,813,902 -> 73,811,997, library_instructions
+73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
+359,922,521. Welfare rises by less than a hundredth and the rise is banked.

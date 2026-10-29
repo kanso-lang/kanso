@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-26 — a refused binding names the line its name is declared on
-
-The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
-asks the refusal to name the declaration it collides with. One declared in
-another file of the module was already named, with its file and line, since
-de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
-A collision inside one file still said only "`greet` is already a
-declaration", so the reader had to find it. It now says "`greet` is already
-a declaration, at line 1". A name no file declares, such as `length` from
-the library or `done`, keeps the message without a line.
-
-`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
-carry the new line, as does appendix A's panel. Adding a space to the message
-turns both red.
-
-CI's rows, against main at #2155. The rewrite runs only on a refusal, so
-what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
-entry_instructions 73,813,902 -> 73,811,997, library_instructions
-73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
-359,922,521. Welfare rises by less than a hundredth and the rise is banked.
-
 ## 2026-10-26 — `put` writes a list at a position
 
 The 2026-10-25 gavel on #2086 rules that `put xs i v` on a list answers the
@@ -1180,6 +1159,20 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — the tab's list of machine calls has one home
+
+#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
+written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
+book panels become live editors, and as a kanso list in the browser
+differential, which decides which samples it covers. They drifted for months.
+The differential now reads the list out of book-play.js, the way it already
+reads the playground's examples out of play.js, and its own copy is gone. A
+page without the list fails the run rather than covering every sample.
+
+Read the same way, the page's list selects the same 717 programs the old copy
+did. With `read_file` taken out of the page's regex the run selected 725, so
+the differential follows the page.
 
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
