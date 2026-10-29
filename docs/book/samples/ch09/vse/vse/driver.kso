@@ -1,17 +1,3 @@
-import "std/list"
-import "std/math"
-
-fn cloud 0 _ acc
-  acc
-
-fn cloud n d acc
-  point d [] .> (p -> cloud (n - 1) d (push acc p))
-
-dims = 2
-
-fn dist2 p q
-  sum (list/map (range (length p)) (d -> sq (p[d] - q[d])))
-
 pub fn means sums
   print "plurality VSE {sums[1] / runs}"
     .> (_ -> print "approval  VSE {sums[2] / runs}")
@@ -20,26 +6,7 @@ pub fn means sums
     .> (_ -> print "irv       VSE {sums[5] / runs}")
     .> (_ -> print "minimax   VSE {sums[6] / runs}")
 
-ncand = 5
-
-nvot = 20
-
-fn point 0 acc
-  acc
-
-fn point d acc
-  math/random 1000 .> (c -> point (d - 1) (push acc c))
-
 pub runs = 400
-
-fn socutil voters c
-  sum (list/map voters (v -> v[c]))
-
-fn socutils voters
-  to_list (list/map (range ncand) (c -> socutil voters c))
-
-fn sq x
-  x * x
 
 fn tally acc elec
   socs = socutils elec
@@ -56,16 +23,6 @@ pub fn trials 0 acc
 
 pub fn trials k acc
   cloud nvot dims [] .> (vp -> with_voters k acc vp)
-
-fn util vpos cpos
-  0 - math/sqrt (dist2 vpos cpos)
-
-fn utilities voters cands
-  to_list (list/map voters (v -> to_list (list/map cands (c -> util v c))))
-
-fn vse socs winner
-  m = mean socs
-  (socs[winner] - m) / (max socs - m)
 
 fn with_voters k acc vp
   cloud ncand dims [] .> (cp -> trials (k - 1) (tally acc (utilities vp cp)))

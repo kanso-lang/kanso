@@ -3,6 +3,16 @@ import "std/list"
 fn argmax list
   fold (range (length list)) 1 (b i -> if (list[b] < list[i]) i b)
 
+fn argmax_except list skip
+  first = if (skip == 1) 2 1
+  fold (range (length list)) first (b i -> better list skip b i)
+
+fn better list skip b i
+  if (i == skip) b (if (list[b] < list[i]) i b)
+
+fn in? list x
+  any? list (y -> y == x)
+
 fn range n
   range_to n 1 []
 
