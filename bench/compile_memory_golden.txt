@@ -24,4 +24,4 @@
 front_end_rounds=19
 front_end_visits=7397
 
-compile_peak_bytes=598492
+compile_peak_bytes=598588

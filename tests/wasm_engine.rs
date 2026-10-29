@@ -216,6 +216,29 @@ impl Toolchain {
     /// see.
     fn run(&mut self, name: &str, source: &str) -> Answer {
         let (plays, ptr, len) = self.prepare(name, source);
+        self.finish(plays, ptr, len)
+    }
+
+    /// Compile an entry beside the modules it imports by `./`, handed over as
+    /// the page hands them, and run it.
+    fn run_beside(&mut self, name: &str, source: &str, modules: &[(&str, &str)]) -> Answer {
+        self.call("kanso_forget_sources", &[], &mut []).expect("the sources clear");
+        for (stem, text) in modules {
+            let (path_ptr, path_len) = self.write(stem);
+            let (file_ptr, file_len) = self.write(&format!("{stem}.kso"));
+            let (src_ptr, src_len) = self.write(text);
+            let args = [path_ptr, path_len, file_ptr, file_len, src_ptr, src_len].map(Val::I32);
+            self.call("kanso_hand_source", &args, &mut []).expect("the module is accepted");
+        }
+        let (name_ptr, name_len) = self.write(name);
+        self.call("kanso_set_seed", &[Val::I32(SEED)], &mut []).expect("the seed is accepted");
+        self.call("kanso_set_file", &[Val::I32(name_ptr), Val::I32(name_len)], &mut [])
+            .expect("the file name is accepted");
+        let (ptr, len) = self.write(source);
+        self.finish(false, ptr, len)
+    }
+
+    fn finish(&mut self, plays: bool, ptr: i32, len: i32) -> Answer {
         let door = match plays {
             true => "kanso_play_native",
             false => "kanso_compile_native",
@@ -502,6 +525,22 @@ fn an_accumulator_grows_where_it_stands() {
             "{name} answered {answer:?}"
         );
     }
+}
+
+/// A derivation runs in the page as it does natively (#2186). The page is
+/// handed the convention and the module it describes, compiles the entry
+/// that derives a route table on the interpreter inside the tab, and the
+/// program dispatches through the table it declared.
+#[test]
+fn a_derivation_runs_in_the_page() {
+    let Some(mut toolchain) = page() else { return };
+    let case = root().join("tests/golden/derive/a_route_table_names_real_functions");
+    let read = |f: &str| std::fs::read_to_string(case.join(f)).expect("the case reads");
+    let modules = [("conventions", read("conventions.kso")), ("posts", read("posts.kso"))];
+    let handed: Vec<(&str, &str)> = modules.iter().map(|(m, t)| (*m, t.as_str())).collect();
+    let want = std::fs::read_to_string(case.with_extension("stdout")).expect("the golden reads");
+    let answer = toolchain.run_beside("main.kso", &read("main.kso"), &handed);
+    assert!(matches!(&answer, Answer::Ran(0, text) if *text == want), "answered {answer:?}");
 }
 
 /// A string built by joining onto itself grows where it stands, and a seed is

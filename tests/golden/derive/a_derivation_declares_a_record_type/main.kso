@@ -1,0 +1,7 @@
+import "./conventions"
+import "./tables"
+
+derive conventions/rows
+
+first = post "hello" "world"
+print "{first.title}: {first.body}"

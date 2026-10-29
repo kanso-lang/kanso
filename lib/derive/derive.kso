@@ -9,8 +9,10 @@
 # `declare` makes a constant, `name = value`, in the entry. The value is
 # data: ints, strings, bools, lists, maps, records and references to
 # functions, which is how a route table names its handlers and why the
-# checker sees each one. `refuse` makes a compile error at the item `origin`
-# names, which is how a convention reports a function it cannot place.
+# checker sees each one. `declare_type` makes a record type in the entry,
+# named `name` with the listed fields. `refuse` makes a compile error at the
+# item `origin` names, which is how a convention reports a function it cannot
+# place.
 pub type program
   modules
 
@@ -43,12 +45,20 @@ pub type constant
   name
   value
 
+pub type type_declaration
+  origin
+  name
+  fields
+
 pub type refusal
   origin
   message
 
 pub fn declare origin name value
   constant origin name value
+
+pub fn declare_type origin name fields
+  type_declaration origin name fields
 
 pub fn refuse origin message
   refusal origin message

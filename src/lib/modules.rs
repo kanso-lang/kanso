@@ -25,8 +25,8 @@ pub const SHIPPED_MODULES: [&str; 17] = [
     "std/net/http",
     "std/path",
     "std/sha256",
-    "std/derive",
     "std/base64",
+    "std/derive",
     "std/regexp",
     "std/json",
 ];

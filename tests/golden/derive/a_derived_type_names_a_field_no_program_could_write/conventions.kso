@@ -1,0 +1,4 @@
+import "std/derive"
+
+pub fn rows _
+  [(derive/declare_type "post" "post" ["title" "Body Text"])]

@@ -110494,3 +110494,228 @@ emitted_other_lines 166,508 → 167,039, emitted_other_branches 17,649 →
 17,724, emitted_other_calls 20,164 → 20,219 and emitted_other_defines 2,209 →
 2,214. Each welfare term these move is re-based to keep its ratio to its
 baseline, so the score stays 95.01.
+
+## 2026-10-25 — a map of maps is written in place
+
+The count per pair of keys from #2125, `inner = or_map m[a]` then
+`put m a (put inner b (or_zero inner[b] + 1))`, now writes both maps in
+place natively (#2122). Four changes in `src/linear.rs` do it.
+
+- **The outer write.** `fed_to_consumer` discounted a read binding only when
+  every later mention reached the write as an arithmetic or comparison
+  operand. A sibling that writes into the binding, `put inner b …`, forces it
+  before the outer write runs, and a binding forced once answers every later
+  mention from its value, so the binding's read of `m` is discounted there
+  too. This alone took the probe at 5,000 counts from 189 million
+  instructions to 101 million.
+- **Values alone.** `elems_params` is a greatest fixpoint over map
+  parameters: every caller hands in a map literal of unique values, a write
+  of a unique value into a map nobody else holds, or a parameter or binding
+  that is one, and no arm keeps an element. An element read may be compared,
+  interpolated or read further; any other read drops the parameter. A
+  parameter may also be written into, counted with `length` or `keys`,
+  answered whole, or handed to another parameter that keeps the promise.
+  `returns_elems` carries the promise through a helper's answer, so a loop
+  that calls `bump m a b` gets it from the helper.
+- **The take.** `m[k]` read into a name that is written into and goes back
+  into `m` at the same key, with nothing else mentioning the name but reads,
+  moves the element out (`element_moves`). The map is linear, so the arm
+  uses it once and the outer write is in place, and its values are alone, so
+  the map's slot is the element's only other holder until the write replaces
+  it.
+- **Pass-through.** A function whose every arm answers one parameter,
+  mentioned nowhere else, or a fresh literal answers a unique value wherever
+  that argument is unique. `or_map` is one. It is asked per call, so one
+  caller handing it a shared map refuses only that call; the first version
+  needed `or_map`'s parameter linear for every caller, and a fixture that
+  shared `or_map` across six loops proved none of them.
+
+The seeding is gated on a take existing anywhere in the program, so a
+program without the shape builds no map facts. The probe at 20,000 counts
+took 2,275,554,111 instructions and takes 35,953,409, and 5,000 to 20,000 is
+a ratio of 4.7. A mem fixture of 2,000 counts over 20 inner maps allocates
+325 times and 401,472 bytes, where main allocated 12,202 times and 6,618,224
+bytes, and at 1,000 counts 220 and 164,752 against 6,089 and 2,300,544.
+
+`an_inner_map_held_elsewhere_keeps_what_it_held` gives each refusal a loop
+of its own, because a parameter is proven for every caller or none and a
+shared loop let one refusal hide another. Its output came from main's
+interpreter. Three ratchet mutations each turn it red on both engines: a map
+literal's values taken as alone whatever they are, an arm allowed to keep an
+element, and a take put back at another key. A check that the take arm uses
+the map once was removed rather than pinned: a written map parameter is
+linear only if every arm uses it once, so the check could not fail.
+
+A loop whose arms are spelled with `return m if i == 0` is proven the same
+way. The interpreter writes in place at these sites on the analysis' word,
+so a wrong proof would be wrong identically on both engines; the fixture's
+expected output is main's interpreter for that reason.
+
+Grouping into a map of lists, `put m k (push (or_list m[k]) i)`, is the same
+take with `push` as the write, and it is proven by the same change: 8,000
+numbers in 20 groups allocated 32,786 times and now 129.
+`a_map_of_lists_groups_in_place` pins it.
+
+CI's rows, against #2125. The run program reads work_runbench 851,781,946 →
+814,679,425 (−4.4%), run_allocs 1,456,758 → 1,447,392, run_alloc_bytes
+221,484,024 → 216,354,904, run_held_peak_bytes 4,120,448 → 248,688 and
+run_sh_map 120,960 → 12,160. run_put_mut_grow rises 55 → 260, because the
+inner maps now grow in place where each copy had been sized afresh. The
+interpreter reads interp_instructions 478,102,371 → 473,127,289 and
+interp_allocs 516,759 → 507,913, and interp_peak_bytes rises 1,233,920 →
+1,263,998. The tab's run falls browser_run_instructions 130,514,490 →
+47,716,164 and browser_run_peak_bytes 4,325,376 → 1,376,256.
+
+The analysis costs the front end. The interpreted corpus holds a take, so
+the tab's compile seeds the map facts and runs their fixpoint:
+browser_compile_instructions 314,821,332 → 324,458,065 (+3.1%). Native
+compiles read compile_instructions 24,731,131 → 24,741,552, entry_instructions
+72,970,344 → 72,986,583, library_instructions 72,642,115 → 72,659,822 and
+emit_instructions 5,641,862 → 5,655,748, and the machine code reads text
+5,649,473 → 5,649,809. Welfare rises 95.01 → 95.15 and the rise is banked.
+
+## 2026-10-25 — a list built by concat, and a map of records, join the corpus
+
+A list built one number at a time with `list/concat acc [i]` costs about ten
+times what `push` costs natively. The concat is made in place, but each lap's
+one-element list is garbage, so the loop stages what it carries, and the
+accumulator is not covered by the license that lets a list of numbers cross
+a rewind by pointer: that license reads in-place pushes only. Each stage then
+deep-copies the accumulator. On its own, 32,000 numbers took 14.6 million
+instructions and 128,000 took 156 million, most of it in `k_deep_copy`, where
+`push` takes 0.9 million and 2.6 million. The interpreter is linear on it.
+
+Under the 2026-09-05 corpus-first gavel `appended` joins the corpus here,
+measured on main at kanso#2126 before its fix. It keeps 64,000 numbers. In
+the run program it grows linearly at about 218 instructions a number. On
+this container the run program reads 828,713,625 with it and 814,784,428
+without it, a column of 13,929,197 (1.68%). The interpreted corpus keeps
+6,000 numbers, and the tab runs the same corpus.
+
+`bucketed` joins beside it: numbers filed into a map of records, each a count
+and a list, `b = or_bucket m[k]` then `put m k (bucket (b.hits + 1) (push
+b.items i))`. Both puts are the persistent `k_b_put`. The record reaches the
+put only through its fields, and the read discount accepts a name that
+reaches the write through arithmetic or a nested write into it, so the map is
+copied for every number. The lists are not copied: on its own the shape
+stays linear as they grow, at about 8,300 instructions a number. It keeps
+2,000 numbers; the run program reads 847,407,464 with both phases, a column
+of 18,693,839 (2.21%), and the interpreted corpus keeps 1,500. With both, the
+interpreted corpus reads 515,277,561 → 567,834,663 on this container.
+
+CI's rows, against #2126. The run program reads work_runbench 814,679,425 →
+847,302,475, run_allocs 1,447,392 → 1,585,686, run_alloc_bytes 216,354,904 →
+224,179,080, run_push_mut_slow 1,580,216 → 1,644,216, run_beat_iters 113,323
+→ 177,323, run_sh_buf 87,169,488 → 89,503,776, run_sh_map 12,160 → 76,160,
+run_sh_rec 3,905,056 → 4,034,336, run_bytes_malloc 7,910 → 7,919 and
+run_bytes_freed 7,768 → 7,777. Its memory rows read run_arena_blocks 4 → 5,
+run_arena_peak_bytes 4,718,608 → 5,767,184, run_held_peak_bytes 248,688 →
+1,863,712, run_perm_peak_bytes 810,225 → 1,858,817 and run_spare_peak_bytes
+2,621,456 → 3,670,032. The interpreter
+reads interp_instructions 473,127,289 → 525,831,073, interp_allocs 507,913 →
+585,540 and interp_peak_bytes 1,263,998 → 1,281,294. The tab reads
+browser_run_instructions 47,716,164 → 107,399,948, browser_run_peak_bytes
+1,376,256 → 3,866,624, browser_compile_instructions 324,458,065 →
+334,007,116 and browser_compile_peak_bytes 728,260 → 743,930. The two
+modules add machine code and emitted lines: text 5,649,809 → 5,652,977,
+emitted_other_lines 167,036 → 167,711, emitted_other_branches 17,724 →
+17,809, emitted_other_calls 20,219 → 20,315 and emitted_other_defines 2,214 →
+2,222. Each welfare term these move is re-based to keep its ratio to its
+baseline, so the score stays 95.15.
+
+## 2026-10-25 — entry and play files keep the blank-line policy
+
+`check_blank_policy` judged libraries only. `parse_entry` never called it,
+and `parse_play` called it on a declaration half whose blank lines it made
+up, one per gap. So an entry or play file could begin with a blank line, hold
+one inside a body, and put any number between two declarations or two
+statements, and every engine ran it (#2143). Both now judge the file as
+written. A top-level `x = …` there is a statement of the run, so it may pack
+against its neighbours, and at most one blank line separates two statements.
+An import below a statement is refused for its place, and the blank above it
+adds nothing.
+
+Eleven examples had a double blank between declarations, and two began with
+a blank line; their output is unchanged. Four error goldens cover the new
+refusals, each of which main ran: two blanks between a play file's
+declarations, two between statements, a blank inside an entry's `if` body,
+and a leading blank in an entry file. kq's three entries pass.
+
+CI's rows. Five compile rows fell: compile_instructions 24,741,552 ->
+24,657,263, entry_instructions 72,986,583 -> 72,734,084,
+library_instructions 72,659,822 -> 72,405,561, emit_instructions 5,655,748
+-> 5,654,777 and browser_compile_instructions 334,007,116 -> 333,912,133.
+interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
+entry is now judged line by line. Nothing here separates the part of each
+move that is the new check from the part that is the binary's layout.
+Welfare holds the net rise at 95.15.
+
+## 2026-10-25 — a concat of numbers crosses the rewind where it stands
+
+`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
+second argument is a list literal of scalars, as it accepted an in-place
+`push` of one. Such a concat writes each item onto the accumulator's frontier,
+so the accumulator still holds no pointer into the arena, and the license
+that lets a list of numbers cross a rewind by pointer applies. The loop from
+#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
+numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
+22,454,668 and take 6,496,051. No allocation counter sees the copies the
+stage made, so the run program's work row is where this shows.
+
+The one-element list each lap is still built. Emitting such a concat as one
+push per item would remove it, but a list literal keeps an item that fails
+where `push` answers the failure, so the two would need to agree first.
+
+`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
+booleans and strings made on the lap, 20,000 laps each. Its output is main's
+interpreter. The strings must stay refused: the ratchet mutation
+`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
+run of the fixture then dies reading the reclaimed strings ("ran out of
+stack"), while the interpreter, which has no rewind, stays green.
+
+## 2026-10-25 — a read a sibling forces lets the map go
+
+`bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
+1) (push b.items i))`, now writes the map in place. #2126 discounted a read
+binding when a sibling of the write wrote into it. `forces` in
+`src/linear.rs` generalizes that to any position that reads the value and
+runs on every path before the write: a field or element read, an operand,
+an interpolation, a condition, or an argument of `put`, `push`, `delete`,
+`length` or `keys`. A binding forced once answers every later mention from
+its value, so the write cannot change what the binding read. A bare name
+handed to a function or a constructor does not count, because a lazy binding
+travels there as an unforced cell; neither do one arm of an `if` (and so
+`and` and `or`), a guard past its condition, or a lambda.
+
+On its own, 16,000 numbers in 20 buckets took 132,724,010 instructions and
+take 9,025,501. `a_map_of_records_files_in_place` pins 4,000 numbers: 8,133
+allocations and 440,064 bytes, where main made 20,457 and 5,216,096.
+`a_record_read_out_of_a_map_keeps_its_fields` keeps the record it read in a
+carried list, in a lambda and under one arm of an `if`; its output is main's
+interpreter, and both engines agree with it.
+
+The read context is conservative and no program here shows it necessary. A
+binding is lazy only when every use hands it bare to a function that may
+discard it, and with the context dropped the probe that tried that shape
+still printed main's answer, because its binding stayed strict. No ratchet
+mutation is pinned for the context for that reason.
+
+CI's rows for both fixes, against main at #2146. The run program reads
+work_runbench 847,302,475 → 828,232,672 (−2.3%), run_allocs 1,585,686 →
+1,579,529, run_alloc_bytes 224,179,080 → 221,800,088, run_sh_map 76,160 →
+12,160, run_sh_buf 89,503,776 → 89,333,968, run_held_peak_bytes 1,863,712 →
+248,688, run_arena_blocks 5 → 4, run_arena_peak_bytes 5,767,184 → 4,718,608
+and run_spare_peak_bytes 3,670,032 → 2,621,456; run_put_mut_grow rises 260 →
+264, where the bucketed map now grows in place. The interpreter reads
+interp_instructions 525,925,462 → 520,276,149 and interp_allocs 585,540 →
+578,088, and interp_peak_bytes rises 1,281,294 → 1,281,313. The tab's run
+falls browser_run_instructions 107,399,948 → 54,006,705 and
+browser_run_peak_bytes 3,866,624 → 1,507,328, its compile rises
+browser_compile_instructions 333,912,133 → 334,848,599, and
+browser_compile_peak_bytes falls 743,930 → 743,876. Native compiles read
+compile_instructions 24,657,263 → 24,735,836, entry_instructions 72,734,084 →
+72,954,229, library_instructions 72,405,561 → 72,625,200 and
+emit_instructions 5,654,777 → 5,655,925: the two analyses cost the compiler
+about 0.3%. The machine code reads text 5,652,977 → 5,653,121, all of it in
+runbench. Welfare
+rises 95.15 → 95.22 and the rise is banked.

@@ -171,10 +171,17 @@ fn compile_parsed_entry(
         let made = phase::watched("derive", || derive::derive(&program, &dep_program))
             .map_err(|d| render_merged(&d, file, source))?;
         let stamp: std::sync::Arc<str> = std::sync::Arc::from(file);
-        program.fns.extend(made.into_iter().map(|mut d| {
+        program.fns.extend(made.constants.into_iter().map(|mut d| {
             d.file = std::sync::Arc::clone(&stamp);
             d
         }));
+        if !made.types.is_empty() {
+            program.types.extend(made.types.into_iter().map(|mut t| {
+                t.file = std::sync::Arc::clone(&stamp);
+                t
+            }));
+            synthesize_getters(&mut program);
+        }
     }
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
