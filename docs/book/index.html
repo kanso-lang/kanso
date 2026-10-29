@@ -25,7 +25,7 @@ extra_css: /book/book.css
 
 <p><strong>part iii—under the hood</strong> is the performance story: how a pure language with no memory syntax decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture—and how those wins are held by cost goldens and structural specs instead of stopwatches. we measured; chapter 10 keeps the receipts.</p>
 
-<p><strong>part iv—shipping</strong> builds programs from an empty directory and takes them as far as a binary on another machine, starting with a command-line tool.</p>
+<p><strong>part iv—shipping</strong> builds programs from an empty directory and takes them as far as a binary on another machine, a command-line tool and then a web service.</p>
 
 <p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, and the complete canonical-form law.</p>
 
@@ -47,6 +47,7 @@ extra_css: /book/book.css
   <li><a href="ch12.html"><span class="ch-num">12</span><span class="ch-title">sequences</span><span class="ch-blurb">adapters are recipes, consumers pull one element at a time, and the chain fuses to one loop</span></a></li>
   <li><div class="toc-part">part iv — shipping</div></li>
   <li><a href="ch13.html"><span class="ch-num">13</span><span class="ch-title">a command-line tool</span><span class="ch-blurb">a project from an empty directory: arguments, stdin, exit codes, tests, a binary</span></a></li>
+  <li><a href="ch14.html"><span class="ch-num">14</span><span class="ch-title">a web service</span><span class="ch-blurb">a handler is a function from a request and state to a response, tested by calling it</span></a></li>
   <li><div class="toc-part">appendices</div></li>
   <li><a href="appa.html"><span class="ch-num">a</span><span class="ch-title">the diagnostics catalog</span><span class="ch-blurb">every error kind, what it protects, and the exact message</span></a></li>
   <li><a href="appb.html"><span class="ch-num">b</span><span class="ch-title">builtin reference</span><span class="ch-blurb">the whole surface: six ambient names, the std modules, the 33-verb list vocabulary</span></a></li>

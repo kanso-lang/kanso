@@ -1,0 +1,10 @@
+# The first try at reading "dango 2": one function, three arms, and the two
+# ways an order can be wrong as two of them.
+fn counted _ none _
+  none
+
+fn counted _ _ none
+  none
+
+fn counted item each qty
+  "{qty} {item}: {each * qty} yen"

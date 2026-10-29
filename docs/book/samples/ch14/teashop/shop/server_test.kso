@@ -1,0 +1,15 @@
+import "std/net/http"
+
+order = "POST /order HTTP/1.1\r\n\r\n"
+
+fn body_of raw
+  (handle (http/parsed raw) opening).answer.body
+
+test_menu = body_of "GET /menu HTTP/1.1\r\n\r\n" == menu
+
+test_an_order = body_of "{order}dango 2" == "2 dango: 700 yen\n"
+
+test_nothing_we_sell = body_of "{order}mochi 1" == "we do not sell that\n"
+
+test_close_stops = (handle (http/parsed "POST /close") opening).carried
+  . (c -> summary c.value == "1 request, 0 sales, 0 yen")

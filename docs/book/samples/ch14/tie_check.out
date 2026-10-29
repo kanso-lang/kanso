@@ -1,0 +1,4 @@
+error[dispatch]: these `counted` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position
+  --> tie_check.kso:6:4
+   6 | fn counted _ _ none
+          ^
