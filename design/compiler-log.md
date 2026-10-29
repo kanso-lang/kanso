@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
-
-Clay ruled #2085. Every function in a module is visible from every file of
-it, so a local in one file that reuses a name declared in another file
-shadows a callable name, which is what no-shadowing forbids. Eighteen of the
-twenty ports met it as action at a distance: a declaration added in `b.kso`
-refused a parameter in `a.kso`, and the refusal pointed at the parameter
-without naming the declaration.
-
-**The ruling.** The rule stands across files. The refusal names the
-declaration it collides with, by file and line, so the fix is a rename made
-knowing what clashed. Letting a local reuse a name declared only in another
-file was declined, because inside the local's scope the name would mean two
-things. File-scoped private names were declined, because they would end the
-sharing of helpers between a module's files.
-
-Owes, on #2085: the refusal names the colliding declaration's file and line;
-an error golden for a two-file module.
-
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
 Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
@@ -1404,3 +1385,32 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — a missing clang is named, and so are missing tests
+
+Two messages a newcomer meets in the first hour named the wrong cause
+(#2217). With no clang on `PATH`, `kanso run` and `kanso play` said
+`cannot build: No such file or directory (os error 2)`, which reads as a
+missing source file, and `kanso build` said it could not invoke clang
+without saying where it had looked. All three now say clang is not on
+`PATH`. `run` and `play` also name the way out that needs no clang:
+`kanso run h.kso --interp`. The check runs only when the spawn reports
+not-found and no `clang` resolves on `PATH`. Any other build failure
+keeps the host's io text. `run` on a directory quotes the path as typed,
+not the entry it was taken to.
+
+`kanso test` on a file of bare statements was refused as a library with a
+statement in it. The file declares nothing, so the message described its
+shape and not the problem. It now says the file holds statements and no
+tests, where tests live, and that `kanso run` runs it.
+
+`kanso --help` now lists `--counters` beside `--release` on `build` (#2215).
+Before this, the only place a user learned the flag was the refusal a
+release binary prints when asked for counters it was built without.
+
+The clang messages are asserted whole in
+`tests/a_toolchain_the_path_cannot_reach.rs`, now three cases with `play`
+added. They stay listed in `tests/golden/unpinned_diagnostics.txt`, which
+says where their pin lives. The test message has a golden in
+`tests/golden/test_verb/statements.stderr`, and `front_door` checks the
+help line. Each spec was watched red on the compiler before the change.

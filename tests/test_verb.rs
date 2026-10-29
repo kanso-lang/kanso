@@ -178,3 +178,16 @@ fn a_malformed_test_file_does_not_stop_the_program_beside_it() {
     );
     assert_eq!(tested.status.code(), Some(2));
 }
+
+/// A file of statements, tested, says it holds no tests. It used to be refused
+/// as a library with a statement in it, which named the file's shape and not
+/// what was missing (#2217).
+#[test]
+fn a_file_of_statements_holds_no_tests() {
+    let output = in_fixtures(&["test", "statements.kso"]);
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("statements.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(output.status.code(), Some(2));
+}
