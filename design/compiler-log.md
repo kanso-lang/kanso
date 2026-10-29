@@ -1420,3 +1420,14 @@ std::net. Inside a group `accept` is still a scheduling point.
 tests/sockets_serve.rs runs a one-statement server on both engines and has
 the harness say hello to it. It was watched red with the old behaviour: the
 program exited before the harness could connect.
+
+Every binary links the runtime, so each benchmark's text grows by 448 bytes
+(text 5,641,403 summed), and its instructions move by layout: no benchmark
+accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
+work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
+work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
+codegen_instructions_dev 116,812,856 (+15,582) and
+codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
+0.001, and the floor follows under the rule for a change the language needs:
+a server written as its specification shows it, one statement, has to wait
+for its client.
