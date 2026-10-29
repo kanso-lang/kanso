@@ -1296,3 +1296,10 @@ the constant's do.
 tests/entry_file.rs runs an entry whose group sleeps in one member and prints
 in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
 library constant prints. The compiler before this change refused it.
+
+The three changes in #2240 move the compile rows by layout:
+compile_instructions 24,096,605 (+27), library_instructions 71,383,017 (+2),
+startup_instructions 50,258 (+4), codegen_instructions_release 371,560,989
+(-89) and browser_compile_instructions 343,289,560 (-12). Welfare falls by
+less than 0.0001, and the floor follows under the rule for a change that
+makes the tools do what the documentation says.
