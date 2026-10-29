@@ -115,14 +115,26 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     check_blank_policy(lexed, &mut diags, true);
     let mut imports: Vec<Import> = Vec::new();
+    let mut derives: Vec<crate::ast::Derive> = Vec::new();
     let mut first_stmt = None;
     for (idx, line) in lexed.lines.iter().enumerate() {
         if line.indent != 0 {
             continue;
         }
+        // `derive conventions/routes` (#2186). The word is only read here, in
+        // the header between the imports and the first statement, so a
+        // program that names something `derive` keeps the name.
+        if let (None, [(Tok::Ident(word), span, _), (Tok::Ident(name), _, _)]) =
+            (first_stmt, line.tokens.as_slice())
+        {
+            if word.as_str() == "derive" {
+                derives.push(crate::ast::Derive { name: name.to_string(), span: *span });
+                continue;
+            }
+        }
         match line.tokens.first() {
             Some((Tok::KwImport, _, _)) => {
-                if first_stmt.is_some() {
+                if first_stmt.is_some() || !derives.is_empty() {
                     diags.push(Diagnostic::new(
                         "formatting",
                         "imports open the file, before any statement".to_string(),
@@ -199,6 +211,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         types: Vec::new(),
         imports,
         reexports: Vec::new(),
+        derives,
         root: String::new(),
     })
 }
@@ -317,7 +330,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         i = body_end;
     }
     if diags.is_empty() {
-        Ok(Program { fns, types, imports, reexports, root: String::new() })
+        Ok(Program { fns, types, imports, reexports, derives: Vec::new(), root: String::new() })
     } else {
         Err(diags)
     }

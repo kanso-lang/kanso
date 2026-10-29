@@ -1,0 +1,4 @@
+error[derive]: `conventions/routing` declared `routes` holding <fn>, which a program cannot write down as a literal
+  --> tests/golden/derive/a_constant_that_holds_a_closure/main.kso:4:1
+   4 | derive conventions/routing
+       ^

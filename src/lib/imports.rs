@@ -17,6 +17,7 @@ fn load_dependencies(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        derives: Vec::new(),
         root: String::new(),
     };
     let mut exports = crate::hash::Map::default();
@@ -69,6 +70,9 @@ fn load_dependencies(
             }
             "std/base64" => {
                 Some(("base64", &[("base64.kso", include_str!("../../lib/base64/base64.kso"))]))
+            }
+            "std/derive" => {
+                Some(("derive", &[("derive.kso", include_str!("../../lib/derive/derive.kso"))]))
             }
             "std/regexp" => {
                 Some(("regexp", &[("regexp.kso", include_str!("../../lib/regexp/regexp.kso"))]))

@@ -1,0 +1,3 @@
+# A convention that cannot place anything says so with an err.
+pub fn routing _
+  err "no conventions here"
