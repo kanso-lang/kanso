@@ -354,15 +354,21 @@ fn recorded_as gs
 # What a title gives the program after naming it: `-- clay`, `< rain.txt`.
 # The recording is name@slug.out, where the slug is those words with every
 # run of other characters made one `_` and `<` read as `from`, so `-- a.txt`
-# and `< a.txt` stay apart; name@slug.args holds them as
-# written, for book_check to pass along.
+# and `< a.txt` stay apart. A title may pipe the run on, as in
+# `-- a.txt 2>&1 | grep allocs`; name@slug.args holds the words as written,
+# for book_check to pass along.
 given_pattern = "kanso [a-z]+ [a-z_0-9/.]+ ((?:-- |&lt; )[^<]*)</div>"
 
 fn given_of none
   ""
 
 fn given_of said
-  "@{slug (text/join (text/split (present said[1]) "&lt;") "from")}"
+  words = spelled (present said[1]) "&lt;" "from"
+  "@{slug (spelled (spelled words "&gt;" "") "&amp;" "")}"
+
+# An entity in a title, as the page escapes `<`, `>` and `&`.
+fn spelled words entity as
+  text/join (text/split words entity) as
 
 fn slug words
   marked = text/join (list/to_list (list/map (text/chars words) kept)) ""

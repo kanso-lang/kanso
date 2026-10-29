@@ -1,0 +1,6 @@
+test_words_are_lowercased ... ok
+test_top_two ... ok
+test_defaults ... ok
+test_top_and_path ... ok
+test_top_needs_a_number ... ok
+5 passed, 0 failed

@@ -1,0 +1,45 @@
+import "std/text"
+
+# What the command line asked for: a path, or none for standard input, and
+# how many words to show.
+pub type options
+  path
+  top
+
+# The command line could not be read. The reason is for the person who typed
+# it, so it says what was wrong in their terms.
+pub type bad_usage
+  reason
+
+pub fn options_of args
+  flags args 1 (options none 5)
+
+fn flags args at opts
+  flag args at opts args[at]
+
+fn flag _ _ opts none
+  opts
+
+fn flag args at opts "--top"
+  with_top args at opts (number args[at + 1])
+
+fn flag args at opts word
+  with_path args at opts word opts.path
+
+fn number none
+  none
+
+fn number word
+  text/to_int word
+
+fn with_top _ _ _ none
+  bad_usage "--top wants a number after it"
+
+fn with_top args at opts n
+  flags args (at + 2) (merge opts { "top":n })
+
+fn with_path args at opts word none
+  flags args (at + 1) (merge opts { "path":word })
+
+fn with_path _ _ _ word _
+  bad_usage "one file at a time, and {word} is a second"

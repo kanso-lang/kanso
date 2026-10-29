@@ -1,0 +1,3 @@
+tea.txt allocs=245
+tea10.txt allocs=526
+tea100.txt allocs=3307
