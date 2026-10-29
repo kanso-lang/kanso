@@ -340,9 +340,8 @@ fn load_with_definitions(
     let mut files: crate::hash::Map<String, String> = crate::hash::Map::default();
     let mut texts: crate::hash::Map<String, String> = crate::hash::Map::default();
     for (path, source) in definitions {
-        let dir = resolve_import(base, path).unwrap_or_else(|_| {
-            std::path::PathBuf::from(path.strip_prefix("./").unwrap_or(path))
-        });
+        let dir = resolve_import(base, path)
+            .unwrap_or_else(|_| std::path::PathBuf::from(path.strip_prefix("./").unwrap_or(path)));
         let text = files.entry(derived_key(&dir)).or_default();
         if !text.is_empty() {
             text.push('\n');
@@ -590,7 +589,12 @@ fn module_sources(
             out
         }
     };
-    let derived = DERIVED_FILES.with(|d| d.borrow().get(&derived_key(dir)).cloned());
+    // Asked only while a derivation's arms are loading: the key canonicalizes
+    // the path, and every other compile would pay for it at every module.
+    let derived = DERIVED_FILES.with(|d| {
+        let d = d.borrow();
+        (!d.is_empty()).then(|| d.get(&derived_key(dir)).cloned()).flatten()
+    });
     if let Some(text) = derived {
         sources.push((derived_name(dir), text));
     }
