@@ -108,6 +108,12 @@ pub trait Executor {
     fn accept_waiting(&mut self, _listener: i64) -> Result<i64, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// Whether a read on the connection would answer now: something has
+    /// arrived, or the other end has closed. `false` puts the fiber back in
+    /// the queue, as `accept` does.
+    fn readable(&mut self, _conn: i64) -> Result<bool, String> {
+        Err("this engine has no sockets".to_string())
+    }
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
         Err("this engine has no sockets".to_string())
     }
@@ -344,6 +350,25 @@ impl Executor for RealExecutor {
             s.conns.insert(handle, taken);
             Ok(handle)
         })
+    }
+
+    fn readable(&mut self, conn: i64) -> Result<bool, String> {
+        let stream = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.conns.get(&conn);
+            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(stream) = stream else {
+            return Err("that is not a connection".to_string());
+        };
+        stream.set_nonblocking(true).map_err(|e| e.to_string())?;
+        let peeked = stream.peek(&mut [0u8; 1]);
+        stream.set_nonblocking(false).map_err(|e| e.to_string())?;
+        match peeked {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(false),
+            Err(_) => Ok(true),
+        }
     }
 
     /// One read of what has arrived. An HTTP request that spans packets is
