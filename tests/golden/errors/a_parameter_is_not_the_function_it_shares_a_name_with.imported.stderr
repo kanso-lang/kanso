@@ -1,0 +1,4 @@
+error[dispatch]: these `t` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position (module a_parameter_is_not_the_function_it_shares_a_name_with)
+  --> a_parameter_is_not_the_function_it_shares_a_name_with.kso:15:4
+  15 | fn t _ 2
+          ^
