@@ -1,0 +1,1 @@
+error: `statements.kso` holds statements and no tests. `kanso test` runs the `test_*` constants a library declares, and a `*_test.kso` file beside a module tests that module. `kanso run statements.kso` runs this one

@@ -48,6 +48,87 @@ pub fn page headers body
 
 pub not_found = response 404 "Not Found" [] "not found\n"
 
+# Any status, with the reason phrase the code is registered with: a created
+# order answers 201, an order for something not sold 422, a wrong method 405.
+# A code with no phrase here goes out with an empty one, which HTTP allows.
+pub fn respond code headers body
+  response code (reason_of code) headers body
+
+fn reason_of 200
+  "OK"
+
+fn reason_of 201
+  "Created"
+
+fn reason_of 202
+  "Accepted"
+
+fn reason_of 204
+  "No Content"
+
+fn reason_of 301
+  "Moved Permanently"
+
+fn reason_of 302
+  "Found"
+
+fn reason_of 303
+  "See Other"
+
+fn reason_of 304
+  "Not Modified"
+
+fn reason_of 307
+  "Temporary Redirect"
+
+fn reason_of 308
+  "Permanent Redirect"
+
+fn reason_of 400
+  "Bad Request"
+
+fn reason_of 401
+  "Unauthorized"
+
+fn reason_of 403
+  "Forbidden"
+
+fn reason_of 404
+  "Not Found"
+
+fn reason_of 405
+  "Method Not Allowed"
+
+fn reason_of 409
+  "Conflict"
+
+fn reason_of 410
+  "Gone"
+
+fn reason_of 415
+  "Unsupported Media Type"
+
+fn reason_of 422
+  "Unprocessable Content"
+
+fn reason_of 429
+  "Too Many Requests"
+
+fn reason_of 500
+  "Internal Server Error"
+
+fn reason_of 501
+  "Not Implemented"
+
+fn reason_of 502
+  "Bad Gateway"
+
+fn reason_of 503
+  "Service Unavailable"
+
+fn reason_of _
+  ""
+
 # What a handler answers: this response, and what to carry to the next
 # request. `stop` in the carried slot ends the fold and what it holds is what
 # `serve_until` answers.

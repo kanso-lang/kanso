@@ -1175,12 +1175,22 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     let cache = hako_cache();
     if let Some((name, module)) = hako::split_name(path) {
         if let Some(pin) = LOCK.with(|l| l.borrow().get(&name).cloned()) {
-            let mut dir = hako::cached(&cache, &name, &pin.sha);
-            if let Some(rest) = module {
-                dir = dir.join(rest);
-            }
+            let tree = hako::cached(&cache, &name, &pin.sha);
+            let dir = match &module {
+                Some(rest) => tree.join(rest),
+                None => tree.clone(),
+            };
             if dir.is_dir() {
                 return Ok(dir);
+            }
+            // Installed and locked, so `kanso install`, which the message
+            // below would advise, changes nothing (#2234).
+            if let (Some(rest), true) = (&module, tree.is_dir()) {
+                return Err(format!(
+                    "error: cannot resolve import \"{path}\" — `{name}` is installed, \
+                     and has no module `{rest}` (its modules: {})\n",
+                    modules_in(&tree, &name)
+                ));
             }
         }
     }
@@ -1192,6 +1202,41 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         "error: cannot resolve import \"{path}\" — a bare path names a hako, and \
          it is not in the cache (run `kanso install`)\n"
     ))
+}
+
+/// The import paths a fetched tree answers: the tree itself when it holds
+/// `.kso` files, and each directory below it that does, sorted.
+fn modules_in(tree: &std::path::Path, name: &str) -> String {
+    let holds_source = |dir: &std::path::Path| {
+        std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| e.path().extension().is_some_and(|x| x == "kso"))
+    };
+    let mut found = Vec::new();
+    let mut pending = vec![tree.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        if holds_source(&dir) {
+            let rel = dir.strip_prefix(tree).unwrap_or(&dir).to_string_lossy().into_owned();
+            found.push(match rel.is_empty() {
+                true => format!("`{name}`"),
+                false => format!("`{name}/{rel}`"),
+            });
+        }
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            let hidden = entry.file_name().to_string_lossy().starts_with('.');
+            if path.is_dir() && !hidden {
+                pending.push(path);
+            }
+        }
+    }
+    found.sort();
+    match found.is_empty() {
+        true => "none".to_string(),
+        false => found.join(", "),
+    }
 }
 
 /// Where fetched hakos live. KANSO_HAKO moves it, which is how a test gets a

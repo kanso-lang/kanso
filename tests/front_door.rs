@@ -31,6 +31,14 @@ fn help_is_an_answer_rather_than_a_failure() {
     }
 }
 
+/// `--counters` was learned only from the refusal a release binary prints when
+/// asked for counters it was built without (#2215).
+#[test]
+fn help_names_the_counting_build() {
+    let (out, _, _) = kanso(&["--help"]);
+    assert!(out.contains("build <file|dir> [--release|--counters]"), "help said: {out}");
+}
+
 #[test]
 fn a_mistake_is_named_before_the_usage() {
     let cases: [(&[&str], &str); 5] = [

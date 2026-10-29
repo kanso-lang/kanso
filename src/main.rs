@@ -346,8 +346,10 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
                                      declared, then stop
   test <file|dir>                    run the `test_*` constants in each
                                      `*_test.kso` file, which sees only pub names
-  build <file|dir> [--release]       write a native binary here, named for
-                                     the program
+  build <file|dir> [--release|--counters]
+                                     write a native binary here, named for
+                                     the program; --counters builds one that
+                                     reports its counters under KANSO_COUNTERS=1
   repl                               evaluate expressions as you type them
 
   install <dir> [--from owner/repo@branch]
@@ -471,9 +473,11 @@ fn driven() -> ExitCode {
             .map(|n| n.to_string_lossy().into_owned()),
         false => None,
     };
-    let file = match rerouted_dir {
-        true => entry_inside.to_string_lossy().into_owned(),
-        false => file,
+    // The path as typed, kept only when it was a directory taken to its entry:
+    // a message offering `--interp` should quote what the user wrote.
+    let (file, typed) = match rerouted_dir {
+        true => (entry_inside.to_string_lossy().into_owned(), Some(file)),
+        false => (file, None),
     };
     // Testing a program directory tests its module: the entry holds
     // statements, the tests live in the library beside it. The descent only
@@ -575,7 +579,7 @@ fn driven() -> ExitCode {
     if interp {
         return run_interpreted(&program, program_args());
     }
-    run(&program, &file, &source, plan)
+    run(&program, &file, typed.as_deref().unwrap_or(&file), &source, plan)
 }
 
 /// `kanso update <dir> [hako]` — the one verb that takes a name after its
@@ -919,6 +923,13 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         }
         Ok(_) => {
             eprintln!("error: clang failed on {ll_path}");
+            ExitCode::FAILURE
+        }
+        Err(io) if clang_is_missing(&io) => {
+            eprintln!(
+                "error: cannot build: clang is not on PATH, and `kanso build` needs it to \
+                 write a native binary. install clang and build again"
+            );
             ExitCode::FAILURE
         }
         Err(io) => {
@@ -2241,6 +2252,20 @@ fn test(target: &str) -> ExitCode {
                 return ExitCode::from(2);
             }
         };
+        // A file of bare statements, tested, used to be refused as a library
+        // with a statement in it, which named the file's shape and not the
+        // missing tests.
+        let declares = source
+            .lines()
+            .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
+        if !declares && !kanso::is_test_file(std::path::Path::new(&file)) {
+            eprintln!(
+                "error: `{file}` holds statements and no tests. `kanso test` runs the \
+                 `test_*` constants a library declares, and a `*_test.kso` file beside a \
+                 module tests that module. `kanso run {file}` runs this one"
+            );
+            return ExitCode::from(2);
+        }
         let compiled = match kanso::is_test_file(std::path::Path::new(&file)) {
             true => kanso::compile_test_file(&file, &source),
             false => kanso::compile_source("test", &file, &source),
@@ -2330,12 +2355,13 @@ fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -
 
 /// `run` builds and executes: a dev-mode native binary, cached by IR hash so
 /// an unchanged program re-runs with no clang at all. `--plan` stays on the
-/// interpreter — it renders the effect DAG instead of executing it.
-fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode {
+/// interpreter — it renders the effect DAG instead of executing it. `asked`
+/// is the path as the user typed it, before a directory was taken to its entry.
+fn run(program: &ast::Program, file: &str, asked: &str, source: &str, plan: bool) -> ExitCode {
     if plan {
         return run_plan(program, file, source);
     }
-    match built_binary(program) {
+    match built_binary(program, "run", asked) {
         Ok(binary) => execute(&binary, ended_by_signal),
         Err(code) => code,
     }
@@ -2358,13 +2384,13 @@ fn play(program: &ast::Program, file: &str, source: &str) -> ExitCode {
         false => None,
     };
     let Some(played) = played else {
-        return run(program, file, source, false);
+        return run(program, file, file, source, false);
     };
     let explain = ended_by_signal;
     if played.exists() {
         return execute(&played, explain);
     }
-    match built_binary(program) {
+    match built_binary(program, "play", file) {
         Ok(binary) => {
             // Two plays racing to name one binary both find the name taken or
             // take it, and either way the file under it is the same build.
@@ -2430,8 +2456,13 @@ fn played_key(file: &str, source: &str) -> Option<String> {
 }
 
 /// The dev binary for a program: its IR emitted and looked up by the IR's key,
-/// built on a miss.
-fn built_binary(program: &ast::Program) -> Result<std::path::PathBuf, ExitCode> {
+/// built on a miss. `verb` and `file` word the way out when clang is missing,
+/// since the interpreter runs the same program without it.
+fn built_binary(
+    program: &ast::Program,
+    verb: &str,
+    file: &str,
+) -> Result<std::path::PathBuf, ExitCode> {
     let ir = match kanso::codegen::emit_ir_dev(program, closure_convention()) {
         Ok(ir) => ir,
         Err(unsupported) => {
@@ -2441,11 +2472,27 @@ fn built_binary(program: &ast::Program) -> Result<std::path::PathBuf, ExitCode> 
     };
     match cached_program_binary(&ir) {
         Ok(binary) => Ok(binary),
+        Err(io) if clang_is_missing(&io) => {
+            eprintln!(
+                "error: cannot build: clang is not on PATH, and `kanso {verb}` builds a \
+                 native binary with it. install clang, or run on the interpreter with \
+                 `kanso {verb} {file} --interp`"
+            );
+            Err(ExitCode::FAILURE)
+        }
         Err(io) => {
             eprintln!("error: cannot build: {io}");
             Err(ExitCode::FAILURE)
         }
     }
+}
+
+/// Whether a failed build failed because no `clang` resolves on `PATH`. The
+/// spawn reports that as a bare "not found", which reads as a missing file.
+fn clang_is_missing(io: &std::io::Error) -> bool {
+    let on_path = std::env::var_os("PATH")
+        .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join("clang").is_file()));
+    io.kind() == std::io::ErrorKind::NotFound && !on_path
 }
 
 /// Runs a built binary. `explain` words a death by signal, and is asked only

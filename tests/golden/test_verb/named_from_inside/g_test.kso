@@ -1,0 +1,4 @@
+fn g x
+  x
+
+test_g = g 1 == 1
