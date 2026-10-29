@@ -110862,3 +110862,399 @@ Owes, on #2086: `put` on a list on every engine; the in-place write under
 the existing uniqueness analysis; the checker accepting a list for `put`, and
 refusing at check what it refuses at run time (diff F9, inflate F8); micro and
 mem goldens; appendix B.
+
+## 2026-10-25 — a list walked by its rest joins the corpus
+
+`rest = list/to_list (list/drop xs 1)` is how most of this repository's
+scripts walk a list: the welfare script, the trend gate, `golden_prose` and
+the differentials among them. A battery of list and text shapes run at two
+sizes on both engines found it the worst of them. Each rest is built afresh,
+so a walk costs the square of the list on any engine, and `list/drop` builds
+it by stepping a cursor through the list one record at a time: `fold` has an
+arm that reads a capped cursor by index, which `take` reaches, and none for
+a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
+the interpreter, about 260 instructions an element stepped natively and
+12,700 interpreted.
+
+Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
+500 elements and the interpreted corpus with 70, measured on main at #2148
+before its fix. On this container the run program reads 888,090,230 with it
+and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
+interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
+same line for it.
+
+The rest of the battery is linear or n log n on both engines: `group_by`,
+`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
+elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
+natively and quadratic on the interpreter, 64 ms at 5,000 characters and
+563 ms at 20,000. On #2152's build, which shares a long string and slices
+an ASCII one by byte, the same two read 39 ms and 77 ms.
+
+CI's rows, against main at #2141. The run program reads work_runbench
+828,232,672 -> 869,011,503, and each rest's step records cost it memory as
+well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
+242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
+94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
+23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
+1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
+run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
+emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
+168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
+-> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
+interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
+623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
+browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
+1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
+344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
+re-bases the eight terms among these it weighs, each keeping its ratio to
+its baseline, and the floor stays at 95.22.
+
+## 2026-10-25 — the rest of a list after a drop is one copy
+
+`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
+`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
+a list, and it asks a new internal builtin, `rest_from`. Given a list and a
+position of at least 1, it answers the list's elements from that position
+on, copied in one move. Given anything else it answers none, and std walks
+that a step at a time as before, so a string still drops to its characters,
+bytes to their numbers and a negative count to nothing. `fold` gains the
+indexed arm a capped cursor already had, so a fold over a drop reads by
+index. Before this, each rest was built a step record and an advanced cursor
+per element.
+
+Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
+interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
+so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
+shared its list's storage would be linear, but a list's items pointer is
+also how a push onto it finds its buffer's header, so a list that points
+into the middle of another's items needs a header of its own first.
+
+`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
+the end and a negative count, from lists of numbers, records and lists, and
+from a string, bytes and a map, which keep their step walk; it also folds
+over a drop. Its output is main's interpreter, and both engines agree with
+it. A first draft clamped a negative drop to the whole list, where main
+answers none of it, and the fixture caught the difference. Moving the copy
+one element either way, on either engine, turns it red.
+
+On this container the run program reads 888,090,230 -> 847,406,017 and the
+interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
+phase's 40.8 million instructions natively, and all but 1.7 million of its
+34 million interpreted.
+
+CI's rows, against #2156's phase. The run program reads work_runbench
+869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
+-> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
+20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
+run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
+1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
+list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
+27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
+523,165,714 against the phase. Main at #2152 added `texts` to the
+interpreted corpus, so against main the interpreter's rows carry the phase
+and its fix together: interp_instructions 564,058,857 -> 565,857,214,
+interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
+1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
+61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
+
+The longer std/list and the builtin cost every compile. Against main at
+#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
+72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
+compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
+emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
+116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
+370,222,776. The front end visits compile_corpus more often and holds more
+while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
+598,984 -> 607,213, read on this container, whose rustc is the one the
+golden names. The tab compiles the corpus with `rested` in it as well, so
+its compile rows carry the phase too: browser_compile_instructions
+344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
+839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
+code carries the new runtime function, about 704 bytes each: text
+5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
+two programs that never drop read work_encodebench 2,327,386,052 ->
+2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
+emitted lines of the drop's new arms land at emitted_other_lines 168,907,
+emitted_other_branches 17,946, emitted_other_calls 20,494 and
+emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
+list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
+Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-25 — a delete marks its pair dead where it stands
+
+`k_b_delete_mut` took a key out of a map nobody else holds by moving every
+pair after it down one slot. In the run program's `drained` phase that move
+was 87% of the phase's instructions, and draining half of 80,000 keys took
+0.92 s (#2118).
+
+Now the deleted pair keeps its slot. Its key moves into the value's slot, and
+the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
+stay sorted by key, so the next delete finds its key with a binary search
+that reads a dead pair by the key it kept. Dead pairs at the end of the map
+are dropped at once. The header records the state in `sorted_len`, which is
+negative while the map has no view: -(len + 1) while the pairs are what the
+deletes left, and any other negative once an in-place put appends past them.
+A lookup searches past the dead pairs. Every other reader closes the gaps
+first, in one pass at the top of `k_map_sort_build`. A persistent put closes
+them before it can share the pairs with a new header, and so do the deep copy
+and the carry's evacuation, whose headers start with no view.
+
+Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
+takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
+6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
+
+`delete_marks` counts the pairs marked dead. It is printed only by a run that
+marked one, so the veins that never delete in place, the sibling
+repositories' among them, read as before. The run program reads 550 and
+`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
+`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
+reader: a lookup, the length, the keys, an in-place put and a delete after
+it, a delete of a key already gone, a drain to empty, and two persistent
+puts beside the maps they copy. Three mutations turn it red: a search that
+answers a dead pair, a persistent put that shares dead pairs, and gaps
+closed as though nothing had been appended.
+
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.
+
+## 2026-10-26 — a refused binding names the line its name is declared on
+
+The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
+asks the refusal to name the declaration it collides with. One declared in
+another file of the module was already named, with its file and line, since
+de0b9aec, and `a_binding_named_like_a_declaration_in_another_file` pins it.
+A collision inside one file still said only "`greet` is already a
+declaration", so the reader had to find it. It now says "`greet` is already
+a declaration, at line 1". A name no file declares, such as `length` from
+the library or `done`, keeps the message without a line.
+
+`shadowed_declaration` and `a_binding_may_not_take_a_name_that_resolves_without_it`
+carry the new line, as does appendix A's panel. Adding a space to the message
+turns both red.
+
+CI's rows, against main at #2155. The rewrite runs only on a refusal, so
+what moves is layout: compile_instructions 25,157,249 -> 25,156,620,
+entry_instructions 73,813,902 -> 73,811,997, library_instructions
+73,484,685 -> 73,482,762 and browser_compile_instructions 359,922,625 ->
+359,922,521. Welfare rises by less than a hundredth and the rise is banked.
+
+## 2026-10-26 — `put` writes a list at a position
+
+The 2026-10-25 gavel on #2086 rules that `put xs i v` on a list answers the
+list with element `i` replaced, 1-based as `xs[i]` reads it, and `none` for
+a position outside the list. A position that is not an int stops the run,
+on both engines, with "put writes a list at an int position"; a first
+argument that is neither a map nor a list stops it with "put writes a map at
+a key or a list at a position", where both used to say "put takes a map, a
+key, and a value". A position past a word answers `none`, as a read there
+does.
+
+The interpreter replaces the element in a copy of the vector, or in the
+vector itself at a site the linearity analysis licenses. The native runtime
+does the same in `k_list_put`, which `k_b_put` and `k_b_put_mut` reach on a
+list before their map arms. No analysis changed: `put` with three arguments
+was already a write into its first argument wherever that argument was
+unique, so a list built by in-place pushes and handed down a loop is
+written where it stands.
+
+A persistent push hands its answer the buffer it was given when the list is
+that buffer's frontier, so two lists can share one buffer. I first had the
+in-place write copy a list into a buffer of its own before writing, and
+then wrote programs to make the copy matter: a push onto a list still held,
+followed by a write into the push's answer, and a function that writes into
+a literal on every call. Neither write was in place. The analysis calls a
+push's answer unique only when the list pushed onto is, which is the case
+where the push was in place and nothing shares the buffer, and a list
+literal is built afresh on each evaluation. Both programs print the same
+lines with the copy taken out, so I removed it.
+
+Inference answers `LIST | NONE` for `put` on a list, `MAP` on a map, and
+both where the first argument could be either. The checker's literal table
+takes a list for `put`, and the after-inference walk that refused a list
+handed to `put` (#2091's fifth item) now asks only of `delete`, `keys`,
+`values` and `entries`, so diff F9 and inflate F8, which passed check and
+stopped at run time, now pass both.
+
+`a_list_written_at_a_position` (micro, both engines) writes inside the list,
+at 0, one past the end, -1 and a bignum, into a literal, with a list as the
+value, into an empty list, through a loop that fills six squares, through
+the shared-buffer program and through the literal written on every call.
+`a_list_written_in_place_is_not_copied` (mem) fills 4,000 squares into a
+list built by pushes and reads allocs=10. `put_writes_a_list_at_an_int_position`
+pins the refusal, and `put_takes_a_map_a_key_and_a_value` is renamed
+`put_writes_a_map_or_a_list` with the new words. `errors/a_list_handed_to_put`
+becomes `a_list_handed_to_delete`, the same two shapes handed to `delete`.
+Three mutations turn the corpus red: the native in-place write made a copy
+(the mem golden), the persistent write made through the original (the
+micro, natively), and the interpreter writing at the wrong position (the
+micro, interpreted). Appendix B's `put` entry gains the list signature and a
+sample.
+
+CI's rows, against main at #2160. The runtime's machine code grows by
+`k_list_put` and the two puts' list arms, 752 bytes in every benchmark binary:
+text 5,679,729 -> 5,690,257. The interpreter reads interp_instructions
+565,857,214 -> 565,868,501, its `put` arm asking first whether it holds a
+list, and interp_allocs 628,011 -> 628,003. The tab reads
+browser_run_instructions 61,465,433 -> 61,508,652 and
+browser_compile_instructions 359,922,521 -> 359,923,093. The rest move by
+layout: compile_instructions 25,156,620 -> 25,156,569, entry_instructions
+73,811,997 -> 73,811,949, library_instructions 73,482,762 -> 73,482,714,
+codegen_instructions_dev 116,504,899 -> 116,505,396,
+codegen_instructions_release 370,158,521 -> 370,153,673, and among the
+benchmarks work_basket 18,278,697 -> 18,266,806, work_runbench
+822,295,072 -> 822,288,845, work_encodebench 2,327,387,236 ->
+2,327,387,586, work_livebench 936,013,522 -> 936,013,844, work_oneshot
+10,033,523 -> 10,034,013 and work_readbench 4,581,973 -> 4,581,975. Welfare holds at 95.38 and is banked.
+
+## 2026-10-26 — a failure inside the library names the program line that called in
+
+The 2026-10-26 gavel on #2099 keeps a library failure's own line and adds,
+under it, the nearest line of the program's own files that called in:
+
+```
+error[runtime]: split takes two strings
+  failed in text/split at std/text/text.kso:38
+  called from g.kso:11
+```
+
+A file is the library's when it is under `std/` or fetched under `.hako/`,
+which `provenance::is_library_file` says and the runtime's
+`k_library_place` repeats for a site's file. The line is added only under a
+library line, so a failure in the program's own code reads as before.
+
+The interpreter adds it as a failure leaves a call written by name, in a
+program file, of a group the library declares. The first such call the
+failure passes out of is the nearest, and the line rides in the place string
+`failed in` already prints, so none of the 108 places that build a
+`RuntimeError` changed. Natively the emitter saves `k_from` before each such
+call, stores the call's `<file>:<line>`, and puts the saved one back when the
+call returns; `k_died` prints it when the failing site's file is the
+library's. A program function the library calls back sets and restores its
+own, so a failure after the callback names the line that called the library
+function, as the interpreter's frames do. The two fused slice doors, which
+call no wrapper, save and restore around the door.
+
+A call into the library in tail position is made rather than looped on, on
+both engines, as an insisting form already is: a looped call would leave no
+program frame to name in the interpreter and nothing to restore natively. A
+call to a flattened twin is not counted as one. `flat` copies `text/span_to`
+into a twin that carries the program's own continuation, so the twin can be a
+step of the program's loop; the first draft made that call an ordinary one,
+and `a_span_handed_on_is_never_built` read beat_iters 26 -> 17, the loop no
+longer rewinding. Both engines skip twins, and it reads 26 again.
+
+The emitted lines move by the store and its restore: the compile samples
+read recursion 470 -> 471, dispatch 370 -> 371, guards 327 -> 328 and
+records 426 -> 427 lines, and the module 1,181 -> 1,186.
+Calls through a function value and steps a chain word runs are not counted on
+either engine. A step that `.>` hands a box is run by the executor after the
+line that wrote it has finished.
+
+`a_library_failure_names_the_line_that_called_in` reaches `text/split`
+through two program functions, the inner one calling it in tail position.
+`a_library_failure_after_a_callback_names_the_outer_line` has `group_by` call
+a key function that calls `text/trim`, and then fail inside the library's
+own `list/file_under`. `an_operator_failing_in_the_library_names_the_line_that_called_in`
+hands `pad_start` a width it subtracts from. Between them they cover the
+ruling's three kinds of failure born in the library, a builtin's, a library
+function's and an operator's, and all three are in the runtime corpus, which
+every engine runs. Nineteen runtime goldens whose
+failure is inside the library, and `test_verb/fails_in_std`, gain the line.
+Four mutations turn the corpus red: the native restore made a no-op, the
+interpreter's addition taken out, and the tail call kept on either engine.
+
+CI's rows, against main at #2161. The interpreter's crossing test first
+scanned both files' paths for a fetched hako on every tail call, and
+`interp_instructions` read 582,178,759; a frame now carries the answer,
+read off its path once, and it reads 571,553,496 against main's
+565,868,501, the rest being the calls into the library made rather than
+looped. `interp_allocs` reads 628,009 and `interp_peak_bytes` 1,313,667.
+Natively the store and restore around each crossing move the run rows:
+`work_encodebench` 2,335,195,960, `work_livebench` 938,703,709,
+`work_widebench` 28,605,098, `work_deepbench` 198,242,568, `work_basket`
+18,294,810, `work_readbench` 4,583,158, `work_jsonbench` 557,387,287,
+`work_pendbench` 154,123,901 (down), `work_runbench` 822,286,353,
+`work_oneshot` 10,033,544, `work_digestbench` 4,122,972,
+`work_escapebench` 40,308,378, `work_indexbench` 1,837,160 and
+`work_scanbench` 274,245. The emitter writes the stores:
+`emitted_lines` 14,383, `emitted_other_calls` 20,496,
+`emitted_other_lines` 170,009, `emit_instructions` 5,725,463, `text`
+5,698,479, `lines` 1,597 and `module_lines` 1,186. Compiling them moves
+`codegen_instructions_dev` to 116,762,508 and `codegen_instructions_release`
+to 371,664,033. In the tab, `browser_compile_instructions` reads
+360,520,776, `browser_compile_peak_bytes` 842,026 and
+`browser_run_instructions` 61,510,637. The live vein's `cohort_kept` reads
+1 where it read 0: a program-to-library tail call is now a call, so the
+caller's beat stays open around it, and on its pop the survivor is more
+than half of what grew, so the region is kept rather than copied out; with
+that one arm of `emit_tail` taken back out it reads 0 again. Welfare is
+banked at 95.38, the floor taking what this ruled feature measured.
+
+## 2026-10-26 — gavel: an err is born boxed
+
+Clay ruled #2087. Since #1884 a name bound to a call that can fail carries
+the err into the check, and a function it reaches must take it with an
+`(err _)` arm. Most of the arms the ports added only hand the err back:
+site wrote 68, toml 37 and bc 22, and bc's came in three rounds because each
+new arm made its callers need one. A bare err did two jobs that other things
+already do. For an outcome the caller handles there are `none` and markers,
+and for a failure that travels up there is the box.
+
+**The ruling.** Clay: "maybe you can unbox an error and pass it around but
+you can't generate an unboxed error." Every way of making an err makes a
+boxed failure. `err "…"` answers an effect that bubbles to a foreign `rescue`
+or the endpoint, and no expression produces a bare err. An err taken out of
+its box, by `rescue` or by a chain callback handed the failure, is an
+ordinary value: it can be passed, stored and dispatched on, and `effect` puts
+it back in a box. An outcome the caller is expected to handle is an ordinary
+value, `none` or a marker or a record carrying the reason. A plain form
+answers one of those, and its `!` form answers the boxed err with its
+message. A box cannot be used as a value without `.>`, so a failure still
+cannot slip into arithmetic.
+
+This supersedes part 2 of the 2026-09-15 gavel ("a bare err is data") and
+the bare err in the 2026-09-16 list of what a non-bang form answers. The
+issue's three options were declined in favour of this one.
+
+Owes, on #2087: `err "…"` answers a boxed failure on every engine, and the
+checker has no bare-err type left to track; each bare err in the library
+classified, a mistake becoming a box and an expected outcome becoming `none`
+or a marker on the plain form with the boxed message on the `!` form; an
+unboxed err behaving as a value on every engine, with goldens; the ports'
+hand-back arms removed, and #2088's migration using the `!` form at reads that
+must succeed; ch04, ch05 and appendix B rewritten where they describe bare
+errs as data, and the error goldens regenerated.

@@ -1,0 +1,7 @@
+import "std/time"
+
+rolls =
+  time/sleep 30 .> (_ -> print "slow")
+  print "fast"
+
+rolls .> (_ -> print "done")

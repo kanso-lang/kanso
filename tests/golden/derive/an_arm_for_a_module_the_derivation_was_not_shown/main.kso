@@ -1,0 +1,8 @@
+import "./comments"
+import "./conventions"
+import "./posts"
+
+derive conventions/routed
+
+print (conventions/path_to (posts/made 3))
+print (conventions/path_to (comments/made 4))

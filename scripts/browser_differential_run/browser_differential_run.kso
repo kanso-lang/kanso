@@ -250,8 +250,8 @@ fn book_with_out paths at acc path said
   os/read_file! path .> on
 
 fn book_one paths at acc path said src
-  kept = book_keep acc path src said
-  book_read paths (at + 1) kept
+  on = (calls -> book_read paths (at + 1) (book_keep acc path src said calls))
+  os/read_file! "docs/book-play.js" .> machine_calls .> on
 
 fn with_names ds at acc names
   here = ds[at]
@@ -293,23 +293,35 @@ fn more_dirs ds at acc false
 
 pub play = gather_dirs dirs 1 []
 
-# What a tab cannot give a program. book-play.js upgrades a panel only when a
-# sample passes the same test, so the differential covers exactly the samples
-# a reader can press run on.
-needs_a_machine = [
-  "os/read_file"
-  "os/write_file"
-  "os/args"
-  "io/stdin"
-  "io/read_line"
-  "os/list_dir"
-  "os/run"
-  "os/make_dir"
-  "os/exists"
-  "os/is_dir"
-  "os/modified"
-  "os/read_bytes"
-]
+# What a tab cannot give a program, read from the page that decides it.
+# book-play.js upgrades a panel to a live editor only when its sample names
+# none of NEEDS_A_MACHINE, so the differential covers exactly the samples a
+# reader can press run on. The list lived here as well, and the two drifted
+# (#2219). The regex is `prefix\/(?:a|b)` groups joined by `|`, and each
+# group becomes `prefix/a`, `prefix/b`.
+fn machine_calls js
+  after = text/split js "NEEDS_A_MACHINE = /\\b(?:"
+  after[2]! .> regex_body
+
+fn regex_body rest
+  inside = text/split rest ")\\b/;"
+  inside[1]! .> (body -> machine_groups (text/split body ")|") 1 [])
+
+fn machine_groups groups at acc
+  return acc if at > length groups
+  groups[at]! .> (g -> machine_group groups at acc (text/split g "\\/(?:"))
+
+fn machine_group groups at acc halves
+  halves[1]! .> (prefix -> machine_names groups at acc prefix halves)
+
+fn machine_names groups at acc prefix halves
+  on = (alts -> machine_named groups at acc prefix alts)
+  halves[2]! .> on
+
+fn machine_named groups at acc prefix alts
+  names = text/split (text/join (text/split alts ")") "") "|"
+  calls = list/to_list (list/map names (n -> "{prefix}/{n}"))
+  machine_groups groups (at + 1) (list/concat acc calls)
 
 fn names_any? src needles at
   hunted? src needles at (at > length needles)
@@ -334,12 +346,11 @@ fn recorded_of path
 # A sample that imports a module beside it needs a directory, and the tab is
 # handed one source. ch04's boundary.kso was left out only because its
 # recorded output began with its error, and stdout now comes first.
-fn book_keep acc path src said
+fn book_keep acc path src said calls
   refused = text/slice said 1 5 == "error"
   beside = local_import? src
   skip = (machine -> either? refused (either? machine beside))
-  names_any? src needs_a_machine 1
-    .> (machine -> put_unless acc path src (skip machine))
+  names_any? src calls 1 .> (machine -> put_unless acc path src (skip machine))
 
 fn put_unless acc _ _ true
   acc

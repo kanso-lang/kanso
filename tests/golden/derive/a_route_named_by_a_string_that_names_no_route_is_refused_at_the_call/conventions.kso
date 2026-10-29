@@ -1,0 +1,33 @@
+import "std/derive"
+import "std/list"
+
+# A link names its route by a string: "posts/show". A string that names no
+# route is refused at the call that writes it.
+pub fn linked p
+  list/fold p.modules [] (acc m -> list/concat acc (stray_links m))
+
+pub fn link _
+  "a link"
+
+fn stray_links m
+  links = list/select m.calls (c -> c.callee == "conventions/link")
+  stray = list/select links (c -> not routed? c.strings[1])
+  list/to_list (list/map stray (c -> refused c c.strings[1]))
+
+fn routed? "posts/index"
+  true
+
+fn routed? "posts/show"
+  true
+
+fn routed? none
+  false
+
+fn routed? _
+  false
+
+fn refused c none
+  derive/refuse_call c "a link names no route"
+
+fn refused c name
+  derive/refuse_call c "`{name}` names no route"

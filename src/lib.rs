@@ -169,12 +169,19 @@ fn compile_parsed_entry(
         });
     }
     let mut visited = crate::hash::Set::default();
-    let (dep_program, exports, surfaced) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, mut exports, mut surfaced) =
+        load_dependencies(&base, &import_list, &mut visited)?;
     // Before anything reads the entry's names: what a derivation declares
     // mentions the modules it describes, and those imports are in use.
     if !program.derives.is_empty() {
         let made = phase::watched("derive", || derive::derive(&program, &dep_program, &exports))
             .map_err(|d| render_merged(&d, file, source))?;
+        // An arm a derivation defined belongs to a module the entry imports,
+        // and that module compiles it as one of its own files.
+        if !made.definitions.is_empty() {
+            (dep_program, exports, surfaced) =
+                load_with_definitions(&base, &import_list, &made.definitions)?;
+        }
         let stamp: std::sync::Arc<str> = std::sync::Arc::from(file);
         program.fns.extend(made.constants.into_iter().map(|mut d| {
             d.file = std::sync::Arc::clone(&stamp);
@@ -764,6 +771,11 @@ fn local_import(source: &str) -> Option<String> {
 /// definitions is a library, which `check` and `test` compile and the running
 /// verbs refuse with the route that would run it. The CLI and the browser
 /// share this so the engines never diverge on which compile a file gets.
+/// What the library parse says at a top-level statement. `kanso check` reads
+/// it as the sign of a play file and checks the file as play instead.
+pub const STATEMENT_IN_A_LIBRARY: &str = "a file with declarations is a library, and a library \
+     has no statements to run — `kanso play` runs declarations beside statements in one file";
+
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
     // main.kso is an entry by NAME (the module-shape gavel): the filename
     // states the intent, so a definition inside one gets the entry
@@ -780,7 +792,16 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
         .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
     let library_verb = command == "test";
     match (command, has_defs) {
-        ("check", true) => compile_library(file, source),
+        // A play file (declarations beside statements) is checked as `kanso
+        // play` would compile it. The library parse refuses its first
+        // statement, and that refusal is the one sign of the shape, so a file
+        // it stops for that reason alone is checked again as play (#2205).
+        ("check", true) => compile_library(file, source).or_else(|refused| {
+            match refused.contains(STATEMENT_IN_A_LIBRARY) {
+                true => compile_play_file(file, source),
+                false => Err(refused),
+            }
+        }),
         (_, true) if !library_verb && declares_tests(source) => {
             Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
         }

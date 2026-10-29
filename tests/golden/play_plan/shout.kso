@@ -1,0 +1,4 @@
+fn shout s
+  "{s}!"
+
+print (shout "hi") .> (_ -> print "bye")

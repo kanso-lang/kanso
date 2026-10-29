@@ -1,0 +1,4 @@
+error[derive]: `posts/shwo` names no route
+  --> tests/golden/derive/a_route_named_by_a_string_that_names_no_route_is_refused_at_the_call/pages.kso:5:13
+   5 |   drafted = conventions/link "posts/shwo"
+                   ^
