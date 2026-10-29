@@ -316,11 +316,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             _ => diags.push(Diagnostic::new(
                 "syntax",
                 match line.tokens.first() {
-                    Some((Tok::Ident(_), _, _)) => {
-                        "a file with declarations is a library, and a library has no \
-                         statements to run — `kanso play` runs declarations beside \
-                         statements in one file"
-                    }
+                    Some((Tok::Ident(_), _, _)) => crate::STATEMENT_IN_A_LIBRARY,
                     _ => "a top-level line must begin with `fn`, `type`, or a constant binding",
                 }
                 .to_string(),

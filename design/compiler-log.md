@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: `put` writes a list at an index
-
-Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
-`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
-list, so the ports built vectors from maps with integer keys and paid for
-keys they did not need.
-
-**The ruling.** `put xs i v` answers the list with element `i` replaced,
-1-based like `xs[i]`. An index outside the list answers `none`, as a read
-there does. A list nothing else holds is written in place, as a map already
-is.
-
-Owes, on #2086: `put` on a list on every engine; the in-place write under
-the existing uniqueness analysis; the checker accepting a list for `put`, and
-refusing at check what it refuses at run time (diff F9, inflate F8); micro and
-mem goldens; appendix B.
-
 ## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
 
 Clay ruled #2099. Under #1975 a run-time failure names the line it happened
@@ -1404,3 +1387,19 @@ a flag fell to "wants a file or directory". The message now names the flag:
 tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
 plan with a golden; tests/front_door.rs gains `play` with no file and `check`
 with `--plan`. Both were watched red on the compiler before the change.
+
+## 2026-10-29 — check reads a play file as play
+
+#2205's first item, filed by the docs worker. `kanso check` sent any file
+with a declaration in it to the library compile, which refused a play file's
+first statement and checked nothing else, so a play file had no check at all
+and the book's `_check` samples had to stay `pub play` libraries. A file the
+library parse stops at a statement, and for that reason alone, is now
+checked as `kanso play` compiles it: a play file that would run reads `ok`,
+and one that would not is refused with what `play` says. The library parse's
+refusal is the one sign of the shape, so its wording now lives in one
+constant that the parser says and `check` reads.
+
+tests/check_reads_a_play_file.rs checks one play file that runs and one that
+names an unknown name. The compiler before this change refused both with the
+library's statement error.
