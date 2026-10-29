@@ -565,12 +565,23 @@ pub struct TypeDecl {
     pub file: std::sync::Arc<str>,
 }
 
+/// A derivation an entry asks for, by the name its module exports it under.
+#[derive(Clone, Debug)]
+pub struct Derive {
+    pub name: String,
+    pub span: Span,
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub fns: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,
     pub imports: Vec<Import>,
     pub reexports: Vec<Reexport>,
+    /// `derive conventions/routes` lines, in the order written: each names a
+    /// pub function the compiler runs over a description of the program
+    /// before checking it (#2186).
+    pub derives: Vec<Derive>,
     /// The root module's name, the one an importer would write for it: a
     /// file's stem, a directory's name. RULED 2026-08-29, "records print
     /// qualified, everywhere": a record prints `{module}/{type}` whatever the
