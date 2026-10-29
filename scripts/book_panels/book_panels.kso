@@ -328,7 +328,8 @@ fn recorded_as gs
 
 # What a title gives the program after naming it: `-- clay`, `< rain.txt`.
 # The recording is name@slug.out, where the slug is those words with every
-# run of other characters made one `_`, and name@slug.args holds them as
+# run of other characters made one `_` and `<` read as `from`, so `-- a.txt`
+# and `< a.txt` stay apart; name@slug.args holds them as
 # written, for book_check to pass along.
 given_pattern = "kanso [a-z]+ [a-z_0-9/.]+ ((?:-- |&lt; )[^<]*)</div>"
 
@@ -336,7 +337,7 @@ fn given_of none
   ""
 
 fn given_of said
-  "@{slug (text/join (text/split (present said[1]) "&lt;") "")}"
+  "@{slug (text/join (text/split (present said[1]) "&lt;") "from")}"
 
 fn slug words
   marked = text/join (list/to_list (list/map (text/chars words) kept)) ""
