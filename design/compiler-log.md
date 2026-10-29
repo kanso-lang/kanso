@@ -1386,7 +1386,7 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
 
-## 2026-10-29 — five messages that named the wrong cause
+## 2026-10-29 — six messages that named the wrong cause
 
 Two messages a newcomer meets in the first hour named the wrong cause
 (#2217). With no clang on `PATH`, `kanso run` and `kanso play` said
@@ -1426,3 +1426,12 @@ cache, and when it is, names the modules the tree does have:
 ``error: cannot resolve import "acme/widgets/gadgets" — `acme/widgets` is
 installed, and has no module `gadgets` (its modules: `acme/widgets`)``.
 tests/hako.rs asserts both, and both were watched red.
+
+The sixth is #2205's last item. A test run from inside its module imports
+the module as `../<name>`, so a refusal in a sibling pointed at
+`../t/p.kso` where the reader sees `p.kso`. A module file whose path climbs
+out of the working directory and back in is now shown from the working
+directory. The check is made only for a path that starts with `..`. The
+refusal itself stands: `p.kso` holds a `pub fn` and a statement, which is
+neither a library nor a play file. tests/test_verb.rs pins the message,
+watched red with the old path.

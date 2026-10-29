@@ -497,6 +497,25 @@ fn compile_module_inner(
     loaded
 }
 
+/// A module file's name as a diagnostic prints it. A test run from inside
+/// its module imports the module as `../<name>`, which named a file beside
+/// the reader `../t/p.kso` (#2205). A path that climbs out of the working
+/// directory and back into it is shown from the working directory.
+fn shown(path: &std::path::Path) -> String {
+    let file = path.to_string_lossy().into_owned();
+    if !file.starts_with("..") {
+        return file;
+    }
+    let here = std::env::current_dir().and_then(|d| d.canonicalize());
+    match (here, path.canonicalize()) {
+        (Ok(here), Ok(full)) => match full.strip_prefix(&here) {
+            Ok(rest) => rest.to_string_lossy().into_owned(),
+            Err(_) => file,
+        },
+        _ => file,
+    }
+}
+
 // The files a module is made of, in the order they are merged. Called once to
 // compile the module, and a second time only if the merged check raises: a
 // located diagnostic needs the text of the file it is about, and holding that
@@ -528,7 +547,7 @@ fn module_sources(
             paths.sort();
             let mut out = Vec::new();
             for path in &paths {
-                let file = path.to_string_lossy().to_string();
+                let file = shown(path);
                 let source = std::fs::read_to_string(path)
                     .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
                 out.push((file, source));

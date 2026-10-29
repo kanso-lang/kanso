@@ -1,0 +1,4 @@
+error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
+  --> p.kso:4:1
+   4 | print "{f 1}"
+       ^
