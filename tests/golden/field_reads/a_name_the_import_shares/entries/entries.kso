@@ -1,0 +1,5 @@
+pub type signature
+  name
+
+pub fn index x
+  (signature x).name + 1

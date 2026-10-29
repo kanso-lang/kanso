@@ -1,0 +1,7 @@
+import "../shared"
+import "./conventions"
+import "./posts"
+
+derive conventions/named
+
+print "{modules} {shared/greeting "kanso"}"

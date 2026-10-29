@@ -1,0 +1,49 @@
+# RFC 4648's test vectors, both ways, and bytes that are not text.
+import "std/testing"
+import "std/text"
+
+fn there s
+  encode (text/bytes s)
+
+fn back s
+  spelled (decode s)
+
+fn spelled none
+  none
+
+fn spelled bs
+  text/utf8 bs
+
+test_empty = there "" == ""
+
+test_f = there "f" == "Zg=="
+
+test_fo = there "fo" == "Zm8="
+
+test_foo = there "foo" == "Zm9v"
+
+test_foob = there "foob" == "Zm9vYg=="
+
+test_fooba = there "fooba" == "Zm9vYmE="
+
+test_foobar = there "foobar" == "Zm9vYmFy"
+
+test_back_f = back "Zg==" == "f"
+
+test_back_fooba = back "Zm9vYmE=" == "fooba"
+
+test_back_foobar = back "Zm9vYmFy" == "foobar"
+
+test_bytes = encode (text/to_bytes [0 255 254 63 191]) == "AP/+P78="
+
+test_bytes_back = decode "AP/+P78=" == [0 255 254 63 191]
+
+test_a_ragged_group_is_none = decode "Zg=" == none
+
+test_a_stray_letter_is_none = decode "Z!==" == none
+
+ragged = "base64 comes in groups of four characters"
+
+test_a_ragged_group_says_why =
+  decoded = decode! "Zg="
+  testing/when_failed decoded (r -> r == ragged)

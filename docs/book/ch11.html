@@ -156,6 +156,66 @@ area came through: 3.14159</code></pre>
 </div>
 </div>
 
+<h2>a convention runs while the program compiles</h2>
+
+<p>a web framework often places code by its name: a function called <code>index</code> in a module called <code>posts</code> answers a request for <code>/posts/index</code>. kanso lets a library state a convention like that as an ordinary function, which runs while your program compiles. the entry asks for it with a <code>derive</code> line after its imports:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./conventions"</span>
+<span class="k">import</span> <span class="s">"./posts"</span>
+
+<span class="k">derive</span> conventions/routing
+
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/posts/show"</span> <span class="n">7</span>)
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/posts/index"</span> <span class="n">2</span>)
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/nowhere"</span> <span class="n">2</span>)</code></pre>
+</div>
+
+<p>the compiler describes the modules the entry imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, and each record type with its fields. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/conventions.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/derive"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="c"># Every pub function of every module, keyed by its path.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">routing</span> p
+  rows <span class="o">=</span> <span class="f">list/fold</span> p<span class="o">.</span>modules {} (<span class="f">acc</span> m <span class="o">-&gt;</span> <span class="f">list/fold</span> m<span class="o">.</span><span class="f">functions</span> acc (<span class="f">row</span> m))
+  [(<span class="f">derive/declare</span> <span class="s">"routes"</span> <span class="s">"routes"</span> rows)]
+
+<span class="k">fn</span> <span class="f">row</span> m
+  (<span class="f">acc</span> f <span class="o">-&gt;</span> <span class="f">put</span> acc <span class="s">"/<span class="i">{m.name}</span>/<span class="i">{f.name}</span>"</span> f<span class="o">.</span>reference)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> table path arg
+  <span class="f">called</span> table[path] path arg
+
+<span class="k">fn</span> <span class="f">called</span> none path _
+  <span class="s">"no route for <span class="i">{path}</span>"</span>
+
+<span class="k">fn</span> <span class="f">called</span> f _ arg
+  <span class="f">f</span> arg</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/posts.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> page
+  <span class="s">"all posts, page <span class="i">{page}</span>"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> id:int
+  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run routed</div>
+    <pre><code>post 7
+all posts, page 2
+no route for /nowhere</code></pre>
+  </div>
+</div>
+
+<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. two more declarations exist. <code>derive/declare_type</code> adds a record type to the entry, and <code>derive/refuse</code> makes a compile error at the function or type it names, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant and type a build derived.</p>
+
+<p>a derivation only computes. it cannot read a file or the clock, and it learns about the app only from the description: a convention that imports one of the modules it describes is refused. the same source therefore derives the same declarations every time, on every engine, including the one in the playground.</p>
+
 <h2>what to remember</h2>
 
 <ul>
@@ -165,6 +225,7 @@ area came through: 3.14159</code></pre>
 <li>a value carries the arms its type's owner wrote: code handed one calls them bare without importing the owner. a value the file made reaches only names its module declares or imports.</li>
 <li><code>import g { theirs:yours } "path"</code> aliases the qualifier and renames a token. a rename replaces the bare spelling.</li>
 <li>a surface is a module's own pubs plus its explicit re-exports—<code>pub name</code>, <code>pub qualifier</code>, <code>pub theirs:yours</code>. nothing leaks through on its own.</li>
+<li><code>derive module/fn</code> runs a convention while the entry compiles. it is handed a description of the app's own modules and answers constants, record types and refusals, which are checked like code you wrote.</li>
 </ul>
 
 <h2>exercises</h2>

@@ -1,0 +1,4 @@
+import "../entries"
+
+pub fn index x
+  entries/index x

@@ -12,6 +12,9 @@
       "include": "#import"
     },
     {
+      "include": "#derive"
+    },
+    {
       "include": "#fn-declaration"
     },
     {
@@ -85,6 +88,17 @@
         },
         "4": {
           "name": "string.quoted.double.import-path.kanso"
+        }
+      }
+    },
+    "derive": {
+      "match": "^(derive)\\s+([a-z_][a-z0-9_]*(?:/[a-z_][a-z0-9_]*)*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.derive.kanso"
+        },
+        "2": {
+          "name": "entity.name.function.kanso"
         }
       }
     },
