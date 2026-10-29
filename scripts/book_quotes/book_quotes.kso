@@ -16,14 +16,16 @@ import "std/text"
 # no longer spells that way, one named `_is_ws` for a function since renamed to
 # `ws?`, and two named byte-array constants the library had replaced.
 #
-# A panel of this kind is an excerpt carrying editorial changes: a private
-# declaration gains a leading `_`, a module qualifier is dropped, a field gains
-# a `:type` the file leaves bare. So its text cannot be compared to the file's
-# and cannot be regenerated from it. What can be checked is structural, and
-# survives every one of those changes:
+# A panel of this kind is an excerpt: whole declarations chosen from the file
+# and left as the file writes them. Three checks read it:
 #
-#   every declaration the panel shows is declared in the file it names, and
-#   every name the panel uses is a name that file can reach.
+#   every block of the panel, as blank lines divide it, is text the files
+#   hold; every declaration the panel shows is declared in the file it
+#   names; and every name the panel uses is a name that file can reach.
+#
+# The first is the strict one. The other two predate it, from when panels
+# were allowed to add a leading `_` or a `:type`, and they still name what a
+# drifted panel got wrong in terms a reader can act on.
 #
 # The reachable set is read off the package rather than listed here: the
 # package's own declarations and bindings, the tail of every qualified name it
