@@ -362,6 +362,8 @@ both dice have landed</code></pre>
 </div>
 </div>
 
+<p>if you know the vocabulary from haskell: <code>.&gt;</code> is monadic bind, where what comes next can look at the value. <code>.&gt; (_ -&gt; ...)</code> is the same bind with the value discarded. a group is applicative: its shape is fixed before anything runs, and no member's value can steer another member, which is why the runtime may run the members at the same time without checking anything.</p>
+
 <h2>the whole model in five lines</h2>
 
 <div class="fl-rules">
