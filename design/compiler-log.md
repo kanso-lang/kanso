@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
-
-Clay ruled #2085. Every function in a module is visible from every file of
-it, so a local in one file that reuses a name declared in another file
-shadows a callable name, which is what no-shadowing forbids. Eighteen of the
-twenty ports met it as action at a distance: a declaration added in `b.kso`
-refused a parameter in `a.kso`, and the refusal pointed at the parameter
-without naming the declaration.
-
-**The ruling.** The rule stands across files. The refusal names the
-declaration it collides with, by file and line, so the fix is a rename made
-knowing what clashed. Letting a local reuse a name declared only in another
-file was declined, because inside the local's scope the name would mean two
-things. File-scoped private names were declined, because they would end the
-sharing of helpers between a module's files.
-
-Owes, on #2085: the refusal names the colliding declaration's file and line;
-an error golden for a two-file module.
-
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
 Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
@@ -1404,3 +1385,18 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — an entry names a group
+
+#2205's second item. ch06 teaches the named group, `prepare =` above
+indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
+concurrent work, and it parsed only as a library constant. An entry or a
+play file refused it with "only `if` opens an indented block", which named
+nothing the reader had written. A binding whose header is `name =` alone,
+above more than one indented line, now parses its body as a constant's body
+is parsed, so its effect lines join into one group and run concurrently as
+the constant's do.
+
+tests/entry_file.rs runs an entry whose group sleeps in one member and prints
+in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
+library constant prints. The compiler before this change refused it.
