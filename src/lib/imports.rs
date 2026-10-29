@@ -57,6 +57,9 @@ fn load_dependencies(
             )),
             "std/math" => Some(("math", &[("math.kso", include_str!("../../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../../lib/bits/bits.kso"))])),
+            "std/expect" => {
+                Some(("expect", &[("expect.kso", include_str!("../../lib/expect/expect.kso"))]))
+            }
             "std/testing" => {
                 Some(("testing", &[("testing.kso", include_str!("../../lib/testing/testing.kso"))]))
             }

@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-26 — the runtime's tags and doors are read from its C
-
-Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
-the tag enum and the functions defined with `K_DOORCC` out of the joined
-text into `$OUT_DIR/runtime_abi.rs`. The seven tags `codegen.rs` restated,
-`K_ERR_TAG`, the door list in `codegen/module.rs`, and the two specs that
-held those copies to the C are gone. A door the reader cannot parse stops
-the build, since a door missing from the list would be called on the C
-convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
-watches `cargo build` go red.
-
-CI's rows, against main at #2154. The derived door list is in the runtime's
-include order, and `through_doors` checks doors in list order, so
-`emit_instructions` reads 5,687,958, 224 fewer. Compiling the runtime reads
-the edited comment in `core.c`, which moves `codegen_instructions_dev` to
-116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
-fewer). Both read as layout of the clang input, since the program's code
-is unchanged, and no runtime row moved.
-
 ## 2026-10-26 — a guard inside a bound branch leaves the branch natively
 
 #2166. `return x if c` inside an `if` branch that is bound to a name leaves
@@ -1228,3 +1209,20 @@ startup_instructions 50,258 (+4), codegen_instructions_release 371,560,989
 (-89) and browser_compile_instructions 343,289,560 (-12). Welfare falls by
 less than 0.0001, and the floor follows under the rule for a change that
 makes the tools do what the documentation says.
+
+## 2026-10-29 — std/expect ships in the binary
+
+Chapter 7 teaches `std/expect` for test failures, and outside a checkout a
+test importing it said "`std/expect` is not in the shipped library". The
+loader finds a shipped module first in the table `src/lib/imports.rs`
+embeds and then on disk at `lib/` beside the binary or the working
+directory. Every other module under `lib/` was in the table, so a checkout
+never showed the gap: an installed binary, with no `lib/` beside it, and the
+browser, with no filesystem, could not import `std/expect`. It is in the
+table now, and in `SHIPPED_MODULES`, so its merged check is asked with the
+others'.
+
+`tests/every_shipped_module_checks_clean.rs` gains a third test that walks
+`lib/` and imports each module from a directory with `KANSO_STD` pointing at
+an empty one, so only the embedded copies can answer. It failed on main
+naming `expect` and nothing else.
