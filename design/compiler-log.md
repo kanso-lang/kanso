@@ -23,47 +23,6 @@
 
 
 
-## 2026-10-25 — a scanned string is read where it stands on the interpreter
-
-The interpreter's `Text` held a long string as a `String`, so handing one to
-a function copied it. A long string is now an `Rc` around the bytes and a
-flag saying whether they are all ASCII, computed once when the string is
-made. A call shares it.
-
-`text/slice` on an ASCII string indexes bytes, and so does `s.i`. On other
-strings `text/slice` counted the characters and collected them all into a
-`Vec<char>` to take one. It now walks from a cursor the interpreter keeps:
-the last string sliced and the character and byte offsets where the slice
-ended, so a scanner that reads the next character walks one character.
-
-An 80,000-character scan ran in 6.9 s and runs in 0.089 s, against native's
-0.08 s. A scan of non-ASCII text took 660 million instructions and takes 89
-million. `a_scanned_string_reads_each_character` scans a string that mixes
-ASCII with two- and three-byte characters, forwards and back, so a cursor
-that kept a stale offset prints the wrong characters.
-
-CI's rows, against #2151. The interpreter reads interp_instructions
-629,524,864 -> 568,584,597 (-9.7%) and interp_allocs 643,872 -> 632,223,
-and interp_peak_bytes holds at 1,298,476. The compile rows move with the
-binary's layout: compile_instructions 24,694,028 -> 24,711,192,
-entry_instructions 72,837,734 -> 72,889,740, library_instructions 72,508,468
--> 72,563,065, emit_instructions 5,657,388 -> 5,654,754 and
-browser_compile_instructions 343,857,683 -> 343,738,623. Against #2151
-welfare read 95.15 -> 95.17.
-
-Merged with main at #2141, CI reads the three together against main. The
-interpreter reads interp_instructions 520,276,149 -> 564,058,857,
-interp_allocs 578,088 -> 624,771 and interp_peak_bytes 1,281,313 ->
-1,298,495. The tab runs and compiles the two corpus phases:
-browser_run_instructions 54,006,705 -> 61,205,256, browser_run_peak_bytes
-1,507,328 -> 1,572,864, browser_compile_instructions 334,848,599 ->
-344,676,704 and browser_compile_peak_bytes 743,876 -> 751,764. The compile
-rows move by layout: compile_instructions 24,735,836 -> 24,747,458,
-entry_instructions 72,954,229 -> 72,992,046, library_instructions
-72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
-corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
-95.22 -> 95.24 and the rise is banked.
-
 ## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
 
 Clay ruled #2085. Every function in a module is visible from every file of
@@ -1419,3 +1378,29 @@ compile_instructions 24,083,702 (+18,776), library_instructions 71,386,812
 (+60,840) and browser_compile_instructions 343,219,110 (+22,172). Welfare fell
 by 0.002, and the floor follows under the rule for a feature a ruling
 requires.
+
+## 2026-10-29 — a parameter is not the function it shares a name with
+
+The none check asks, at each call whose argument can be a none, whether the
+callee's group has an arm for one. It found the group by name and arity
+alone. std/list's merge sort takes its key as a parameter named `key` and
+calls it on an element it reads by index, so a program with a one-argument
+function named `key` had that parameter read as its own function, and the
+read was refused twice inside std/list, at a line the program's author
+cannot change. The proof that the index is in bounds usually kept the
+question from being asked. A dispatch tie elsewhere in the program took that
+proof away, so the tie arrived with two errors nobody wrote. The senro
+routing prototype found it.
+
+The check now asks first whether the declaration binds the name, the
+question the box check already asks through the same per-declaration set.
+
+tests/golden/errors gains the program: a function named `key`, a tie, and a
+call into std/list. It was watched red through the corpus runner with the
+test switched off, reporting the two refusals in list.kso, and passes with it.
+
+The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
+browser_compile_instructions 343,289,574 (+70,464), entry_instructions
+85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
+falls by less than 0.001, and the floor follows under the rule for a change
+that makes the language do what its specification says.
