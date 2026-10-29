@@ -42,77 +42,6 @@ library; error goldens on every engine for an operator, a builtin and a
 library function reached from a program file; CI's rows and the floor moved
 by them.
 
-## 2026-10-25 — the rest of a list after a drop is one copy
-
-`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
-`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
-a list, and it asks a new internal builtin, `rest_from`. Given a list and a
-position of at least 1, it answers the list's elements from that position
-on, copied in one move. Given anything else it answers none, and std walks
-that a step at a time as before, so a string still drops to its characters,
-bytes to their numbers and a negative count to nothing. `fold` gains the
-indexed arm a capped cursor already had, so a fold over a drop reads by
-index. Before this, each rest was built a step record and an advanced cursor
-per element.
-
-Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
-interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
-so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
-shared its list's storage would be linear, but a list's items pointer is
-also how a push onto it finds its buffer's header, so a list that points
-into the middle of another's items needs a header of its own first.
-
-`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
-the end and a negative count, from lists of numbers, records and lists, and
-from a string, bytes and a map, which keep their step walk; it also folds
-over a drop. Its output is main's interpreter, and both engines agree with
-it. A first draft clamped a negative drop to the whole list, where main
-answers none of it, and the fixture caught the difference. Moving the copy
-one element either way, on either engine, turns it red.
-
-On this container the run program reads 888,090,230 -> 847,406,017 and the
-interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
-phase's 40.8 million instructions natively, and all but 1.7 million of its
-34 million interpreted.
-
-CI's rows, against #2156's phase. The run program reads work_runbench
-869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
--> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
-20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
-run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
-1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
-list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
-27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
-523,165,714 against the phase. Main at #2152 added `texts` to the
-interpreted corpus, so against main the interpreter's rows carry the phase
-and its fix together: interp_instructions 564,058,857 -> 565,857,214,
-interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
-1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
-61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
-
-The longer std/list and the builtin cost every compile. Against main at
-#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
-72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
-compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
-emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
-116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
-370,222,776. The front end visits compile_corpus more often and holds more
-while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
-598,984 -> 607,213, read on this container, whose rustc is the one the
-golden names. The tab compiles the corpus with `rested` in it as well, so
-its compile rows carry the phase too: browser_compile_instructions
-344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
-839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
-code carries the new runtime function, about 704 bytes each: text
-5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
-two programs that never drop read work_encodebench 2,327,386,052 ->
-2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
-emitted lines of the drop's new arms land at emitted_other_lines 168,907,
-emitted_other_branches 17,946, emitted_other_calls 20,494 and
-emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
-list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
-Welfare rises 95.24 -> 95.36 and the rise is banked.
-
 ## 2026-10-25 — a delete marks its pair dead where it stands
 
 `k_b_delete_mut` took a key out of a map nobody else holds by moving every
@@ -1322,6 +1251,20 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — the tab's list of machine calls has one home
+
+#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
+written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
+book panels become live editors, and as a kanso list in the browser
+differential, which decides which samples it covers. They drifted for months.
+The differential now reads the list out of book-play.js, the way it already
+reads the playground's examples out of play.js, and its own copy is gone. A
+page without the list fails the run rather than covering every sample.
+
+Read the same way, the page's list selects the same 717 programs the old copy
+did. With `read_file` taken out of the page's regex the run selected 725, so
+the differential follows the page.
 
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
