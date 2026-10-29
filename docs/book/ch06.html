@@ -50,7 +50,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 06</span>
 <h1>flow and concurrency</h1>
 
-<p>every program answers two questions that most languages braid into one: <em>where does data go</em>, and <em>what order do things happen in</em>? kanso keeps them apart, one construct each. once you see the split, groups, binds, and green threads stop being rules to memorize and become the only way it could work. and because the two axes are separate, the one about order has a surprising default: things run at the same time unless you say otherwise.</p>
+<p>every program answers two questions that most languages braid into one: <em>where does data go</em>, and <em>what order do things happen in</em>? kanso keeps them apart, one construct each. once you see the split, groups, binds and green threads follow from it. and because the two axes are separate, the one about order has a default that surprises people: things run at the same time unless you say otherwise.</p>
 
 <h2>data moves through names</h2>
 
@@ -76,7 +76,7 @@ total <span class="o">=</span> <span class="f">list/sum</span> prices  <span cla
   </div>
 </div>
 
-<p>you never wrote an ordering between <code>low</code> and <code>total</code>, because there isn't one to write. the dependency graph is the schedule: <code>report</code> depends on both, so both finish before it starts, and nothing forces the two of them into a line. this is the whole trick—the absence of a dependency <em>is</em> the license to overlap.</p>
+<p>you never wrote an ordering between <code>low</code> and <code>total</code>, because there isn't one to write. the dependency graph is the schedule: <code>report</code> depends on both, so both finish before it starts, and nothing forces the two of them into a line. two lines with no dependency between them are free to overlap.</p>
 
 <h2>order without data</h2>
 
@@ -106,11 +106,11 @@ serving</code></pre>
   </div>
 </div>
 
-<p>the plan says it plainly. the two bare lines land inside a <code>join</code> block the runtime marks <em>unordered; both run</em>, and <code>serving</code> sits after the closing brace. <code>--plan</code> isn't guessing; the group and the bind are structure in the value, and the flag just renders that structure instead of performing it. this is the chapter 05 idea seen sideways: a program is a description, and its concurrency is part of the description.</p>
+<p>the plan says it plainly. the two bare lines land inside a <code>join</code> block the runtime marks <em>unordered; both run</em>, and <code>serving</code> sits after the closing brace. <code>--plan</code> can say this without running anything because the group and the bind are structure in the value; the flag renders that structure instead of performing it. it is the idea from chapter 05 again: a program is a description, and its concurrency is part of the description.</p>
 
 <h2>bare lines are green threads</h2>
 
-<p>the bare lines above aren't a notational convenience for "do these in some order i don't care about." they are independent green threads, and the runtime overlaps them. you feel the difference the moment one of them blocks. <code>sleep</code> pauses a thread; while it waits, the scheduler runs whatever else is ready. here is the repository's set-piece: a slow steep runs beside a handful of dice.</p>
+<p>the bare lines above are independent green threads, and the runtime overlaps them. you feel the difference the moment one of them blocks. <code>sleep</code> pauses a thread; while it waits, the scheduler runs whatever else is ready. here is the repository's set-piece: a slow steep runs beside a handful of dice.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">concurrency.kso</div>
@@ -145,7 +145,7 @@ brew: poured</code></pre>
   </div>
 </div>
 
-<p>read the transcript against the structure. <code>brew</code> and <code>rolls</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>rolls</code>, whose five throws chain with <code>.&gt; (_ -&gt; ...)</code> <em>inside</em> one thread: they run in order, and every one of them lands during the steep, because the steep belongs to the other thread. only when the sleep ends does <code>brew: poured</code> print. sequence within a thread, overlap between threads. the <code>--plan</code> makes the structure explicit:</p>
+<p>read the transcript against the structure. <code>brew</code> and <code>rolls</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>rolls</code>, whose five throws chain with <code>.&gt; (_ -&gt; ...)</code> <em>inside</em> one thread: they run in order, and every one of them lands during the steep, because the steep belongs to the other thread. only when the sleep ends does <code>brew: poured</code> print. lines in one thread run in order, and threads overlap each other. the <code>--plan</code> shows the structure:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">kanso run concurrency.kso --plan</div>
@@ -211,9 +211,7 @@ roll 5: a 1</code></pre>
 
 <h2>a scheduler you can predict</h2>
 
-<p>overlap would be a menace if it were nondeterministic. it isn't. the scheduler decides who runs next by the numbers <em>you</em> wrote—sleep durations and spawn order—never by the machine's clock. so the transcript is a function of the source, and every run is byte-for-byte identical. watch two dishes cook at once:</p>
-
-<p>one refinement rides under that guarantee. while a fiber sleeps, real time another fiber spends <em>computing</em> counts against the pending wait—so a thread that grinds for 900&nbsp;ms beside a 2000&nbsp;ms steep finishes with the steep, and the whole group's wall-clock is the longest branch. the machine's clock shortens the physical wait, and only that: who runs next, what prints when, and every counter still come from the numbers you wrote.</p>
+<p>overlapping threads would be hard to reason about if their order changed from run to run, and in kanso it does not. the scheduler decides who runs next by the numbers <em>you</em> wrote—sleep durations and spawn order—never by the machine's clock. so the transcript is a function of the source, and every run is byte-for-byte identical. watch two dishes cook at once:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">race.kso</div>
@@ -246,17 +244,19 @@ ramen: bowled</code></pre>
 
 <p>both threads start, print their opening line, and park on a sleep. the gyoza wakes at 20, the ramen at 30, the gyoza again at 40, the ramen again at 60—so the lines interleave in exactly that order. run it a thousand times and it never wavers, because "who is due next" is settled by <code>20 &lt; 30 &lt; 40 &lt; 60</code>, not by which thread the operating system happened to favor this millisecond. the delays are real time—<code>sleep 30</code> genuinely pauses that thread—but the <em>order</em> they impose is fixed by the numbers, so the output is reproducible to the byte.</p>
 
-<p>randomness rides the same rails. <code>math/random n</code> is an effect drawn from a seeded generator. a bare run seeds from the clock, so your dice differ from these panels. set <code>KANSO_SEED</code> and the whole run replays byte-identically—scheduling, interleaving, and rolls. that is why <code>concurrency.kso</code> and <code>ordered.kso</code> both show <code>3, 1, 4, 1, 1</code> here: same program, same pinned seed, same dice. replay on demand is a debugging superpower—a bug seen once under seed 41 reproduces forever under seed 41, so there is no "heisenbug that only happens under load."</p>
+<p>the clock does matter in one place. while a fiber sleeps, real time another fiber spends <em>computing</em> counts against the pending wait—so a thread that grinds for 900&nbsp;ms beside a 2000&nbsp;ms steep finishes with the steep, and the whole group's wall-clock is the longest branch. the machine's clock shortens the physical wait, and only that: who runs next, what prints when, and every counter still come from the numbers you wrote.</p>
 
-<div class="fl-pull">the scheduler reads the numbers you wrote, not the clock on the wall. concurrency in kanso is a value you can print, replay, and pin in a test.</div>
+<p>randomness works the same way. <code>math/random n</code> is an effect drawn from a seeded generator. a bare run seeds from the clock, so your dice differ from these panels. set <code>KANSO_SEED</code> and the whole run replays byte-identically—scheduling, interleaving, and rolls. that is why <code>concurrency.kso</code> and <code>ordered.kso</code> both show <code>3, 1, 4, 1, 1</code> here: same program, same pinned seed, same dice. a bug seen once under seed 41 reproduces every time under seed 41, which makes a failure that only shows up under load something you can rerun and study.</p>
+
+<div class="fl-pull">the scheduler orders threads by the sleep durations and spawn order in the source, so a concurrent program can be printed, replayed and pinned in a test.</div>
 
 <h2>the same program in go</h2>
 
-<p>go solves the same problem with three separate pieces of machinery: a goroutine to run each task, a <code>WaitGroup</code> to know when they've all finished, and a channel to carry results back out. three names for three jobs, and the actual work hides behind them. in kanso those three jobs collapse into two ideas you already have: the bare lines are the goroutines, and a bind after the named group is the <code>WaitGroup</code>. there is no channel, because <em>the data flow is the channel</em>—a value crosses at a binding or a dot, and the function that reads it is the join. go's <code>select</code>, which picks a branch by which message type showed up, is likewise just kanso's dispatch from chapter 03: one function arm per message, no separate statement for it. the concurrency falls out of keeping data and order apart.</p>
+<p>go solves the same problem with three separate pieces of machinery: a goroutine to run each task, a <code>WaitGroup</code> to know when they've all finished, and a channel to carry results back out. in kanso the same three jobs are covered by two ideas you already have: the bare lines are the goroutines, and a bind after the named group is the <code>WaitGroup</code>. there is no channel, because data already moves between threads the ordinary way: a value crosses at a binding or a dot, and the function that reads it is the join. go's <code>select</code>, which picks a branch by which message type showed up, is kanso's dispatch from chapter 03: one function arm per message, with no separate statement for it.</p>
 
 <h2>what crosses from a group to the next step</h2>
 
-<p>the question that keeps coming back, answered once: <strong>nothing crosses from a group to the step after it except permission.</strong> the members of a group are bare lines. nobody binds their results, so their results are discarded where they stand—the compiler even refuses a bare line whose value could never be an effect, because a value nobody can read is a bug, not a statement. when every member settles, the group carries no value worth reading, and the <code>_</code> in <code>.&gt; (_ -&gt; next)</code> discards it. the bind asks one thing: did anything in the group fail?</p>
+<p>what passes from a group to the step after it? <strong>only permission to continue.</strong> the members of a group are bare lines. nobody binds their results, so their results are discarded where they stand—the compiler even refuses a bare line whose value could never be an effect, because a value nobody can read is almost certainly a mistake. when every member settles, the group carries no value worth reading, and the <code>_</code> in <code>.&gt; (_ -&gt; next)</code> discards it. the bind asks one thing: did anything in the group fail?</p>
 
 <table class="fl-crossing">
   <tr><th>what</th><th>crosses to the next step?</th></tr>
@@ -294,7 +294,7 @@ ramen: bowled</code></pre>
 </svg>
 </div>
 
-<p>that last row is worth seeing run. a group joins failures the way a validation form joins them: it does not stop at the first bad field. both members run to completion, and if both fail, you get both reasons—merged into one err that carries the pair.</p>
+<p>here is the last row running. a group joins failures the way a validation form joins them: it does not stop at the first bad field. both members run to completion, and if both fail, you get both reasons—merged into one err that carries the pair.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">accumulate.kso</div>
@@ -330,7 +330,7 @@ prepare <span class="o">=</span>
 
 <h2>values, not descriptions</h2>
 
-<p>one snag catches everyone once. <code>random n</code> is a description—an effect—just like <code>read_file</code> in chapter 05. bind it with <code>=</code> and you have named the <em>description</em>, not a number; interpolate that name and you get <code>&lt;io&gt;</code>, not a roll. to get the value, pipe the effect into what needs it with <code>.&gt;</code>, the bind dot, and the value arrives once it exists:</p>
+<p>a common first mistake: <code>random n</code> is a description—an effect—just like <code>read_file</code> in chapter 05. bind it with <code>=</code> and you have named the <em>description</em>, not a number; interpolate that name and you get <code>&lt;io&gt;</code>, not a roll. to get the value, pipe the effect into what needs it with <code>.&gt;</code>, the bind dot, and the value arrives once it exists:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">dice.kso</div>
@@ -370,11 +370,11 @@ both dice have landed</code></pre>
   <li><strong><code>.&gt; (_ -&gt; ...)</code> carries no data</strong>—it carries one bit: nothing before me failed. after a named group it waits for the whole group, not for one line of it.</li>
   <li><strong>a group discards every member's value</strong>—bare lines exist for their effects; all of them always run, as independent green threads.</li>
   <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the next bind onward; the join is the one place an err pauses to collect its siblings.</li>
-  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so independence is unrepresentable to violate, and the runtime never has to prove it.</li>
+  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so a member cannot depend on another, and the runtime never has to check that it doesn't.</li>
 </ul>
 </div>
 
-<p>you can now read any kanso program as two questions at once and answer each on sight: follow the names and dots to see where data goes, follow the binds to see what waits. you can put two slow effects side by side and let them overlap without a single primitive named "thread." you can predict an interleaving from the source, replay it byte-for-byte, and pin it in a test. and when something fails mid-flight, you know exactly where it pauses and what it carries. concurrency stopped being a subsystem and became a consequence of keeping two ideas apart.</p>
+<p>you can now read any kanso program as two questions at once and answer each on sight: follow the names and dots to see where data goes, follow the binds to see what waits. you can put two slow effects side by side and let them overlap without a single primitive named "thread." you can predict an interleaving from the source, replay it byte-for-byte, and pin it in a test. and when something fails mid-flight, you know where it pauses and what it carries.</p>
 
 <h2>exercises</h2>
 
