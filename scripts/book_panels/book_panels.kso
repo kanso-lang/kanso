@@ -20,11 +20,19 @@ type source_file
   path
   body
 
-# Where a chapter's panels are: the ones quoting a sample, and the ones
-# quoting a recorded run.
+# Where a chapter's panels are: the ones quoting a sample, the ones quoting a
+# recorded run, and the ones titled with a golden's path.
 type panels
   src
   out
+  quoted
+
+# A panel found by reading around a match rather than by one pattern: an
+# `output` panel named by the source above it. It carries what a match does.
+type located
+  from
+  to
+  groups
 
 # One matched panel and which shape's fixer answers for it.
 type placed
@@ -74,6 +82,21 @@ out_verbs = "(?:run|check|test|build|play)"
 out_tail = "{out_verbs}[^<]*?([a-z_0-9/]+)(?:\\.kso)?\\b[^<]*</div>"
 
 out_pattern = "(?s){out_head} {out_tail}\\s*<pre><code>)(.*?)(</code></pre>)"
+
+# An output panel titled only `output`, which says nothing of what ran. The
+# source panel it sits under names the program.
+bare_out = "(?s)({panel_title}output</div>\\s*<pre><code>)(.*?)(</code></pre>)"
+
+# A panel titled with a golden's path shows that file. The empty group keeps
+# the body and tail where an output panel's are, so one fixer serves both.
+golden_path = "tests/golden/[a-z_0-9/]+\\.(?:stdout|stderr|plan)"
+
+quote_head = "({panel_title}()({golden_path})</div>"
+
+quote_pattern = "(?s){quote_head}\\s*<pre><code>)(.*?)(</code></pre>)"
+
+# What lies between a source panel and an output panel that belongs to it.
+beneath = "^\\s*<div class=\"code-output\">\\s*$"
 
 fn writing? given
   length (list/to_list (list/select given (a -> a == "--write"))) > 0
@@ -157,23 +180,83 @@ fn walking names at drift write false
 fn one_chapter names at drift write name raw
   dir = dir_of name
   on = (paths -> with_paths names at drift write name raw dir paths)
-  walk_all dir on
+  walk_all dir (found -> recordings_too dir found on)
+
+# The site's pages run programs from examples/, and the runs they show are the
+# example goldens.
+fn recordings_too "examples" found on
+  walk_all "tests/golden/examples" (more -> on (joined found more))
+
+fn recordings_too _ found on
+  on found
 
 fn with_paths names at drift write name raw dir paths
   seen = found_in raw
   on = (files -> with_files names at drift write name raw seen files dir)
-  seen .> (p -> read_each (needed p dir paths) 1 [] on)
+  read = (all -> read_each (needed seen dir all) 1 [] on)
+  existing (quoted_paths seen) 1 paths read
 
-# Both panel shapes, matched once. Each pattern is a lazy `.*?` over the whole
+fn quoted_paths p
+  list/to_list (list/map p.quoted (m -> present m.groups[3]))
+
+# A golden a title names is read if it is there. One that is not is left for
+# the panel to keep, as a sample nothing holds is.
+fn existing ps at acc after
+  return after acc if at > length ps
+  path = present ps[at]
+  next = (there -> existing ps (at + 1) (kept_if acc path there) after)
+  os/exists path .> next
+
+fn kept_if acc path true
+  push acc path
+
+fn kept_if acc _ false
+  acc
+
+# Every panel shape, matched once. Each pattern is a lazy `.*?` over the whole
 # chapter, which is the expensive thing this program does.
 fn found_in raw
-  panels (regexp/matches src_pattern raw) (regexp/matches out_pattern raw)
+  src = regexp/matches src_pattern raw
+  bare = regexp/matches bare_out raw
+  named = under_sources raw src bare
+  out = joined (regexp/matches out_pattern raw) named
+  quoted = regexp/matches quote_pattern raw
+  panels src (list/sort_by out (h -> h.from)) quoted
+
+# An `output` panel answers to the source panel it sits under, and becomes the
+# match an output panel titled with that source's run would have been.
+fn under_sources raw src bare
+  named = list/to_list (list/map bare (b -> named_output raw src b))
+  list/to_list (list/select named (h -> h.from > 0))
+
+fn named_output raw src b
+  before = list/to_list (list/select src (s -> s.to <= b.from))
+  return located 0 0 [] if length before == 0
+  s = present before[length before]
+  gap = or_empty (text/slice raw s.to (b.from - 1))
+  regexp/match? beneath gap .> (under -> output_of s b under)
+
+fn output_of s b true
+  title = present s.groups[2]
+  stem = or_empty (text/slice title 1 (length title - 4))
+  gs = b.groups
+  located b.from b.to [gs[1] "" stem gs[2] gs[3]]
+
+fn output_of _ _ false
+  located 0 0 []
 
 # The path each panel resolves to, once, so a sample two panels share is read
 # once and a sample nothing names is not read at all.
 fn needed p dir paths
   from_src = wanted_src p.src dir paths 1 []
-  wanted_out p.out dir paths 1 from_src
+  from_out = wanted_out p.out dir paths 1 from_src
+  wanted_quoted p.quoted paths 1 from_out
+
+fn wanted_quoted ms paths at acc
+  return acc if at > length ms
+  path = present ms[at].groups[3]
+  found = if (holds? paths path) path ""
+  wanted_quoted ms paths (at + 1) (noted acc found)
 
 fn wanted_src ms dir paths at acc
   sourcing ms dir paths at acc (at > length ms)
@@ -214,42 +297,22 @@ fn again acc found false
   push acc found
 
 fn with_files names at drift write name raw p files dir
-  said = rebuilt raw (merged p.src p.out 1 1 []) name dir files write
+  said = rebuilt raw (in_order p) name dir files write
   on = (_ -> next_chapter names at drift write name raw said)
   io/write said.log .> on
 
-# Both panel shapes in one ascending list, because one pass over the chapter is
-# what keeps an offset honest. Matched separately and rewritten in two passes,
-# the second pass carries offsets from the text as it arrived: a source body
-# that grew moves everything after it, and the output panel then lands inside
-# the source panel's markup. A new panel is where it shows, its body going from
-# a placeholder to hundreds of characters at once.
-fn merged src out i j acc
-  merging src out i j acc (i > length src) (j > length out)
-
-fn merging src _ i _ acc false true
-  trailing src i acc 1
-
-fn merging src out i j acc false false
-  ahead src out i j acc (src[i].from < out[j].from)
-
-fn merging _ out _ j acc true _
-  trailing out j acc 2
-
-fn ahead src out i j acc true
-  merged src out (i + 1) j (push acc (placed src[i] 1))
-
-fn ahead src out i j acc false
-  merged src out i (j + 1) (push acc (placed out[j] 2))
-
-fn trailing xs at acc shape
-  trailed xs at acc shape (at > length xs)
-
-fn trailed _ _ acc _ true
-  acc
-
-fn trailed xs at acc shape false
-  trailing xs (at + 1) (push acc (placed xs[at] shape)) shape
+# Every shape in one ascending list, because one pass over the chapter is what
+# keeps an offset honest. Matched separately and rewritten in two passes, the
+# second pass carries offsets from the text as it arrived: a source body that
+# grew moves everything after it, and the output panel then lands inside the
+# source panel's markup. A new panel is where it shows, its body going from a
+# placeholder to hundreds of characters at once.
+fn in_order p
+  src = list/to_list (list/map p.src (m -> placed m 1))
+  out = list/to_list (list/map p.out (m -> placed m 2))
+  quoted = list/to_list (list/map p.quoted (m -> placed m 3))
+  every = joined (joined src out) quoted
+  list/sort_by every (x -> x.m.from)
 
 fn dir_of "../about.html"
   "examples"
@@ -329,6 +392,11 @@ fn fixed raw m name dir files write 1
   sample = present m.groups[2]
   found = sample_at (path_list files) dir (local_to dir sample)
   no_sample raw m sample name files write found (found == "")
+
+fn fixed raw m name _ files write 3
+  path = present m.groups[3]
+  found = if (holds? (path_list files) path) path ""
+  no_recorded raw m path name files write found (found == "")
 
 fn fixed raw m name dir files write _
   gs = m.groups
@@ -438,6 +506,11 @@ fn starts? s pre
 fn ends? s suf
   text/slice s (length s - length suf + 1) (length s) == suf
 
+# A site page's run is the example's golden: its output, or its plan.
+fn out_at paths "examples" base
+  want = golden_run base (ends? base "_plan")
+  if (holds? paths want) want ""
+
 # A recorded run may live anywhere under the chapter's samples, and a name that
 # is there twice is ambiguous: leave the panel alone rather than guess.
 fn out_at paths dir base
@@ -447,6 +520,12 @@ fn out_at paths dir base
 
 fn under? path dir want
   starts? path "{dir}/" and ends? path want
+
+fn golden_run base true
+  "tests/golden/examples/{or_empty (text/slice base 1 (length base - 5))}.plan"
+
+fn golden_run base false
+  "tests/golden/examples/{base}.stdout"
 
 fn sole hits
   only hits (length hits == 1)
@@ -488,8 +567,8 @@ fn swapped _ m src true said
 fn no_recorded raw m _ _ _ _ _ true
   outcome (whole_of raw m) 0 ""
 
-fn no_recorded raw m base name files write found false
-  weighed_out raw m (body_of files found) base name write
+fn no_recorded raw m _ name files write found false
+  weighed_out raw m (body_of files found) found name write
 
 fn weighed_out raw m rec base name write
   gs = m.groups
@@ -502,7 +581,7 @@ fn settled_out raw m _ _ _ _ true
   outcome (whole_of raw m) 0 ""
 
 fn settled_out raw m rec base name write false
-  swapped_out raw m rec write "{verb write}: {name} :: {base}.out\n"
+  swapped_out raw m rec write "{verb write}: {name} :: {base}\n"
 
 fn swapped_out raw m _ false said
   outcome (whole_of raw m) 1 said
