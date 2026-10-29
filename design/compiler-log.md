@@ -1437,3 +1437,12 @@ side of the padding boundary, RFC 4231's HMAC cases 1, 2 and 6 (6 has a key
 longer than a block), PBKDF2 at one, two and 4096 rounds and RFC 7914's
 two-block vector, and RFC 4648's base64 cases both ways. The guestbook
 prototype logs in to Postgres 16 with these.
+
+std/sha256 is imported by the entry and library corpora and by digestbench,
+so their rows move. The compile rows rise with the module: entry_instructions
+84,707,709 (+793,475) and library_instructions 71,324,471 (+462,430).
+digestbench compiles four more functions (emitted defines=118 calls=871
+branches=923 lines=7998) and its run rises to work_digestbench 4,104,363
+(+52), text 341,377 (+16); runbench carries the same module and reads
+work_runbench 825,011,765 (+717), text 819,297 (+16). Welfare fell by about
+0.001 and the floor follows under the rule for a feature a ruling requires.
