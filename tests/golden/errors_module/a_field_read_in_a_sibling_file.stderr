@@ -1,0 +1,4 @@
+error[name]: no record type has a field `weight`
+  --> tests/golden/errors_module/a_field_read_in_a_sibling_file/boxes.kso:8:6
+   8 |   "{b.weight}"
+            ^

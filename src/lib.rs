@@ -39,17 +39,22 @@ pub const RUNTIME_C: &str = include_str!(concat!(env!("OUT_DIR"), "/runtime.c"))
 /// The merged check's diagnostics, each quoting its own file's line. One about
 /// a dependency names that dependency's file, and the text is read again here,
 /// on the path that is about to fail, the way a module compile rereads its own
-/// files. An embedded file is named bare, with no directory, and is never read
-/// from disk: a file of that name in the working directory is somebody else's.
+/// files. A shipped module's files are named under `std/`, which no checkout
+/// holds, so reading one finds nothing. A bare name is a file beside an entry
+/// that is itself named bare, in the working directory, and is read from
+/// there (#2188); beside an entry named with a directory, a bare name is not
+/// the program's and is left unread.
 fn render_merged(diags: &[diag::Diagnostic], file: &str, source: &str) -> String {
+    let bare = |f: &str| std::path::Path::new(f).parent().is_none_or(|p| p.as_os_str().is_empty());
     let mut named: Vec<(String, String)> = Vec::new();
     for d in diags {
         let Some(own) = d.file.as_deref() else { continue };
         if own == file || named.iter().any(|(f, _)| f == own) {
             continue;
         }
-        let on_disk = std::path::Path::new(own).parent().is_some_and(|p| !p.as_os_str().is_empty());
-        if let Some(text) = on_disk.then(|| std::fs::read_to_string(own).ok()).flatten() {
+        let on_disk = !bare(own) || bare(file);
+        let read = || on_disk.then(|| std::fs::read_to_string(own).ok()).flatten();
+        if let Some(text) = handed_text(own).or_else(read) {
             named.push((own.to_string(), text));
         }
     }
