@@ -1,37 +1,94 @@
 import "std/derive"
 import "std/list"
+import "std/text"
+
+type route
+  method
+  path
+  origin
+  action
+  id
+
+type place
+  method
+  path
+
+type clashes
+  seen
+  out
 
 # senro's routing convention, run while an app compiles (#2186). A pub
 # function in one of the app's modules is an action, and its module's name
 # and its own name place it: `entries/index` answers GET /entries,
-# `entries/create` answers POST /entries, and `home/index` answers GET /.
-# Any other pub function is refused where it is declared, so a misspelled
-# action is a compile error and never a dead route.
+# `entries/create` POST /entries, `entries/show` GET /entries/:id, and
+# `home/index` GET /. Any other pub function is refused where it is declared,
+# so a misspelled action is a compile error and never a dead route.
+#
+# The table maps each route to its action and to what its `:id` segment
+# takes: "int" when the action annotates `id` as an int, "any" when it takes
+# any segment, and "" when the route has no `:id`.
 pub fn rest p
-  rows = list/fold p.modules {} (acc m -> list/fold m.functions acc (row m))
+  placed = list/fold p.modules [] (acc m -> list/concat acc (routes_of m))
+  rows = list/fold placed {} (acc r -> put acc (spelled r) (row r))
   odd = list/fold p.modules [] (acc m -> list/concat acc (strays m))
-  list/concat [(derive/declare "routes" "routes" rows)] odd
+  clashing = list/fold placed (clashes [] []) clashed
+  declared = [(derive/declare "routes" "routes" rows)]
+  list/concat (list/concat declared odd) clashing.out
 
-fn row m
-  (acc f -> placed acc f (path_of m.name f.name))
+fn spelled r
+  "{r.method} {r.path}"
 
-fn placed acc _ none
+fn row r
+  { "action":r.action "id":r.id }
+
+fn routes_of m
+  list/fold m.functions [] (acc f -> routed acc m f (path_of m.name f.name))
+
+fn routed acc _ _ none
   acc
 
-fn placed acc f key
-  put acc key f.reference
+fn routed acc m f (place method path)
+  origin = "{m.name}/{f.name}"
+  id = id_of path f.params
+  push acc (route method path origin f.reference id)
+
+fn id_of path params
+  return "" if not list/any? (text/split path "/") (s -> s == ":id")
+  list/fold params "any" (acc p -> taken acc p)
+
+fn taken acc p
+  return acc if p.name != "id"
+  int_or_any p.annotation
+
+fn int_or_any "int"
+  "int"
+
+fn int_or_any _
+  "any"
 
 fn path_of "home" "index"
-  "GET /"
+  place "GET" "/"
 
 fn path_of m "index"
-  "GET /{m}"
+  place "GET" "/{m}"
 
 fn path_of m "new"
-  "GET /{m}/new"
+  place "GET" "/{m}/new"
 
 fn path_of m "create"
-  "POST /{m}"
+  place "POST" "/{m}"
+
+fn path_of m "show"
+  place "GET" "/{m}/:id"
+
+fn path_of m "edit"
+  place "GET" "/{m}/:id/edit"
+
+fn path_of m "update"
+  place "PATCH" "/{m}/:id"
+
+fn path_of m "destroy"
+  place "DELETE" "/{m}/:id"
 
 fn path_of _ _
   none
@@ -41,5 +98,66 @@ fn strays m
   list/to_list (list/map unplaced (f -> refused m f))
 
 fn refused m f
-  said = "`{f.name}` is not an action: name it index, new or create"
+  actions = "index, new, create, show, edit, update or destroy"
+  said = "`{f.name}` is not an action: name it {actions}"
   derive/refuse "{m.name}/{f.name}" said
+
+# Two routes clash when one request could reach both: the same method, as
+# many segments, and each pair of segments able to match one string. A literal
+# and `:id` can, unless the action annotates `id` as an int and the literal is
+# not a number. The later of the two is refused, naming the earlier.
+fn clashed acc r
+  hit = list/select acc.seen (s -> overlap? s r)
+  out = list/concat acc.out (list/to_list (list/map hit (s -> clash s r)))
+  clashes (push acc.seen r) out
+
+fn clash s r
+  said = "`{spelled r}` and `{spelled s}` ({s.origin}) answer the same request"
+  derive/refuse r.origin "{said}{advice s r}"
+
+fn advice s r
+  return "" if s.id == "" and r.id == ""
+  ": annotate `id` as `int` so a word is not taken for an id"
+
+fn overlap? s r
+  return false if s.method != r.method
+  sa = text/split s.path "/"
+  sb = text/split r.path "/"
+  return false if length sa != length sb
+  meet? sa sb 1 s.id r.id
+
+fn meet? sa sb i ix iy
+  return true if i > length sa
+  return false if not meets? sa[i] sb[i] ix iy
+  meet? sa sb (i + 1) ix iy
+
+fn meets? none none _ _
+  false
+
+fn meets? none _ _ _
+  false
+
+fn meets? _ none _ _
+  false
+
+fn meets? x y ix iy
+  return true if x == y
+  across? x y ix iy
+
+fn across? ":id" ":id" _ _
+  true
+
+fn across? ":id" y ix _
+  number_or_any? y ix
+
+fn across? x ":id" _ iy
+  number_or_any? x iy
+
+fn across? _ _ _ _
+  false
+
+fn number_or_any? segment "int"
+  text/to_int segment != none
+
+fn number_or_any? _ _
+  true

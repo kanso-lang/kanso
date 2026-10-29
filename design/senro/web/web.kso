@@ -3,6 +3,11 @@ import "std/net"
 import "std/net/http"
 import "std/text"
 
+type hit
+  action
+  kind
+  id
+
 # A server for an app's route table: one connection at a time, each request
 # looked up by its method and path and handed to the action with the
 # database. An action answers an effect that yields the response.
@@ -18,15 +23,63 @@ fn served l routes db
     .> (_ -> served l routes db)
 
 fn answered c routes db req
-  routed routes["{req.method} {req.path}"] req db
+  routed (matched routes req.method req.path) req db
     .> (r -> net/write c (http/rendered r))
     .> (_ -> net/close_conn c)
+
+# A request's route: its own path first, then the path with the segment after
+# the module's name read as `:id`, so /entries/3 and /entries/3/edit find
+# GET /entries/:id and GET /entries/:id/edit.
+pub fn matched routes method path
+  whole = routes["{method} {path}"]
+  return found whole "" if whole != none
+  parts = text/split path "/"
+  return none if length parts < 3
+  head = list/to_list (list/take parts 2)
+  tail = list/to_list (list/drop parts 3)
+  pattern = text/join (list/concat (push head ":id") tail) "/"
+  found routes["{method} {pattern}"] parts[3]
+
+fn found none _
+  none
+
+fn found row id
+  took row["action"] row["id"] id
+
+fn took none none _
+  none
+
+fn took none _ _
+  none
+
+fn took _ none _
+  none
+
+fn took action kind id
+  hit action kind id
 
 fn routed none _ _
   effect http/not_found
 
-fn routed action req db
+fn routed (hit action kind id) req db
+  called action kind id req db
+
+# An `:id` the action annotates as an int reaches it as one, and a segment
+# that is not a number is not that route.
+fn called action "int" id req db
+  numbered action (text/to_int id) req db
+
+fn called action "any" id req db
+  action req db id
+
+fn called action _ _ req db
   action req db
+
+fn numbered _ none _ _
+  effect http/not_found
+
+fn numbered action n req db
+  action req db n
 
 # A form posted as application/x-www-form-urlencoded, as a map from each
 # field's name to its value. A field the form did not send reads as "".
