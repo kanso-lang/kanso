@@ -84075,8 +84075,7 @@ and no work here moves it.
 ## 2026-09-18 — three conflict markers shipped in the published page, and what did not catch them
 
 **A MISTAKE, caught by `no_published_page_carries_a_conflict_marker` on CI.**
-kanso#1504's `docs/compiler.html` went to CI carrying `<<<<<<< HEAD`,
-`>>>>>>> origin/main` and `=======`. Main never had them and no other branch
+kanso#1504's `docs/compiler.html` went to CI carrying ``>>>>>>> origin/main` and `=======`. Main never had them and no other branch
 did; it was this one resolution.
 
 **HOW.** The merge left the page unmerged with main's new section on one side
@@ -110845,6 +110844,7 @@ sharing of helpers between a module's files.
 Owes, on #2085: the refusal names the colliding declaration's file and line;
 an error golden for a two-file module.
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
@@ -110908,3 +110908,145 @@ browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
 344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
 re-bases the eight terms among these it weighs, each keeping its ratio to
 its baseline, and the floor stays at 95.22.
+
+## 2026-10-25 — the rest of a list after a drop is one copy
+
+`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
+`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
+a list, and it asks a new internal builtin, `rest_from`. Given a list and a
+position of at least 1, it answers the list's elements from that position
+on, copied in one move. Given anything else it answers none, and std walks
+that a step at a time as before, so a string still drops to its characters,
+bytes to their numbers and a negative count to nothing. `fold` gains the
+indexed arm a capped cursor already had, so a fold over a drop reads by
+index. Before this, each rest was built a step record and an advanced cursor
+per element.
+
+Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
+interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
+so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
+shared its list's storage would be linear, but a list's items pointer is
+also how a push onto it finds its buffer's header, so a list that points
+into the middle of another's items needs a header of its own first.
+
+`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
+the end and a negative count, from lists of numbers, records and lists, and
+from a string, bytes and a map, which keep their step walk; it also folds
+over a drop. Its output is main's interpreter, and both engines agree with
+it. A first draft clamped a negative drop to the whole list, where main
+answers none of it, and the fixture caught the difference. Moving the copy
+one element either way, on either engine, turns it red.
+
+On this container the run program reads 888,090,230 -> 847,406,017 and the
+interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
+phase's 40.8 million instructions natively, and all but 1.7 million of its
+34 million interpreted.
+
+CI's rows, against #2156's phase. The run program reads work_runbench
+869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
+-> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
+20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
+run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
+1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
+list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
+27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
+523,165,714 against the phase. Main at #2152 added `texts` to the
+interpreted corpus, so against main the interpreter's rows carry the phase
+and its fix together: interp_instructions 564,058,857 -> 565,857,214,
+interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
+1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
+61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
+
+The longer std/list and the builtin cost every compile. Against main at
+#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
+72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
+compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
+emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
+116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
+370,222,776. The front end visits compile_corpus more often and holds more
+while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
+598,984 -> 607,213, read on this container, whose rustc is the one the
+golden names. The tab compiles the corpus with `rested` in it as well, so
+its compile rows carry the phase too: browser_compile_instructions
+344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
+839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
+code carries the new runtime function, about 704 bytes each: text
+5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
+two programs that never drop read work_encodebench 2,327,386,052 ->
+2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
+emitted lines of the drop's new arms land at emitted_other_lines 168,907,
+emitted_other_branches 17,946, emitted_other_calls 20,494 and
+emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
+list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
+Welfare rises 95.24 -> 95.36 and the rise is banked.
+
+## 2026-10-25 — a delete marks its pair dead where it stands
+
+`k_b_delete_mut` took a key out of a map nobody else holds by moving every
+pair after it down one slot. In the run program's `drained` phase that move
+was 87% of the phase's instructions, and draining half of 80,000 keys took
+0.92 s (#2118).
+
+Now the deleted pair keeps its slot. Its key moves into the value's slot, and
+the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
+stay sorted by key, so the next delete finds its key with a binary search
+that reads a dead pair by the key it kept. Dead pairs at the end of the map
+are dropped at once. The header records the state in `sorted_len`, which is
+negative while the map has no view: -(len + 1) while the pairs are what the
+deletes left, and any other negative once an in-place put appends past them.
+A lookup searches past the dead pairs. Every other reader closes the gaps
+first, in one pass at the top of `k_map_sort_build`. A persistent put closes
+them before it can share the pairs with a new header, and so do the deep copy
+and the carry's evacuation, whose headers start with no view.
+
+Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
+takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
+6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
+
+`delete_marks` counts the pairs marked dead. It is printed only by a run that
+marked one, so the veins that never delete in place, the sibling
+repositories' among them, read as before. The run program reads 550 and
+`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
+`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
+reader: a lookup, the length, the keys, an in-place put and a delete after
+it, a delete of a key already gone, a drain to empty, and two persistent
+puts beside the maps they copy. Three mutations turn it red: a search that
+answers a dead pair, a persistent put that shares dead pairs, and gaps
+closed as though nothing had been appended.
+
+CI's rows, against main at #2158. The run program's drain reads
+work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
+gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
+Every reader of a map now asks first whether it holds dead pairs, which the
+programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
+work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
+work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
+4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
+work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
+indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
+10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
+274,263. The runtime's machine code grows by the search past dead pairs and
+the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
+5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
+codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
+browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
+95.38 and the rise is banked.
+
+## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
+
+Clay ruled #2099. Under #1975 a run-time failure names the line it happened
+on, so a failure inside the standard library named a library line, such as
+`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
+program. Every port asked for its own line.
+
+**The ruling.** A failure inside the library keeps its library line and adds
+`called from <file>:<line>`, the nearest line in the program's own files. The
+library line is still what a library author needs, and the program's line is
+what its author needs. Native records that line on each call from a program
+file into a library function. Its cost is the cost of a ruled feature: the
+floor moves by what CI measures, as CLAUDE.md's language exception says.
+
+Owes, on #2099: the caller's line on every engine for a failure born in the
+library; error goldens on every engine for an operator, a builtin and a
+library function reached from a program file; CI's rows and the floor moved
+by them.

@@ -95,6 +95,23 @@ thread_local! {
     static HANDED_SOURCES: std::cell::RefCell<
         crate::hash::Map<String, Vec<(String, String)>>,
     > = std::cell::RefCell::new(crate::hash::Map::default());
+    /// What derivations defined for each module (`derive/define`), keyed by
+    /// the module's path as `derived_key` spells it. Set while an entry's
+    /// dependencies load a second time, so each module compiles the arms a
+    /// convention wrote for it as one more of its own files.
+    static DERIVED_FILES: std::cell::RefCell<crate::hash::Map<String, String>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+}
+
+/// A module's path as the derived files are keyed: the canonical path when
+/// one exists, and the path as given for a module handed in as sources.
+fn derived_key(dir: &std::path::Path) -> String {
+    std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf()).to_string_lossy().to_string()
+}
+
+/// The file name a module's derived arms are compiled and quoted under.
+fn derived_name(dir: &std::path::Path) -> String {
+    format!("{}.derived.kso", dir.with_extension("").to_string_lossy())
 }
 
 thread_local! {
@@ -299,9 +316,45 @@ pub fn hand_source(path: &str, files: Vec<(String, String)>) {
 /// refusal in a module the browser was handed quotes its line as one read from
 /// disk does.
 fn handed_text(file: &str) -> Option<String> {
-    HANDED_SOURCES.with(|c| {
+    let handed = HANDED_SOURCES.with(|c| {
         c.borrow().values().flatten().find(|(name, _)| name == file).map(|(_, text)| text.clone())
-    })
+    });
+    handed.or_else(|| DERIVED_TEXT.with(|t| t.borrow().get(file).cloned()))
+}
+
+thread_local! {
+    /// The derived files of the last entry compiled, by the name their
+    /// diagnostics carry, so a refusal in an arm a convention wrote quotes
+    /// the line it wrote.
+    static DERIVED_TEXT: std::cell::RefCell<crate::hash::Map<String, String>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+}
+
+/// Loads an entry's dependencies again with the arms its derivations
+/// defined, each joined to the module it was defined in as one more file.
+fn load_with_definitions(
+    base: &std::path::Path,
+    imports: &[ast::Import],
+    definitions: &[(String, String)],
+) -> Result<Loaded, String> {
+    let mut files: crate::hash::Map<String, String> = crate::hash::Map::default();
+    let mut texts: crate::hash::Map<String, String> = crate::hash::Map::default();
+    for (path, source) in definitions {
+        let dir = resolve_import(base, path)
+            .unwrap_or_else(|_| std::path::PathBuf::from(path.strip_prefix("./").unwrap_or(path)));
+        let text = files.entry(derived_key(&dir)).or_default();
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(source);
+        texts.insert(derived_name(&dir), text.clone());
+    }
+    DERIVED_TEXT.with(|t| *t.borrow_mut() = texts);
+    DERIVED_FILES.with(|d| *d.borrow_mut() = files);
+    let mut visited = crate::hash::Set::default();
+    let loaded = load_dependencies(base, imports, &mut visited);
+    DERIVED_FILES.with(|d| d.borrow_mut().clear());
+    loaded
 }
 
 pub fn forget_sources() {
@@ -536,6 +589,15 @@ fn module_sources(
             out
         }
     };
+    // Asked only while a derivation's arms are loading: the key canonicalizes
+    // the path, and every other compile would pay for it at every module.
+    let derived = DERIVED_FILES.with(|d| {
+        let d = d.borrow();
+        (!d.is_empty()).then(|| d.get(&derived_key(dir)).cloned()).flatten()
+    });
+    if let Some(text) = derived {
+        sources.push((derived_name(dir), text));
+    }
     sources.sort_by(|a, b| a.0.cmp(&b.0));
     if sources.is_empty() {
         return Err(format!("error: no .kso files in {}\n", dir.display()));

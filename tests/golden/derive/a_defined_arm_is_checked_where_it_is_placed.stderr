@@ -1,0 +1,4 @@
+error[name]: no record type has a field `idd` (module tests/golden/derive/a_defined_arm_is_checked_where_it_is_placed/posts)
+  --> tests/golden/derive/a_defined_arm_is_checked_where_it_is_placed/posts.derived.kso:2:13
+   2 |   "/posts/{x.idd}"
+                   ^

@@ -543,6 +543,24 @@ fn a_derivation_runs_in_the_page() {
     assert!(matches!(&answer, Answer::Ran(0, text) if *text == want), "answered {answer:?}");
 }
 
+/// An arm a derivation defines joins its module in the tab as it does on
+/// disk: the module was handed in as text, and the arm is one more file of it.
+#[test]
+fn a_defined_arm_runs_in_the_page() {
+    let Some(mut toolchain) = page() else { return };
+    let case = root().join("tests/golden/derive/a_derivation_defines_an_arm_for_each_model");
+    let read = |f: &str| std::fs::read_to_string(case.join(f)).expect("the case reads");
+    let modules = [
+        ("comments", read("comments.kso")),
+        ("conventions", read("conventions.kso")),
+        ("posts", read("posts.kso")),
+    ];
+    let handed: Vec<(&str, &str)> = modules.iter().map(|(m, t)| (*m, t.as_str())).collect();
+    let want = std::fs::read_to_string(case.with_extension("stdout")).expect("the golden reads");
+    let answer = toolchain.run_beside("main.kso", &read("main.kso"), &handed);
+    assert!(matches!(&answer, Answer::Ran(0, text) if *text == want), "answered {answer:?}");
+}
+
 /// A string built by joining onto itself grows where it stands, and a seed is
 /// not written through: the second program seeds three loops with the same
 /// `"ab"`. The older engine kept every string such a loop made, about 2.4 GB

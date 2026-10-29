@@ -1,0 +1,19 @@
+import "std/derive"
+import "std/list"
+
+# The arm reads a field the record does not have. It is refused in the file
+# the module compiles it as, and the refusal quotes the line the convention
+# wrote.
+pub fn path_to _
+  "no route"
+
+pub fn routed p
+  list/fold p.modules [] (acc m -> list/concat acc (arms m))
+
+fn arms m
+  return [] if not list/any? m.functions (f -> f.name == "show")
+  list/to_list (list/map m.records (r -> arm m.name r.name))
+
+fn arm m t
+  body = "\"/{m}/\{x.idd}\""
+  derive/define "{m}/{t}" "fn conventions/path_to x:{t}\n  {body}\n"

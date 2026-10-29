@@ -23,148 +23,6 @@
 
 
 
-## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
-
-Clay ruled #2099. Under #1975 a run-time failure names the line it happened
-on, so a failure inside the standard library named a library line, such as
-`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
-program. Every port asked for its own line.
-
-**The ruling.** A failure inside the library keeps its library line and adds
-`called from <file>:<line>`, the nearest line in the program's own files. The
-library line is still what a library author needs, and the program's line is
-what its author needs. Native records that line on each call from a program
-file into a library function. Its cost is the cost of a ruled feature: the
-floor moves by what CI measures, as CLAUDE.md's language exception says.
-
-Owes, on #2099: the caller's line on every engine for a failure born in the
-library; error goldens on every engine for an operator, a builtin and a
-library function reached from a program file; CI's rows and the floor moved
-by them.
-
-## 2026-10-25 — the rest of a list after a drop is one copy
-
-`list/to_list (list/drop xs k)` now takes the rest of a list in one copy.
-`to_list` has an arm for a skip over a cursor, the shape `list/drop` makes of
-a list, and it asks a new internal builtin, `rest_from`. Given a list and a
-position of at least 1, it answers the list's elements from that position
-on, copied in one move. Given anything else it answers none, and std walks
-that a step at a time as before, so a string still drops to its characters,
-bytes to their numbers and a negative count to nothing. `fold` gains the
-indexed arm a capped cursor already had, so a fold over a drop reads by
-index. Before this, each rest was built a step record and an advanced cursor
-per element.
-
-Walking 5,000 elements by their rest took 6.5 s natively and 23 s on the
-interpreter, and takes 0.125 s and 0.15 s. The walk still copies each rest,
-so it is still quadratic: 20,000 elements take 2.1 s and 1.8 s. A rest that
-shared its list's storage would be linear, but a list's items pointer is
-also how a push onto it finds its buffer's header, so a list that points
-into the middle of another's items needs a header of its own first.
-
-`a_list_dropped_from_hands_on_its_rest` drops nothing, the whole list, past
-the end and a negative count, from lists of numbers, records and lists, and
-from a string, bytes and a map, which keep their step walk; it also folds
-over a drop. Its output is main's interpreter, and both engines agree with
-it. A first draft clamped a negative drop to the whole list, where main
-answers none of it, and the fixture caught the difference. Moving the copy
-one element either way, on either engine, turns it red.
-
-On this container the run program reads 888,090,230 -> 847,406,017 and the
-interpreted corpus 559,915,367 -> 527,644,513: all but about 100,000 of the
-phase's 40.8 million instructions natively, and all but 1.7 million of its
-34 million interpreted.
-
-CI's rows, against #2156's phase. The run program reads work_runbench
-869,011,503 -> 828,685,220, and its memory comes back: run_allocs 1,832,525
--> 1,581,589, run_alloc_bytes 242,831,624 -> 223,888,104, run_sh_rec
-20,162,336 -> 4,098,336, run_sh_buf 94,217,168 -> 91,336,688,
-run_arena_peak_bytes 23,592,976 -> 4,718,608, and run_push_mut_fast lands at
-1,191,311 and run_push_mut_slow at 1,644,657. basket, which drops from a
-list too, reads 18,214,855 -> 18,212,549 instructions and basket_allocs
-27,272 -> 27,249. The interpreter read interp_instructions 554,451,443 ->
-523,165,714 against the phase. Main at #2152 added `texts` to the
-interpreted corpus, so against main the interpreter's rows carry the phase
-and its fix together: interp_instructions 564,058,857 -> 565,857,214,
-interp_allocs 624,771 -> 628,011 and interp_peak_bytes 1,298,495 ->
-1,313,603. The tab's run reads browser_run_instructions 61,205,256 ->
-61,369,685, and browser_run_peak_bytes stays at main's 1,572,864.
-
-The longer std/list and the builtin cost every compile. Against main at
-#2152: compile_instructions 24,747,458 -> 25,157,249, entry_instructions
-72,992,046 -> 73,813,902, library_instructions 72,664,658 -> 73,484,685,
-compile_allocs 13,836 -> 14,025, module_visits 1,368 -> 1,460,
-emit_instructions 5,657,365 -> 5,698,770, codegen_instructions_dev
-116,477,304 -> 116,483,659 and codegen_instructions_release 370,206,363 ->
-370,222,776. The front end visits compile_corpus more often and holds more
-while it does, front_end_visits 7,251 -> 7,373 and compile_peak_bytes
-598,984 -> 607,213, read on this container, whose rustc is the one the
-golden names. The tab compiles the corpus with `rested` in it as well, so
-its compile rows carry the phase too: browser_compile_instructions
-344,676,704 -> 359,922,625 and browser_compile_peak_bytes 751,764 ->
-839,011, where the fix alone read 344,866,301 -> 349,801,935. Every benchmark's machine
-code carries the new runtime function, about 704 bytes each: text
-5,657,953 -> 5,674,129 over the fourteen, runbench 810,652 -> 815,164. The
-two programs that never drop read work_encodebench 2,327,386,052 ->
-2,327,386,353 and work_livebench 936,013,492 -> 936,013,758 by layout. The
-emitted lines of the drop's new arms land at emitted_other_lines 168,907,
-emitted_other_branches 17,946, emitted_other_calls 20,494 and
-emitted_other_defines 2,239. `skip_shape` no longer pushes onto a fresh
-list at all: skip_shape_push_mut_fast 8 -> 0, with its allocs 37 -> 13.
-Welfare rises 95.24 -> 95.36 and the rise is banked.
-
-## 2026-10-25 — a delete marks its pair dead where it stands
-
-`k_b_delete_mut` took a key out of a map nobody else holds by moving every
-pair after it down one slot. In the run program's `drained` phase that move
-was 87% of the phase's instructions, and draining half of 80,000 keys took
-0.92 s (#2118).
-
-Now the deleted pair keeps its slot. Its key moves into the value's slot, and
-the key's slot takes `K_GONE`, a tag no key has (`K_DONE` reused). The pairs
-stay sorted by key, so the next delete finds its key with a binary search
-that reads a dead pair by the key it kept. Dead pairs at the end of the map
-are dropped at once. The header records the state in `sorted_len`, which is
-negative while the map has no view: -(len + 1) while the pairs are what the
-deletes left, and any other negative once an in-place put appends past them.
-A lookup searches past the dead pairs. Every other reader closes the gaps
-first, in one pass at the top of `k_map_sort_build`. A persistent put closes
-them before it can share the pairs with a new header, and so do the deep copy
-and the carry's evacuation, whose headers start with no view.
-
-Measured alone, draining half of 1,100 keys took 7,630,173 instructions and
-takes 1,172,819; half of 3,000 took 55,939,149 and takes 2,860,308; half of
-6,000 took 220,510,861 and takes 5,749,048. Half of 80,000 keys takes 0.033 s.
-
-`delete_marks` counts the pairs marked dead. It is printed only by a run that
-marked one, so the veins that never delete in place, the sibling
-repositories' among them, read as before. The run program reads 550 and
-`a_map_drained_by_delete_loses_keys_in_place` reads 1,000.
-`a_drained_map_reads_past_its_dead_pairs` meets a drained map with each
-reader: a lookup, the length, the keys, an in-place put and a delete after
-it, a delete of a key already gone, a drain to empty, and two persistent
-puts beside the maps they copy. Three mutations turn it red: a search that
-answers a dead pair, a persistent put that shares dead pairs, and gaps
-closed as though nothing had been appended.
-
-CI's rows, against main at #2158. The run program's drain reads
-work_runbench 828,685,220 -> 822,295,072 (-0.77%), and its allocation vein
-gains delete_marks=550; the drain's mem golden gains delete_marks=1000.
-Every reader of a map now asks first whether it holds dead pairs, which the
-programs that never delete pay for: work_basket 18,212,549 -> 18,278,697,
-work_widebench 28,413,165 -> 28,445,119, and by a few hundred or less
-work_deepbench 197,978,249 -> 197,978,593, work_digestbench 4,122,823 ->
-4,122,987, work_encodebench 2,327,386,353 -> 2,327,387,236 and
-work_escapebench 40,308,401 -> 40,308,403. The others move by layout:
-indexbench 1,837,185, jsonbench 557,386,408, livebench 936,013,522, oneshot
-10,033,523, pendbench 155,724,444, readbench 4,581,973 and scanbench
-274,263. The runtime's machine code grows by the search past dead pairs and
-the gap closing, 400 bytes in every benchmark binary: text 5,674,129 ->
-5,679,729. codegen_instructions_dev reads 116,483,659 -> 116,504,899 and
-codegen_instructions_release 370,222,776 -> 370,158,521, and the tab's run
-browser_run_instructions 61,369,685 -> 61,465,433. Welfare rises 95.36 ->
-95.38 and the rise is banked.
-
 ## 2026-10-26 — a refused binding names the line its name is declared on
 
 The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
@@ -1372,3 +1230,69 @@ the constant's do.
 tests/entry_file.rs runs an entry whose group sleeps in one member and prints
 in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
 library constant prints. The compiler before this change refused it.
+
+## 2026-10-29 — gavel: `path_to` takes a record or a route's name
+
+#2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
+reverse, and the gavel on equality refuses to compare two functions, which
+the lookup needs at run time. Clay, ruling: "it could either take path_to
+post, or the string form that specifies the path followed by the id... both
+are available to the user. I'm not sure how you do that but you can be
+clever."
+
+So `path_to` has two forms. `path_to post` takes a record, and the record's
+type picks its show route, with its `id` for `:id`. `path_to "posts/show"
+post.id` names the route by a string. The form that takes a function is
+dropped. The string form runs as a lookup in a map the routing derivation
+declares, and the derivation refuses a string that names no route at the
+call that writes it. The record form runs by dispatch on the record's type:
+the derivation declares one `path_to` arm per model with a show route, which
+needs a derivation that can declare a function arm (`derive/define`, planned
+on #2198).
+
+## 2026-10-29 — a call's description carries the strings it was written with
+
+#2198's string form refuses `path_to "posts/shwo" id` at the call, so a
+derivation has to read the string. Each `derive/call` now carries `strings`
+beside `arguments`: an argument's text when it is a string written whole, and
+"" for anything else, including a string with an interpolation in it.
+
+tests/golden/derive gains a convention that refuses a link whose string
+names no route, at the call, on both engines. On the compiler before this
+change it was refused for a different reason, at the convention: no record
+type had a field `strings`.
+
+## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
+
+#2198's record form runs `path_to post` by dispatch on the record's type, so
+the routing convention has to write a `path_to` arm for each model. A
+derivation can now answer `derive/define origin source`: an arm written out as
+source, for the module `origin` names. A module may already add an arm to a
+library's function for a type it declares, so the arm goes there and not in
+the entry, which declares no models.
+
+When any derivation defines an arm, the entry's dependencies load a second
+time, and each module that was given arms reads them as one more of its own
+files, `posts.derived.kso` beside `posts.kso`. The arm is qualified, formatted
+and checked as code someone wrote in that module, and an error in it quotes
+the line the convention wrote. An arm for a module the derivation was not
+shown is refused at the `derive` line. `kanso derived` prints each arm under
+the module it went to. In the tab the modules arrive as text and the arms join
+them the same way.
+
+tests/golden/derive gains three cases, each run on both engines: a `path_to`
+arm defined for each record type in a module with a `show` action, an arm that
+reads a missing field and is refused in the derived file, and an arm for
+std/list, refused. With the second load switched off the first case printed
+"no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
+first case in the page; it was watched red with the derived files keyed so
+the module could not find them.
+
+The rows: bench/entry_corpus derives, so it pays for each call's strings and
+for the larger `lib/derive`: entry_instructions 85,282,135 (+134,173),
+compile_instructions 24,096,578 (+1,025), library_instructions 71,383,015
+(+2,479), and browser_compile_instructions 343,289,572 (-2). The first build
+keyed the derived files on every module load, which cost compile_allocs 14
+and interp_allocs 12 on programs that derive nothing; the key is asked for
+only while arms load, and neither row moves. Welfare falls by less than
+0.001, and the floor follows under the rule for a feature a ruling requires.
