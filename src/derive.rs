@@ -22,6 +22,9 @@ use crate::diag::{Diagnostic, Span};
 use crate::eval::{Entries, Interp, MapKey, Value};
 use crate::name::Name;
 use std::cell::RefCell;
+
+/// Each qualified name the entry's imports bring in, and whether it is pub.
+pub type Exports = crate::hash::Map<String, bool>;
 use std::rc::Rc;
 
 thread_local! {
@@ -59,13 +62,17 @@ enum Made {
 
 /// What the derivations an entry names add to it, or the diagnostics a
 /// refusal or a misbehaving derivation produced.
-pub fn derive(entry: &Program, deps: &Program) -> Result<Derived, Vec<Diagnostic>> {
+pub fn derive(
+    entry: &Program,
+    deps: &Program,
+    exports: &Exports,
+) -> Result<Derived, Vec<Diagnostic>> {
     let mut diags = reads_around(entry, deps);
     if !diags.is_empty() {
         return Err(diags);
     }
     let interp = Interp::copying(deps);
-    let description = describe(entry, deps, &interp)?;
+    let description = describe(entry, deps, exports, &interp)?;
     let mut made = Derived::default();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
@@ -91,10 +98,15 @@ pub fn derive(entry: &Program, deps: &Program) -> Result<Derived, Vec<Diagnostic
 /// The app's own modules the entry imports, each with its pub functions, its
 /// pub constants and its record types. The modules a derivation lives in are
 /// left out: they hold the convention, not the program it describes.
-fn describe(entry: &Program, deps: &Program, interp: &Interp) -> Result<Value, Vec<Diagnostic>> {
+fn describe(
+    entry: &Program,
+    deps: &Program,
+    exports: &Exports,
+    interp: &Interp,
+) -> Result<Value, Vec<Diagnostic>> {
     let modules = described(entry)
         .iter()
-        .map(|name| module(deps, name, interp))
+        .map(|name| module(deps, name, exports, interp))
         .collect::<Result<_, _>>()
         .map_err(|d| vec![d])?;
     Ok(record("derive/program", vec![list(modules)]))
@@ -170,14 +182,23 @@ fn names_in(e: &Expr, named: &mut Vec<(String, Span)>) {
     crate::for_each_child(e, |child| names_in(child, named));
 }
 
-fn module(deps: &Program, name: &str, interp: &Interp) -> Result<Value, Diagnostic> {
+fn module(
+    deps: &Program,
+    name: &str,
+    exports: &Exports,
+    interp: &Interp,
+) -> Result<Value, Diagnostic> {
+    // Whether a name reaches the entry as pub. A declaration's own flag is
+    // demoted when it arrives through another module that does not re-export
+    // it, and that route can load first, so the entry's exports decide.
+    let open = |n: &str| exports.get(n).copied().unwrap_or(false);
     let prefix = format!("{name}/");
     let mut seen: Vec<&str> = Vec::new();
     let mut functions = Vec::new();
     let mut constants = Entries::new();
     for decl in &deps.fns {
         let Some(bare) = decl.name.strip_prefix(&prefix) else { continue };
-        if !decl.is_pub || decl.synthetic || bare.contains('/') || seen.contains(&bare) {
+        if !open(&decl.name) || decl.synthetic || bare.contains('/') || seen.contains(&bare) {
             continue;
         }
         if crate::ast::getter_field(bare).is_some() || bare.starts_with(char::is_uppercase) {
@@ -205,7 +226,7 @@ fn module(deps: &Program, name: &str, interp: &Interp) -> Result<Value, Diagnost
     let records = deps
         .types
         .iter()
-        .filter(|t| t.is_pub && !t.synthetic && t.parent.is_none() && t.members.is_empty())
+        .filter(|t| open(&t.name) && !t.synthetic && t.parent.is_none() && t.members.is_empty())
         .filter_map(|t| t.name.strip_prefix(&prefix).map(|bare| (bare, t)))
         .filter(|(bare, _)| !bare.contains('/'))
         .map(|(bare, t)| {
@@ -214,7 +235,51 @@ fn module(deps: &Program, name: &str, interp: &Interp) -> Result<Value, Diagnost
         })
         .collect();
     let constants = Value::Map(Rc::new(constants));
-    Ok(record("derive/module", vec![text(name), list(functions), constants, list(records)]))
+    let calls = calls_in(deps, name);
+    let fields = vec![text(name), list(functions), constants, list(records), list(calls)];
+    Ok(record("derive/module", fields))
+}
+
+/// Every call a function of module `name` makes to a named function, as
+/// `derive/call` records, in the order the module declares and writes them.
+fn calls_in(deps: &Program, name: &str) -> Vec<Value> {
+    let prefix = format!("{name}/");
+    let mut calls = Vec::new();
+    for decl in deps.fns.iter().filter(|f| !f.synthetic) {
+        let Some(caller) = decl.name.strip_prefix(&prefix) else { continue };
+        if caller.contains('/') || crate::ast::getter_field(caller).is_some() {
+            continue;
+        }
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } => expr,
+                Stmt::Expr(e) => e,
+            };
+            calls_from(e, name, caller, &mut calls);
+        }
+    }
+    calls
+}
+
+fn calls_from(e: &Expr, module: &str, caller: &str, calls: &mut Vec<Value>) {
+    if let Expr::App { head, args, span, .. } = e {
+        if let Expr::Ident(callee, _, _) = &**head {
+            let named = |a: &Expr| match a {
+                Expr::Ident(n, _, _) => text(n.as_str()),
+                _ => text(""),
+            };
+            let fields = vec![
+                text(module),
+                text(caller),
+                text(callee.as_str()),
+                list(args.iter().map(named).collect()),
+                Value::Int((span.line as i64).into()),
+                Value::Int((span.col as i64).into()),
+            ];
+            calls.push(record("derive/call", fields));
+        }
+    }
+    crate::for_each_child(e, |child| calls_from(child, module, caller, calls));
 }
 
 fn param(p: &Pattern) -> Value {
@@ -306,7 +371,8 @@ fn declared(
     d: &Derive,
     decl: &Value,
 ) -> Result<Option<Made>, Diagnostic> {
-    let kinds = ["derive/constant", "derive/type_declaration", "derive/refusal"];
+    let kinds =
+        ["derive/constant", "derive/type_declaration", "derive/refusal", "derive/call_refusal"];
     let fields = match decl {
         Value::Record { ty, fields } if kinds.contains(&&**ty) => fields.borrow().clone(),
         other => {
@@ -325,6 +391,9 @@ fn declared(
         if &**ty == "derive/refusal" {
             let message = plain_text(interp, &fields[1]);
             return Err(refused_at(deps, &origin, message, d.span));
+        }
+        if &**ty == "derive/call_refusal" {
+            return Err(refused_at_call(interp, deps, d, &fields));
         }
         if &**ty == "derive/type_declaration" {
             return declared_type(interp, d, &fields).map(|t| Some(Made::Type(t)));
@@ -355,6 +424,28 @@ fn declared(
         synthetic: false,
         shades: None,
     })))
+}
+
+/// A refusal at one call a description listed, in the file of the function
+/// that makes it.
+fn refused_at_call(interp: &Interp, deps: &Program, d: &Derive, fields: &[Value]) -> Diagnostic {
+    let message = plain_text(interp, &fields[1]);
+    let call = match interp.demand(&fields[0]) {
+        Ok(Value::Record { ty, fields }) if &*ty == "derive/call" => fields.borrow().clone(),
+        _ => return Diagnostic::new("derive", message, d.span),
+    };
+    let number = |v: &Value| match interp.demand(v) {
+        Ok(Value::Int(n)) => n.to_string().parse::<u32>().ok(),
+        _ => None,
+    };
+    let caller = format!("{}/{}", plain_text(interp, &call[0]), plain_text(interp, &call[1]));
+    let at = number(&call[4]).zip(number(&call[5]));
+    match (deps.fns.iter().find(|f| f.name == caller), at) {
+        (Some(f), Some((line, col))) => {
+            Diagnostic::new("derive", message, Span { line, col }).about(&f.file)
+        }
+        _ => Diagnostic::new("derive", message, d.span),
+    }
 }
 
 /// A record type the entry declares, named and with fields as a programmer

@@ -1,0 +1,15 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# Each call a module makes to another module, as caller and callee.
+pub fn traced p
+  rows = list/fold p.modules [] (acc m -> list/concat acc (outward m))
+  [(derive/declare "traced" "traced" rows)]
+
+fn outward m
+  across = list/select m.calls (c -> c.module != head_of c.callee)
+  list/to_list (list/map across (c -> "{c.module}/{c.caller} -> {c.callee}"))
+
+fn head_of name
+  (text/split name "/")[1]
