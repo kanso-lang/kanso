@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 08</span>
 <h1>a json library</h1>
 
-<p>part i taught the pieces. part ii spends them. the repository ships <code>lib/json</code>—a complete json decoder and encoder, escapes and <code>\uXXXX</code> and int-versus-float and failure positions included—written to prove the language can earn a living. it is six files and four hundred and change lines, and this chapter reads all of it, byte by byte. every panel below quotes the real files, and the executed samples either run the library itself or replay one of its moves small enough to fit on a page. first, what it feels like to use:</p>
+<p>the repository ships <code>lib/json</code>, a complete json decoder and encoder that handles escapes, <code>\uXXXX</code>, ints and floats, and failure positions. it is six files, and this chapter reads the core of each. every panel titled <code>lib/json/…</code> is cut from the real file, whole declarations unchanged, and the book's build fails if a panel stops matching. the other samples either run the library or replay one of its moves on a page. first, what using it looks like:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">using/main.kso</div>
@@ -26,11 +26,11 @@ parse failed at byte 10: invalid literal</code></pre>
   </div>
 </div>
 
-<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in a few lines. <code>decode!</code> insists the text is json and answers a box: the value, or a failure carrying where the parser stopped. <code>ok</code> is opened with <code>.&gt;</code>, and the happy path never checks anything. <code>bad</code> is read through <code>std/testing</code>'s <code>when_failed</code>, which hands <code>told</code> the reason record; a rescue opens only a failure another package raised, and the sample links json into its own module. plain <code>decode</code> asks instead of insisting, and answers <code>none</code> for text that is not json. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
+<p>the module behind this panel is the library itself: the sample directory links the real <code>lib/json</code> files beside a small <code>app.kso</code> that defines <code>describe</code> and <code>told</code>. <code>decode</code> asks: it answers the value, or <code>none</code> for text that is not json. <code>decode!</code> insists: it answers a box holding the value or a failure that says where the parser stopped. here <code>ok</code> comes from <code>decode</code>, is opened with <code>.&gt;</code>, printed and encoded back. <code>bad</code> comes from <code>decode!</code>, and its failure is read through <code>std/testing</code>'s <code>when_failed</code>, because a rescue opens only a failure another module raised and this sample links json into its own. the failure reads <em>byte 10, invalid literal</em>: the parser saw <code>n</code>, committed to <code>null</code>, and reported where the input stopped matching.</p>
 
 <h2>six files, one namespace</h2>
 
-<p>the library is a directory, so chapter 07 already told you its shape: one namespace, files split by topic, alphabetical inside. the split reads like a table of contents:</p>
+<p>the library is a module, so chapter 07 already described its shape: one namespace, split into files by topic.</p>
 
 <ul>
   <li><code>json.kso</code>—the public api: <code>decode</code>, <code>encode</code>, the failure types</li>
@@ -41,83 +41,130 @@ parse failed at byte 10: invalid literal</code></pre>
   <li><code>json_test.kso</code>—the suite</li>
 </ul>
 
-<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file sees only what the module marks <code>pub</code>, the same as any importer. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
+<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers with no import, and the test file sees only what the module marks <code>pub</code>, like any importer. the api file is where to start reading:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">_parsed</span>
-  pos:<span class="t">int</span>
-  value:<span class="t">json</span>
+  <pre><code>pub <span class="k">type</span> <span class="t">json_null</span>
 
-<span class="k">type</span> <span class="t">parse_failure</span>
-  position:<span class="t">int</span>
-  reason:<span class="t">string</span>
+pub <span class="k">type</span> <span class="t">parse_failure</span>
+  position
+  reason
 
-<span class="k">fn</span> <span class="f">_finish</span> <span class="o">_</span> <span class="t">none</span>
-  <span class="t">err</span> (<span class="t">parse_failure</span> <span class="n">0</span> <span class="s">"unexpected end of input"</span>)
+<span class="k">type</span> <span class="t">parsed</span>
+  pos
+  value
 
-<span class="k">fn</span> <span class="f">_finish</span> cs (<span class="t">_parsed</span> p v)
-  p2 <span class="o">=</span> <span class="f">_skip_ws</span> cs p
-  <span class="f">if</span> (p2 <span class="o">&gt;</span> (<span class="f">length</span> cs)) v (<span class="f">_fail</span> p2 <span class="s">"unexpected trailing characters"</span>)
+<span class="c"># Text that is not JSON answers none, an outcome the caller handles. The</span>
+<span class="c"># decoder's failure is a box, and `plain` takes the box itself rather than</span>
+<span class="c"># opening it, so what went wrong is left to `decode!`.</span>
+pub <span class="k">fn</span> <span class="f">decode</span> s
+  plain <span class="o">(</span>document s<span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">decode</span> s
-  cs <span class="o">=</span> <span class="f">bytes</span> s
-  <span class="f">_finish</span> cs (<span class="f">_parse_value</span> cs <span class="n">1</span>)</code></pre>
+<span class="c"># `decode!` insists the text is JSON. Like every `!` name it answers a box:</span>
+<span class="c"># the value, or a failure that bubbles carrying a `parse_failure`, which says</span>
+<span class="c"># where the decoder stopped and why.</span>
+pub <span class="k">fn</span> <span class="f">decode</span>! s
+  effect <span class="o">(</span>document s<span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">document</span> s
+  cs <span class="o">=</span> text<span class="o">/</span><span class="f">bytes</span> s
+  finish cs <span class="o">(</span>parse_value cs <span class="i">1</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">plain</span> _<span class="o">:</span><span class="o">&lt;</span>some<span class="o">&gt;</span>effect
+  <span class="k">none</span>
+
+<span class="k">fn</span> <span class="f">plain</span> v
+  v
+
+<span class="k">fn</span> <span class="f">finish</span> _ <span class="k">none</span>
+  <span class="k">err</span> <span class="o">(</span>parse_failure <span class="i">0</span> <span class="s">"unexpected end of input"</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">finish</span> cs <span class="o">(</span>parsed p v<span class="o">)</span>
+  p2 <span class="o">=</span> skip_ws cs p
+  <span class="f">if</span> <span class="o">(</span>p2 <span class="o">&gt;</span> <span class="f">length</span> cs<span class="o">)</span> v <span class="o">(</span>fail p2 <span class="s">"unexpected trailing characters"</span><span class="o">)</span></code></pre>
 </div>
 
-<p><code>decode</code> is three lines because the whole design lives in its two collaborators. every internal step returns a <code>_parsed</code>—a cursor position paired with the value parsed so far—because a parser's real product is not just a value but <em>how far it got</em>. and <code>_finish</code> is dispatch doing the last two checks: an absent result is the empty-input failure, and a present one is accepted only if nothing but whitespace remains. <code>decode "1 x"</code> fails at byte 3, and you will meet that exact assertion in the suite.</p>
+<p><code>decode</code> and <code>decode!</code> share <code>document</code>, which turns the text into bytes and hands them to <code>parse_value</code> at position 1. every step of the parser answers a <code>parsed</code>, a record of the position it reached and the value it read, because the next step needs to know where to continue. <code>finish</code> makes the last two checks by dispatch: <code>none</code> means the input ended too early, and a <code>parsed</code> is accepted only if nothing but whitespace follows it, so <code>decode "1 x"</code> fails at byte 3. the two public forms differ only in how a failure comes back. <code>decode!</code> hands back the box as it is. <code>decode</code> passes it to <code>plain</code>, whose first arm takes any effect and answers <code>none</code>.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">ensō-neko</span>
-<p>four hundred lines is small for a json library and it is not an accident of golfing. there is no error-propagation code to write, no visitor plumbing, no token type—the language's defaults absorb whole categories of a parser's usual weight. as you read the files, keep a tally of the code a normal parser needs that this one just never writes.</p>
+<p>count what this library does not contain: no token type, no lexer, no visitor, and no code that checks whether the previous step failed. a failure passes every function it reaches, so the parser's happy path is the whole parser.</p>
 </div>
 </div>
 
 <h2>the next byte is the dispatch</h2>
 
-<p>most hand-written parsers begin with a lexer, a token enum, and a loop with a switch in it. kanso-json has none of those, because it doesn't need a value to branch on—it needs a value to <em>dispatch</em> on, and the next byte already is one. the heart of the parser is the chapter-03 move at industrial scale:</p>
+<p>most hand-written parsers begin with a lexer, a token type and a loop with a switch in it. this one has none of those. it dispatches on the next byte, which is already a value, using chapter 03's overloads:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/value.kso</div>
-  <pre><code><span class="c"># value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace</span>
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">34</span> cs p
-  <span class="f">_parse_string</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+  <pre><code><span class="k">fn</span> <span class="f">parse_value</span> cs p
+  value_for cs<span class="o">[</span>p<span class="o">]</span> cs p
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">91</span> cs p
-  <span class="f">_parse_array</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+<span class="c"># value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace</span>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">34</span> cs p
+  parse_string cs <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
-  matched <span class="o">=</span> <span class="f">_alse?</span> cs p
-  <span class="f">_word</span> matched p <span class="n">5</span> <span class="t">false</span>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">91</span> cs p
+  parse_array cs <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
-  matched <span class="o">=</span> <span class="f">_ull?</span> cs p
-  <span class="f">_word</span> matched p <span class="n">4</span> <span class="t">json_null</span>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">102</span> cs p
+  matched <span class="o">=</span> alse? cs p
+  word matched p <span class="i">5</span> <span class="k">false</span>
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
-  matched <span class="o">=</span> <span class="f">_rue?</span> cs p
-  <span class="f">_word</span> matched p <span class="n">4</span> <span class="t">true</span>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">110</span> cs p
+  matched <span class="o">=</span> ull? cs p
+  word matched p <span class="i">4</span> json_null
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">123</span> cs p
-  <span class="f">_parse_object</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">116</span> cs p
+  matched <span class="o">=</span> rue? cs p
+  word matched p <span class="i">4</span> <span class="k">true</span>
 
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="t">none</span> <span class="o">_</span> p
-  <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="i">123</span> cs p
+  parse_object cs <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_value_for</span> c cs p
-  numeric <span class="o">=</span> <span class="f">_number_start?</span> c
-  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_bad_value_char</span> c p)</code></pre>
+<span class="k">fn</span> <span class="f">value_for</span> <span class="k">none</span> _ p
+  fail p <span class="s">"unexpected end of input"</span>
+
+<span class="k">fn</span> <span class="f">value_for</span> c cs p
+  numeric <span class="o">=</span> number_start? c
+  <span class="f">if</span> numeric <span class="o">(</span>parse_number cs p<span class="o">)</span> <span class="o">(</span>value_blank c cs p<span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">value_blank</span> c cs p
+  blank <span class="o">=</span> ws? c
+  <span class="f">if</span> blank <span class="o">(</span>value_for cs<span class="o">[</span>p <span class="o">+</span> <span class="i">1</span><span class="o">]</span> cs <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span><span class="o">)</span> <span class="o">(</span>bad_value_char c p<span class="o">)</span>
+
+<span class="c"># The first byte chose the arm, so what is left is the tail of one known</span>
+<span class="c"># keyword, compared where it sits. Slicing it out built a byte string to throw</span>
+<span class="c"># away, and comparing that to a list of codes walked both element by element</span>
+<span class="c"># with a tag check on each. Reading past the end answers none, which matches</span>
+<span class="c"># nothing, so a truncated literal needs no length test of its own.</span>
+<span class="k">fn</span> <span class="f">alse</span>? cs p
+  cs<span class="o">[</span>p <span class="o">+</span> <span class="i">1</span><span class="o">]</span> <span class="o">==</span> <span class="i">97</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">2</span><span class="o">]</span> <span class="o">==</span> <span class="i">108</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">3</span><span class="o">]</span> <span class="o">==</span> <span class="i">115</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">4</span><span class="o">]</span> <span class="o">==</span> <span class="i">101</span>
+
+<span class="k">fn</span> <span class="f">ull</span>? cs p
+  cs<span class="o">[</span>p <span class="o">+</span> <span class="i">1</span><span class="o">]</span> <span class="o">==</span> <span class="i">117</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">2</span><span class="o">]</span> <span class="o">==</span> <span class="i">108</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">3</span><span class="o">]</span> <span class="o">==</span> <span class="i">108</span>
+
+<span class="k">fn</span> <span class="f">rue</span>? cs p
+  cs<span class="o">[</span>p <span class="o">+</span> <span class="i">1</span><span class="o">]</span> <span class="o">==</span> <span class="i">114</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">2</span><span class="o">]</span> <span class="o">==</span> <span class="i">117</span> and cs<span class="o">[</span>p <span class="o">+</span> <span class="i">3</span><span class="o">]</span> <span class="o">==</span> <span class="i">101</span>
+
+<span class="k">fn</span> <span class="f">word</span> <span class="k">true</span> p n v
+  parsed <span class="o">(</span>p <span class="o">+</span> n<span class="o">)</span> v
+
+<span class="k">fn</span> <span class="f">word</span> <span class="k">false</span> p _ _
+  fail p <span class="s">"invalid literal"</span></code></pre>
 </div>
 
-<p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because reading past the end of the byte array answers <code>none</code>, and running off the end of input is just an absent byte, dispatched like everything else. the three keyword literals each get a checker for their own tail: the first byte already chose the arm, so <code>_rue?</code> compares the three bytes after it where they sit, and <code>_word</code> turns that verdict into a result or a failure. reading past the end answers <code>none</code>, which equals no byte, so a truncated literal needs no length test of its own. here is that whole path, small enough to re-run on its own:</p>
+<p><code>value_for</code> has eight arms, one per way a json value can begin, plus a <code>none</code> arm: reading past the end of the bytes answers <code>none</code>, so running out of input is one more value to dispatch on. the last arm takes everything else. <code>number_start?</code> asks whether the byte can begin a number, and <code>value_blank</code> skips a blank byte and dispatches again, or names the unexpected character. each keyword has a checker for its own tail. the first byte already chose the arm, so <code>rue?</code> compares the three bytes after it where they sit, and <code>word</code> turns that verdict into a <code>parsed</code> or a failure. here is that path as a small project of its own: <code>lit</code> holds the decoder, <code>report</code> prints its answers, and the entry tries four inputs:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">literal.kso</div>
+  <div class="code-panel-title">literal/lit/lit.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">type</span> parse_failure
+<span class="k">pub</span> <span class="k">type</span> parse_failure
   <span class="f">position</span>
   <span class="f">reason</span>
 
@@ -127,7 +174,7 @@ parse failed at byte 10: invalid literal</code></pre>
 <span class="k">fn</span> <span class="f">alse?</span> cs p
   cs[p <span class="o">+</span> <span class="n">1</span>] <span class="o">==</span> <span class="n">97</span> and cs[p <span class="o">+</span> <span class="n">2</span>] <span class="o">==</span> <span class="n">108</span> and cs[p <span class="o">+</span> <span class="n">3</span>] <span class="o">==</span> <span class="n">115</span> and cs[p <span class="o">+</span> <span class="n">4</span>] <span class="o">==</span> <span class="n">101</span>
 
-<span class="k">fn</span> <span class="f">decode_literal</span> s
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">decode_literal</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
   <span class="f">value_for</span> cs[<span class="n">1</span>] cs <span class="n">1</span>
 
@@ -162,23 +209,35 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="f">v</span>
 
 <span class="k">fn</span> <span class="f">word</span> false p _
-  <span class="f">fail</span> p <span class="s">"invalid literal"</span>
+  <span class="f">fail</span> p <span class="s">"invalid literal"</span></code></pre>
+</div>
 
-<span class="c"># `show` sits one package over from the decoder, which refuses a document and</span>
-<span class="c"># says nothing about what a caller does with that. A foreign type is named,</span>
-<span class="c"># never destructured.</span>
-<span class="k">fn</span> <span class="f">show</span> r:parse_failure
+<div class="code-panel">
+  <div class="code-panel-title">literal/report/report.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../lit"</span>
+
+<span class="c"># The reporting lives here rather than beside the decoder, because the</span>
+<span class="c"># decoder refuses a document and says nothing about what a caller does with</span>
+<span class="c"># that. A foreign type is named, never destructured (membership crosses an</span>
+<span class="c"># import where structure does not), so its fields are read by name.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> r:lit/parse_failure
   <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
 
-<span class="k">fn</span> <span class="f">show</span> v
-  <span class="s">"ok: <span class="i">{v}</span>"</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> v
+  <span class="s">"ok: <span class="i">{v}</span>"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">literal/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./lit"</span>
+<span class="k">import</span> <span class="s">"./report"</span>
 
 <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>)))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>)))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>)))</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run literal.kso</div>
+    <div class="code-panel-title">kanso run literal</div>
     <pre><code>ok: true
 ok: null
 err at 1: invalid literal
@@ -186,81 +245,126 @@ err at 1: unexpected character `?`</code></pre>
   </div>
 </div>
 
-<p>the tail predicates read the spellings a byte at a time—<code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8—and each comparison is an <code>==</code> against a byte the input already holds. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." in the library a bad literal becomes an <code>err</code> deep inside, and it comes back out with its position intact, past every function between, without one of them naming it. the sample answers the record instead, the shape chapter 04 gives an outcome the caller handles, and its caller reads the position off it.</p>
+<p>the tail predicates compare bytes: <code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>word</code> reports the mismatch. <code>?</code> starts no value, so the catch-all arm names it. in the library a bad literal becomes an <code>err</code> deep inside and comes back out with its position, past every function in between, and none of them mentions it. the sample's <code>fail</code> answers a <code>parse_failure</code> record instead, the shape chapter 04 gives an outcome the caller handles, and <code>report</code>'s <code>show</code> reads the position from it.</p>
 
-<p>arrays and objects follow the same discipline one level up. <code>_array_delim</code> dispatches on the byte after an element—comma means more items, <code>93</code> (a closing bracket) means done, <code>none</code> means the input ended mid-array—and the object path adds only a key: <code>_obj_key_start</code> insists on a quote, <code>_expect_char</code> demands the colon, and <code>_obj_value</code> folds each pair into a map with <code>put</code>. there is no recursion <em>limit</em> to manage and no parser state to restore, because every step passes its whole world—the bytes and a position—forward as arguments.</p>
+<p>arrays and objects work the same way one level up. <code>array_delim</code> dispatches on the byte after an element: <code>44</code>, a comma, means more items, <code>93</code> means the array is done, <code>none</code> means the input ended inside it, and anything else is whitespace to skip or a mistake to name. the object path adds a key: <code>obj_key_start</code> insists on a quote, <code>obj_key_end</code> demands the colon, and <code>obj_value</code> puts each pair into the map. every step passes its whole state, the bytes and a position, forward as arguments, so there is no parser state to restore. the comments in <code>value.kso</code> record why some of these states call themselves and others hand off to a twin: each choice was measured, in instructions, on the benchmark chapter 10 describes.</p>
 
 <h2>strings and the escape path</h2>
 
-<p>strings are where json parsers earn or lose their keep, and <code>text.kso</code> is the library's biggest file. the design is a two-speed scanner. the fast path bets that most strings contain no escapes: <code>span_to</code> answers the run of bytes from <code>p</code> up to the next quote <em>or</em> backslash, and dispatch on the byte that stopped it decides which world you're in:</p>
+<p>strings are where a json parser spends most of its time. <code>parse_string</code> reads a string in one runtime call when it can. <code>builtin_plain_string</code> answers the text in front of the closing quote when the string has no escape in it, or the closing quote's position when its escapes are the simple one-letter kind, which <code>builtin_unescape</code> then undoes. anything harder answers <code>none</code>, and <code>string_at</code> reads the string the long way:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/text.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_parse_string</span> cs p
-  <span class="f">_string_at</span> cs (<span class="f">span_to</span> cs p <span class="n">34</span> <span class="n">92</span>)
+  <pre><code><span class="c"># A string is read in one call where it can be. With no escape in it, the call</span>
+<span class="c"># answers the text in front of the closing quote. With escapes, it answers the</span>
+<span class="c"># closing quote's position, and `unescape` undoes the eight one-letter escapes</span>
+<span class="c"># over that range. A `\u` escape, any other escape, a string that runs out, or</span>
+<span class="c"># bytes that are not utf-8 answer none at either step, and the string is read</span>
+<span class="c"># the long way below, which is where each of those is undone or named.</span>
+<span class="k">fn</span> <span class="f">parse_string</span> cs p
+  plain_at cs p <span class="o">(</span>builtin_plain_string cs p<span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_string_at</span> cs <span class="t">none</span>
-  <span class="f">_fail</span> (<span class="f">length</span> cs <span class="o">+</span> <span class="n">1</span>) <span class="s">"unterminated string"</span>
+<span class="k">fn</span> <span class="f">plain_at</span> cs p <span class="k">none</span>
+  string_at cs <span class="o">(</span>text<span class="o">/</span>span_to cs p <span class="i">34</span> <span class="i">92</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_string_at</span> cs run
-  <span class="f">_string_end</span> cs cs[run.to <span class="o">+</span> <span class="n">1</span>] run
+<span class="k">fn</span> <span class="f">plain_at</span> cs p e<span class="o">:</span><span class="t">int</span>
+  undone cs p e <span class="o">(</span>builtin_unescape cs p e<span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_string_end</span> <span class="o">_</span> <span class="n">34</span> run
-  p <span class="o">=</span> run.to <span class="o">+</span> <span class="n">1</span>
-  <span class="t">_parsed</span> (p <span class="o">+</span> <span class="n">1</span>) (<span class="f">_string_ok</span> p (<span class="f">utf8</span> (<span class="f">slice</span> run)))
+<span class="k">fn</span> <span class="f">plain_at</span> _ p s
+  parsed <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span> <span class="o">+</span> <span class="f">length</span> <span class="o">(</span>text<span class="o">/</span><span class="f">bytes</span> s<span class="o">)</span><span class="o">)</span> s
 
-<span class="k">fn</span> <span class="f">_string_end</span> cs <span class="n">92</span> run
-  fresh <span class="o">=</span> <span class="f">bytes</span> <span class="s">""</span>
-  <span class="f">_str_chars</span> cs (run.to <span class="o">+</span> <span class="n">1</span>) (<span class="f">append</span> fresh (<span class="f">slice</span> run))
+<span class="k">fn</span> <span class="f">undone</span> cs p _ <span class="k">none</span>
+  string_at cs <span class="o">(</span>text<span class="o">/</span>span_to cs p <span class="i">34</span> <span class="i">92</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_string_end</span> <span class="o">_</span> <span class="t">none</span> run
-  <span class="f">_fail</span> (run.to <span class="o">+</span> <span class="n">1</span>) <span class="s">"unterminated string"</span></code></pre>
+<span class="k">fn</span> <span class="f">undone</span> _ _ e s
+  parsed <span class="o">(</span>e <span class="o">+</span> <span class="i">1</span><span class="o">)</span> s
+
+<span class="c"># The run up to the first quote or backslash is a span the scan proved</span>
+<span class="c"># inside cs, so slicing it cannot miss. A string ending in its last byte</span>
+<span class="c"># reaches one past the end, where span_to answers the empty run.</span>
+<span class="k">fn</span> <span class="f">string_at</span> cs <span class="k">none</span>
+  fail <span class="o">(</span><span class="f">length</span> cs <span class="o">+</span> <span class="i">1</span><span class="o">)</span> <span class="s">"unterminated string"</span>
+
+<span class="k">fn</span> <span class="f">string_at</span> cs run
+  string_end cs cs<span class="o">[</span>run<span class="o">.</span>to <span class="o">+</span> <span class="i">1</span><span class="o">]</span> run
+
+<span class="k">fn</span> <span class="f">string_end</span> _ <span class="i">34</span> run
+  p <span class="o">=</span> run<span class="o">.</span>to <span class="o">+</span> <span class="i">1</span>
+  parsed <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span> <span class="o">(</span>string_ok p <span class="o">(</span>text<span class="o">/</span><span class="f">utf8</span> <span class="o">(</span>text<span class="o">/</span><span class="f">slice</span> run<span class="o">)</span><span class="o">)</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">string_end</span> cs <span class="i">92</span> run
+  fresh <span class="o">=</span> text<span class="o">/</span><span class="f">bytes</span> <span class="s">""</span>
+  str_chars cs <span class="o">(</span>run<span class="o">.</span>to <span class="o">+</span> <span class="i">1</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append fresh <span class="o">(</span>text<span class="o">/</span><span class="f">slice</span> run<span class="o">)</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">string_end</span> _ <span class="k">none</span> run
+  fail <span class="o">(</span>run<span class="o">.</span>to <span class="o">+</span> <span class="i">1</span><span class="o">)</span> <span class="s">"unterminated string"</span></code></pre>
 </div>
 
-<p>the run is a <code>span</code>: the bytes it lies in and two positions, <code>from</code> and <code>to</code>. a quote (<code>34</code>) after it ends the string, and the value is one slice of the original input—no copying, no character loop. a backslash (<code>92</code>) abandons the bet: the bytes so far are moved into an accumulator and the slow path takes over, appending decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. slicing a span answers no <code>none</code>, because only <code>std/text</code> builds one, and only after checking that its range lies inside the bytes. the span is never built at run time either: the compiler hands its three fields from <code>span_to</code> to <code>_string_end</code> as arguments. the slow path is another dispatch table—one arm per legal escape character, each pushing the byte it names:</p>
+<p><code>text/span_to</code> answers a <code>span</code>: the bytes it lies in and two positions, <code>from</code> and <code>to</code>, running up to the next quote (<code>34</code>) or backslash (<code>92</code>). <code>string_end</code> dispatches on the byte that stopped it. a quote ends the string, and its value is one slice of the input. a backslash moves the bytes so far into an accumulator, and the slow path appends decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. slicing a span cannot fail, because only <code>std/text</code> builds one, and only after checking that its range lies inside the bytes. the slow path is another dispatch table, one arm per escape character:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/text.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">110</span> p acc
-  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">2</span>) (<span class="f">append</span> acc <span class="n">10</span>)
+  <pre><code><span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">34</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">34</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">117</span> p acc
-  <span class="f">_str_unicode</span> cs p acc
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">47</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">47</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_str_escape</span> <span class="o">_</span> c p <span class="o">_</span>
-  <span class="f">_fail</span> p <span class="s">"invalid escape `\\<span class="i">{utf8 [c]}</span>`"</span>
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">92</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">92</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_str_hex4</span> cs p
-  <span class="f">_hex_on</span> (<span class="f">_hex_three</span> cs p) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">3</span>])
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">98</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">8</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_hex_three</span> cs p
-  <span class="f">_hex_on</span> (<span class="f">_hex_on</span> (<span class="f">_hex_digit</span> cs[p]) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">1</span>])) (<span class="f">_hex_digit</span> cs[p <span class="o">+</span> <span class="n">2</span>])
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">102</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">12</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_hex_on</span> e@(<span class="f">err</span> <span class="o">_</span>) (<span class="f">err</span> <span class="o">_</span>)
-  e
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">110</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">10</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_hex_on</span> e@(<span class="f">err</span> <span class="o">_</span>) <span class="o">_</span>
-  e
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">114</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">13</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_hex_on</span> <span class="o">_</span> e@(<span class="f">err</span> <span class="o">_</span>)
-  e
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">116</span> p acc
+  str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">9</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_hex_on</span> n d
-  n <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> d
+<span class="k">fn</span> <span class="f">str_escape</span> cs <span class="i">117</span> p acc
+  str_unicode cs p acc
 
-<span class="k">fn</span> <span class="f">_str_unicode</span> cs p acc
-  <span class="f">_unicode_at</span> cs p acc (<span class="f">_str_hex4</span> cs (p <span class="o">+</span> <span class="n">2</span>))
+<span class="k">fn</span> <span class="f">str_escape</span> _ <span class="k">none</span> p _
+  fail p <span class="s">"unterminated string"</span>
 
-<span class="k">fn</span> <span class="f">_unicode_at</span> <span class="o">_</span> <span class="o">_</span> <span class="o">_</span> e@(<span class="f">err</span> <span class="o">_</span>)
-  e
+<span class="k">fn</span> <span class="f">str_escape</span> _ c p _
+  fail p <span class="s">"invalid escape `\\<span class="i">{text/utf8 [c]}</span>`"</span>
 
-<span class="k">fn</span> <span class="f">_unicode_at</span> cs p acc code
-  <span class="f">if</span> (code <span class="o">&lt;</span> <span class="n">55296</span> or <span class="n">57343</span> <span class="o">&lt;</span> code)
-    <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">6</span>) (<span class="f">append</span> acc (<span class="f">from_code</span> code))
-    <span class="f">_str_surrogate</span> cs p acc code</code></pre>
+<span class="c"># four hex digits: a bad digit is a failure, which passes `hex_on` by, so the</span>
+<span class="c"># first bad digit is the failure handed on</span>
+<span class="k">fn</span> <span class="f">str_hex4</span> cs p
+  hex_on <span class="o">(</span>hex_three cs p<span class="o">)</span> <span class="o">(</span>hex_digit cs<span class="o">[</span>p <span class="o">+</span> <span class="i">3</span><span class="o">]</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">hex_three</span> cs p
+  hex_on <span class="o">(</span>hex_on <span class="o">(</span>hex_digit cs<span class="o">[</span>p<span class="o">]</span><span class="o">)</span> <span class="o">(</span>hex_digit cs<span class="o">[</span>p <span class="o">+</span> <span class="i">1</span><span class="o">]</span><span class="o">)</span><span class="o">)</span> <span class="o">(</span>hex_digit cs<span class="o">[</span>p <span class="o">+</span> <span class="i">2</span><span class="o">]</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">hex_on</span> n d
+  n <span class="o">*</span> <span class="i">16</span> <span class="o">+</span> d
+
+<span class="c"># a surrogate is half a character: the high half joins the `\u` low half</span>
+<span class="c"># written beside it, and either half alone is a failure</span>
+<span class="k">fn</span> <span class="f">str_surrogate</span> cs p acc high
+  <span class="f">if</span> <span class="o">(</span><span class="i">56319</span> <span class="o">&lt;</span> high<span class="o">)</span>
+    fail p <span class="s">"a low surrogate arrived without its high half"</span>
+    str_pair cs p acc high
+
+<span class="k">fn</span> <span class="f">str_unicode</span> cs p acc
+  unicode_at cs p acc <span class="o">(</span>str_hex4 cs <span class="o">(</span>p <span class="o">+</span> <span class="i">2</span><span class="o">)</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">unicode_at</span> cs p acc code
+  <span class="f">if</span> <span class="o">(</span>code <span class="o">&lt;</span> <span class="i">55296</span> or <span class="i">57343</span> <span class="o">&lt;</span> code<span class="o">)</span>
+    str_chars cs <span class="o">(</span>p <span class="o">+</span> <span class="i">6</span><span class="o">)</span> <span class="o">(</span>text<span class="o">/</span>append acc <span class="o">(</span>text<span class="o">/</span><span class="f">from_code</span> code<span class="o">)</span><span class="o">)</span>
+    str_surrogate cs p acc code</code></pre>
 </div>
 
-<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: <code>_str_hex4</code> reads four hex digits into a code point, passing each through <code>_hex_on</code>, which hands the first bad digit on as the failure, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. a code point in the surrogate range is half a character, and <code>_str_surrogate</code> goes looking for the other half. the digit math is worth running with your own eyes:</p>
+<p>eight arms handle the one-letter escapes (<code>110</code> is <code>\n</code>), one handles <code>\u</code>, and two name what went wrong: the input ended, or the escape is not one json has. for <code>\uXXXX</code>, <code>str_hex4</code> reads four hex digits into a code point. a bad digit is a failure, and a failure passes <code>hex_on</code> by without running its body, so the first bad digit is the failure that comes out. <code>text/from_code</code> turns the code point into a character. a code point in the surrogate range is half a character, and <code>str_surrogate</code> looks for the other half written beside it. the digit functions are small enough to run on their own:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">unicode.kso</div>
@@ -270,23 +374,11 @@ err at 1: unexpected character `?`</code></pre>
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
   <span class="f">char_of</span> (<span class="f">hex_on</span> (<span class="f">hex_three</span> cs <span class="n">1</span>) (<span class="f">hex_digit</span> cs[<span class="n">4</span>]))
 
-<span class="k">fn</span> <span class="f">char_of</span> e@(<span class="f">err</span> _)
-  <span class="f">e</span>
-
 <span class="k">fn</span> <span class="f">char_of</span> code
   <span class="f">text/from_code</span> code
 
 <span class="k">fn</span> <span class="f">hex_three</span> cs p
   <span class="f">hex_on</span> (<span class="f">hex_on</span> (<span class="f">hex_digit</span> cs[p]) (<span class="f">hex_digit</span> cs[p <span class="o">+</span> <span class="n">1</span>])) (<span class="f">hex_digit</span> cs[p <span class="o">+</span> <span class="n">2</span>])
-
-<span class="k">fn</span> <span class="f">hex_on</span> e@(<span class="f">err</span> _) (<span class="f">err</span> _)
-  <span class="f">e</span>
-
-<span class="k">fn</span> <span class="f">hex_on</span> e@(<span class="f">err</span> _) _
-  <span class="f">e</span>
-
-<span class="k">fn</span> <span class="f">hex_on</span> _ e@(<span class="f">err</span> _)
-  <span class="f">e</span>
 
 <span class="k">fn</span> <span class="f">hex_on</span> n d
   n <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> d
@@ -305,174 +397,180 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>))
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>))</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7g80"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play unicode.kso</div>
     <pre><code>é
 た
-简</code></pre>
+简
+<span class="k">error[endpoint]</span>: unhandled err reached the executor: "invalid hex digit"
+  born in hex_upper at unicode.kso:26
+  passed through char_of ← hex_on ← hex_on ← hex_on</code></pre>
   </div>
 </div>
 
-<p>those are the library's own hex functions, verbatim—the three-way relay <code>_hex_digit</code> → <code>_hex_alpha</code> → <code>_hex_upper</code> tries digits, then lowercase, then uppercase, and a byte that is none of them raises the one genuinely unhandleable failure in the file. that last character is <code>7b80</code>—<code>简</code>, the first half of 簡素. the library can spell its own name.</p>
+<p><code>hex_digit</code>, <code>hex_alpha</code> and <code>hex_upper</code> are the library's, unchanged: they try digits, then lowercase letters, then uppercase, and a byte that is none of them is the failure. <code>7b80</code> is 简, the first character of 簡素. <code>7g80</code> has a <code>g</code> in it, and the report shows its failure passing through <code>hex_on</code> three times and <code>char_of</code> once on its way to the top, none of which mention it.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">mugi</span>
-<p>the plain subscript is 1-indexed and returns <code>none</code> past the end—that pair of facts is the parser's entire end-of-input story. no length checks before reads, no sentinel value, no eof token: read the byte, and if the input is over, <code>none</code> flows into the same dispatch as everything else. count the <code>none</code> arms across the six files. each one is a bounds check somebody else's parser had to remember to write.</p>
+<p>the plain subscript starts at 1 and answers <code>none</code> past the end, and that is the parser's whole end-of-input story. there is no length check before a read and no eof token: read the byte, and if the input is over, <code>none</code> goes into the same dispatch as every other byte. count the <code>none</code> arms across the six files. each is a bounds check another parser would have had to remember.</p>
 </div>
 </div>
 
 <h2>numbers without a lexer</h2>
 
-<p>numbers get the same treatment, and one call answers both questions. <code>text/number_span</code> starts at the number's first byte and returns the position of the first byte that cannot belong to it, negated when a <code>.</code>, an <code>e</code> or an <code>E</code> went past. it answers zero when a leading 0 has another digit after it, or a minus or a point has none: RFC 8259 refuses those numbers, and the converters would take them. the runtime classifies sixteen bytes at a time, where a walk written in kanso dispatched on every byte. by the time the answer comes back, the library knows where the number ends and which converter to call:</p>
+<p>numbers take one runtime call. <code>text/number_span</code> starts at a number's first byte and answers the position just past its last byte, negated when a <code>.</code>, <code>e</code> or <code>E</code> went past. it answers zero for bytes rfc 8259 refuses as a number, such as a leading zero followed by another digit, or a minus or a point with no digit after it. the runtime classifies sixteen bytes at a time, where a walk written in kanso would dispatch on each one. so the library knows where the number ends and which converter to call before it converts anything:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/number.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">scan</span> cs start p
-  <span class="f">spanned</span> cs start (<span class="f">text/number_span</span> cs p)
+  <pre><code>import <span class="s">"std/text"</span>
+
+<span class="c"># Where the number's bytes end, and whether a `.`, `e` or `E` went past, in</span>
+<span class="c"># one call: the runtime classifies sixteen bytes a step where a walk here</span>
+<span class="c"># dispatched on every byte. A negative answer is the end of a float, and zero</span>
+<span class="c"># is bytes that are not a number as RFC 8259 writes one (#1999): the integer</span>
+<span class="c"># path then asks for a span that ends before it starts, gets none, and fails</span>
+<span class="c"># as `invalid number`.</span>
+<span class="k">fn</span> <span class="f">scan</span> cs start p
+  spanned cs start <span class="o">(</span>text<span class="o">/</span>number_span cs p<span class="o">)</span>
 
 <span class="k">fn</span> <span class="f">spanned</span> cs start e
-  <span class="f">if</span> (e <span class="o">&lt;</span> <span class="n">0</span>) (<span class="f">number_done</span> cs start (<span class="n">0</span> <span class="o">-</span> e) <span class="t">true</span>) (<span class="f">number_done</span> cs start e <span class="t">false</span>)
+  <span class="f">if</span> <span class="o">(</span>e <span class="o">&lt;</span> <span class="i">0</span><span class="o">)</span> <span class="o">(</span>number_done cs start <span class="o">(</span><span class="i">0</span> <span class="o">-</span> e<span class="o">)</span> <span class="k">true</span><span class="o">)</span> <span class="o">(</span>number_done cs start e <span class="k">false</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">true</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">float_of</span> (<span class="f">text/to_span</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+<span class="c"># The number's bytes are a span the scan proved inside cs.</span>
+<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="k">true</span>
+  parsed p <span class="o">(</span>number_ok start <span class="o">(</span>float_of <span class="o">(</span>text<span class="o">/</span>to_span cs start <span class="o">(</span>p <span class="o">-</span> <span class="i">1</span><span class="o">)</span><span class="o">)</span><span class="o">)</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">false</span>
-  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">int_of</span> (<span class="f">text/to_span</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="k">false</span>
+  parsed p <span class="o">(</span>number_ok start <span class="o">(</span>int_of <span class="o">(</span>text<span class="o">/</span>to_span cs start <span class="o">(</span>p <span class="o">-</span> <span class="i">1</span><span class="o">)</span><span class="o">)</span><span class="o">)</span><span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">float_of</span> <span class="k">none</span>
+  <span class="k">none</span>
 
 <span class="k">fn</span> <span class="f">float_of</span> run
-  <span class="f">text/to_float</span> (<span class="f">text/slice</span> run)</code></pre>
+  text<span class="o">/</span><span class="f">to_float</span> <span class="o">(</span>text<span class="o">/</span><span class="f">slice</span> run<span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">int_of</span> <span class="k">none</span>
+  <span class="k">none</span>
+
+<span class="k">fn</span> <span class="f">int_of</span> run
+  text<span class="o">/</span><span class="f">to_int</span> <span class="o">(</span>text<span class="o">/</span><span class="f">slice</span> run<span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">number_ok</span> p <span class="k">none</span>
+  fail p <span class="s">"invalid number"</span>
+
+<span class="k">fn</span> <span class="f">number_ok</span> _ n
+  n
+
+<span class="k">fn</span> <span class="f">number_start</span>? <span class="i">45</span>
+  <span class="k">true</span>
+
+<span class="k">fn</span> <span class="f">number_start</span>? <span class="k">none</span>
+  <span class="k">false</span>
+
+<span class="k">fn</span> <span class="f">number_start</span>? c
+  <span class="i">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="i">58</span></code></pre>
 </div>
 
-<p>replay the decision on its own inputs. the sample below asks the two questions apart, one walk each, in kanso rather than in the runtime; it prints which converter would fire:</p>
+<p>here is the same path on its own, with the library's <code>spanned</code> and <code>number_done</code> folded into one <code>converted</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">numbers.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">classify</span> s
+<span class="c"># The library's number path on its own. One call says where the number's</span>
+<span class="c"># bytes end and whether a float mark went past, and that picks the converter.</span>
+<span class="k">fn</span> <span class="f">read_number</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
-  q <span class="o">=</span> <span class="f">number_end</span> cs <span class="n">1</span>
-  digits <span class="o">=</span> <span class="f">text/slice</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
-  floaty <span class="o">=</span> <span class="f">mark_from</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
-  <span class="f">shown</span> floaty digits
+  <span class="f">converted</span> cs (<span class="f">text/number_span</span> cs <span class="n">1</span>)
 
-<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">43</span>
-  <span class="f">true</span>
+<span class="k">fn</span> <span class="f">converted</span> _ <span class="n">0</span>
+  <span class="s">"refused"</span>
 
-<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">45</span>
-  <span class="f">true</span>
+<span class="k">fn</span> <span class="f">converted</span> cs e
+  <span class="f">if</span> (e <span class="o">&lt;</span> <span class="n">0</span>) (<span class="f">float_of</span> (<span class="f">bytes_to</span> cs (<span class="n">0</span> <span class="o">-</span> e))) (<span class="f">int_of</span> (<span class="f">bytes_to</span> cs e))
 
-<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">46</span>
-  <span class="f">true</span>
+<span class="c"># The span ends one byte before the position number_span answers.</span>
+<span class="k">fn</span> <span class="f">bytes_to</span> cs p
+  <span class="f">text/to_span</span> cs <span class="n">1</span> (p <span class="o">-</span> <span class="n">1</span>)
 
-<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">69</span>
-  <span class="f">true</span>
+<span class="k">fn</span> <span class="f">float_of</span> none
+  <span class="s">"refused"</span>
 
-<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">101</span>
-  <span class="f">true</span>
+<span class="k">fn</span> <span class="f">float_of</span> run
+  <span class="s">"float64 <span class="i">{text/to_float (text/slice run)}</span>"</span>
 
-<span class="k">fn</span> <span class="f">is_number_char</span> none
-  <span class="f">false</span>
+<span class="k">fn</span> <span class="f">int_of</span> none
+  <span class="s">"refused"</span>
 
-<span class="k">fn</span> <span class="f">is_number_char</span> c
-  <span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>
+<span class="k">fn</span> <span class="f">int_of</span> run
+  <span class="s">"int <span class="i">{text/to_int (text/slice run)}</span>"</span>
 
-<span class="k">fn</span> <span class="f">mark_from</span> cs p q
-  <span class="f">if</span> (p <span class="o">&gt;</span> q) false (<span class="f">mark_step</span> cs cs[p] p q)
+<span class="k">fn</span> <span class="f">line</span> s
+  <span class="s">"<span class="i">{s}</span> -&gt; <span class="i">{read_number s}</span>"</span>
 
-<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">46</span> _ _
-  <span class="f">true</span>
-
-<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">69</span> _ _
-  <span class="f">true</span>
-
-<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">101</span> _ _
-  <span class="f">true</span>
-
-<span class="k">fn</span> <span class="f">mark_step</span> _ none _ _
-  <span class="f">false</span>
-
-<span class="k">fn</span> <span class="f">mark_step</span> cs _ p q
-  <span class="f">mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q
-
-<span class="k">fn</span> <span class="f">number_end</span> cs p
-  <span class="f">if</span> (<span class="f">is_number_char</span> cs[p]) (<span class="f">number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
-
-<span class="k">fn</span> <span class="f">shown</span> _ none
-  <span class="f">err</span> <span class="s">"no digits to read"</span>
-
-<span class="k">fn</span> <span class="f">shown</span> floaty digits
-  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{text/to_float digits}</span>"</span> <span class="s">"int <span class="i">{text/to_int digits}</span>"</span>
-
-<span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>))
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>))
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>))</code></pre>
+inputs <span class="o">=</span> [<span class="s">"42"</span> <span class="s">"-17"</span> <span class="s">"3.25"</span> <span class="s">"6e3"</span> <span class="s">"007"</span> <span class="s">"1."</span>]
+<span class="f">print</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> inputs line)) <span class="s">"\n"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play numbers.kso</div>
-    <pre><code><span class="k">error[naming]</span>: `is_number_char` answers only true or false: name it `is_number_char?`
-<span class="c">  --&gt; numbers.kso:10:4</span>
-  10 | fn is_number_char 43
-          <span class="k">^</span>
-<span class="k">error[naming]</span>: `mark_from` answers only true or false: name it `mark_from?`
-<span class="c">  --&gt; numbers.kso:31:4</span>
-  31 | fn mark_from cs p q
-          <span class="k">^</span>
-<span class="k">error[naming]</span>: `mark_step` answers only true or false: name it `mark_step?`
-<span class="c">  --&gt; numbers.kso:34:4</span>
-  34 | fn mark_step _ 46 _ _
-          <span class="k">^</span></code></pre>
+    <pre><code>42 -&gt; int 42
+-17 -&gt; int -17
+3.25 -&gt; float64 3.25
+6e3 -&gt; float64 6000.0
+007 -&gt; refused
+1. -&gt; refused</code></pre>
   </div>
 </div>
 
-<p>the sample's helpers are the library's older shape, kept on purpose: <code>is_number_char</code> and <code>number_end</code> find where the number stops, and <code>mark_from</code> walks the same bytes again asking whether a float mark went past. the library carries the mark along with the scan now and reads each number's bytes once. an integer stays an integer&#8212;<code>42</code> decodes to <code>int 42</code>, not <code>42.0</code>&#8212;and anything marked with a dot or an exponent becomes a <code>float64</code>, so <code>6e3</code> is <code>6000.0</code>. the greedy scan is deliberately looser than the json grammar in either shape: any plausible number byte is accepted, and <code>to_int</code> or <code>to_float</code> is the real judge. if the conversion fails, <code>_number_ok</code> converts that refusal into a <code>parse_failure</code> pinned to where the number began. let the builtin own the hard part; the parser only needs to know where the number stops and whether a float mark appeared.</p>
+<p>an integer stays an integer: <code>42</code> decodes to the int 42, and anything with a point or an exponent becomes a float, so <code>6e3</code> is <code>6000.0</code>. <code>007</code> and <code>1.</code> are refused before any converter sees them. in the library, a converter that still says no is caught by <code>number_ok</code>, which turns the refusal into a <code>parse_failure</code> at the position where the number began.</p>
 
 <h2>failure carries its position</h2>
 
-<p>every failure in the library flows through one two-line function:</p>
+<p>every failure in the library is made by one function, in the smallest file:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/scan.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_fail</span> p reason
-  <span class="t">err</span> (<span class="t">parse_failure</span> p reason)
+  <pre><code><span class="k">fn</span> <span class="f">fail</span> p reason
+  <span class="k">err</span> <span class="o">(</span>parse_failure p reason<span class="o">)</span>
+
+<span class="k">fn</span> <span class="f">skip_ws</span> cs p
+  <span class="f">if</span> <span class="o">(</span>ws? cs<span class="o">[</span>p<span class="o">]</span><span class="o">)</span> <span class="o">(</span>skip_ws cs <span class="o">(</span>p <span class="o">+</span> <span class="i">1</span><span class="o">)</span><span class="o">)</span> p
 
 <span class="c"># json whitespace bytes: tab, newline, carriage return, space</span>
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">9</span>
-  <span class="t">true</span>
+<span class="k">fn</span> <span class="f">ws</span>? <span class="i">9</span>
+  <span class="k">true</span>
 
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">10</span>
-  <span class="t">true</span>
+<span class="k">fn</span> <span class="f">ws</span>? <span class="i">10</span>
+  <span class="k">true</span>
 
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">13</span>
-  <span class="t">true</span>
+<span class="k">fn</span> <span class="f">ws</span>? <span class="i">13</span>
+  <span class="k">true</span>
 
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">32</span>
-  <span class="t">true</span>
+<span class="k">fn</span> <span class="f">ws</span>? <span class="i">32</span>
+  <span class="k">true</span>
 
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="t">none</span>
-  <span class="t">false</span>
+<span class="k">fn</span> <span class="f">ws</span>? <span class="k">none</span>
+  <span class="k">false</span>
 
-<span class="k">fn</span> <span class="f">_ws?</span> <span class="o">_</span>
-  <span class="t">false</span>
-
-<span class="k">fn</span> <span class="f">_skip_ws</span> cs p
-  <span class="f">if</span> (<span class="f">_ws?</span> cs[p]) (<span class="f">_skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p</code></pre>
+<span class="k">fn</span> <span class="f">ws</span>? _
+  <span class="k">false</span></code></pre>
 </div>
 
-<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. <code>decode!</code> hands that failure to its caller, and <code>decode</code> answers <code>none</code> in its place. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_ws?</code> and <code>_skip_ws</code> byte for byte. its caller reads the position, so the sample answers the record itself, the shape for an outcome the caller handles:</p>
+<p><code>fail</code> wraps a <code>parse_failure</code>, the byte position and a reason, in an <code>err</code>. because the position is always an argument, it is always at hand when something goes wrong. there is no current location to reconstruct from a lexer's state. the project below is <code>finish</code>'s trailing-characters check in miniature: skip whitespace, read an integer, skip whitespace again, and demand that the input be over. <code>pos</code> keeps the library's whitespace functions and answers the record itself, the shape for an outcome its caller handles:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">positions.kso</div>
+  <div class="code-panel-title">positions/pos/pos.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">type</span> parse_failure
+<span class="k">pub</span> <span class="k">type</span> parse_failure
   <span class="f">position</span>
   <span class="f">reason</span>
 
-<span class="k">fn</span> <span class="f">decode_int</span> s
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">decode_int</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
   p <span class="o">=</span> <span class="f">skip_ws</span> cs <span class="n">1</span>
   q <span class="o">=</span> <span class="f">digits_end</span> cs p
@@ -523,15 +621,6 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">ws?</span> _
   <span class="f">false</span>
 
-<span class="c"># `show` sits one package over from the decoder, which refuses a document and</span>
-<span class="c"># says nothing about what a caller does with that. A foreign type is named,</span>
-<span class="c"># never destructured.</span>
-<span class="k">fn</span> <span class="f">show</span> r:parse_failure
-  <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
-
-<span class="k">fn</span> <span class="f">show</span> v
-  <span class="s">"ok: <span class="i">{v}</span>"</span>
-
 <span class="k">fn</span> <span class="f">skip_ws</span> cs p
   <span class="f">if</span> (<span class="f">ws?</span> cs[p]) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
@@ -539,14 +628,35 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">f</span>
 
 <span class="k">fn</span> <span class="f">trailing</span> cs p v
-  <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)
+  <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">positions/report/report.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../pos"</span>
+
+<span class="c"># The reporting lives here rather than beside the decoder, because the</span>
+<span class="c"># decoder refuses a document and says nothing about what a caller does with</span>
+<span class="c"># that. A foreign type is named, never destructured (membership crosses an</span>
+<span class="c"># import where structure does not), so its fields are read by name.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> r:pos/parse_failure
+  <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> v
+  <span class="s">"ok: <span class="i">{v}</span>"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">positions/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./pos"</span>
+<span class="k">import</span> <span class="s">"./report"</span>
 
 <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>)))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>)))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  ;"</span>)))</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run positions.kso</div>
+    <div class="code-panel-title">kanso run positions</div>
     <pre><code>ok: 42
 err at 3: unexpected trailing characters
 err at 5: unexpected trailing characters
@@ -560,25 +670,93 @@ err at 3: expected a digit</code></pre>
 
 <h2>the suite</h2>
 
-<p>a file of booleans pins the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, and a round trip:</p>
+<p>a file of booleans pins the library: every kind of value, the escapes in both directions, unicode, whitespace, error positions, and a round trip.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json_test.kso</div>
-  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> <span class="f">decodes?</span> <span class="s">"\"\\u00e9\""</span> <span class="s">"é"</span>
+  <pre><code>import <span class="s">"std/testing"</span>
+import <span class="s">"std/text"</span>
 
-<span class="f">test_error_position</span> <span class="o">=</span>
-  decoded <span class="o">=</span> <span class="f">decode!</span> <span class="s">"[1, nope]"</span>
-  <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">5</span>)
+<span class="c"># `when_failed` hands back the reason out of the box, so this names a reason</span>
+<span class="c"># type and never an err — json cannot rescue what json raised.</span>
+test_decode_array <span class="o">=</span> decodes? <span class="s">"[1, 2, 3]"</span> <span class="o">[</span><span class="i">1</span> <span class="i">2</span> <span class="i">3</span><span class="o">]</span>
 
-<span class="f">test_error_trailing</span> <span class="o">=</span>
-  decoded <span class="o">=</span> <span class="f">decode!</span> <span class="s">"1 x"</span>
-  <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">3</span>)
+test_decode_bool <span class="o">=</span> decode <span class="s">"true"</span>
 
-<span class="f">test_plain_decode_answers_none</span> <span class="o">=</span> <span class="f">decode</span> <span class="s">"[1, nope]"</span> <span class="o">==</span> none
+test_decode_escapes <span class="o">=</span> decodes? <span class="s">"\"a\\n\\\"b\\\"\""</span> <span class="s">"a\n\"b\""</span>
 
-<span class="f">test_roundtrip</span> <span class="o">=</span>
+test_decode_float <span class="o">=</span> decodes? <span class="s">"3.25"</span> <span class="i">3.25</span>
+
+test_decode_exponent <span class="o">=</span> decodes? <span class="s">"1e3"</span> <span class="i">1000.0</span>
+
+test_decode_exponent_upper <span class="o">=</span> decodes? <span class="s">"2E2"</span> <span class="i">200.0</span>
+
+<span class="c"># the mark is a `.` here and an `e` further on: a scan that forgot the first</span>
+<span class="c"># one on reaching the second would hand these digits to the integer reader</span>
+test_decode_exponent_signed <span class="o">=</span> decodes? <span class="s">"1.5e2"</span> <span class="i">150.0</span>
+
+test_decode_int <span class="o">=</span> decodes? <span class="s">"42"</span> <span class="i">42</span>
+
+test_decode_negative <span class="o">=</span> decodes? <span class="s">"-7"</span> <span class="o">(</span><span class="i">0</span> <span class="o">-</span> <span class="i">7</span><span class="o">)</span>
+
+test_decode_nested <span class="o">=</span>
+  decoded <span class="o">=</span> decode <span class="s">"\{\"a\": [1, \{\"b\": null}]}"</span>
+  same? decoded { <span class="s">"a"</span><span class="o">:</span><span class="o">[</span><span class="i">1</span> { <span class="s">"b"</span><span class="o">:</span>json_null }<span class="o">]</span> }
+
+test_decode_object <span class="o">=</span> decodes? <span class="s">"\{\"a\": 1, \"b\": 2}"</span> { <span class="s">"a"</span><span class="o">:</span><span class="i">1</span> <span class="s">"b"</span><span class="o">:</span><span class="i">2</span> }
+
+test_decode_string <span class="o">=</span> decodes? <span class="s">"\"hello\""</span> <span class="s">"hello"</span>
+
+test_decode_surrogate_pair <span class="o">=</span> decodes? <span class="s">"\"\\ud83c\\udf8c\""</span> <span class="s">"🎌"</span>
+
+test_decode_unicode <span class="o">=</span> decodes? <span class="s">"\"\\u00e9\""</span> <span class="s">"é"</span>
+
+test_decode_whitespace <span class="o">=</span> decodes? <span class="s">"  [ 1 , 2 ]  "</span> <span class="o">[</span><span class="i">1</span> <span class="i">2</span><span class="o">]</span>
+
+test_encode_empty_list <span class="o">=</span> encode <span class="o">[</span><span class="o">]</span> <span class="o">==</span> <span class="s">"[]"</span>
+
+test_encode_empty_map <span class="o">=</span> encode {} <span class="o">==</span> <span class="s">"\{}"</span>
+
+test_encode_escapes <span class="o">=</span> encode <span class="s">"a\"b\nc"</span> <span class="o">==</span> <span class="s">"\"a\\\"b\\nc\""</span>
+
+test_encode_shorthands <span class="o">=</span>
+  raw <span class="o">=</span> text<span class="o">/</span><span class="f">utf8</span> <span class="o">[</span><span class="i">120</span> <span class="i">8</span> <span class="i">121</span> <span class="i">12</span> <span class="i">122</span><span class="o">]</span>
+  encode raw <span class="o">==</span> <span class="s">"\"x\\by\\fz\""</span>
+
+test_encode_nested <span class="o">=</span>
+  value <span class="o">=</span> { <span class="s">"a"</span><span class="o">:</span><span class="k">true</span> <span class="s">"b"</span><span class="o">:</span><span class="o">[</span><span class="i">1</span> <span class="i">2</span><span class="o">]</span> }
+  encode value <span class="o">==</span> <span class="s">"\{\"a\":true,\"b\":[1,2]}"</span>
+
+test_error_position <span class="o">=</span>
+  decoded <span class="o">=</span> decode! <span class="s">"[1, nope]"</span>
+  testing<span class="o">/</span>when_failed decoded <span class="o">(</span>r <span class="o">-&gt;</span> r<span class="o">.</span>position <span class="o">==</span> <span class="i">5</span><span class="o">)</span>
+
+test_error_trailing <span class="o">=</span>
+  decoded <span class="o">=</span> decode! <span class="s">"1 x"</span>
+  testing<span class="o">/</span>when_failed decoded <span class="o">(</span>r <span class="o">-&gt;</span> r<span class="o">.</span>position <span class="o">==</span> <span class="i">3</span><span class="o">)</span>
+
+test_plain_decode_answers_none <span class="o">=</span> decode <span class="s">"[1, nope]"</span> <span class="o">==</span> <span class="k">none</span>
+
+test_roundtrip <span class="o">=</span>
   text <span class="o">=</span> <span class="s">"\{\"a\":[1,2.5,\"x\"],\"b\":null}"</span>
-  <span class="f">encodes_back?</span> (<span class="f">decode</span> text) text</code></pre>
+  encodes_back? <span class="o">(</span>decode text<span class="o">)</span> text
+
+<span class="c"># `decode` answers none for bad input, so a test dispatches on what it</span>
+<span class="c"># decoded before comparing it.</span>
+<span class="k">fn</span> <span class="f">decodes</span>? text want
+  same? <span class="o">(</span>decode text<span class="o">)</span> want
+
+<span class="k">fn</span> <span class="f">same</span>? <span class="k">none</span> _
+  <span class="k">false</span>
+
+<span class="k">fn</span> <span class="f">same</span>? got want
+  got <span class="o">==</span> want
+
+<span class="k">fn</span> <span class="f">encodes_back</span>? <span class="k">none</span> _
+  <span class="k">false</span>
+
+<span class="k">fn</span> <span class="f">encodes_back</span>? v text
+  encode v <span class="o">==</span> text</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test lib/json</div>
     <pre><code>test_decode_array ... ok
@@ -609,39 +787,63 @@ test_roundtrip ... ok
   </div>
 </div>
 
-<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison. it goes through <code>std/testing</code>, which hands the reason record to a continuation, because a rescue opens only a failure another package raised and the suite sits inside json. <code>test_plain_decode_answers_none</code> pins the other half: the plain form answers <code>none</code> for the same document. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
+<p>each test is one comparison. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5. it goes through <code>std/testing</code>, which hands the reason record to a function, because a rescue opens only a failure another module raised and the suite is inside json. <code>test_plain_decode_answers_none</code> pins the other form: <code>decode</code> answers <code>none</code> for the same text. <code>test_roundtrip</code> decodes a document, encodes the result, and demands the original text back. it holds because <code>encode</code> writes one canonical form, with no spaces and keys in map order, so canonically written input survives the round trip byte for byte.</p>
 
 <h2>encode and pretty-printing</h2>
 
-<p>the decoder is a search; the encoder is a fold. one arm per value kind, and every arm appends onto the same byte accumulator, so a byte is written once no matter how deep in the tree it was born. <code>encode</code> itself is two calls: seed the builder, decode the finished bytes back into a string.</p>
+<p>the encoder has one arm per kind of value, and every arm appends to the same byte builder, so each byte of the output is written once however deep in the tree it was born. <code>encode</code> starts the builder and turns the finished bytes into a string:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">encode</span> v
-  <span class="f">text/utf8</span> (<span class="f">_encode_onto</span> (<span class="f">text/bytes</span> <span class="s">""</span>) v)
+  <pre><code><span class="c"># one byte accumulator threads the whole tree, so every emitted byte is</span>
+<span class="c"># copied once into the builder and once into the final string</span>
+<span class="k">fn</span> <span class="f">elem_onto</span> acc x
+  encode_onto <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">44</span><span class="o">)</span> x
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc <span class="t">true</span>
-  <span class="f">text/append</span> acc <span class="s">"true"</span>
+<span class="c"># Everything the encoder appends is text or an ascii byte, so the bytes it</span>
+<span class="c"># hands back are text already and `built_text` takes them without checking.</span>
+pub <span class="k">fn</span> <span class="f">encode</span> v
+  builtin_built_text <span class="o">(</span>encode_onto <span class="o">(</span>text<span class="o">/</span><span class="f">bytes</span> <span class="s">""</span><span class="o">)</span> v<span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc <span class="t">json_null</span>
-  <span class="f">text/append</span> acc <span class="s">"null"</span>
+<span class="c"># the bound is written where the read is, so the checker proves the read in</span>
+<span class="c"># range and the plain form answers the element (ruled 2026-09-16)</span>
+<span class="k">fn</span> <span class="f">encode_items</span> acc xs i
+  return acc <span class="f">if</span> i <span class="o">&lt;</span> <span class="i">1</span> or <span class="f">length</span> xs <span class="o">&lt;</span> i
+  encode_items <span class="o">(</span>elem_onto acc xs<span class="o">[</span>i<span class="o">]</span><span class="o">)</span> xs <span class="o">(</span>i <span class="o">+</span> <span class="i">1</span><span class="o">)</span>
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc n:<span class="t">int</span>
-  <span class="f">text/append</span> acc <span class="s">"<span class="i">{n}</span>"</span>
+<span class="k">fn</span> <span class="f">encode_list</span> acc xs
+  return text<span class="o">/</span>append acc <span class="s">"[]"</span> <span class="f">if</span> <span class="f">length</span> xs <span class="o">==</span> <span class="i">0</span>
+  opened <span class="o">=</span> encode_onto <span class="o">(</span>text<span class="o">/</span>append acc <span class="i">91</span><span class="o">)</span> xs<span class="o">[</span><span class="i">1</span><span class="o">]</span>
+  text<span class="o">/</span>append <span class="o">(</span>encode_items opened xs <span class="i">2</span><span class="o">)</span> <span class="i">93</span>
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc s:<span class="t">string</span>
-  <span class="f">builtin_append_string</span> acc s
+<span class="k">fn</span> <span class="f">encode_onto</span> acc <span class="k">true</span>
+  text<span class="o">/</span>append acc <span class="s">"true"</span>
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc xs:<span class="t">[]json</span>
-  <span class="k">if</span> (<span class="f">length</span> xs <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"[]"</span>) (<span class="f">_encode_list</span> acc xs)
+<span class="k">fn</span> <span class="f">encode_onto</span> acc <span class="k">false</span>
+  text<span class="o">/</span>append acc <span class="s">"false"</span>
 
-<span class="k">fn</span> <span class="f">_encode_onto</span> acc m:<span class="t">map[string json]</span>
-  <span class="f">_encode_map</span> acc m (<span class="f">builtin_entry_count</span> m)</code></pre>
+<span class="k">fn</span> <span class="f">encode_onto</span> acc json_null
+  text<span class="o">/</span>append acc <span class="s">"null"</span>
+
+<span class="k">fn</span> <span class="f">encode_onto</span> acc n<span class="o">:</span><span class="t">int</span>
+  text<span class="o">/</span>append acc <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">encode_onto</span> acc x<span class="o">:</span><span class="t">float64</span>
+  text<span class="o">/</span>append acc <span class="s">"<span class="i">{x}</span>"</span>
+
+<span class="k">fn</span> <span class="f">encode_onto</span> acc s<span class="o">:</span><span class="t">string</span>
+  builtin_append_string acc s
+
+<span class="k">fn</span> <span class="f">encode_onto</span> acc xs<span class="o">:</span><span class="o">[</span><span class="o">]</span>some
+  encode_list acc xs
+
+<span class="k">fn</span> <span class="f">encode_onto</span> acc m<span class="o">:</span><span class="t">map[string</span> some<span class="o">]</span>
+  encode_map acc m <span class="o">(</span>builtin_entry_count m<span class="o">)</span></code></pre>
 </div>
 
-<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors, and <code>_encode_list</code> and <code>_encode_map</code> walk their elements with a comma between each pair. a map goes in whole, with the count of its entries, and the walk reads the <em>i</em>th key and the <em>i</em>th value where they sit in the map's sorted entries, so it builds no list to walk.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:[]json</code>—which is the other half of chapter 03. <code>text/append</code> is the builder from chapter 06: the accumulator owns its buffer and extends it in place when it can, so the fold of appends costs what one pass over the output costs, while every intermediate stays an ordinary value.</p>
+<p>the literal arms dispatch on a value, and the last five dispatch on a type: <code>n:int</code>, <code>xs:[]some</code>, <code>m:map[string some]</code>, the other half of chapter 03. <code>text/append</code> is a builder that owns its buffer and extends it in place when it can, so the fold of appends costs about one pass over the output, while every intermediate stays an ordinary value.</p>
 
-<p>the one arm with real work is strings, and it is one call into the runtime: <code>builtin_append_string</code> writes the opening quote, the string with what json cannot hold escaped, and the closing quote. the escapes are decode's run in reverse. the runtime looks at eight bytes at a time for a quote, a backslash or a control byte, copies a clean run whole, and writes the escape for what it finds, so a string with nothing to escape costs about one copy. the sample spells the same escapes in kanso, a byte at a time, and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
+<p>the arm with real work is strings, and it is one call into the runtime: <code>builtin_append_string</code> writes the opening quote, the string with what json cannot hold escaped, and the closing quote. the runtime looks at eight bytes at a time for a quote, a backslash or a control byte, copies a clean run whole, and writes the escape for what it finds, so a string with nothing to escape costs about one copy. the sample spells the same escapes in kanso, a byte at a time, and quotes two awkward strings: one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">escapes.kso</div>
@@ -709,7 +911,7 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
   </div>
 </div>
 
-<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, written string-per-node because that style reads best on a page; threading the byte builder through it instead is a good exercise, and the library's own <code>encode</code> above is the worked answer:</p>
+<p><code>encode</code> writes no whitespace, which is what machine-to-machine json wants. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write in full. it builds a string per node because that reads best on a page; threading the byte builder through it instead is a good exercise, with the library's <code>encode</code> as the worked answer:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pretty.kso</div>
@@ -772,18 +974,18 @@ doc <span class="o">=</span> { <span class="s">"name"</span>:<span class="s">"ka
   </div>
 </div>
 
-<p>same eight-arm shape as <code>encode</code>, one extra argument. the scalar arms ignore the depth with <code>_</code>; the compound arms deepen it and lay each element on its own indented line. <code>_pad</code> is recursion instead of a loop—dispatch on <code>0</code> is the base case—and the whole printer is under forty lines. drop it into <code>lib/json</code> as <code>pretty.kso</code> (with <code>_escape_str</code> in place of the naive string arm) and it would be the module's seventh file, sharing the namespace like everything else.</p>
+<p>it has the shape of <code>encode</code> with one extra argument. the scalar arms ignore the depth with <code>_</code>, and the compound arms deepen it and put each element on its own indented line. the padding is a recursion whose base case is an arm for <code>0</code>.</p>
 
 <h2>what you can do now</h2>
 
-<p>you have now read a real library end to end, and nothing in it was new: byte dispatch is chapter 03, the <code>err</code> railway is chapter 04, the module layout is chapter 07, and the rest is arithmetic. that is the point of part ii—the language does not grow a special mode for serious programs. you can navigate kanso-json by name, extend it in its own style, and—the sharper skill—recognize its shapes elsewhere: a two-speed scanner betting on the common case, a cursor threaded as an argument so failures always know where they are, a caller choosing between handleable failure and defect in one word. next chapter, the same language simulates elections.</p>
+<p>you have read the core of a real library, and nothing in it was new: byte dispatch is chapter 03, failure that passes through is chapter 04, the module is chapter 07, and the runtime calls are named where they appear. you can find your way around <code>lib/json</code> by name and extend it in its own style. you can also recognize its shapes elsewhere: a fast path that bets on the common case and a slow path that handles the rest, a position passed as an argument so every failure knows where it happened, and a caller choosing between a handled outcome and a failure with one character. the next chapter uses the same language to simulate elections.</p>
 
 <h2>exercises</h2>
 
 <ol>
-  <li>make <code>pretty</code> the module's seventh file. add <code>pretty.kso</code> to a copy of <code>lib/json</code>, swap its naive string arm for one that uses <code>_escape_str</code>, and add <code>test_pretty_roundtrip</code>: decoding a pretty-printed document must equal decoding the compact original.</li>
-  <li>json forbids leading zeros—<code>007</code> is not a number—but <code>to_int</code> happily accepts it. add the rejection to <code>_parse_number</code> with a positioned failure, and a test pinning where <code>decode "[1, 007]"</code> fails.</li>
-  <li><code>_str_unicode</code> reads exactly one <code>\uXXXX</code>. characters outside the basic plane arrive as surrogate pairs—<code>"😀"</code> is one emoji, not two characters. extend the escape path to spot a high surrogate, demand its partner, and combine them; pin it with a test.</li>
+  <li>make <code>pretty</code> the module's seventh file. add <code>pretty.kso</code> to a copy of <code>lib/json</code>, give its string arm the escaping <code>encode_onto</code> gets from <code>builtin_append_string</code>, and add <code>test_pretty_roundtrip</code>: decoding a pretty-printed document must equal decoding the compact original.</li>
+  <li><code>number_span</code> refuses <code>007</code> before any converter sees it. predict the position and reason <code>decode! "[1, 007]"</code> reports, then pin them with a test beside <code>test_error_position</code>.</li>
+  <li><code>str_surrogate</code> refuses a low surrogate that arrives alone. write a test for <code>decode! "\"\\udc00\""</code> that pins the reason, and read <code>str_pair</code> to find the other way a pair can be malformed.</li>
   <li>the suite pins positions for a bad literal and trailing characters, but not for an unterminated string. write <code>test_error_unterminated</code> asserting the position <code>decode "\"abc"</code> fails at, predicting the number before you run it.</li>
 </ol>
 

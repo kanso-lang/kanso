@@ -4,23 +4,11 @@ fn decode_u s
   cs = text/bytes s
   char_of (hex_on (hex_three cs 1) (hex_digit cs[4]))
 
-fn char_of e@(err _)
-  e
-
 fn char_of code
   text/from_code code
 
 fn hex_three cs p
   hex_on (hex_on (hex_digit cs[p]) (hex_digit cs[p + 1])) (hex_digit cs[p + 2])
-
-fn hex_on e@(err _) (err _)
-  e
-
-fn hex_on e@(err _) _
-  e
-
-fn hex_on _ e@(err _)
-  e
 
 fn hex_on n d
   n * 16 + d
@@ -40,3 +28,4 @@ fn hex_upper c
 print (decode_u "00e9")
   .> (_ -> print (decode_u "305f"))
   .> (_ -> print (decode_u "7b80"))
+  .> (_ -> print (decode_u "7g80"))

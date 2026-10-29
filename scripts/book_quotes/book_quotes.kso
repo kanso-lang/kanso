@@ -245,7 +245,30 @@ fn found_for q file bodies
   gone = missing declared (shown panel)
   loose = missing (reachable bodies) (named_in panel)
   named = as_findings q lead "names" loose []
-  named .> (acc -> as_findings q lead "declares" gone acc)
+  blocks = blocks_of panel
+  edited = list/to_list (list/reject blocks (b -> verbatim? bodies b))
+  named
+    .> (acc -> as_findings q lead "declares" gone acc)
+    .> (acc -> as_findings q lead "edits" (lines_heading edited) acc)
+
+# An excerpt is whole declarations, chosen and not changed: every block of
+# the panel, as blank lines divide it, is text one of the files holds. The
+# panels this was written for had typed fields and underscored names the
+# library never had, which the structural checks above were built to forgive
+# and the book now teaches as errors.
+fn blocks_of panel
+  pieces = text/split panel "\n\n"
+  list/to_list (list/select pieces (b -> text/trim b != ""))
+
+fn verbatim? bodies block
+  wanted = text/trim block
+  list/any? bodies (b -> length (text/split b wanted) > 1)
+
+fn lines_heading blocks
+  list/to_list (list/map blocks first_line)
+
+fn first_line block
+  present (text/split (text/trim block) "\n")[1]
 
 fn leading names
   first names (length names == 0)
