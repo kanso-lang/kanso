@@ -7,6 +7,6 @@
 # once per element again, and alloc_bytes reads millions where it pins
 # hundreds of thousands.
 set -e
-sed -i.bak 's|^                k_render_into(b, l->items\[i\], 1);$|&\n                (void)k_str_n(b->p, b->len);|' src/runtime/values.c
-rm -f src/runtime/values.c.bak
-grep -q '^                (void)k_str_n(b->p, b->len);$' src/runtime/values.c
+sed -i.bak 's|^                k_render_into(b, l->items\[i\], 1);$|&\n                (void)k_str_n(b->p, b->len);|' src/runtime/operators.c
+rm -f src/runtime/operators.c.bak
+grep -q '^                (void)k_str_n(b->p, b->len);$' src/runtime/operators.c

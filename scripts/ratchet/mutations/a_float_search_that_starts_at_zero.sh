@@ -7,11 +7,11 @@
 # The work vein reads runbench about thirteen million instructions heavier.
 set -e
 line='    int p = k_ryu_places;'
-grep -qxF "$line" src/runtime/values.c && test "$(grep -cxF "$line" src/runtime/values.c)" = 1 || {
+grep -qxF "$line" src/runtime/ryu.c && test "$(grep -cxF "$line" src/runtime/ryu.c)" = 1 || {
   echo "the float search's starting guess changed shape; rewrite this" >&2
   exit 1
 }
 awk -v line="$line" '$0 == line { print "    int p = 0;"; next } { print }' \
-  src/runtime/values.c > src/runtime/values.c.new
-mv src/runtime/values.c.new src/runtime/values.c
-test "$(grep -cxF "$line" src/runtime/values.c)" = 0
+  src/runtime/ryu.c > src/runtime/ryu.c.new
+mv src/runtime/ryu.c.new src/runtime/ryu.c
+test "$(grep -cxF "$line" src/runtime/ryu.c)" = 0
