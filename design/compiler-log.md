@@ -23,39 +23,6 @@
 
 
 
-## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
-
-Probing the standard library's text functions on the interpreter turned up
-two shapes it runs in quadratic time, where native and the tab run them in
-linear time. Both grow or walk one long string through a loop.
-
-`joined_onto "{s}{i}," (i - 1)` builds a string a piece at a time.
-`linear::string_builders` licenses that join, and native and the tab write
-it in place, but the interpreter never asked the analysis. Its `Text` held a
-long string as a plain `String`, so reading `s` copied it and the template
-copied it again. Run alone, 3,000 pieces took 76,760,738 instructions and
-12,000 took 1,551,921,916; 200,000 took 2.39 s against native's 0.08 s.
-
-The second is a scanner: a loop that hands a long string to each step and
-reads it a character at a time with `text/slice s i i`. Each call copied the
-string, and `text/slice` counted the characters and then collected all of
-them into a `Vec<char>` to take one. 2,500 pairs of characters took
-497,826,665 instructions, 65% of it collecting, and an 80,000-character
-walk took 6.9 s against native's 0.08 s.
-
-Under the 2026-09-05 corpus-first gavel `grown 3000` and `scanned 1000` join
-the interpreted corpus here, measured before their fixes. Both engines
-print the same line for it.
-
-CI's rows for the corpus with the two phases: interp_instructions
-525,925,462 -> 636,804,390, interp_allocs 585,540 -> 651,249 and
-interp_peak_bytes 1,281,294 -> 1,298,220. The tab compiles and runs the
-same corpus: browser_compile_instructions 333,912,133 -> 343,748,020,
-browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
-107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
-3,997,696. Welfare re-bases the six terms among these it weighs, each
-keeping its ratio to its baseline, and the floor stays at 95.15.
-
 ## 2026-10-25 — a joined string grows where it stands on the interpreter
 
 `linear::string_builders` licenses a template whose first part is a string
@@ -1431,3 +1398,28 @@ codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
 0.001, and the floor follows under the rule for a change the language needs:
 a server written as its specification shows it, one statement, has to wait
 for its client.
+
+## 2026-10-29 — a sibling module's diagnostic quotes its line
+
+#2188. `render_merged` took a bare file name for an embedded file and never
+read it from disk, on the reasoning that a shipped module's files are the
+bare ones. They are named under `std/`, and a bare name is a file beside an
+entry run from its own directory, so a refusal in a sibling module printed
+its location and no source line there. It now reads a bare name when the
+entry's own name is bare too.
+
+tests/golden/errors_module gains a sibling-file case, which a spec runs from
+inside its directory; it was watched red with the line missing. One error
+golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
+as a library beside a generated entry, both bare, and it now quotes the line
+it points at.
+
+The browser has no disk to read the line from, so the page answered the same
+refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
+the page to every error golden, went red on the other host. A file the
+compiler was handed as source is now read from what it was handed before the
+disk is tried. The spec was watched red without that, on
+a_field_read_of_a_list, and passes with it.
+
+The browser compile moves by two instructions, browser_compile_instructions
+343,196,938 (-2), and no other row moves.

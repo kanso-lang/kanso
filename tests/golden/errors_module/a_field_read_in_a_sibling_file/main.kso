@@ -1,0 +1,3 @@
+import "./boxes"
+
+print (boxes/shown 1)
