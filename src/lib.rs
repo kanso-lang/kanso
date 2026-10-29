@@ -168,7 +168,7 @@ fn compile_parsed_entry(
     // Before anything reads the entry's names: what a derivation declares
     // mentions the modules it describes, and those imports are in use.
     if !program.derives.is_empty() {
-        let made = phase::watched("derive", || derive::derive(&program, &dep_program))
+        let made = phase::watched("derive", || derive::derive(&program, &dep_program, &exports))
             .map_err(|d| render_merged(&d, file, source))?;
         let stamp: std::sync::Arc<str> = std::sync::Arc::from(file);
         program.fns.extend(made.constants.into_iter().map(|mut d| {

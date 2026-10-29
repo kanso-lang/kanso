@@ -23,39 +23,6 @@
 
 
 
-## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
-
-Probing the standard library's text functions on the interpreter turned up
-two shapes it runs in quadratic time, where native and the tab run them in
-linear time. Both grow or walk one long string through a loop.
-
-`joined_onto "{s}{i}," (i - 1)` builds a string a piece at a time.
-`linear::string_builders` licenses that join, and native and the tab write
-it in place, but the interpreter never asked the analysis. Its `Text` held a
-long string as a plain `String`, so reading `s` copied it and the template
-copied it again. Run alone, 3,000 pieces took 76,760,738 instructions and
-12,000 took 1,551,921,916; 200,000 took 2.39 s against native's 0.08 s.
-
-The second is a scanner: a loop that hands a long string to each step and
-reads it a character at a time with `text/slice s i i`. Each call copied the
-string, and `text/slice` counted the characters and then collected all of
-them into a `Vec<char>` to take one. 2,500 pairs of characters took
-497,826,665 instructions, 65% of it collecting, and an 80,000-character
-walk took 6.9 s against native's 0.08 s.
-
-Under the 2026-09-05 corpus-first gavel `grown 3000` and `scanned 1000` join
-the interpreted corpus here, measured before their fixes. Both engines
-print the same line for it.
-
-CI's rows for the corpus with the two phases: interp_instructions
-525,925,462 -> 636,804,390, interp_allocs 585,540 -> 651,249 and
-interp_peak_bytes 1,281,294 -> 1,298,220. The tab compiles and runs the
-same corpus: browser_compile_instructions 333,912,133 -> 343,748,020,
-browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
-107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
-3,997,696. Welfare re-bases the six terms among these it weighs, each
-keeping its ratio to its baseline, and the floor stays at 95.15.
-
 ## 2026-10-25 — a joined string grows where it stands on the interpreter
 
 `linear::string_builders` licenses a template whose first part is a string
@@ -1431,3 +1398,24 @@ codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
 0.001, and the floor follows under the rule for a change the language needs:
 a server written as its specification shows it, one statement, has to wait
 for its client.
+
+## 2026-10-29 — a derivation sees the calls a module makes, and can refuse one
+
+#2186's routing convention owes a compile error at a `path_to` that names a
+function that is not a route. A derivation could see an app's functions but
+not their calls, so it could refuse only at a declaration. A module in the
+description now carries `calls`: each call a function of the module makes to
+a named function, with the caller, the callee, each argument's name ("" for
+one that is not a name), and where it is written. `derive/refuse_call` makes
+a compile error at one of them, in the caller's file.
+
+Building the case for it found that a module the entry imports could arrive
+described with nothing in it. When another of the entry's modules imports it
+first and does not re-export it, its declarations come in already demoted,
+and the description read each declaration's own pub flag. It now reads the
+entry's exports, which say what reaches the entry as pub by any route.
+
+tests/golden/derive gains a derivation that lists the calls between modules
+and one that refuses a link to a function that is not a route, at the call.
+The second was watched red twice: with no calls to read, and with
+`posts/show` refused too before the exports fix.
