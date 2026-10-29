@@ -13,6 +13,10 @@ import "std/text"
 #
 # Code samples are excluded. A `<pre>` block is what a program said, and a
 # program is allowed to say anything.
+#
+# One check is about markup rather than prose: a page's `<div>` tags must pair
+# up. ch07 shipped with a stray `</div>` that the browser forgave and every
+# other gate passed over.
 type finding
   page
   line
@@ -113,7 +117,10 @@ fn reading pages at acc after false
 
 fn scanned_page pages at acc after page raw
   text = prose raw
-  onward pages at acc after (in_page page text)
+  prose_hits = in_page page text
+  divs = unbalanced page raw
+  both = prose_hits .> (s -> divs .> (d -> list/to_list (list/concat s d)))
+  onward pages at acc after both
 
 fn onward pages at acc after here
   found = list/concat acc here
@@ -128,6 +135,33 @@ fn in_page page text
   first = from_family page text "antithesis flip" flips 1 []
   second = from_family page text "self-announcing" said 1 first
   from_family page text "throat-clearing" throat 1 second
+
+fn unbalanced page raw
+  tags = hits "</?div\\b" raw
+  tags .> (ts -> paired page raw ts 1 0 [])
+
+fn paired page text ts at depth acc
+  return left_open page text depth acc if at > length ts
+  t = present ts[at]
+  closing = present (text/slice text t.from (t.from + 1)) == "</"
+  stepped page text ts at depth acc closing
+
+fn stepped page text ts at depth acc false
+  paired page text ts (at + 1) (depth + 1) acc
+
+fn stepped page text ts at depth acc true
+  return paired page text ts (at + 1) (depth - 1) acc if depth > 0
+  t = present ts[at]
+  at_line = line_of text t.from
+  stray = finding page at_line "unbalanced markup" "a </div> closes nothing"
+  paired page text ts (at + 1) 0 (list/to_list (list/concat acc [stray]))
+
+fn left_open page text depth acc
+  return acc if depth == 0
+  told_of = "{depth} <div> never closed"
+  last = line_of text (length text)
+  open = finding page last "unbalanced markup" told_of
+  list/to_list (list/concat acc [open])
 
 fn from_family page text family patterns at acc
   walking page text family patterns at acc (at > length patterns)
@@ -155,8 +189,14 @@ fn line_of text at
   length (text/split before "\n")
 
 fn reported pages found
-  head = "{length pages} pages read, {length found} machine-detectable tells\n"
+  head = "{length pages} pages read, {counted (length found)}\n"
   io/write "{head}{spelled found 1 ""}" .> (_ -> closed found)
+
+fn counted 1
+  "1 finding"
+
+fn counted n
+  "{n} findings"
 
 fn spelled found at acc
   telling found at acc (at > length found)
@@ -179,7 +219,10 @@ fn shortened q true
   text/slice q 1 150
 
 fn closed found
-  io/write (advice (length found == 0)) .> (_ -> ending (length found == 0))
+  kept = list/select found (f -> f.family != "unbalanced markup")
+  worded = list/to_list kept
+  urged = advice (length worded == 0)
+  io/write urged .> (_ -> ending (length found == 0))
 
 fn advice true
   ""

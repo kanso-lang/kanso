@@ -1724,4 +1724,17 @@ lex_openers = row
 
 rows_dq61 = list/concat rows_dq60 [lex_lines lex_openers]
 
-rows_d = list/concat rows_dq61 [itself]
+# A page's <div> tags pair up (2026-10-29). ch07 and appendix a both shipped
+# with a stray </div> that every gate passed over. The mutation puts one back
+# after ch07's first panel.
+stray_div = row
+  "a page closing a <div> it never opened"
+  true
+  "./target/release/kanso run scripts/prose_check"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_page_closes_a_div_it_never_opened")
+  release
+
+rows_dq62 = list/concat rows_dq61 [stray_div]
+
+rows_d = list/concat rows_dq62 [itself]
