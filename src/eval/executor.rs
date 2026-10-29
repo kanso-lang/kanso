@@ -102,6 +102,12 @@ pub trait Executor {
     fn accept(&mut self, _listener: i64) -> Result<Option<i64>, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// Waits for a connection. Outside a parallel group nothing else in the
+    /// program can run while a server waits, and a client outside it can
+    /// still connect.
+    fn accept_waiting(&mut self, _listener: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
         Err("this engine has no sockets".to_string())
     }
@@ -318,6 +324,25 @@ impl Executor for RealExecutor {
             let handle = s.hand();
             s.conns.insert(handle, taken);
             Ok(Some(handle))
+        })
+    }
+
+    fn accept_waiting(&mut self, listener: i64) -> Result<i64, String> {
+        let socket = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.listeners.get(&listener);
+            found.map(|l| l.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(socket) = socket else {
+            return Err("that is not a listener".to_string());
+        };
+        socket.set_nonblocking(false).map_err(|e| e.to_string())?;
+        let (taken, _) = socket.accept().map_err(|_| "cannot accept".to_string())?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.conns.insert(handle, taken);
+            Ok(handle)
         })
     }
 

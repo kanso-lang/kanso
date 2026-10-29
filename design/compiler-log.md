@@ -23,53 +23,6 @@
 
 
 
-## 2026-10-25 — a read a sibling forces lets the map go
-
-`bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
-1) (push b.items i))`, now writes the map in place. #2126 discounted a read
-binding when a sibling of the write wrote into it. `forces` in
-`src/linear.rs` generalizes that to any position that reads the value and
-runs on every path before the write: a field or element read, an operand,
-an interpolation, a condition, or an argument of `put`, `push`, `delete`,
-`length` or `keys`. A binding forced once answers every later mention from
-its value, so the write cannot change what the binding read. A bare name
-handed to a function or a constructor does not count, because a lazy binding
-travels there as an unforced cell; neither do one arm of an `if` (and so
-`and` and `or`), a guard past its condition, or a lambda.
-
-On its own, 16,000 numbers in 20 buckets took 132,724,010 instructions and
-take 9,025,501. `a_map_of_records_files_in_place` pins 4,000 numbers: 8,133
-allocations and 440,064 bytes, where main made 20,457 and 5,216,096.
-`a_record_read_out_of_a_map_keeps_its_fields` keeps the record it read in a
-carried list, in a lambda and under one arm of an `if`; its output is main's
-interpreter, and both engines agree with it.
-
-The read context is conservative and no program here shows it necessary. A
-binding is lazy only when every use hands it bare to a function that may
-discard it, and with the context dropped the probe that tried that shape
-still printed main's answer, because its binding stayed strict. No ratchet
-mutation is pinned for the context for that reason.
-
-CI's rows for both fixes, against main at #2146. The run program reads
-work_runbench 847,302,475 → 828,232,672 (−2.3%), run_allocs 1,585,686 →
-1,579,529, run_alloc_bytes 224,179,080 → 221,800,088, run_sh_map 76,160 →
-12,160, run_sh_buf 89,503,776 → 89,333,968, run_held_peak_bytes 1,863,712 →
-248,688, run_arena_blocks 5 → 4, run_arena_peak_bytes 5,767,184 → 4,718,608
-and run_spare_peak_bytes 3,670,032 → 2,621,456; run_put_mut_grow rises 260 →
-264, where the bucketed map now grows in place. The interpreter reads
-interp_instructions 525,925,462 → 520,276,149 and interp_allocs 585,540 →
-578,088, and interp_peak_bytes rises 1,281,294 → 1,281,313. The tab's run
-falls browser_run_instructions 107,399,948 → 54,006,705 and
-browser_run_peak_bytes 3,866,624 → 1,507,328, its compile rises
-browser_compile_instructions 333,912,133 → 334,848,599, and
-browser_compile_peak_bytes falls 743,930 → 743,876. Native compiles read
-compile_instructions 24,657,263 → 24,735,836, entry_instructions 72,734,084 →
-72,954,229, library_instructions 72,405,561 → 72,625,200 and
-emit_instructions 5,654,777 → 5,655,925: the two analyses cost the compiler
-about 0.3%. The machine code reads text 5,652,977 → 5,653,121, all of it in
-runbench. Welfare
-rises 95.15 → 95.22 and the rise is banked.
-
 ## 2026-10-25 — two strings the interpreter makes quadratic join the corpus
 
 Probing the standard library's text functions on the interpreter turned up
@@ -1452,3 +1405,29 @@ The change moves the compile rows by layout: compile_instructions 24,064,926
 The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
 Welfare fell by less than 0.0001, and the floor follows under the rule for a
 change that makes the language do what its specification says.
+
+## 2026-10-29 — a server written as one statement waits for its client
+
+Outside a parallel group, `net/accept` answered "nothing connected" at once
+on both engines, on the reasoning that no other fiber could connect. A
+client outside the program can, and a server is usually written as one
+statement, so the guestbook prototype exited before a browser reached it.
+`accept` there now waits the way accept(2) does. Natively, `k_accept_waiting`
+clears the non-blocking flag a group's polling may have left and blocks; the
+interpreter's executor gains `accept_waiting`, which does the same with
+std::net. Inside a group `accept` is still a scheduling point.
+
+tests/sockets_serve.rs runs a one-statement server on both engines and has
+the harness say hello to it. It was watched red with the old behaviour: the
+program exited before the harness could connect.
+
+Every binary links the runtime, so each benchmark's text grows by 448 bytes
+(text 5,641,403 summed), and its instructions move by layout: no benchmark
+accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
+work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
+work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
+codegen_instructions_dev 116,812,856 (+15,582) and
+codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
+0.001, and the floor follows under the rule for a change the language needs:
+a server written as its specification shows it, one statement, has to wait
+for its client.
