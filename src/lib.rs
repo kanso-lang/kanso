@@ -53,7 +53,8 @@ fn render_merged(diags: &[diag::Diagnostic], file: &str, source: &str) -> String
             continue;
         }
         let on_disk = !bare(own) || bare(file);
-        if let Some(text) = on_disk.then(|| std::fs::read_to_string(own).ok()).flatten() {
+        let read = || on_disk.then(|| std::fs::read_to_string(own).ok()).flatten();
+        if let Some(text) = handed_text(own).or_else(read) {
             named.push((own.to_string(), text));
         }
     }

@@ -1414,5 +1414,12 @@ golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
 as a library beside a generated entry, both bare, and it now quotes the line
 it points at.
 
+The browser has no disk to read the line from, so the page answered the same
+refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
+the page to every error golden, went red on the other host. A file the
+compiler was handed as source is now read from what it was handed before the
+disk is tried. The spec was watched red without that, on
+a_field_read_of_a_list, and passes with it.
+
 The browser compile moves by two instructions, browser_compile_instructions
 343,196,938 (-2), and no other row moves.
