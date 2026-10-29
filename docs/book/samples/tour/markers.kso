@@ -1,0 +1,18 @@
+type cold
+
+type hot
+
+type warm
+
+type temperature cold hot warm
+
+fn serve cold
+  "over ice"
+
+fn serve hot
+  "in a warmed cup"
+
+fn serve warm
+  "as it comes"
+
+print (serve hot) .> (_ -> print (serve cold))

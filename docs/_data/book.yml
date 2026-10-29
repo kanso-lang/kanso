@@ -1,3 +1,8 @@
+- part: "start here"
+  start: 1
+  appendix: true
+  chapters:
+    - { num: "→", slug: "tour", title: "a tour of kanso" }
 - part: "part i — the language"
   start: 1
   chapters:
@@ -17,6 +22,14 @@
   start: 10
   chapters:
     - { num: "10", slug: "ch10", title: "fast by construction" }
+    - { num: "11", slug: "ch11", title: "modules" }
+    - { num: "12", slug: "ch12", title: "sequences" }
+- part: "part iv — shipping"
+  start: 13
+  chapters:
+    - { num: "13", slug: "ch13", title: "a command-line tool" }
+    - { num: "14", slug: "ch14", title: "a web service" }
+    - { num: "15", slug: "ch15", title: "measuring and shipping" }
 - part: "appendices"
   start: 1
   appendix: true
@@ -24,3 +37,4 @@
     - { num: "a", slug: "appa", title: "the diagnostics catalog" }
     - { num: "b", slug: "appb", title: "builtin reference" }
     - { num: "c", slug: "appc", title: "canonical form" }
+    - { num: "d", slug: "appd", title: "recipes" }

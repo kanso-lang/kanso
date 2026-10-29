@@ -68,7 +68,10 @@ src_pattern = "(?s){src_head}\\s*<pre><code>)(.*?)(</code></pre>)"
 
 out_head = "({panel_title}(KANSO_COUNTERS=1 )?kanso"
 
-out_tail = "(?:run|check|test|build|play)[^<]*?([a-z_0-9/]+)\\.kso[^<]*</div>"
+out_verbs = "(?:run|check|test|build|play)"
+
+# The title names a sample file or a directory module.
+out_tail = "{out_verbs}[^<]*?([a-z_0-9/]+)(?:\\.kso)?\\b[^<]*</div>"
 
 out_pattern = "(?s){out_head} {out_tail}\\s*<pre><code>)(.*?)(</code></pre>)"
 
@@ -124,14 +127,21 @@ fn read_next wanted at acc after path body
   read_each wanted (at + 1) (push acc (source_file path body)) after
 
 fn over_chapters write
-  on = (names -> chapter_loop (only_chapters names) 1 0 write)
+  on = (names -> chapter_loop (with_site (only_chapters names)) 1 0 write)
   os/list_dir chapters .> on
+
+# The site's own pages quote programs from examples/, and once said so while
+# five of seven panels had drifted from the files they named.
+site_pages = ["../about.html" "../index.html"]
+
+fn with_site names
+  list/to_list (list/concat names site_pages)
 
 fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))
 
 fn chapter? n
-  regexp/match? "^(ch[0-9]+|app[a-z])\\.html$" n
+  regexp/match? "^(ch[0-9]+|app[a-z]|tour)\\.html$" n
 
 fn chapter_loop names at drift write
   walking names at drift write (at > length names)
@@ -175,7 +185,7 @@ fn sourcing ms dir paths at acc false
   return acc if at < 1 or length ms < at
   gs = ms[at].groups
   return acc if length gs < 2
-  found = sample_at paths dir gs[2]
+  found = sample_at paths dir (local_to dir (present gs[2]))
   wanted_src ms dir paths (at + 1) (noted acc found)
 
 fn wanted_out ms dir paths at acc
@@ -188,9 +198,8 @@ fn recording ms dir paths at acc false
   return acc if at < 1 or length ms < at
   gs = ms[at].groups
   return acc if length gs < 3
-  parts = text/split gs[3] "/"
-  base = "{parts[length parts]}{counters_of gs[2]}"
-  wanted_out ms dir paths (at + 1) (noted acc (out_at paths dir base))
+  found = out_at paths dir (recorded_as gs)
+  wanted_out ms dir paths (at + 1) (noted acc found)
 
 fn noted acc ""
   acc
@@ -242,8 +251,26 @@ fn trailed _ _ acc _ true
 fn trailed xs at acc shape false
   trailing xs (at + 1) (push acc (placed xs[at] shape)) shape
 
+fn dir_of "../about.html"
+  "examples"
+
+fn dir_of "../index.html"
+  "examples"
+
 fn dir_of name
   "{chapters}/samples/{(text/split name ".")[1]}"
+
+# A title names a sample from inside its directory, or from the directory's
+# own name for a page that quotes examples/ by its repository path.
+fn local_to dir name
+  stem = present (text/split dir "/")[length (text/split dir "/")]
+  unprefixed name "{stem}/" (starts? name "{stem}/")
+
+fn unprefixed name _ false
+  name
+
+fn unprefixed name prefix true
+  text/slice name (length prefix + 1) (length name)
 
 fn next_chapter names at drift write name raw said
   saved "{chapters}/{name}" raw said.text write
@@ -300,19 +327,77 @@ fn smaller _ b false
 
 fn fixed raw m name dir files write 1
   sample = present m.groups[2]
-  found = sample_at (path_list files) dir sample
+  found = sample_at (path_list files) dir (local_to dir sample)
   no_sample raw m sample name files write found (found == "")
 
 fn fixed raw m name dir files write _
   gs = m.groups
   return outcome (whole_of raw m) 0 "" if length gs < 3
-  parts = text/split gs[3] "/"
-  base = "{parts[length parts]}{counters_of gs[2]}"
+  base = recorded_as gs
   found = out_at (path_list files) dir base
   no_recorded raw m base name files write found (found == "")
 
 fn path_list files
   list/to_list (list/map files (f -> f.path))
+
+# The recording an output panel quotes. The title's flags pick the file: a
+# panel titled `kanso run brew.kso --plan` quotes brew_plan.out, and matched
+# against brew.out it was regenerated to show the run instead of the plan.
+fn recorded_as gs
+  title = present gs[1]
+  parts = text/split (present gs[3]) "/"
+  stem = present parts[length parts]
+  plan = plan_of (regexp/match? " --plan\\b" title)
+  given = given_of (regexp/groups given_pattern title)
+  "{stem}{verb_of title stem}{counters_of (present gs[2])}{plan}{given}"
+
+# What a title gives the program after naming it: `-- clay`, `< rain.txt`.
+# The recording is name@slug.out, where the slug is those words with every
+# run of other characters made one `_` and `<` read as `from`, so `-- a.txt`
+# and `< a.txt` stay apart. A title may pipe the run on, as in
+# `-- a.txt 2>&1 | grep allocs`; name@slug.args holds the words as written,
+# for book_check to pass along.
+given_pattern = "kanso [a-z]+ [a-z_0-9/.]+ ((?:-- |&lt; )[^<]*)</div>"
+
+fn given_of none
+  ""
+
+fn given_of said
+  words = spelled (present said[1]) "&lt;" "from"
+  "@{slug (spelled (spelled words "&gt;" "") "&amp;" "")}"
+
+# An entity in a title, as the page escapes `<`, `>` and `&`.
+fn spelled words entity as
+  text/join (text/split words entity) as
+
+fn slug words
+  marked = text/join (list/to_list (list/map (text/chars words) kept)) ""
+  parts = list/select (text/split marked "_") (w -> w != "")
+  text/join (list/to_list parts) "_"
+
+fn kept c
+  if (word_char? c) c "_"
+
+fn word_char? c
+  ("a" <= c and c <= "z") or ("0" <= c and c <= "9")
+
+# A check, test or build panel quotes that verb's recording. Its sample is
+# usually named for it already, as unused_check.kso is.
+fn verb_of title stem
+  suffixed stem (regexp/groups "kanso (check|test|build) " title)
+
+fn suffixed _ none
+  ""
+
+fn suffixed stem said
+  mark = "_{present said[1]}"
+  if (ends? stem mark) "" mark
+
+fn plan_of true
+  "_plan"
+
+fn plan_of false
+  ""
 
 fn counters_of ""
   ""

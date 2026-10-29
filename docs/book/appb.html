@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "appendix b—builtin reference"
-description: "the whole standard surface: the six ambient names, the std modules, and the 33-verb list vocabulary—signature, behavior, and failure semantics, each with a worked example run through the real interpreter."
+description: "the whole standard surface: the ambient names, the std modules, and the list vocabulary—signature, behavior, and failure semantics, each with a worked example run through the real interpreter."
 extra_css: /book/book.css
 ---
 <style>
@@ -157,7 +157,7 @@ to_float-int 5.0</code></pre>
   </div>
 </div>
 
-<p>the failure is worth seeing on its own. ask <code>to_int!</code> for the number in a word and the failure inside its box goes past the <code>.&gt;</code> step, so the print never happens and the failure surfaces at the endpoint, its birthplace named:</p>
+<p>here is the failure on its own. ask <code>to_int!</code> for the number in a word and the failure inside its box goes past the <code>.&gt;</code> step, so the print never happens and the failure surfaces at the endpoint, its birthplace named:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">parse_fail.kso</div>
@@ -336,7 +336,7 @@ found <span class="o">=</span> <span class="f">describe</span> [<span class="n">
 gone <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">9</span>]
 <span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run missing.kso</div>
+    <div class="code-panel-title">kanso play missing.kso</div>
     <pre><code>in-range: value is 20
 missing: index out of range</code></pre>
   </div>
@@ -523,7 +523,7 @@ find2 2</code></pre>
 
 <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run control.kso</div>
+    <div class="code-panel-title">kanso play control.kso</div>
     <pre><code>seven positive
 zero non-positive</code></pre>
   </div>
@@ -531,7 +531,7 @@ zero non-positive</code></pre>
 
 <h2>effects</h2>
 
-<p>the eight functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>.&gt;</code> pipes the value a description will yield into a function; when that function ignores the value, as <code>_ -&gt; next</code> does, the two descriptions are simply sequenced.</p>
+<p>the functions marked <em>description</em> in this group return <code>io</code> values, which describe work to be done. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>.&gt;</code> pipes the value a description will yield into a function; when that function ignores the value, as <code>_ -&gt; next</code> does, the two descriptions run one after the other.</p>
 
 <h3 id="b-args"><code>os/args</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/args → io (yields string[])</code></p>
@@ -544,13 +544,13 @@ zero non-positive</code></pre>
 <span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run argv.kso -- clay</div>
-    <pre><code>&lt;none&gt;</code></pre>
+    <div class="code-panel-title">kanso play argv.kso -- clay</div>
+    <pre><code>clay</code></pre>
   </div>
   <div class="code-output">
-    <div class="code-panel-title">kanso run argv.kso</div>
+    <div class="code-panel-title">kanso play argv.kso</div>
     <pre><code>&lt;none&gt;</code></pre>
   </div>
 </div>
@@ -574,7 +574,7 @@ zero non-positive</code></pre>
 
 <span class="f">low_read</span> <span class="n">0</span> <span class="o">.?</span> <span class="f">relabel</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run wrap_err.kso</div>
+    <div class="code-panel-title">kanso play wrap_err.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: wrap_err/config_bad "app.conf"
   born in relabel at wrap_err.kso:10
   caused by: "invalid utf-8"
@@ -616,9 +616,10 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run print.kso --plan</div>
-    <pre><code>first
-second
-third</code></pre>
+    <pre><code>plan:
+  print "first"    # from line 1
+  print "second"    # from line 1
+  print "third"    # from line 1</code></pre>
   </div>
 </div>
 
@@ -645,7 +646,10 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run timing.kso --plan</div>
-    <pre><code>rolled 2</code></pre>
+    <pre><code>plan:
+  sleep 10
+  random 6
+  . &lt;continuation&gt;</code></pre>
   </div>
 </div>
 
@@ -671,7 +675,7 @@ third</code></pre>
   <div class="code-panel-title">write_stream.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/write</span> <span class="s">"no newline "</span>
+<span class="f">io/write</span> <span class="s">"no newline "</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">io/write</span> <span class="s">"between these"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"; print ends the line"</span>)</code></pre>
   <div class="code-output">
@@ -709,12 +713,12 @@ third</code></pre>
   <div class="code-panel-title">input.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
+<span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">printf 'hello from a pipe' | kanso run input.kso</div>
+    <div class="code-panel-title">kanso play input.kso &lt; pipe.txt</div>
     <pre><code>hello from a pipe!!</code></pre>
   </div>
 </div>
@@ -723,11 +727,11 @@ third</code></pre>
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">err</span>
-<p>hand me to a builtin and i pass straight through—<code>list/sort</code>, <code>list/map</code>, <code>list/sum</code>, none of them inspect me, they just return me. a <em>type</em> mistake is different: <code>list/sum</code> on a list with a string in it is a bug in your program, and that raises where it happens. failures flow; bugs stop.</p>
+<p>hand me to a builtin and i pass straight through—<code>list/sort</code>, <code>list/map</code>, <code>list/sum</code>, none of them inspect me; they return me. a <em>type</em> mistake is different: <code>list/sum</code> on a list with a string in it is a bug in your program, and that raises where it happens.</p>
 </div>
 </div>
 
-<p>that is the whole surface: six ambient names, a handful of std modules, two shapes, one failure convention. (std/json, the decoder the book builds by hand in chapter 08, ships ready-made too.) you now have the signature, the behavior, and the failure mode of everything kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right verb instead of hand-rolling it. the chapters build real programs on exactly this surface; the json library of chapter 08 is little more than <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code> worn smooth.</p>
+<p>that is the whole surface: the ambient names, a handful of std modules, two shapes, one failure convention. (std/json, the decoder the book builds by hand in chapter 08, ships ready-made too.) you now have the signature, the behavior, and the failure mode of everything kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right verb instead of hand-rolling it. the chapters build real programs on exactly this surface; the json library of chapter 08 is little more than <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code> worn smooth.</p>
 
 <h2>exercises</h2>
 <ol>

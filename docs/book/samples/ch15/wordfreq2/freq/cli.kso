@@ -1,0 +1,26 @@
+import "std/io"
+import "std/os"
+
+usage = "usage: wordfreq [--top N] [file]"
+
+# The whole program: read the command line, then do what it asked.
+pub fn main args
+  start (options_of args)
+
+fn start (bad_usage reason)
+  io/write_err "wordfreq: {reason}\n{usage}\n" .> (_ -> os/exit 2)
+
+fn start (options none n)
+  io/stdin .> (text -> report n text)
+
+fn start (options path n)
+  os/read_file path .> (got -> opened path n got)
+
+fn opened path _ (file_not_found _)
+  io/write_err "wordfreq: cannot open {path}\n" .> (_ -> os/exit 1)
+
+fn opened _ n text
+  report n text
+
+fn report n text
+  print (render (top n (words text)))

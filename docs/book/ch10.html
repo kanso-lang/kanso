@@ -48,13 +48,13 @@ extra_css: /book/book.css
 
 <h2>the same program, two engines</h2>
 
-<p>one module, two ways to run it. start with the engine you've used all book—<code>kanso run</code>, the interpreter. and be fair to it: this clock times the <em>whole</em> pipeline. parse the source, type-check it, infer it, then tree-walk a four-hundred-line parser across 188kb of json, a hundred and fifty times over:</p>
+<p>one module, two ways to run it. start with the interpreter, <code>kanso run --interp</code>. and be fair to it: this clock times the <em>whole</em> pipeline. parse the source, type-check it, infer it, then tree-walk the json parser across 188kb of json, a hundred and fifty times over:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">shell</div>
-  <pre><code><span class="prompt">$ </span>time kanso run bench/jsonbench
+  <pre><code><span class="prompt">$ </span>time kanso run bench/jsonbench --interp
 <span class="s">decoded 150 times, checksum 24000</span>
-kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></pre>
+kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total</code></pre>
 </div>
 
 <p>a quarter of a second for 150 full decodes, tree-walked. that's far closer to compiled speed than the folklore about interpreters would let you guess—and winning this race was never the interpreter's job anyway. its job is to answer in milliseconds on human-sized programs, carry no state between runs, and stand as the reference the compiler has to match to the bit. notice the checksum on that line: <code>24000</code>. hold onto it.</p>
@@ -92,11 +92,11 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
         k_b_put  (in jsonbench)        97</code></pre>
 </div>
 
-<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's the <code>_value_for</code> you wrote in chapter 08, the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
+<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's <code>value_for</code>, which chapter 08 read: the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
 
 <p>now look at what's <em>missing</em>. there is no interpreter in this list. no dispatcher walking a table of function pointers. no tag-checking loop, no garbage collector. <code>memmove</code>—raw byte copying, the floor of any parser—has sunk to fifth. the overloads, the pattern matches, the railway you spent nine chapters learning: none of them appear, because by the time the compiler is done they aren't separate things in the program anymore.</p>
 
-<p>take the hottest function as the case study. in the source, <code>_value_for</code> is seven overloads—seven tiny functions, one per kind of byte. you might picture running it as walking into a room and asking, one at a time, "are you a string? a number? an object?" until someone says yes. that is not what the machine does. the compiler knows all seven arms ahead of time, so it builds the equivalent of a telephone switchboard: take the byte, jump straight to the one arm that handles it, no working down a line. seven overloads in the source, one indexed jump in the machine.</p>
+<p>take the hottest function as the case study. in the source, <code>value_for</code> is eight arms, one per kind of first byte. you might picture running it as asking each arm in turn whether it matches until one says yes. the machine does something else. the compiler knows all eight arms ahead of time, so it emits one indexed jump: take the byte, go straight to the arm that handles it.</p>
 
 <p>the word for turning "one function that works for many types" into "a separate specialized copy for each concrete type actually used" is <strong>monomorphization</strong>. that's all it is—the compiler saw exactly which bytes flow through <code>_value_for</code> and stamped out the specialized switchboard, so dispatch, the "only switch" from chapter 03, costs nothing at runtime. you can watch it happen on a program small enough to hold in one hand.</p>
 
@@ -119,7 +119,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 
 <span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run classify.kso</div>
+    <div class="code-panel-title">kanso play classify.kso</div>
     <pre><code>dot</code></pre>
   </div>
 </div>
@@ -136,16 +136,18 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
   ]</code></pre>
 </div>
 
-<p>the catch-all <code>_</code> became the <code>default</code> label; each byte literal became one case. this is the exact shape the real json scanner is built from. here is <code>_is_number_char</code> from the benchmark module—its arms are the bytes <code>43 45 46 69 101</code>, which are <code>+ - . E e</code>—compiled the same way, one function deeper into a working parser:</p>
+<p>the catch-all <code>_</code> became the <code>default</code> label, and each byte literal became one case. the real decoder compiles the same way. here is <code>value_for</code> in a release build of the benchmark today: its six byte arms are <code>34 91 102 110 116 123</code>, which are <code>" [ f n t {</code>, the <code>none</code> arm is the case for 256, a value no byte can have, and the arm for everything else is the default:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">jsonbench.ll</div>
-  <pre><code>  <span class="k">switch</span> i64 %t4, label %arm6 [
-    i64 43, label %arm0
-    i64 45, label %arm1
-    i64 46, label %arm2
-    i64 69, label %arm3
-    i64 101, label %arm4
+  <div class="code-panel-title">jsonbench.ll, value_for</div>
+  <pre><code>  switch i64 %x0r, label %arm7 [
+    i64 34, label %arm0
+    i64 91, label %arm1
+    i64 102, label %arm2
+    i64 110, label %arm3
+    i64 116, label %arm4
+    i64 123, label %arm5
+    i64 256, label %arm6
   ]</code></pre>
 </div>
 
@@ -183,12 +185,12 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 
 <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
+    <div class="code-panel-title">kanso play pingpong.kso</div>
     <pre><code>10000000 even? true</code></pre>
   </div>
 </div>
 
-<p>ten million alternating calls, no annotation asking for anything, and the stack never grows past a single frame. three milliseconds, done. the guarantee is right there in the ir—<code>musttail</code>, llvm's strongest promise: emit the jump, or refuse to compile the module at all.</p>
+<p>ten million alternating calls, no annotation asking for anything, and the stack never grows past a single frame. built with <code>kanso build pingpong.kso --release</code>, the binary takes about three milliseconds. the guarantee is right there in the ir—<code>musttail</code>, llvm's strongest promise: emit the jump, or refuse to compile the module at all.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pingpong.ll</div>
@@ -209,7 +211,7 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 
 <h3>costs are facts, not measurements</h3>
 
-<p>a deterministic language has deterministic costs. run any compiled binary with <code>KANSO_COUNTERS=1</code> and, instead of how long it took, the runtime tells you what it <em>did</em>. take a program small enough to check by eye: build a thousand-element list one <code>push</code> at a time, then sum it.</p>
+<p>a deterministic language has deterministic costs. run a program with <code>KANSO_COUNTERS=1</code>, under <code>kanso run</code> or <code>kanso play</code> or as a binary built with <code>kanso build --counters</code>, and, instead of how long it took, the runtime tells you what it <em>did</em>. take a program small enough to check by eye: build a thousand-element list one <code>push</code> at a time, then sum it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">counters.kso</div>
@@ -221,20 +223,20 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 <span class="k">fn</span> <span class="f">build</span> n acc
   <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run counters.kso</div>
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso play counters.kso</div>
     <pre><code>allocs=7
 alloc_bytes=28960
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
 cohort_kept=0
-perm_allocs=3
+perm_allocs=2
 beat_iters=0
 evac_allocs=3
 evac_bytes=80
-survive_slots=4
+survive_slots=0
 put_mut_fast=0
 put_mut_grow=0
 push_mut_fast=0
@@ -284,27 +286,20 @@ sum 500500</code></pre>
 
 <p>a thousand pushes cost seven allocations. not "about seven." not "seven on my laptop." seven—run it again, run it on a different chip, a loaded cpu, a cold cache, and every one of those integers comes back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
 
-<p>now point the same instrument at the gauntlet:</p>
+<p>the same instrument, pointed at the gauntlet, gives the first lines of the file ci keeps for it:</p>
 
-<div class="code-panel">
-  <div class="code-panel-title">KANSO_COUNTERS=1 ./jsonbench</div>
-  <pre><code>allocs=8341214
-alloc_bytes=489854112
-arena_blocks=4
-perm_allocs=8
-beat_iters=151
-decoded 150 times, checksum 24000</code></pre>
-</div>
-
-<p>two of those integers tell the memory story cleanly. <code>arena_blocks=4</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches four blocks of scratch space, a hundred and fifty decodes touch the same four, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one rewind per decode plus one for the program itself, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
+<p>two of those integers tell the memory story. <code>arena_blocks</code> is <span data-golden="decode.arena_blocks">2</span> across all hundred and fifty decodes: each decode hands its scratch space back before the next begins, so the count does not grow with the number of decodes. <code>beat_iters</code> is <span data-golden="decode.beat_iters">150</span>, one for each decode. none of these numbers moves between runs, so ci keeps them in a file and diffs it like program output:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
-  <pre><code>allocs=8341214
-alloc_bytes=489854112
-arena_blocks=4
-perm_allocs=8
-beat_iters=151</code></pre>
+  <pre><code>allocs=<span data-golden="decode.allocs">1125014</span>
+alloc_bytes=<span data-golden="decode.alloc_bytes">152572448</span>
+arena_blocks=<span data-golden="decode.arena_blocks">2</span>
+arena_peak_bytes=<span data-golden="decode.arena_peak_bytes">2097152</span>
+cohort_frees=<span data-golden="decode.cohort_frees">1</span>
+cohort_kept=<span data-golden="decode.cohort_kept">0</span>
+perm_allocs=<span data-golden="decode.perm_allocs">4</span>
+beat_iters=<span data-golden="decode.beat_iters">150</span></code></pre>
 </div>
 
 <p>a regression in the compiler's folding now shows up as a changed integer in a diff—the same way a broken behavior shows up as a failed assertion. if a future edit to <code>push</code> loses the in-place reuse, <code>allocs</code> jumps, the golden fails, and it fails on every machine, before anyone has to file a "feels slower lately." no clocks, no flaky thresholds, no "it was fine on ci but slow on mine." that −10.7% inlining win from a few pages back stopped being an anecdote the day <code>alloc_bytes</code> became a committed integer.</p>
@@ -344,14 +339,14 @@ beat_iters=151</code></pre>
 </div>
 </div>
 
-<p>you can now read a kanso binary's cost the way you read its output—as a fact, not a feeling. you can prove a tail call is real, prove a dispatch group stayed a jump table, prove an allocation count didn't creep, each one a golden that ci diffs on every commit. the abstractions you spent nine chapters learning to write cost nothing at runtime, and now you hold the receipts that keep it that way. that is the book's last claim, and every earlier chapter was walking toward it: kanso deletes the clutter from your source, and then the compiler deletes your source's abstractions from the machine. what runs is only the decisions.</p>
+<p>you can now read a kanso binary's cost the way you read its output—as a fact, not a feeling. you can prove a tail call is real, prove a dispatch group stayed a jump table, prove an allocation count didn't creep, each one a golden that ci diffs on every commit. the abstractions from the earlier chapters cost nothing at run time, and the goldens are what keep that true from one commit to the next. chapters 11 and 12 return to the language, to modules and sequences, and part iv puts all of it to work on programs you ship.</p>
 
 <h2>exercises</h2>
 
 <ol class="exercises">
   <li>build <code>samples/ch10/counters.kso</code>, then change the loop count from <code>1000</code> to <code>2000</code> and rebuild. run it under <code>KANSO_COUNTERS=1</code> and write down the new <code>allocs</code> and <code>alloc_bytes</code>. from your two data points, work out the list's growth policy: does doubling the element count double the allocation count, or add a fixed few?</li>
   <li>write your own two-overload tail-recursive function—say, a countdown that prints as it goes—build it, and grep the <code>.ll</code> for <code>musttail call</code>. now rewrite one arm so its recursive call is <em>not</em> the last thing it does—wrap the call in a bit of arithmetic—rebuild, and grep again. say what happened to the count, and what that predicts about the stack at ten million frames.</li>
-  <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>_both (47 &lt; c) (c &lt; 58)</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
+  <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>47 &lt; c and c &lt; 58</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
   <li>the cost golden in <code>bench/cost_golden.txt</code> is committed. break it on purpose: edit one integer, run the counters, and diff the two. then describe what a real regression would have to change in the program to produce that same diff—and why a wall-clock benchmark would have waved it through.</li>
 </ol>
 
@@ -359,5 +354,5 @@ beat_iters=151</code></pre>
   <a href="index.html">contents</a>
   <span class="nav-spacer"></span>
   <a href="ch09.html">← a voting simulator</a>
-  <a href="index.html">back to contents →</a>
+  <a href="ch11.html">next: modules →</a>
 </nav>

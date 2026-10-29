@@ -1,4 +1,4 @@
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> boxed.kso:3:26
-   3 | pub play = print (length os/args)
-                                ^
+  --> boxed.kso:3:15
+   3 | print (length os/args)
+                     ^

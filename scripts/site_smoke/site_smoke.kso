@@ -192,8 +192,10 @@ story = """
     first.querySelector('.book-run').click();
     for (let i = 0; i < 120 && out.textContent === ran; i++)
       await new Promise(r => setTimeout(r, 100));
+    const reads = /\\bos\\/read_file\\b/;
+    const machine = live.filter(p => reads.test(p.textContent)).length;
     return \{panels: panels.length, live: live.length, ran,
-            edited: out.textContent};
+            edited: out.textContent, machine};
   };
   </script>
 """
@@ -525,7 +527,8 @@ fn read_book set chrome failures report
 fn book_read set chrome failures read
   a = missing_panels read failures
   b = missing_run read a
-  faults = missing_reader read b
+  c = missing_reader read b
+  faults = machine_panels read c
   visiting_chart set chrome faults
 
 fn visiting_chart set chrome failures
@@ -599,6 +602,14 @@ fn missing_panel_rows read acc
 fn missing_panels read acc
   why = "no panel in chapter 04 became runnable"
   noted acc why (any_live? read["live"])
+
+# A panel that reads a file needs a machine the tab is not, so it keeps the
+# output the book recorded. The guard once named io/read_file after the
+# function had moved to os/, and ch04's three file-reading panels each grew a
+# run button that could only fail.
+fn machine_panels read acc
+  why = "a chapter 04 panel that reads a file became runnable in the tab"
+  noted acc why (read["machine"] == 0)
 
 fn any_live? none
   false

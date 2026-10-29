@@ -1,0 +1,3 @@
+prices = { "dango":350 "taiyaki":500 }
+prices = put prices "mochi" 300
+print "{prices["mochi"]} yen" .> (_ -> print "{entries prices}")

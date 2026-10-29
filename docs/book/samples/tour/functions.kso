@@ -1,0 +1,4 @@
+fn steep_for name seconds
+  "steep {name} for {seconds} seconds"
+
+print (steep_for "hojicha" 30)

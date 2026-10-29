@@ -1,0 +1,3 @@
+import "std/os"
+
+os/args .> (a -> print "given: {a}")

@@ -1,0 +1,7 @@
+import "std/testing"
+
+test_dango_price = price "dango" == 400
+
+test_describe = describe 400 == "400 yen, service included"
+
+test_unknown_item_fails = testing/failed? (price "pocky")

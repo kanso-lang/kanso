@@ -28,17 +28,17 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>the gap to serde used to be allocation, kanso copying where serde reuses. rewinding arenas closed that — the strict tier of a two-tier memory model with no collector, whose ratified destination is reference counting over kanso's values. what remained was representational: tagged values and per-call dispatch. three later changes closed it. an inlining fix recovered work <code>-flto</code> was silently dropping across the .ll/.o boundary, a simd two-byte scan sped up the string scanner, and integers got a fast path for the common case.</p>
 
-<p>two engines exist to refuse a trade. go bought instant compiles and pays for them in slower binaries. rust bought the fastest binaries and charges every developer for the wait. kanso separates the two paths so the dev loop never pays the optimizer and the release path never compromises.</p>
+<p>the two paths exist so kanso does not have to choose between fast compiles and fast binaries. go bought instant compiles and pays for them in slower binaries. rust bought the fastest binaries and charges every developer for the wait. kanso keeps the optimizer out of the dev loop and runs all of it on the release path.</p>
 
 <p>the price of that is agreement. both engines have to mean exactly the same thing, so ci builds every example native and requires byte-identical output against the interpreter — floats included, since both render the shortest round-trip. a one-bit disagreement fails the build.</p>
 
-<p>go refused llvm because it was too big and too slow for the compile times they wanted, and slower binaries are what that refusal cost. kanso gets both, by never asking llvm's optimizer to be part of the dev loop. dev builds compile unoptimized against a cached runtime and answer in tens of milliseconds. <code>-O3 -flto</code> runs only when a release binary is being made.</p>
+<p>go refused llvm because it was too big and too slow for the compile times they wanted. kanso uses llvm, but dev builds compile unoptimized against a cached runtime and answer in tens of milliseconds. <code>-O3 -flto</code> runs only when a release binary is being made.</p>
 
-<p>which also retires the question every new language gets: "why rust and not llvm?" is a category error. rust is the <em>host</em>—the language the compiler is written in. llvm is the <em>backend</em>, and kanso employs it directly: the emitter writes llvm ir, clang turns it into machine code. the speed still on the table lives in kanso's own analyses, not in the backend—llvm multiplies what the front end proves.</p>
+<p>new languages often get asked "why rust and not llvm?", but the two do different jobs. rust is the <em>host</em>—the language the compiler is written in. llvm is the <em>backend</em>, and kanso employs it directly: the emitter writes llvm ir, clang turns it into machine code. the speed still on the table is in kanso's own analyses, because llvm can only optimize what the front end has proved.</p>
 
 <p>so why keep an interpreter, once <code>kanso run</code> compiles? three reasons.</p>
 
-<p>it is the oracle. two independent implementations of the semantics, held byte-identical by ci, catch each other's bugs. the differential suite has caught a float-rendering divergence, a utf-8 validation gap, and — on the day <code>kanso run</code> went native — an interpolation bug and a missing pattern form in the backend. a compiler tested only against itself moves confidently in whatever direction its bugs point.</p>
+<p>it is the oracle. two independent implementations of the semantics, held byte-identical by ci, catch each other's bugs. the differential suite has caught a float-rendering divergence, a utf-8 validation gap, and — on the day <code>kanso run</code> went native — an interpolation bug and a missing pattern form in the backend.</p>
 
 <p>it is the interactive tier. the repl and <code>--plan</code>, which renders an effect plan rather than running it, want evaluation without artifacts.</p>
 
@@ -50,11 +50,11 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>what does <code>print "one"</code> do when it is evaluated?</p>
 
-<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>.&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives <code>main</code>'s description and walks it. the same program, run two ways:</p>
+<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>.&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives the program's description and walks it. the same program, run two ways:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/effects.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso</div>
     <pre><code>one
@@ -64,13 +64,13 @@ three</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso --plan</div>
     <pre><code>plan:
-  print "one"    // from line 1
-  print "two"    // from line 1
-  print "three"    // from line 1</code></pre>
+  print "one"    # from line 1
+  print "two"    # from line 1
+  print "three"    # from line 1</code></pre>
   </div>
 </div>
 
-<p><code>--plan</code> falls out of that. the description already exists as inspectable data, so the flag renders it instead of handing it to the executor. each step carries its origin span, which is where the <code>// from line 1</code> provenance comes from.</p>
+<p><code>--plan</code> falls out of that. the description already exists as inspectable data, so the flag renders it instead of handing it to the executor. each step carries its origin span, which is where the <code># from line 1</code> provenance comes from.</p>
 
 <p>the payoff lands in testing. in most languages, testing effectful code means mocks: intercept the i/o call, record what would have happened, hope the interception is faithful. in kanso there is nothing to intercept, because evaluation never does i/o. the interpreter's runtime is a trait with two implementations—a real executor that prints, and a scripted one that appends each effect to a transcript:</p>
 
@@ -81,11 +81,11 @@ three</code></pre>
 }</code></pre>
 </div>
 
-<p>tests run <code>main</code>, hand the resulting description to the scripted executor, and assert on the transcript: <code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no mocks, no stubbing framework, no "was this called with these arguments"—just data equality on what the program said it would do.</p>
+<p>tests evaluate the program, hand the resulting description to the scripted executor, and assert on the transcript: <code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. there are no mocks and no stubbing framework, only a comparison of data: what the program said it would do.</p>
 
 <h2 id="p3"><span class="sec-num">part 03</span>the conjecture that dissolved</h2>
 
-<p>kanso nearly shipped with a class of programs it would refuse to compile. the class turned out to be empty, and the reason is worth following.</p>
+<p>kanso nearly shipped with a class of programs it would refuse to compile. the class turned out to be empty, and this part explains why.</p>
 
 <p>kanso has no interfaces, and return types are never written—they're inferred. it also has overload dispatch, and it auto-generates pass-throughs: for any failure type an overload group doesn't handle, the compiler adds an identity overload so <code>err</code> and <code>none</code> flow through untouched. put those together and three facts chase each other's tails. dispatch needs types: which overload a call targets depends on its arguments' types. types come from bodies: a function's return set is computed from whichever body dispatch selects. and pass-through generation changes return sets: the argument's type set leaks into the result. sets determine dispatch, dispatch determines bodies, bodies determine sets.</p>
 
@@ -97,43 +97,43 @@ three</code></pre>
 
 <h2 id="p4"><span class="sec-num">part 04</span>the formatter that doesn't exist</h2>
 
-<p>every serious language eventually ships a formatter, and every formatter is a confession: the grammar admits many renderings of the same program, so a second tool exists to pick one. kanso skips the confession. canonical form <em>is</em> the grammar—one rendering per program—so there is nothing left for a formatter to do. non-canonical spacing is a syntax error. blank lines inside a body, trailing whitespace, imports out of alphabetical order: compile errors. so are unused bindings and unused expressions, because a line that does nothing is a rendering decision too. these are real diagnostics from the interpreter's golden-file corpus:</p>
+<p>most mature languages ship a formatter, because their grammar admits many renderings of the same program and a second tool is needed to pick one. kanso has no formatter. canonical form <em>is</em> the grammar—one rendering per program—so there is nothing left for a formatter to do. non-canonical spacing is a compile error. blank lines inside a body, trailing whitespace, imports out of alphabetical order: compile errors. so are unused bindings and unused expressions, because a line that does nothing is a rendering decision too. these are real diagnostics from the interpreter's golden-file corpus:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/trailing_whitespace.stderr</div>
   <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; trailing_whitespace.kso:2:13</span>
-   2 |   print "hi" 
-                   <span class="k">^</span></code></pre>
+  --&gt; trailing_whitespace.kso:1:11
+   1 | print "hi" 
+                 ^</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/import_order.stderr</div>
   <pre><code><span class="k">error[formatting]</span>: imports appear in alphabetical order
-<span class="c">  --&gt; import_order.kso:2:8</span>
+  --&gt; import_order.kso:2:8
    2 | import "kanso-lang/vse"
-              <span class="k">^</span></code></pre>
+              ^</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/unused_expression.stderr</div>
-  <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `.&gt;`)
-<span class="c">  --&gt; unused_expression.kso:2:5</span>
-   2 |   1 + 1
-           <span class="k">^</span></code></pre>
+  <pre><code><span class="k">error[unused]</span>: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --&gt; unused_expression.kso:1:3
+   1 | 1 + 1
+         ^</code></pre>
 </div>
 
 <p>the error corpus is maintained as carefully as the success corpus, because a good share of this language's value is in its diagnostics. each message states the rule it is applying. there is no style left to have an opinion about, so a diagnostic can afford to be calm.</p>
 
 <h2 id="p5"><span class="sec-num">part 05</span>strictness is machine ergonomics</h2>
 
-<p>none of this was designed for language models. kanso's founding principle—anything a style guide or linter would enforce by convention becomes a compile error or unrepresentable—was written for human readers, so that no reviewer ever spends attention adjudicating style. but follow the consequence to its end and you arrive somewhere interesting.</p>
+<p>none of this was designed for language models. kanso's founding principle—anything a style guide or linter would enforce by convention becomes a compile error or unrepresentable—was written for human readers, so that no reviewer ever spends attention adjudicating style. it has a consequence for language models all the same.</p>
 
-<p>think about what teams actually write into their llm system prompts today: don't leave unused variables, delete dead code, match the project's formatting, don't drift from the house style. it's the same list that used to live in style guides and code-review checklists, migrated to a third home. in kanso that list has nowhere to live, because every item on it fails to compile. unused bindings, unused expressions, non-canonical whitespace, out-of-order declarations—the compiler already rejects them, for everyone, with the diagnostics you just read. there is nothing subjective left to teach a model, and no slop for it to gradually accumulate: the classic failure mode where generated code is <em>correct but slightly off</em>—an orphaned binding here, a dead expression there—is a compile error, caught before any reviewer sees it.</p>
+<p>think about what teams actually write into their llm system prompts today: don't leave unused variables, delete dead code, match the project's formatting, don't drift from the house style. it's the same list that used to live in style guides and code-review checklists, migrated to a third home. in kanso that list has nowhere to live, because every item on it fails to compile. unused bindings, unused expressions, non-canonical whitespace, out-of-order imports—the compiler already rejects them, for everyone, with the diagnostics you just read. there is nothing subjective left to teach a model, and no slop for it to gradually accumulate: the classic failure mode where generated code is <em>correct but slightly off</em>—an orphaned binding here, a dead expression there—is a compile error, caught before any reviewer sees it.</p>
 
 <p>one rendering per program has a second-order effect on review itself. if a program has exactly one canonical form, then no diff between two versions of a file is ever formatting churn—no reflowed lines, no argument about where the blank line goes, no imports to re-sort. what remains is real: a changed decision, a renamed thing, a helper extracted or inlined. review, whether the reviewer is a human or a machine, no longer spends attention on form and shrinks toward the thing it was always supposed to be about: decisions.</p>
 
-<p>the honest framing is that this is a consequence, not a motivation. kanso was designed so that readers never adjudicate style; it just happens that the cheapest reader to confuse—the one most prone to absorbing a codebase's bad habits and repeating them at scale—is now a language model. a language with exactly one rendering per program is unusually friendly to machine-generated code by construction.</p>
+<p>this was a consequence of the design and never its motivation. kanso was designed so that readers never adjudicate style; it just happens that the cheapest reader to confuse—the one most prone to absorbing a codebase's bad habits and repeating them at scale—is now a language model. a language with exactly one rendering per program is unusually friendly to machine-generated code by construction.</p>
 
 <p class="eyebrow" style="margin-top: 4rem">dedication</p>
 

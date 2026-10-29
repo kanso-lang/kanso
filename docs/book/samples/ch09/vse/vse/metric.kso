@@ -1,0 +1,11 @@
+import "std/list"
+
+fn socutil voters c
+  sum (list/map voters (v -> v[c]))
+
+fn socutils voters
+  to_list (list/map (range ncand) (c -> socutil voters c))
+
+fn vse socs winner
+  m = mean socs
+  (socs[winner] - m) / (max socs - m)

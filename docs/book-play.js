@@ -13,8 +13,10 @@
   if (!engine) return;
   const { ready, playSource, runLibrary, highlight } = engine;
 
-  /* what the tab cannot give a program */
-  const NEEDS_A_MACHINE = /\bio\/(read_file|write_file|args|stdin|read_line|list_dir|run|make_dir|exists|is_dir)\b/;
+  /* what the tab cannot give a program: the same list as needs_a_machine in
+     scripts/browser_differential_run, which covers exactly the samples a
+     reader can press run on */
+  const NEEDS_A_MACHINE = /\b(?:os\/(?:read_file|write_file|args|list_dir|run|make_dir|exists|is_dir|modified|read_bytes)|io\/(?:stdin|read_line))\b/;
 
   const localImport = (src) =>
     src.split('\n').some((line) => {

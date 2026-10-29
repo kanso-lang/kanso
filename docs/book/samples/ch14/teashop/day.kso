@@ -1,0 +1,4 @@
+import "./shop"
+import "std/net"
+
+net/listen 0 .> shop/day

@@ -1,0 +1,5 @@
+pub fn describe n
+  "{n} yen, service included"
+
+pub fn price item
+  base_price item + 50

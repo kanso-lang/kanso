@@ -1,0 +1,7 @@
+import "std/json"
+import "std/os"
+
+fn described order
+  "{order["dish"]} for {order["price"]}, tagged {order["tags"]}"
+
+os/read_file! "broken.json" .> json/decode! .> described .> print
