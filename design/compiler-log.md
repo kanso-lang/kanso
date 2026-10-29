@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
-
-Clay ruled #2099. Under #1975 a run-time failure names the line it happened
-on, so a failure inside the standard library named a library line, such as
-`failed in text/split at std/text/text.kso:38`, and nothing pointed at the
-program. Every port asked for its own line.
-
-**The ruling.** A failure inside the library keeps its library line and adds
-`called from <file>:<line>`, the nearest line in the program's own files. The
-library line is still what a library author needs, and the program's line is
-what its author needs. Native records that line on each call from a program
-file into a library function. Its cost is the cost of a ruled feature: the
-floor moves by what CI measures, as CLAUDE.md's language exception says.
-
-Owes, on #2099: the caller's line on every engine for a failure born in the
-library; error goldens on every engine for an operator, a builtin and a
-library function reached from a program file; CI's rows and the floor moved
-by them.
-
 ## 2026-10-26 — a refused binding names the line its name is declared on
 
 The 2026-10-25 gavel on #2085 keeps no-shadowing across a module's files and
@@ -1295,3 +1276,25 @@ word count uses. On this container the release-tier run program reads
 of 26,348,749 (3.09%). The interpreted corpus splits 400 words, and both
 engines answer the same counts. The rows this moves are CI's, and are
 recorded below when the cost-goldens job has run.
+
+## 2026-10-29 — a letter the scan refuses costs nothing
+
+`regexp/split "[^a-z']+"` tries a match at every letter of its subject, and
+each try that failed cost three allocations: the empty list of captures the
+walk starts with, a continuation built by the pattern's sequence, which had
+one part, and the bytes of the class's set and of the letter, read afresh to
+ask whether one holds the other. A field of five letters and a separator
+cost about thirty (#2214).
+
+Three changes take a refused letter to none. A pass over the compiled tree
+gives each class its set's bytes once, and the class reads the letter's
+code rather than its bytes. A sequence of one part is replaced by the part,
+since it matches what the part matches. And the walk starts from one empty
+list held as a constant. The 2,600-word page from the issue went from 95,946
+allocations to 15,364, and a scan over 3,000 letters that never matches went
+from 9,058 to 54.
+
+The new mem fixture splits 60 lines of prose and reads 1,987 allocations
+where the library before this read 14,283. The four regexp fixtures already
+in the mem vein fall with it. Two runtime goldens quote a line of the
+library and follow the line.
