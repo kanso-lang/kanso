@@ -1112,6 +1112,13 @@ process group of its own so a hang is killed whole rather than leaving the
 built program holding the test's streams. With the change reverted it failed
 for the right reason, a native run that never finished.
 
+The peek makes the runtime larger, so CI's rows move: codegen_instructions_dev
+116,812,856 -> 116,821,778, codegen_instructions_release 371,560,989 ->
+371,573,437, and each benchmark's text grows by 288 bytes. Run instructions
+fall by a few hundred to two thousand a benchmark, runbench 825,011,247 ->
+825,009,321. Welfare falls by less than 0.01, and the floor follows under the
+rule for a change that makes the language do what its specification says.
+
 ## 2026-10-29 — the tab's list of machine calls has one home
 
 #2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
