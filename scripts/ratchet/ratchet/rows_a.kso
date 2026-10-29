@@ -1257,6 +1257,16 @@ book_modules = row
   (breaking "a_module_panel_drifts_from_its_run")
   release
 
+# book_check runs a sample with the verb it needs; a title is what a reader
+# types, and it has to be that verb.
+book_titles = row
+  "a panel title naming a command the toolchain refuses"
+  true
+  "sh scripts/book_check.sh"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_title_names_a_command_that_refuses")
+  release
+
 # book_check.sh runs two harnesses, and they fail for different reasons. The
 # first regenerates a panel from the sample it renders; the second reads the
 # panels that harness cannot resolve — a title naming a file this repository

@@ -336,7 +336,7 @@ found <span class="o">=</span> <span class="f">describe</span> [<span class="n">
 gone <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">9</span>]
 <span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run missing.kso</div>
+    <div class="code-panel-title">kanso play missing.kso</div>
     <pre><code>in-range: value is 20
 missing: index out of range</code></pre>
   </div>
@@ -523,7 +523,7 @@ find2 2</code></pre>
 
 <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run control.kso</div>
+    <div class="code-panel-title">kanso play control.kso</div>
     <pre><code>seven positive
 zero non-positive</code></pre>
   </div>
@@ -544,13 +544,13 @@ zero non-positive</code></pre>
 <span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run argv.kso -- clay</div>
-    <pre><code>&lt;none&gt;</code></pre>
+    <div class="code-panel-title">kanso play argv.kso -- clay</div>
+    <pre><code>clay</code></pre>
   </div>
   <div class="code-output">
-    <div class="code-panel-title">kanso run argv.kso</div>
+    <div class="code-panel-title">kanso play argv.kso</div>
     <pre><code>&lt;none&gt;</code></pre>
   </div>
 </div>
@@ -574,7 +574,7 @@ zero non-positive</code></pre>
 
 <span class="f">low_read</span> <span class="n">0</span> <span class="o">.?</span> <span class="f">relabel</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run wrap_err.kso</div>
+    <div class="code-panel-title">kanso play wrap_err.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: wrap_err/config_bad "app.conf"
   born in relabel at wrap_err.kso:10
   caused by: "invalid utf-8"
@@ -675,7 +675,7 @@ third</code></pre>
   <div class="code-panel-title">write_stream.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/write</span> <span class="s">"no newline "</span>
+<span class="f">io/write</span> <span class="s">"no newline "</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">io/write</span> <span class="s">"between these"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"; print ends the line"</span>)</code></pre>
   <div class="code-output">
@@ -713,12 +713,12 @@ third</code></pre>
   <div class="code-panel-title">input.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
+<span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">printf 'hello from a pipe' | kanso run input.kso</div>
+    <div class="code-panel-title">kanso play input.kso &lt; pipe.txt</div>
     <pre><code>hello from a pipe!!</code></pre>
   </div>
 </div>

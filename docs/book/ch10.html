@@ -119,7 +119,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 
 <span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run classify.kso</div>
+    <div class="code-panel-title">kanso play classify.kso</div>
     <pre><code>dot</code></pre>
   </div>
 </div>
@@ -183,7 +183,7 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 
 <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run pingpong.kso</div>
+    <div class="code-panel-title">kanso play pingpong.kso</div>
     <pre><code>10000000 even? true</code></pre>
   </div>
 </div>
@@ -221,20 +221,20 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 <span class="k">fn</span> <span class="f">build</span> n acc
   <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run counters.kso</div>
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso play counters.kso</div>
     <pre><code>allocs=7
 alloc_bytes=28960
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
 cohort_kept=0
-perm_allocs=3
+perm_allocs=2
 beat_iters=0
 evac_allocs=3
 evac_bytes=80
-survive_slots=4
+survive_slots=0
 put_mut_fast=0
 put_mut_grow=0
 push_mut_fast=0
