@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-26 — the runtime's tags and doors are read from its C
-
-Fixes #2130. `build.rs` already joins the runtime's parts, and it now reads
-the tag enum and the functions defined with `K_DOORCC` out of the joined
-text into `$OUT_DIR/runtime_abi.rs`. The seven tags `codegen.rs` restated,
-`K_ERR_TAG`, the door list in `codegen/module.rs`, and the two specs that
-held those copies to the C are gone. A door the reader cannot parse stops
-the build, since a door missing from the list would be called on the C
-convention; the ratchet row `a_door_the_build_cannot_read` breaks one and
-watches `cargo build` go red.
-
-CI's rows, against main at #2154. The derived door list is in the runtime's
-include order, and `through_doors` checks doors in list order, so
-`emit_instructions` reads 5,687,958, 224 fewer. Compiling the runtime reads
-the edited comment in `core.c`, which moves `codegen_instructions_dev` to
-116,762,560 (52 more) and `codegen_instructions_release` to 371,663,962 (71
-fewer). Both read as layout of the clang input, since the program's code
-is unchanged, and no runtime row moved.
-
 ## 2026-10-26 — a guard inside a bound branch leaves the branch natively
 
 #2166. `return x if c` inside an `if` branch that is bound to a name leaves
@@ -1228,3 +1209,109 @@ startup_instructions 50,258 (+4), codegen_instructions_release 371,560,989
 (-89) and browser_compile_instructions 343,289,560 (-12). Welfare falls by
 less than 0.0001, and the floor follows under the rule for a change that
 makes the tools do what the documentation says.
+
+## 2026-10-29 — a letter the scan refuses costs nothing
+
+`regexp/split "[^a-z']+"` tries a match at every letter of its subject, and
+each try that failed cost three allocations: the empty list of captures the
+walk starts with, a continuation built by the pattern's sequence, which had
+one part, and the bytes of the class's set and of the letter, read afresh to
+ask whether one holds the other. A field of five letters and a separator
+cost about thirty (#2214).
+
+Three changes take a refused letter to none. A pass over the compiled tree
+gives each class its set's bytes once, and the class reads the letter's
+code rather than its bytes. A sequence of one part is replaced by the part,
+since it matches what the part matches. And the walk starts from one empty
+list held as a constant. A fourth takes a field from four allocations to
+three: a pattern with no groups answers that constant for its captures
+rather than building an empty list per match. The 2,600-word page from the
+issue went from 95,946 allocations to 12,764, and a scan over 3,000 letters
+that never matches went from 9,058 to 54.
+
+The new mem fixture splits 60 lines of prose and reads 1,507 allocations
+where the library before this read 14,283. The four regexp fixtures already
+in the mem vein fall with it. Two runtime goldens quote a line of the
+library and follow the line.
+
+of 26,348,749 (3.09%).
+
+The interpreted corpus does not take the phase. Importing `std/regexp` there
+made the tab compile the whole library on every run: CI read
+browser_compile_instructions 343,289,560 -> 816,029,965 and
+interp_instructions 571,786,909 -> 817,162,078, so the tab's compile term
+would have measured one library's front end and swung with every edit to
+it. The shape is the matcher's work at run time, which the run program
+measures.
+
+CI's rows for the phase: run_alloc_bytes 224,043,124 -> 231,013,169,
+run_allocs 1,582,921 -> 1,700,863, run_arena_blocks 4 -> 5,
+run_arena_peak_bytes 4,718,608 -> 5,767,184, run_beat_iters 193,074 ->
+211,299, run_bytes_malloc 7,850 -> 7,867, run_evac_allocs 1,732 -> 1,736,
+run_evac_bytes 4,602,208 -> 4,602,496, run_find2_calls 1,037,031 ->
+1,060,857, run_perm_allocs 106 -> 127, run_push_mut_fast 1,191,311 ->
+1,195,309, run_push_mut_slow 1,645,457 -> 1,645,463, run_sh_buf 91,336,800
+-> 93,914,368, run_sh_bytes 4,872 -> 1,148,520, run_sh_rec 4,098,336 ->
+4,675,424, run_sh_str 16,816,384 -> 16,930,368, run_spare_peak_bytes
+2,621,456 -> 3,670,032, run_str_scan_bytes 18,358,325 -> 18,358,372,
+run_str_scans 3,387 -> 3,402, work_runbench 825,009,321 -> 851,374,952,
+emitted_other_branches 17,933 -> 18,066, emitted_other_calls 20,709 ->
+20,888, emitted_other_defines 2,278 -> 2,292, emitted_other_lines 171,268 ->
+172,430 and text 5,645,435 -> 5,658,091.
+Welfare re-bases run_instructions and
+run_peak_bytes, each keeping its ratio to its baseline, and the floor moves
+only by the rounding of the two baselines.
+
+CI's rows for the fix. What falls: run_alloc_bytes 231,013,169 ->
+224,894,993, run_allocs 1,700,863 -> 1,594,553, run_arena_blocks 5 -> 4,
+run_arena_peak_bytes 5,767,184 -> 4,718,608, run_push_mut_fast 1,195,309 ->
+1,195,313, run_sh_buf 93,914,368 -> 91,425,392, run_sh_bytes 1,148,520 ->
+5,112, run_spare_peak_bytes 3,670,032 -> 2,621,456, work_runbench
+851,374,952 -> 846,388,267, scan_push_mut_fast 9 -> 13,
+a_class_asks_by_the_byte_alloc_bytes 507,073 -> 116,737,
+a_class_asks_by_the_byte_allocs 9,266 -> 1,267,
+a_class_asks_by_the_byte_sh_buf 157,168 -> 22,768,
+a_class_asks_by_the_byte_sh_bytes 134,520 -> 168,
+a_scan_keeps_its_place_in_the_text_alloc_bytes 106,537 -> 73,289,
+a_scan_keeps_its_place_in_the_text_allocs 1,742 -> 874,
+a_scan_keeps_its_place_in_the_text_push_mut_fast 5 -> 7,
+a_scan_keeps_its_place_in_the_text_sh_buf 52,896 -> 46,288,
+a_scan_keeps_its_place_in_the_text_sh_bytes 19,752 -> 240,
+a_scan_that_finds_nothing_keeps_nothing_alloc_bytes 2,781,801 -> 1,194,889,
+a_scan_that_finds_nothing_keeps_nothing_allocs 74,006 -> 24,874,
+a_scan_that_finds_nothing_keeps_nothing_push_mut_fast 5 -> 7,
+a_scan_that_finds_nothing_keeps_nothing_sh_buf 18,336 -> 976,
+a_scan_that_finds_nothing_keeps_nothing_sh_bytes 1,175,784 -> 240,
+a_split_stops_where_the_separator_does_alloc_bytes 24,487 -> 4,743,
+a_split_stops_where_the_separator_does_allocs 673 -> 64,
+a_split_stops_where_the_separator_does_push_mut_fast 8 -> 10,
+a_split_stops_where_the_separator_does_sh_buf 1,168 -> 832 and
+a_split_stops_where_the_separator_does_sh_bytes 14,808 -> 240. What rises,
+and why: the pass that gives each class its bytes copies the compiled tree
+once per pattern, and the library is 85 lines longer to compile, so each
+program that uses a pattern holds a few more records and the compile corpora
+read more: run_evac_allocs 1,736 -> 1,738, run_evac_bytes 4,602,496 ->
+4,602,512, run_perm_allocs 127 -> 128, run_sh_rec 4,675,424 -> 4,675,856,
+entry_instructions 85,282,135 -> 86,700,059, library_instructions 71,383,019
+-> 72,615,632, work_scanbench 266,140 -> 266,939, emitted_other_branches
+18,066 -> 18,226, emitted_other_calls 20,888 -> 21,137,
+emitted_other_defines 2,292 -> 2,312, emitted_other_lines 172,430 ->
+173,938, text 5,658,091 -> 5,670,096, scan_alloc_bytes 8,934 -> 9,366,
+scan_allocs 91 -> 97, scan_sh_buf 1,056 -> 1,168, scan_sh_bytes 288 -> 336,
+scan_sh_rec 1,632 -> 1,872, a_class_asks_by_the_byte_evac_allocs 7 -> 9,
+a_class_asks_by_the_byte_evac_bytes 224 -> 272,
+a_class_asks_by_the_byte_perm_allocs 33 -> 34,
+a_class_asks_by_the_byte_sh_rec 87,440 -> 87,536,
+a_scan_keeps_its_place_in_the_text_evac_allocs 7 -> 9,
+a_scan_keeps_its_place_in_the_text_evac_bytes 208 -> 256,
+a_scan_keeps_its_place_in_the_text_perm_allocs 51 -> 52,
+a_scan_keeps_its_place_in_the_text_sh_rec 1,296 -> 1,616,
+a_scan_that_finds_nothing_keeps_nothing_evac_allocs 7 -> 9,
+a_scan_that_finds_nothing_keeps_nothing_evac_bytes 208 -> 256,
+a_scan_that_finds_nothing_keeps_nothing_perm_allocs 50 -> 51,
+a_scan_that_finds_nothing_keeps_nothing_sh_rec 1,296 -> 1,616,
+a_split_stops_where_the_separator_does_evac_allocs 7 -> 9,
+a_split_stops_where_the_separator_does_evac_bytes 224 -> 272,
+a_split_stops_where_the_separator_does_perm_allocs 22 -> 23 and
+a_split_stops_where_the_separator_does_sh_rec 1,168 -> 1,232. Welfare rises,
+and the floor is banked at the new score.
