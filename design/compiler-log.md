@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: `put` writes a list at an index
-
-Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
-`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
-list, so the ports built vectors from maps with integer keys and paid for
-keys they did not need.
-
-**The ruling.** `put xs i v` answers the list with element `i` replaced,
-1-based like `xs[i]`. An index outside the list answers `none`, as a read
-there does. A list nothing else holds is written in place, as a map already
-is.
-
-Owes, on #2086: `put` on a list on every engine; the in-place write under
-the existing uniqueness analysis; the checker accepting a list for `put`, and
-refusing at check what it refuses at run time (diff F9, inflate F8); micro and
-mem goldens; appendix B.
-
 ## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
 
 Clay ruled #2099. Under #1975 a run-time failure names the line it happened
@@ -1435,3 +1418,17 @@ directory. The check is made only for a path that starts with `..`. The
 refusal itself stands: `p.kso` holds a `pub fn` and a statement, which is
 neither a library nor a play file. tests/test_verb.rs pins the message,
 watched red with the old path.
+
+## 2026-10-29 — http answers any status, and its suite runs
+
+#2209, filed by the docs worker. `std/net/http` could answer only 200 and
+404, and `response` cannot be built outside the module, so an order service
+answered a refused order with 200 and a sentence. `http/respond code headers
+body` answers any status, with the reason phrase its code is registered with,
+and an empty phrase for a code without one, which HTTP allows.
+
+The suite beside it had never run. tests/std_suites.rs walked one level below
+lib/, and lib/net/http is two, so `http_test.kso` passed or failed unread. The
+walk now goes all the way down and pins the count at seven suites. With the
+422 phrase misspelled, both of its specs went red on lib/net/http, which
+neither could see before.

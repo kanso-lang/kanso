@@ -19,36 +19,41 @@ fn tested(target: &str) -> std::process::Output {
         .expect("kanso binary runs")
 }
 
-fn suites() -> Vec<std::path::PathBuf> {
-    let lib = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib");
-    let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(&lib)
-        .expect("the library is there")
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|dir| {
-            std::fs::read_dir(dir)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .any(|e| e.file_name().to_string_lossy().ends_with("_test.kso"))
-        })
-        .collect();
-    found.sort();
+/// Every directory under lib/ that holds a `*_test.kso`, as the path the verb
+/// is given (`lib/list`, `lib/net/http`). The walk goes all the way down: it
+/// used to read one level, and lib/net/http's suite never ran.
+fn suites() -> Vec<String> {
+    fn walk(dir: &std::path::Path, rel: &str, found: &mut Vec<String>) {
+        let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+            .expect("the library reads")
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .collect();
+        entries.sort();
+        if entries.iter().any(|p| p.to_string_lossy().ends_with("_test.kso")) {
+            found.push(rel.to_string());
+        }
+        for sub in entries.iter().filter(|p| p.is_dir()) {
+            let name = sub.file_name().expect("a directory has a name").to_string_lossy();
+            walk(sub, &format!("{rel}/{name}"), found);
+        }
+    }
+    let mut found = Vec::new();
+    walk(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib"), "lib", &mut found);
     found
 }
 
 #[test]
 fn every_standard_module_with_tests_passes_them() {
     let suites = suites();
-    assert!(suites.len() >= 4, "the library's suites moved: found {}", suites.len());
+    assert_eq!(suites.len(), 7, "the library's suites moved: {suites:?}");
     let mut refused = Vec::new();
-    for dir in &suites {
-        let name = dir.file_name().expect("a directory has a name").to_string_lossy();
-        let output = tested(&format!("lib/{name}"));
+    for name in &suites {
+        let output = tested(name);
         let said = String::from_utf8_lossy(&output.stdout).into_owned()
             + &String::from_utf8_lossy(&output.stderr);
         if !output.status.success() || !said.contains("0 failed") {
-            refused.push(format!("  lib/{name}: {}", said.trim()));
+            refused.push(format!("  {name}: {}", said.trim()));
         }
     }
     assert!(refused.is_empty(), "standard suites that do not pass:\n{}", refused.join("\n"));
@@ -59,18 +64,20 @@ fn every_standard_module_with_tests_passes_them() {
 #[test]
 fn every_standard_suite_passes_named_as_a_file() {
     let mut refused = Vec::new();
-    for dir in suites() {
-        let name = dir.file_name().expect("a directory has a name").to_string_lossy().into_owned();
-        for entry in std::fs::read_dir(&dir).expect("the module reads").filter_map(Result::ok) {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for name in suites() {
+        for entry in
+            std::fs::read_dir(root.join(&name)).expect("the module reads").filter_map(Result::ok)
+        {
             let file = entry.file_name().to_string_lossy().into_owned();
             if !file.ends_with("_test.kso") {
                 continue;
             }
-            let output = tested(&format!("lib/{name}/{file}"));
+            let output = tested(&format!("{name}/{file}"));
             let said = String::from_utf8_lossy(&output.stdout).into_owned()
                 + &String::from_utf8_lossy(&output.stderr);
             if !output.status.success() || !said.contains("0 failed") {
-                refused.push(format!("  lib/{name}/{file}: {}", said.trim()));
+                refused.push(format!("  {name}/{file}: {}", said.trim()));
             }
         }
     }
