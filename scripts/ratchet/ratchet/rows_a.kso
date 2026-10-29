@@ -1236,6 +1236,27 @@ book_outputs = row
   (breaking "drifted_book_output")
   release
 
+# A panel titled with --plan quotes the plan, and the harness once matched it
+# against the plain run's recording instead: --write then filled nine plan
+# panels with what the program prints, under prose describing join braces and
+# <continuation> steps that were no longer on the page.
+book_plans = row
+  "a plan panel showing what the program prints instead of its plan"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_plan_panel_shows_the_run")
+  release
+
+# The same harness, for a title naming a directory module rather than a file.
+book_modules = row
+  "a module panel showing a run the module no longer produces"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_module_panel_drifts_from_its_run")
+  release
+
 # book_check.sh runs two harnesses, and they fail for different reasons. The
 # first regenerates a panel from the sample it renders; the second reads the
 # panels that harness cannot resolve — a title naming a file this repository

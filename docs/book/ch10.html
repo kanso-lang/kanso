@@ -183,12 +183,12 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 
 <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
+    <div class="code-panel-title">kanso run pingpong.kso</div>
     <pre><code>10000000 even? true</code></pre>
   </div>
 </div>
 
-<p>ten million alternating calls, no annotation asking for anything, and the stack never grows past a single frame. three milliseconds, done. the guarantee is right there in the ir—<code>musttail</code>, llvm's strongest promise: emit the jump, or refuse to compile the module at all.</p>
+<p>ten million alternating calls, no annotation asking for anything, and the stack never grows past a single frame. built with <code>kanso build pingpong.kso --release</code>, the binary takes about three milliseconds. the guarantee is right there in the ir—<code>musttail</code>, llvm's strongest promise: emit the jump, or refuse to compile the module at all.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pingpong.ll</div>
