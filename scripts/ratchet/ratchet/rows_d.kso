@@ -1724,4 +1724,26 @@ lex_openers = row
 
 rows_dq61 = list/concat rows_dq60 [lex_lines lex_openers]
 
-rows_d = list/concat rows_dq61 [itself]
+# book_panels reads an `output` panel through the source panel above it
+# (2026-10-29). The landing page's outputs were copied by hand until then.
+landing_output = row
+  "a landing output panel showing a run the example no longer produces"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_landing_output_drifts_from_its_golden")
+  release
+
+# book_panels shows a golden byte for byte under a panel titled with its path
+# (2026-10-29).
+golden_panel = row
+  "a panel titled with a golden's path showing what the golden does not say"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_golden_panel_drifts_from_its_file")
+  release
+
+rows_dq62 = list/concat rows_dq61 [landing_output golden_panel]
+
+rows_d = list/concat rows_dq62 [itself]
