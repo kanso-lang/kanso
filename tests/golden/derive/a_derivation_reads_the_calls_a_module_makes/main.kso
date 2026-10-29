@@ -1,0 +1,8 @@
+import "./conventions"
+import "./pages"
+import "./posts"
+
+derive conventions/traced
+
+print "{traced}"
+print (pages/home 7)

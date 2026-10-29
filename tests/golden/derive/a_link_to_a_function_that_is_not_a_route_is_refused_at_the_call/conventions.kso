@@ -1,0 +1,42 @@
+import "std/derive"
+import "std/list"
+
+# A link may name only a route: posts/index or posts/show. Any other
+# function a link names is refused at the call that names it.
+pub fn linked p
+  routes = list/fold p.modules [] (acc m -> list/concat acc (named m))
+  list/fold p.modules [] (acc m -> list/concat acc (stray_links m routes))
+
+pub fn link _
+  "a link"
+
+fn named m
+  return [] if m.name != "posts"
+  actions = list/select m.functions (f -> action? f.name)
+  list/to_list (list/map actions (f -> "posts/{f.name}"))
+
+fn action? "index"
+  true
+
+fn action? "show"
+  true
+
+fn action? _
+  false
+
+fn routed? _ none
+  false
+
+fn routed? routes name
+  list/any? routes (r -> r == name)
+
+fn stray_links m routes
+  links = list/select m.calls (c -> c.callee == "conventions/link")
+  stray = list/select links (c -> not routed? routes c.arguments[1])
+  list/to_list (list/map stray (c -> refused c c.arguments[1]))
+
+fn refused c none
+  derive/refuse_call c "a link names something that is not a route"
+
+fn refused c name
+  derive/refuse_call c "`{name}` is not a route"

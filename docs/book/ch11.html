@@ -172,7 +172,7 @@ area came through: 3.14159</code></pre>
 <span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/nowhere"</span> <span class="n">2</span>)</code></pre>
 </div>
 
-<p>the compiler describes the modules the entry imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, and each record type with its fields. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
+<p>the compiler describes the modules the entry imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, each record type with its fields, and every call a module's functions make to a named function. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">routed/conventions.kso</div>
@@ -212,7 +212,7 @@ no route for /nowhere</code></pre>
   </div>
 </div>
 
-<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. two more declarations exist. <code>derive/declare_type</code> adds a record type to the entry, and <code>derive/refuse</code> makes a compile error at the function or type it names, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant and type a build derived.</p>
+<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. two more declarations exist. <code>derive/declare_type</code> adds a record type to the entry, and <code>derive/refuse</code> makes a compile error at the function or type it names, and <code>derive/refuse_call</code> makes one at a call the description listed, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant and type a build derived.</p>
 
 <p>a derivation only computes. it cannot read a file or the clock, and it learns about the app only from the description: a convention that imports one of the modules it describes is refused. the same source therefore derives the same declarations every time, on every engine, including the one in the playground.</p>
 
