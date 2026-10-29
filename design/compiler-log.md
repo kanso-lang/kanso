@@ -23,29 +23,6 @@
 
 
 
-## 2026-10-25 — a concat of numbers crosses the rewind where it stands
-
-`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
-second argument is a list literal of scalars, as it accepted an in-place
-`push` of one. Such a concat writes each item onto the accumulator's frontier,
-so the accumulator still holds no pointer into the arena, and the license
-that lets a list of numbers cross a rewind by pointer applies. The loop from
-#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
-numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
-22,454,668 and take 6,496,051. No allocation counter sees the copies the
-stage made, so the run program's work row is where this shows.
-
-The one-element list each lap is still built. Emitting such a concat as one
-push per item would remove it, but a list literal keeps an item that fails
-where `push` answers the failure, so the two would need to agree first.
-
-`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
-booleans and strings made on the lap, 20,000 laps each. Its output is main's
-interpreter. The strings must stay refused: the ratchet mutation
-`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
-run of the fixture then dies reading the reclaimed strings ("ran out of
-stack"), while the interpreter, which has no rewind, stays green.
-
 ## 2026-10-25 — a read a sibling forces lets the map go
 
 `bucketed` from #2139, `b = or_bucket m[k]` then `put m k (bucket (b.hits +
@@ -1450,3 +1427,28 @@ the benchmarks the emitted counters read emitted_other_defines 2,278 (+2),
 emitted_other_calls 20,709 (+9), emitted_other_branches 17,933 (+8) and
 emitted_other_lines 171,268 (+133), and text 5,635,131 (+32). Welfare fell by about
 0.001 and the floor follows under the rule for a feature a ruling requires.
+
+## 2026-10-29 — a field read in an import no longer makes the importer's name private
+
+#2189. A module that declares a name one of its imports also exports keeps
+its own arms under the qualified spelling and moves the import's twin into
+the bare overload space. `qualify` told the two apart by file: a twin is
+cloned from the import's declaration and carries the import's file, while
+everything the module writes carries one of its own. The getter for a field
+counted as one of the module's own declarations, and its arms carry the file
+of each type that has the field, an import's among them. So when `entries`
+declared a record with a `name` field, `entries.kso` counted as one of
+`home`'s files, `entries/index`'s twin read as `home`'s own `index`, took
+`home/index` first, and was not pub: "`index` is private to module `home`".
+Getters are now left out of the module's files.
+
+The reduced program is three files in tests/golden/field_reads, run on both
+engines by `a_field_read_in_an_import_leaves_the_importers_names_its_own`.
+It was watched red with the old filter.
+
+The change moves the compile rows by layout: compile_instructions 24,064,926
+(+1,072), entry_instructions 84,709,988 (+2,279), library_instructions
+71,325,972 (+1,501) and browser_compile_instructions 343,196,940 (+8,965).
+The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
+Welfare fell by less than 0.0001, and the floor follows under the rule for a
+change that makes the language do what its specification says.

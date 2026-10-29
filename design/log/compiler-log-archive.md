@@ -110649,3 +110649,26 @@ interp_instructions rose, 525,831,073 -> 525,925,462, since the corpus's
 entry is now judged line by line. Nothing here separates the part of each
 move that is the new check from the part that is the binary's layout.
 Welfare holds the net rise at 95.15.
+
+## 2026-10-25 — a concat of numbers crosses the rewind where it stands
+
+`is_scalar_list_chain` in `src/beat.rs` now accepts an in-place `concat` whose
+second argument is a list literal of scalars, as it accepted an in-place
+`push` of one. Such a concat writes each item onto the accumulator's frontier,
+so the accumulator still holds no pointer into the arena, and the license
+that lets a list of numbers cross a rewind by pointer applies. The loop from
+#2139 stops deep-copying its accumulator at every stage. On its own, 128,000
+numbers took 156,368,201 instructions and take 19,718,704, and 40,000 took
+22,454,668 and take 6,496,051. No allocation counter sees the copies the
+stage made, so the run program's work row is where this shows.
+
+The one-element list each lap is still built. Emitting such a concat as one
+push per item would remove it, but a list literal keeps an item that fails
+where `push` answers the failure, so the two would need to agree first.
+
+`a_list_concatenated_in_place_keeps_its_items` concatenates numbers, pairs,
+booleans and strings made on the lap, 20,000 laps each. Its output is main's
+interpreter. The strings must stay refused: the ratchet mutation
+`a_concat_of_strings_crosses_the_rewind` admits any literal, and the native
+run of the fixture then dies reading the reclaimed strings ("ran out of
+stack"), while the interpreter, which has no rewind, stays green.

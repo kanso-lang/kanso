@@ -1759,11 +1759,14 @@ fn qualify(
     // took the plain recursion and ran out of stack. What separates them is
     // the file: a twin is cloned from its import's declaration and carries
     // that file, where everything the module writes, and everything a pass
-    // writes for it, carries one of the module's own.
+    // writes for it, carries one of the module's own. A getter is left out:
+    // its arms carry the file of each type that has the field, an import's
+    // among them, and counting that file as the module's made the import's
+    // twin read as the module's own (#2189).
     let own_files: crate::hash::Set<std::sync::Arc<str>> = dep
         .fns
         .iter()
-        .filter(|f| !f.synthetic && !ast::has_slash(&f.name))
+        .filter(|f| !f.synthetic && !f.is_getter() && !ast::has_slash(&f.name))
         .map(|f| f.file.clone())
         .collect();
     let is_twin = |f: &ast::FnDecl| f.synthetic && !own_files.contains(&f.file);
