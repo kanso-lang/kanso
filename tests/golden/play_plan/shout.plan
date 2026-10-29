@@ -1,0 +1,3 @@
+plan:
+  print "hi!"    # from line 4
+  print "bye"    # from line 4

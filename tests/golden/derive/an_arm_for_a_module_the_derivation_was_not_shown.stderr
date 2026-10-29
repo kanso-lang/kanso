@@ -1,0 +1,4 @@
+error[derive]: `conventions/routed` defined an arm for `list/post`, and `list` is not one of the modules it describes
+  --> tests/golden/derive/an_arm_for_a_module_the_derivation_was_not_shown/main.kso:5:1
+   5 | derive conventions/routed
+       ^
