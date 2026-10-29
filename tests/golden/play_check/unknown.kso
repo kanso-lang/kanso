@@ -1,0 +1,4 @@
+fn f x
+  x + y
+
+print "{f 1}"

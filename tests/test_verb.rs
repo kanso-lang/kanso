@@ -178,3 +178,33 @@ fn a_malformed_test_file_does_not_stop_the_program_beside_it() {
     );
     assert_eq!(tested.status.code(), Some(2));
 }
+
+/// A file of statements, tested, says it holds no tests. It used to be refused
+/// as a library with a statement in it, which named the file's shape and not
+/// what was missing (#2217).
+#[test]
+fn a_file_of_statements_holds_no_tests() {
+    let output = in_fixtures(&["test", "statements.kso"]);
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("statements.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// A test run from inside its module names a sibling's file as the reader
+/// sees it. The module is imported as `../named_from_inside`, and the
+/// refusal pointed at `../named_from_inside/p.kso` (#2205).
+#[test]
+fn a_sibling_is_named_from_where_the_test_runs() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["test", "g_test.kso"])
+        .current_dir(fixture_dir().join("named_from_inside"))
+        .output()
+        .expect("kanso binary runs");
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("named_from_inside.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(output.status.code(), Some(2));
+}

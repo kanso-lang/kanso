@@ -147,6 +147,11 @@ fn install_resolves_the_highest_release_and_the_build_reads_the_cache() {
         "install failed: {}",
         String::from_utf8_lossy(&install.stderr)
     );
+    // The count was the names left to walk, which is none by the end (#2234).
+    assert_eq!(
+        String::from_utf8_lossy(&install.stdout),
+        "installed 1 hako(s):\n  acme/widgets v0.2.0\n"
+    );
 
     let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock is written");
     let fields: Vec<&str> = lock.split_whitespace().collect();
@@ -331,6 +336,10 @@ fn an_interim_pin_is_built_against_flagged_and_never_walked_forward() {
         install.status.success(),
         "install --from failed: {}",
         String::from_utf8_lossy(&install.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&install.stdout),
+        "installed 1 hako(s):\n  acme/widgets fix-thing (interim pin)\n"
     );
     let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock is written");
     let fields: Vec<&str> = lock.split_whitespace().collect();
@@ -538,4 +547,41 @@ fn the_kanso_update_refuses_for_the_stated_reasons() {
             Some(2)
         )
     );
+}
+
+/// An import of a module the installed hako does not have. The resolver used
+/// to say the hako was not in the cache and to run `kanso install`, which
+/// changed nothing, so the reader went round in a loop (#2234).
+#[test]
+fn a_module_an_installed_hako_lacks_is_named() {
+    let root = std::env::temp_dir().join("kanso-hako-no-module");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets/gadgets\"\n\nprint \"{gadgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+    let kanso = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .args(args)
+            .env("KANSO_HAKO", &cache)
+            .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+            .current_dir(&app)
+            .output()
+            .expect("kanso runs")
+    };
+    let install = kanso(&["install", "."]);
+    assert!(install.status.success(), "{}", String::from_utf8_lossy(&install.stderr));
+
+    let run = kanso(&["run", "."]);
+    assert_eq!(
+        String::from_utf8_lossy(&run.stderr),
+        "error: cannot resolve import \"acme/widgets/gadgets\" — `acme/widgets` is \
+         installed, and has no module `gadgets` (its modules: `acme/widgets`)\n"
+    );
+    assert_eq!(run.status.code(), Some(2));
 }

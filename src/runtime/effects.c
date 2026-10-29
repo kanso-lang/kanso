@@ -1381,6 +1381,24 @@ static KStep k_step(KDesc* d) {
             KStep s = {0, 0, k_none(), k_int(k_hold_socket(taken))};
             return s;
         }
+        case 22:
+        case 35: {
+            /* A read with nothing arrived yet waits the same way, so a program
+               can be both ends of a connection: the fiber reading yields, and
+               the one that will write runs. A closed peer reads as ready, and
+               the read answers what it always did. */
+#ifndef __wasm__
+            int fd = k_socket_of(d->x.payload);
+            char one;
+            if (fd >= 0 && recv(fd, &one, 1, MSG_PEEK | MSG_DONTWAIT) < 0
+                && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                KStep s = {1, 1, k_mkdesc(d->dtag, d->x, d->y), k_none()};
+                return s;
+            }
+#endif
+            KStep s = {0, 0, k_none(), k_conn_read(d->x.payload, d->dtag == 35)};
+            return s;
+        }
         case 17: {
             /* Same shape for a process: start it, then wait by yielding, so
                the other statements of the group run while it does. */
