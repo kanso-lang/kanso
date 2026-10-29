@@ -1411,3 +1411,11 @@ tests/golden/derive gains a derivation that lists the calls between modules
 and one that refuses a link to a function that is not a route, at the call.
 The second was watched red twice: with no calls to read, and with
 `posts/show` refused too before the exports fix.
+
+bench/entry_corpus derives, so the entry row prices collecting the calls:
+entry_instructions 85,153,572 (+443,584). `lib/derive` is embedded in the
+compiler and grew, so the other compile rows move with it:
+compile_instructions 24,083,702 (+18,776), library_instructions 71,386,812
+(+60,840) and browser_compile_instructions 343,219,110 (+22,172). Welfare fell
+by 0.002, and the floor follows under the rule for a feature a ruling
+requires.
