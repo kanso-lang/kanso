@@ -76,7 +76,7 @@ coverage_printed = row
   (breaking "a_printed_error_kind_arrives_without_a_golden")
   release
 
-rows_c1h = list/concat rows_c1g [dispatch coverage_driver]
+rows_c1h = list/concat rows_c1g [dispatch coverage_driver tab_guard]
 
 # A FOURTH opener, and the file the scan could not see. `source?` took `.rs`
 # only, so src/runtime.c — where a compiled binary gets its runtime messages —
