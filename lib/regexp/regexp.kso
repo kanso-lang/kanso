@@ -27,6 +27,13 @@ type cls
   set
   negated
 
+# A class as the walk sees it: the set's bytes are read once, when the
+# pattern is compiled, rather than at every character the class is asked about.
+type bcls
+  set
+  negated
+  bytes
+
 type seq
   parts
 
@@ -95,6 +102,7 @@ type program
   starters
   wanted
   must
+  starting
 
 type slotted
   node
@@ -110,6 +118,10 @@ pub fn match? pattern s
   found pattern s . (m -> m.from > 0)
 
 no_hit = hit 0 0 []
+
+# The captures a walk starts with. A literal `[]` at the start of each walk was
+# a list built for every position a scan tried.
+no_slots = []
 
 pub fn find pattern s
   taken s (found pattern s)
@@ -152,13 +164,20 @@ fn fitting _ _ _ true
   none
 
 fn fitting prog s at false
-  reached_at prog at (walked prog.node s at [] (to caught -> arrival to caught))
+  end = walked prog.node s at no_slots (to caught -> arrival to caught)
+  reached_at prog at end
 
 fn reached_at _ _ none
   none
 
 fn reached_at prog at end
-  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
+  hit at end.to (captured prog end)
+
+# A pattern with no groups captures nothing, and every match it made built an
+# empty list to say so.
+fn captured prog end
+  return no_slots if prog.wanted == 0
+  caught_in_order end.caught 1 [] prog.wanted
 
 # The same walk, keeping where each match sat. A caller reporting a finding
 # needs the position to name a line, which the text alone cannot give back.
@@ -351,12 +370,16 @@ fn skipping prog s at false
   probing prog s (at + 1)
 
 fn skipping prog s at true
-  end = walked prog.node s at [] (to caught -> arrival to caught)
+  end = walked prog.node s at no_slots (to caught -> arrival to caught)
   return probing prog s (at + 1) if end == none
-  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
+  hit at end.to (captured prog end)
 
+# A pattern any character may start is worth trying everywhere, and asking
+# first spares the slice of the character at every position.
 fn worth_trying? prog s at
-  open_start? prog.starters (at > length s) (char_at s at)
+  return true if prog.starters == ""
+  starts = prog.starting
+  open_start? prog.starters starts (at > length s) (char_at s at)
 
 # Any one of three conditions opens the position, and written as three arms
 # each was the most specific one somewhere and none was most specific
@@ -366,8 +389,8 @@ fn worth_trying? prog s at
 # position out. The past-the-end flag says the same thing for the position one
 # past the end; a slice can answer nothing while the flag is false, and then
 # the set was being asked whether it holds no character at all.
-fn open_start? set past_end c
-  set == "" or past_end or c == "" or in? set c
+fn open_start? set bs past_end c
+  set == "" or past_end or c == "" or held? set bs c
 
 # A group can be entered more than once — `(ab)+` captures its last pass — so
 # the latest record for a slot is the one that stands.
@@ -430,7 +453,42 @@ fn refused _ _ true
   err "a lookbehind matches one fixed width"
 
 fn refused node wanted false
-  program node (starters node) wanted (required node)
+  first = starters node
+  program (bytewise node) first wanted (required node) (text/bytes first)
+
+# The tree the walk reads: each class carries its set's bytes. Testing a
+# character read both the set's and the character's bytes, two allocations per
+# character, and a scan for `[^a-z']+` asks at every letter of a page.
+fn bytewise (cls set negated)
+  bcls set negated (text/bytes set)
+
+fn bytewise (group node slot)
+  group (bytewise node) slot
+
+# A sequence of one part matches what the part matches. Walking it built a
+# continuation for the step past its only part at every position a scan tried.
+fn bytewise (seq parts)
+  return bytewise parts[1] if length parts == 1
+  seq (bytewise_all parts 1 [])
+
+fn bytewise (alt branches)
+  alt (bytewise_all branches 1 [])
+
+fn bytewise (rep node least most greedy)
+  rep (bytewise node) least most greedy
+
+fn bytewise (ahead node wanted pad)
+  ahead (bytewise node) wanted pad
+
+fn bytewise (behind node wanted wide)
+  behind (bytewise node) wanted wide
+
+fn bytewise node
+  node
+
+fn bytewise_all nodes i acc
+  return acc if i < 1 or i > length nodes
+  bytewise_all nodes (i + 1) (push acc (bytewise nodes[i]))
 
 # A pattern that parses whole is read to its last character, the leading
 # flags and the body between them. The parse stops short at a `)` that closes
@@ -1092,6 +1150,8 @@ fn escaped _ at c
 
 word_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 
+word_bytes = text/bytes word_chars
+
 fn read_class chars at
   negated = chars[at] == "^"
   start = shifted at negated
@@ -1216,7 +1276,7 @@ fn compared? _ wanted _ _ _ false
 
 fn compared? node wanted wide s at true
   from = at - wide
-  saw = walked node s from [] (to caught -> arrival to caught)
+  saw = walked node s from no_slots (to caught -> arrival to caught)
   landed_back? saw at wanted
 
 fn landed_back? none _ wanted
@@ -1247,9 +1307,10 @@ fn matched_one _ _ _ _ false
 fn walked (dot _) s at slots k
   matched_one s at slots k (at <= length s and text/slice s at at != "\n")
 
-fn walked (cls set negated) s at slots k
+fn walked (bcls set negated bs) s at slots k
   here = at <= length s
-  matched_one s at slots k (here and in_class? set negated (sliced s at here))
+  c = sliced s at here
+  matched_one s at slots k (here and held_by? set bs negated c)
 
 fn sliced s at true
   char_at s at
@@ -1271,8 +1332,15 @@ fn or_empty none
 fn or_empty piece
   piece
 
-fn in_class? set negated c
-  flipped? (in? set c) negated
+fn held_by? set bs negated c
+  flipped? (held? set bs c) negated
+
+# `in?` for a set whose bytes were read already. A one-byte character is found
+# by its code; a wider one has no byte below 128, so it walks the set.
+fn held? set bs c
+  code = text/char_code c
+  return among? (text/chars set) c 1 if code >= 128
+  text/find2 bs 1 code code <= length bs
 
 fn flipped? held false
   held
@@ -1304,7 +1372,7 @@ fn word_at? s at
   reads? s at (at >= 1 and at <= length s)
 
 fn reads? s at true
-  in? word_chars (char_at s at)
+  held? word_chars word_bytes (char_at s at)
 
 fn reads? _ _ false
   false
@@ -1333,7 +1401,7 @@ fn one_char? (lit _)
 fn one_char? (dot _)
   true
 
-fn one_char? (cls _ _)
+fn one_char? (bcls _ _ _)
   true
 
 fn one_char? _
@@ -1355,9 +1423,9 @@ fn takes_one? (lit c) s at
 fn takes_one? (dot _) s at
   at <= length s and text/slice s at at != "\n"
 
-fn takes_one? (cls set negated) s at
+fn takes_one? (bcls set negated bs) s at
   here = at <= length s
-  here and in_class? set negated (sliced s at here)
+  here and held_by? set bs negated (sliced s at here)
 
 fn backing least at n slots k
   return none if n < least

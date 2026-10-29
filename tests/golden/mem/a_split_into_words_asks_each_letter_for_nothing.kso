@@ -1,0 +1,18 @@
+# a page split into its words by `[^a-z']+`. every letter is a position the
+# scan tries and the class refuses. each try built a list for the captures, a
+# continuation for the pattern's one-part sequence, and the bytes of the set
+# and of the letter. the class carries its bytes from compile time now, a
+# one-part sequence is its part, and a letter costs no allocation (#2214).
+import "std/regexp"
+import "std/text"
+
+fn grow 0 acc
+  acc
+
+fn grow n acc
+  grow (n - 1) (text/append acc "the quick fox, it's over the lazy dog. ")
+
+pub play =
+  subject = text/utf8 (grow 60 (text/bytes ""))
+  words = regexp/split "[^a-z']+" subject
+  print "{length words} words in {length subject}"

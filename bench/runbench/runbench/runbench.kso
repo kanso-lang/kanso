@@ -296,6 +296,16 @@
 # `relayed` builds three strings by joining onto each one round a cycle of
 # two groups. Natively each hop to the second group copies the string, so
 # each loop costs the square of its length.
+#
+# One more joined on 2026-10-29, measured on main before kanso#2214's fix.
+# Its column is the whole program with it, 851,480,954, less the whole with
+# it reading nothing, 825,132,205, and its share is of the former.
+#
+#   worded    4,000 words split by a pattern              26,348,749  3.09%
+#
+# `worded` splits a page into its words with `regexp/split "[^a-z']+"`, the
+# way a word count reads its input. The scan tries every letter, and testing
+# one against the class read the class's bytes and the letter's afresh.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -326,6 +336,7 @@ import "./rewind"
 import "./scatter"
 import "./split"
 import "./stack"
+import "./worded"
 import "std/io"
 import "std/json"
 import "std/sha256"
@@ -397,6 +408,8 @@ lasted_items = 800
 
 relayed_steps = 3000
 
+worded_words = 4000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -458,8 +471,9 @@ fn tally raw doc a b
   ported18 = ported17 + rested/total rested_items
   ported19 = ported18 + lasted/total lasted_items
   ported20 = ported19 + relayed/total relayed_steps
+  ported21 = ported20 + worded/total worded_words
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported20 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported21 + rest))
   bulk .> on
 
 fn shaped raw doc a
