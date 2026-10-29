@@ -23,25 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
-
-Clay ruled #2085. Every function in a module is visible from every file of
-it, so a local in one file that reuses a name declared in another file
-shadows a callable name, which is what no-shadowing forbids. Eighteen of the
-twenty ports met it as action at a distance: a declaration added in `b.kso`
-refused a parameter in `a.kso`, and the refusal pointed at the parameter
-without naming the declaration.
-
-**The ruling.** The rule stands across files. The refusal names the
-declaration it collides with, by file and line, so the fix is a rename made
-knowing what clashed. Letting a local reuse a name declared only in another
-file was declined, because inside the local's scope the name would mean two
-things. File-scoped private names were declined, because they would end the
-sharing of helpers between a module's files.
-
-Owes, on #2085: the refusal names the colliding declaration's file and line;
-an error golden for a two-file module.
-
 ## 2026-10-25 — gavel: `put` writes a list at an index
 
 Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
@@ -1404,3 +1385,17 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — the tab's list of machine calls has one home
+
+#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
+written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
+book panels become live editors, and as a kanso list in the browser
+differential, which decides which samples it covers. They drifted for months.
+The differential now reads the list out of book-play.js, the way it already
+reads the playground's examples out of play.js, and its own copy is gone. A
+page without the list fails the run rather than covering every sample.
+
+Read the same way, the page's list selects the same 717 programs the old copy
+did. With `read_file` taken out of the page's regex the run selected 725, so
+the differential follows the page.
