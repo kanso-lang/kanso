@@ -1,0 +1,11 @@
+fn price_of menu item
+  or_zero menu[item]
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+menu = { "dango":350 "taiyaki":500 }
+print "dango {price_of menu "dango"}, pocky {price_of menu "pocky"}"
