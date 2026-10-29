@@ -1,0 +1,19 @@
+# A page split into its words by a pattern, the way a word count reads its
+# input: `regexp/split "[^a-z']+"` over lowercase text. Every letter is a
+# position the scan tries and the class refuses, and the matcher read the
+# class's bytes and the letter's bytes afresh each time, so a field cost about
+# thirty allocations where splitting on a space costs one.
+import "std/regexp"
+
+words = ["the" "quick" "fox" "it's" "over" "lazy" "dog" "a" "truth"]
+
+marks = [" " " " ", " ". " "\n"]
+
+fn page acc i n
+  return acc if i > n
+  w = words[i % length words + 1]
+  m = marks[i % length marks + 1]
+  page "{acc}{w}{m}" (i + 1) n
+
+pub fn total n
+  length (regexp/split "[^a-z']+" (page "" 1 n))
