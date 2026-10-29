@@ -1248,6 +1248,15 @@ book_plans = row
   (breaking "a_plan_panel_shows_the_run")
   release
 
+# The same harness, for a title naming a directory module rather than a file.
+book_modules = row
+  "a module panel showing a run the module no longer produces"
+  true
+  "./target/release/kanso run scripts/book_panels"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_module_panel_drifts_from_its_run")
+  release
+
 # book_check.sh runs two harnesses, and they fail for different reasons. The
 # first regenerates a panel from the sample it renders; the second reads the
 # panels that harness cannot resolve — a title naming a file this repository

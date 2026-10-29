@@ -68,7 +68,10 @@ src_pattern = "(?s){src_head}\\s*<pre><code>)(.*?)(</code></pre>)"
 
 out_head = "({panel_title}(KANSO_COUNTERS=1 )?kanso"
 
-out_tail = "(?:run|check|test|build|play)[^<]*?([a-z_0-9/]+)\\.kso[^<]*</div>"
+out_verbs = "(?:run|check|test|build|play)"
+
+# The title names a sample file or a directory module.
+out_tail = "{out_verbs}[^<]*?([a-z_0-9/]+)(?:\\.kso)?\\b[^<]*</div>"
 
 out_pattern = "(?s){out_head} {out_tail}\\s*<pre><code>)(.*?)(</code></pre>)"
 

@@ -77,10 +77,10 @@ a ride: 3.963325623765981</code></pre>
 <span class="f">print</span> <span class="s">"<span class="i">{geo/square 3.0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run nosy</div>
-    <pre><code>error[opacity]: `square` is private to module `geo`—only pub names cross an import
-  --> nosy/main.kso:3:9
+    <pre><code><span class="k">error[opacity]</span>: `square` is private to module `geo` — only pub names cross an import
+<span class="c">  --&gt; nosy/main.kso:3:9</span>
    3 | print "{geo/square 3.0}"
-               ^</code></pre>
+               <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -139,10 +139,10 @@ area came through: 3.14159</code></pre>
 <span class="f">print</span> <span class="s">"<span class="i">{resort/ride_km 1.0 2.0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run sealed</div>
-    <pre><code>error[name]: unknown name `ride_km`
-  --> sealed/main.kso:3:9
-   3 | print "{ride_km 1.0 2.0}"
-               ^</code></pre>
+    <pre><code><span class="k">error[name]</span>: unknown name `resort/ride_km`
+<span class="c">  --&gt; sealed/main.kso:3:9</span>
+   3 | print "{resort/ride_km 1.0 2.0}"
+               <span class="k">^</span></code></pre>
   </div>
 </div>
 
