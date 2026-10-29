@@ -147,7 +147,7 @@ sum 6 len 3 first 3</code></pre>
 
 <h2>maps</h2>
 
-<p>a map associates keys with values. the literal reuses the bracket form with a colon between each key and its value, and lookup is the same tight <code>[k]</code> you use on lists. <code>put</code> returns a new map with one more entry—the original is untouched, because values do not mutate—and <code>entries</code> hands back the pairs in <strong>sorted key order</strong>, so iteration is deterministic every single run:</p>
+<p>a map associates keys with values. the literal is written in braces with a colon between each key and its value, <code>{ "clay":47 }</code>, and lookup is the same tight <code>[k]</code> you use on lists. <code>put</code> returns a new map with one more entry—the original is untouched, because values do not mutate—and <code>entries</code> hands back the pairs in <strong>sorted key order</strong>, so iteration is deterministic every single run:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
