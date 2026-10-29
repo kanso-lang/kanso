@@ -697,7 +697,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <p>the same kind reports the one resource a recursive program can exhaust. recursion is kanso's loop, and a tail call costs no stack at all—but a call that still has work to do after the recursion returns keeps its frame, and a million kept frames is more than any stack holds. counting shapes mostly never get there: when the leftover work adds or multiplies something the compiler can prove is a whole number—a literal, the counter itself, arithmetic over the two—the group is rewritten to carry an accumulator and the recursion runs as a loop on every engine. the operand below is a float, and floating-point addition answers differently in a different order, so the rewrite has no license here and the frames stay. the report is the same words on every engine. the fix is the rewrite the compiler does for the shapes it can prove: carry the running total down as an argument, so the call becomes a tail call:</p>
 
-<p>the line between the two is worth drawing once, plainly. tail position is a promise: every engine runs it in constant stack, forever. the accumulator rewrite is an optimization: it covers the shapes whose reassociation it can prove exact today and may cover more or fewer tomorrow, so a program that needs flat memory writes the tail call itself rather than hoping the rewrite reaches its shape. what the engines cannot promise they bound differently — the interpreter refuses unlicensed recursion at ten thousand frames, and native's ceiling is whatever stack the operating system handed the process.</p>
+<p>the two differ in what they guarantee. tail position is a promise: every engine runs it in constant stack, forever. the accumulator rewrite is an optimization: it covers the shapes whose reassociation it can prove exact today and may cover more or fewer tomorrow, so a program that needs flat memory writes the tail call itself rather than hoping the rewrite reaches its shape. what the engines cannot promise they bound differently — the interpreter refuses unlicensed recursion at ten thousand frames, and native's ceiling is whatever stack the operating system handed the process.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">deep_recursion.kso</div>
@@ -779,7 +779,7 @@ steeps[<span class="n">1</span>]! <span class="o">.&gt;</span> (n <span class="o
   </div>
 </div>
 
-<p><code>none</code> reaches this endpoint one way only: as the program's final value. reading past the end of a list answers <code>none</code>—a real answer, not a crash—and interpolated into a string it simply renders as <code>&lt;none&gt;</code>, loud in the output. but a program whose last expression <em>is</em> the none has produced absence where a result should be, and the endpoint reports it, without the "born" line, because an absence has no failure site to point at:</p>
+<p><code>none</code> reaches this endpoint one way only: as the program's final value. reading past the end of a list answers <code>none</code>, which is an ordinary value, and interpolated into a string it renders as <code>&lt;none&gt;</code>, loud in the output. but a program whose last expression <em>is</em> the none has produced absence where a result should be, and the endpoint reports it, without the "born" line, because an absence has no failure site to point at:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">missing_index.kso</div>
