@@ -1,0 +1,18 @@
+# std/list's merge sort takes its key as a parameter named `key`, and calls it
+# on an element it reads by index. The none check looked a call up by name
+# alone, so it read that parameter as this file's `key` and refused the read
+# twice, inside std/list, where nobody can change it. The proof that the index
+# is in bounds usually kept the question from being asked; beside the tie
+# below it was not there, so the tie arrived with two errors nobody wrote.
+import "std/list"
+
+fn key r
+  r + 1
+
+fn t 1 _
+  1
+
+fn t _ 2
+  2
+
+pub play = print (key (t 1 (list/first [3])))

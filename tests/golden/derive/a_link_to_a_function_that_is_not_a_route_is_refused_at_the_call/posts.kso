@@ -1,0 +1,5 @@
+pub fn show id
+  "post {id}"
+
+pub fn draft id
+  "draft {id}"
