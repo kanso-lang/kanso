@@ -37,20 +37,20 @@ fn an_edited_play_file_runs_what_it_now_says() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// `std/expect` is the one library module the compiler does not carry, so a
-/// play file that imports it reads it from disk. The play file does not
-/// change here and the module does, and the second play runs the new module.
+/// A `std/` module this binary does not carry is read from disk, under
+/// `KANSO_STD`. The play file does not change here and the module does, and
+/// the second play runs the new module.
 #[test]
 fn a_module_read_from_disk_changes_what_the_same_play_file_runs() {
     let dir = fresh("from_disk");
-    let module = dir.join("std/expect");
+    let module = dir.join("std/shout");
     std::fs::create_dir_all(&module).unwrap();
-    std::fs::write(module.join("expect.kso"), "pub fn shout s\n  \"{s}!\"\n").unwrap();
+    std::fs::write(module.join("shout.kso"), "pub fn shout s\n  \"{s}!\"\n").unwrap();
     let file = dir.join("main.kso");
-    std::fs::write(&file, "import \"std/expect\"\n\nprint (expect/shout \"a\")\n").unwrap();
+    std::fs::write(&file, "import \"std/shout\"\n\nprint (shout/shout \"a\")\n").unwrap();
     let std_dir = dir.join("std");
     assert_eq!(play(&file, Some(&std_dir)), "a!\n");
-    std::fs::write(module.join("expect.kso"), "pub fn shout s\n  \"{s}?\"\n").unwrap();
+    std::fs::write(module.join("shout.kso"), "pub fn shout s\n  \"{s}?\"\n").unwrap();
     assert_eq!(play(&file, Some(&std_dir)), "a?\n");
     let _ = std::fs::remove_dir_all(&dir);
 }

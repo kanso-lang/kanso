@@ -6,9 +6,9 @@
 # witness.
 set -e
 kept='        let mut scores: [Score; 2] = Default::default();'
-[ "$(grep -cxF "$kept" src/eval.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$kept" src/eval/calls.rs)" -eq 1 ] || {
   echo "the scores moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        let mut scores: \[Score; 2\] = Default::default();$/        let mut scores: [Score; 2] = [(); 2].map(|_| Score { spill: Vec::with_capacity(args.len()), ..Score::default() });/' src/eval.rs
-if grep -qxF "$kept" src/eval.rs; then exit 1; fi
+sed -i 's/^        let mut scores: \[Score; 2\] = Default::default();$/        let mut scores: [Score; 2] = [(); 2].map(|_| Score { spill: Vec::with_capacity(args.len()), ..Score::default() });/' src/eval/calls.rs
+if grep -qxF "$kept" src/eval/calls.rs; then exit 1; fi

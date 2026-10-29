@@ -5,7 +5,7 @@
 # goes red.
 set -e
 old='                Callee::Constructor(ty) if ty.members.is_empty() => vec![ty.fields.len()],'
-[ "$(grep -cxF "$old" src/eval.rs)" -eq 1 ]
-sed -i.bak 's#^                Callee::Constructor(ty) if ty.members.is_empty() => vec!\[ty.fields.len()\],$#                Callee::Constructor(ty) if ty.members.is_empty() => Vec::new(),#' src/eval.rs
-rm -f src/eval.rs.bak
-! grep -qxF "$old" src/eval.rs
+[ "$(grep -cxF "$old" src/eval/calls.rs)" -eq 1 ]
+sed -i.bak 's#^                Callee::Constructor(ty) if ty.members.is_empty() => vec!\[ty.fields.len()\],$#                Callee::Constructor(ty) if ty.members.is_empty() => Vec::new(),#' src/eval/calls.rs
+rm -f src/eval/calls.rs.bak
+! grep -qxF "$old" src/eval/calls.rs

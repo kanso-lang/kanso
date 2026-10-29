@@ -23,88 +23,6 @@
 
 
 
-## 2026-10-26 — a length handed down a loop bounds its reads
-
-#2174. A loop that walks a list by index usually hands its bound down once,
-`walk xs 1 (length xs) 0`, and guards with `i > n`. The prover had two doors
-for the upper bound of `xs[i]`, a guard written against `length xs` and the
-length a literal list spells out, and the guard against `n` passed neither,
-so a read like `twice xs[i]` was refused unless the loop read `length xs`
-again on every step. #2088 makes that the common case, since a name bound to
-such a read now carries its none too: bench/indexbench, migrated to `i >
-length s`, reads 13% more instructions for it.
-
-`handed_lengths` (`src/infer.rs`) is a third door. It proves that a
-parameter holds another parameter's length for a whole arm on the terms
-`counter_floors` proves a floor: the group is not pub and never travels as a
-value, every call from outside passes `length X` at the bound's position and
-the same name `X` at the list's, every self-call passes both on unchanged,
-and no arm rebinds either. The arm starts with that fact, and a guard `i >
-n` gives the read its upper bound through it.
-
-`a_length_handed_down_bounds_the_read` (micro) prints `20 0` on both
-engines, and main refuses it. `a_length_of_another_list_bounds_nothing` and
-`a_bound_that_grows_bounds_nothing` (errors) keep the two near misses
-refused. The ratchet row `a length handed down a loop proving nothing` drops
-the fact and watches the micro corpus go red.
-
-CI's rows against main at #2170. indexbench goes back to handing its bound
-down, and work_indexbench falls 2,077,157 -> 1,887,164; work_runbench, which
-carries the shape at a larger size, falls 829,234,755 -> 821,299,208. The
-interpreter does a little less, interp_instructions 560,993,797 ->
-560,933,132. The front end pays for the walk and the facts:
-compile_instructions 24,798,984 -> 24,862,623, entry_instructions 73,507,587
--> 73,686,908, library_instructions 73,143,499 -> 73,325,258, compile_allocs
-13,930 -> 13,941, emit_instructions 5,689,859 -> 5,702,866 and the tab's
-browser_compile_instructions 340,825,316 -> 342,497,302. interp_allocs moves
-630,592 -> 630,614, and nothing here isolates why. The emitted and text rows
-fall with the guard's `length` call: emitted_other_calls 20,472 -> 20,468,
-emitted_other_branches 17,764 -> 17,762, emitted_other_lines 169,582 ->
-169,576 and text 5,620,636 -> 5,620,459. Welfare rises 95.38 -> 95.41 and the
-rise is banked.
-
-## 2026-10-26 — a list read for its last element joins the corpus
-
-A battery of list shapes, each run at 5,000 and 20,000 elements on both
-engines, found `list/last` read in a loop quadratic on both. `last` folds
-the whole collection to find its last element, so each read costs the
-length of the list: 5,000 reads of a 5,000-element list took 0.38 seconds
-natively and 17.7 on the interpreter, and at 20,000 they took 4.6 seconds
-natively, where the interpreter ran past two minutes. The other shapes,
-`text/join`, `list/zip`, `list/count`, `list/reverse`, `list/sort_by`,
-`list/tally`, `list/to_h`, `text/to_int` over a list and floats rendered by
-interpolation, grow linearly or by n log n on both.
-
-Under the 2026-09-05 corpus-first gavel `lasted` joins the run program with
-800 reads and the interpreted corpus with 70, measured on main at #2158
-before its fix. On this container the run program reads 865,303,604 with it
-and 828,684,309 with it reading nothing, a column of 36,619,295 (4.23%), and
-the interpreted corpus reads 565,857,214 -> 593,093,849. Both engines print
-the same line for it.
-
-The battery also found a field read that the engines disagree on: native
-reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
-Clay which way it goes.
-
-CI's rows, against main at #2175. The run program reads work_runbench
-821,299,208 -> 859,187,448, and its allocation vein moves with the 800 reads:
-run_allocs 1,581,589 -> 1,582,393, run_alloc_bytes 223,888,104 ->
-223,955,352, run_beat_iters 177,272 -> 178,072, run_push_mut_slow 1,644,657
--> 1,645,457, run_sh_rec 4,098,336 -> 4,136,736, run_sh_buf 91,336,688 ->
-91,336,800, run_perm_peak_bytes 1,867,025 -> 1,875,217, run_bytes_malloc
-7,921 -> 7,924 and run_bytes_freed 7,779 -> 7,782. The interpreted corpus
-reads interp_instructions 560,933,132 -> 588,905,757, interp_allocs 630,614
--> 656,976 and interp_peak_bytes 1,306,819 -> 1,327,257. The tab compiles
-and runs the corpus too: browser_compile_instructions 342,497,302 ->
-348,067,219, browser_compile_peak_bytes 832,433 -> 836,713 and
-browser_run_instructions 61,425,132 -> 64,341,530. The run program's new
-function is emitted code: emitted_other_lines 169,576 -> 170,115,
-emitted_other_branches 17,762 -> 17,826, emitted_other_calls 20,468 ->
-20,537, emitted_other_defines 2,253 -> 2,262, and text 5,620,459 ->
-5,622,379. Under the corpus-first gavel each moved welfare term's baseline
-is scaled so its ratio to what it reads holds, so the phase leaves welfare
-where it was and the fix in #2165 scores as a rise.
-
 ## 2026-10-26 — the last element of a list is read at its end
 
 `list/last` gains an arm for a list, `last xs:[]some`, which answers
@@ -1165,6 +1083,47 @@ copies the example and error goldens into its scratch tree, so a rewrite
 there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
 go red.
 
+## 2026-10-29 — the interpreter's calls section moves into eval/calls.rs
+
+The cleanup owed after #2240 to #2244. `call` through `worded_step`, 888
+lines of the `Interp` impl, move into src/eval/calls.rs as an impl block of
+their own, read with include! where they stood, the way eval.rs already reads
+executor.rs and builtins.rs. eval.rs falls from 3,803 lines to 2,918. The
+removed lines are the body of calls.rs byte for byte. CI's cost-goldens job
+read every vein at main's values, compile_instructions among them, so no row
+moved. Sixteen ratchet mutations patched lines in the moved section by their
+text and now name calls.rs. One of them, the lambda called as a nested call,
+only checked for `closure_flow` there; the arms it deletes stayed in eval.rs.
+
+## 2026-10-29 — std/expect ships in the binary
+
+Chapter 7 teaches `std/expect` for test failures, and outside a checkout a
+test importing it said "`std/expect` is not in the shipped library". The
+loader finds a shipped module first in the table `src/lib/imports.rs`
+embeds and then on disk at `lib/` beside the binary or the working
+directory. Every other module under `lib/` was in the table, so a checkout
+never showed the gap: an installed binary, with no `lib/` beside it, and the
+browser, with no filesystem, could not import `std/expect`. It is in the
+table now, and in `SHIPPED_MODULES`, so its merged check is asked with the
+others'.
+
+`tests/every_shipped_module_checks_clean.rs` gains a third test that walks
+`lib/` and imports each module from a directory with `KANSO_STD` pointing at
+an empty one, so only the embedded copies can answer. It failed on main
+naming `expect` and nothing else.
+
+tests/a_play_file_is_keyed_by_its_text.rs leaned on `std/expect` being the
+one library module the binary did not carry, to play a file that reads a
+module from disk. It now plays a `std/shout` that exists only under
+`KANSO_STD`. Forcing `play_file_is_self_contained` to true still turns it red
+at the second play.
+
+The binary carries one more module's text, and four compile rows move by
+layout: browser_compile_instructions 343,289,560 -> 343,289,578,
+compile_instructions 24,096,621 -> 24,096,607, entry_instructions 86,700,059
+-> 86,700,038 and library_instructions 72,615,632 -> 72,615,607. Welfare
+rises by less than a hundredth and is banked.
+
 ## 2026-10-29 — check.rs, values.c and lib.rs give up their separate sections
 
 #2249, from the weekly sweep. Three files past three thousand lines each held
@@ -1188,3 +1147,4 @@ Each Rust file rebuilt from its includes is main's file byte for byte.
 Twenty-two ratchet mutations patched lines in the moved sections by their
 text and now name the files that hold them. linear.rs, at 3,087 lines, is one
 analysis and its helpers and stays whole.
+CI's cost-goldens job read every vein at main's values, so no row moved.
