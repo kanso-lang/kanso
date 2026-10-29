@@ -6,7 +6,7 @@
 # instructions more.
 set -e
 t='        while (p > 0 && k_tenfold((uint64_t)m)) {'
-n=$(grep -cxF "$t" src/runtime/values.c)
+n=$(grep -cxF "$t" src/runtime/ryu.c)
 [ "$n" -eq 1 ] || { echo "the walk down from a passing guess changed shape ($n); rewrite this" >&2; exit 1; }
 awk -v t="$t" '
   $0 == t {
@@ -16,7 +16,7 @@ awk -v t="$t" '
     getline; print "            m = below;"
     next
   }
-  { print }' src/runtime/values.c > src/runtime/values.c.new
-mv src/runtime/values.c.new src/runtime/values.c
-test "$(grep -cxF "$t" src/runtime/values.c)" = 0
-grep -qxF '            m = below;' src/runtime/values.c
+  { print }' src/runtime/ryu.c > src/runtime/ryu.c.new
+mv src/runtime/ryu.c.new src/runtime/ryu.c
+test "$(grep -cxF "$t" src/runtime/ryu.c)" = 0
+grep -qxF '            m = below;' src/runtime/ryu.c

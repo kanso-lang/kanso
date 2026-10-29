@@ -4,7 +4,7 @@
 # refused, and tests/sibling_types.rs goes red on both engines.
 set -e
 old='        self.own.contains(name) || self.siblings.contains(name)'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^        self.own.contains(name) || self.siblings.contains(name)$#        self.own.contains(name)#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/annotations.rs)" -eq 1 ]
+sed -i.bak 's#^        self.own.contains(name) || self.siblings.contains(name)$#        self.own.contains(name)#' src/check/annotations.rs
+rm -f src/check/annotations.rs.bak
+! grep -qxF "$old" src/check/annotations.rs

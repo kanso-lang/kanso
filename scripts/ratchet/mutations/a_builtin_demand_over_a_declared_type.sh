@@ -5,9 +5,9 @@
 # string first. a_type_named_like_a_builtin_is_the_files_own sees the
 # refusal.
 set -e
-f=src/check.rs
+f=src/check/literals.rs
 line='    let shadowed = !forwards && (declared || types.contains_key(name.as_str()));'
-[ "$(grep -cxF "$line" src/check.rs)" -eq 1 ] || {
+[ "$(grep -cxF "$line" src/check/literals.rs)" -eq 1 ] || {
   echo "the literal guard moved; this mutation needs rewriting" >&2
   exit 1
 }

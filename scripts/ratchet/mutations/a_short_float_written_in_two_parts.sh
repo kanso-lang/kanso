@@ -6,7 +6,7 @@
 # the run program reads heavier.
 set -e
 t='            char tmp[48];'
-n=$(grep -cxF "$t" src/runtime/values.c)
+n=$(grep -cxF "$t" src/runtime/ryu.c)
 [ "$n" -eq 1 ] || { echo "the short float's writer changed shape ($n); rewrite this" >&2; exit 1; }
 awk -v t="$t" '
   $0 == t {
@@ -33,7 +33,7 @@ awk -v t="$t" '
   }
   skip && $0 == "            return n;" { skip = 0; next }
   skip { next }
-  { print }' src/runtime/values.c > src/runtime/values.c.new
-mv src/runtime/values.c.new src/runtime/values.c
-test "$(grep -cxF "$t" src/runtime/values.c)" = 0
-grep -qxF '            uint64_t whole = m / pw, part = m - whole * pw;' src/runtime/values.c
+  { print }' src/runtime/ryu.c > src/runtime/ryu.c.new
+mv src/runtime/ryu.c.new src/runtime/ryu.c
+test "$(grep -cxF "$t" src/runtime/ryu.c)" = 0
+grep -qxF '            uint64_t whole = m / pw, part = m - whole * pw;' src/runtime/ryu.c

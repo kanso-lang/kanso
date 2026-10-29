@@ -5,7 +5,7 @@
 # corpus goes red.
 set -e
 old='        sibling_decls.iter().copied().chain(&program.types).map(|t| (t.name.as_str(), t)).collect();'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^        sibling_decls\.iter()\.copied()#        sibling_decls[..0].iter().copied()#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/annotations.rs)" -eq 1 ]
+sed -i.bak 's#^        sibling_decls\.iter()\.copied()#        sibling_decls[..0].iter().copied()#' src/check/annotations.rs
+rm -f src/check/annotations.rs.bak
+! grep -qxF "$old" src/check/annotations.rs

@@ -23,48 +23,6 @@
 
 
 
-## 2026-10-26 — a list read for its last element joins the corpus
-
-A battery of list shapes, each run at 5,000 and 20,000 elements on both
-engines, found `list/last` read in a loop quadratic on both. `last` folds
-the whole collection to find its last element, so each read costs the
-length of the list: 5,000 reads of a 5,000-element list took 0.38 seconds
-natively and 17.7 on the interpreter, and at 20,000 they took 4.6 seconds
-natively, where the interpreter ran past two minutes. The other shapes,
-`text/join`, `list/zip`, `list/count`, `list/reverse`, `list/sort_by`,
-`list/tally`, `list/to_h`, `text/to_int` over a list and floats rendered by
-interpolation, grow linearly or by n log n on both.
-
-Under the 2026-09-05 corpus-first gavel `lasted` joins the run program with
-800 reads and the interpreted corpus with 70, measured on main at #2158
-before its fix. On this container the run program reads 865,303,604 with it
-and 828,684,309 with it reading nothing, a column of 36,619,295 (4.23%), and
-the interpreted corpus reads 565,857,214 -> 593,093,849. Both engines print
-the same line for it.
-
-The battery also found a field read that the engines disagree on: native
-reads `e.value` from an entry, and the interpreter refuses it. #2163 asks
-Clay which way it goes.
-
-CI's rows, against main at #2175. The run program reads work_runbench
-821,299,208 -> 859,187,448, and its allocation vein moves with the 800 reads:
-run_allocs 1,581,589 -> 1,582,393, run_alloc_bytes 223,888,104 ->
-223,955,352, run_beat_iters 177,272 -> 178,072, run_push_mut_slow 1,644,657
--> 1,645,457, run_sh_rec 4,098,336 -> 4,136,736, run_sh_buf 91,336,688 ->
-91,336,800, run_perm_peak_bytes 1,867,025 -> 1,875,217, run_bytes_malloc
-7,921 -> 7,924 and run_bytes_freed 7,779 -> 7,782. The interpreted corpus
-reads interp_instructions 560,933,132 -> 588,905,757, interp_allocs 630,614
--> 656,976 and interp_peak_bytes 1,306,819 -> 1,327,257. The tab compiles
-and runs the corpus too: browser_compile_instructions 342,497,302 ->
-348,067,219, browser_compile_peak_bytes 832,433 -> 836,713 and
-browser_run_instructions 61,425,132 -> 64,341,530. The run program's new
-function is emitted code: emitted_other_lines 169,576 -> 170,115,
-emitted_other_branches 17,762 -> 17,826, emitted_other_calls 20,468 ->
-20,537, emitted_other_defines 2,253 -> 2,262, and text 5,620,459 ->
-5,622,379. Under the corpus-first gavel each moved welfare term's baseline
-is scaled so its ratio to what it reads holds, so the phase leaves welfare
-where it was and the fix in #2165 scores as a rise.
-
 ## 2026-10-26 — the last element of a list is read at its end
 
 `list/last` gains an arm for a list, `last xs:[]some`, which answers
@@ -1165,3 +1123,28 @@ layout: browser_compile_instructions 343,289,560 -> 343,289,578,
 compile_instructions 24,096,621 -> 24,096,607, entry_instructions 86,700,059
 -> 86,700,038 and library_instructions 72,615,632 -> 72,615,607. Welfare
 rises by less than a hundredth and is banked.
+
+## 2026-10-29 — check.rs, values.c and lib.rs give up their separate sections
+
+#2249, from the weekly sweep. Three files past three thousand lines each held
+sections that share nothing but the file, and each moves without a change to
+what it says.
+
+- check.rs, 3,355 lines to 2,710: the literal-argument check moves to
+  check/literals.rs and the annotation-name check to check/annotations.rs,
+  read with include! where they stood.
+- runtime/values.c, 3,044 lines, becomes four parts that runtime.c lists in
+  order: bignum.c (ints past a machine word), values.c (strings, errors,
+  records, fields), ryu.c (the shortest float rendering and its tables) and
+  operators.c (subtypes, rendering, equality, arithmetic). The text build.rs
+  joins is main's byte for byte, so every compiled program links the same
+  runtime.
+- lib.rs, 3,004 lines to 2,739: the late rewrites (field reads to getters,
+  merges to constructor calls, `!=` to the negation of `==`) move to
+  lib/desugar.rs.
+
+Each Rust file rebuilt from its includes is main's file byte for byte.
+Twenty-two ratchet mutations patched lines in the moved sections by their
+text and now name the files that hold them. linear.rs, at 3,087 lines, is one
+analysis and its helpers and stays whole.
+CI's cost-goldens job read every vein at main's values, so no row moved.

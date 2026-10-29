@@ -4,7 +4,7 @@
 # a_typeset_holds_itself then reports nothing.
 set -e
 old='            if member == ty.name {'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^            if member == ty.name {$#            if member == ty.name \&\& ty.members.is_empty() {#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/annotations.rs)" -eq 1 ]
+sed -i.bak 's#^            if member == ty.name {$#            if member == ty.name \&\& ty.members.is_empty() {#' src/check/annotations.rs
+rm -f src/check/annotations.rs.bak
+! grep -qxF "$old" src/check/annotations.rs
