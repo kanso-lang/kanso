@@ -1,0 +1,4 @@
+import "./posts"
+
+pub fn home id
+  "home: {posts/show id}"

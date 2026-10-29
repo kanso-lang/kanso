@@ -1,0 +1,4 @@
+error[derive]: `posts/draft` is not a route
+  --> tests/golden/derive/a_link_to_a_function_that_is_not_a_route_is_refused_at_the_call/pages.kso:6:13
+   6 |   drafted = conventions/link posts/draft
+                   ^

@@ -18,11 +18,24 @@ pub type program
 
 # `constants` maps each pub constant's name to its value, which is how a
 # derivation reads data the app keeps, such as its migrations.
+# `calls` lists every call a function in the module makes to a named
+# function, in the order they are written: the function that makes it, the
+# function it calls, and each argument's name, or "" for an argument that is
+# not a name. `refuse_call` makes a compile error at one of them.
 pub type module
   name
   functions
   constants
   records
+  calls
+
+pub type call
+  module
+  caller
+  callee
+  arguments
+  line
+  column
 
 # A pub function as its first arm declares it. An unannotated parameter
 # carries "" for its annotation. `reference` is the function itself, so a
@@ -54,6 +67,10 @@ pub type refusal
   origin
   message
 
+pub type call_refusal
+  call
+  message
+
 pub fn declare origin name value
   constant origin name value
 
@@ -62,3 +79,6 @@ pub fn declare_type origin name fields
 
 pub fn refuse origin message
   refusal origin message
+
+pub fn refuse_call c message
+  call_refusal c message
