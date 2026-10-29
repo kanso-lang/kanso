@@ -23,39 +23,6 @@
 
 
 
-## 2026-10-25 — a joined string grows where it stands on the interpreter
-
-`linear::string_builders` licenses a template whose first part is a string
-binding nothing reads afterwards, and native and the tab write those joins in
-place. The interpreter now asks the same question. At a licensed site
-`eval_template` renders the rest of the template first, so `"{s}{s}"` still
-reads all of `s`, then takes the string out of its binding and pushes the
-rest onto it. A string short enough to sit inline skips the question, since
-copying fifteen bytes costs less than building the analysis.
-
-The interpreter used to build `in_place_pushes` alone. It now calls
-`linear::for_the_interpreter`, which answers the push sites and the join
-sites from one analysis and drops it, so the run holds two sets and not the
-analysis behind them. Holding the analysis had cost interp_peak_bytes
-175,000 bytes in the first draft.
-
-`grown 200000` ran in 2.39 s and runs in 0.06 s, against native's 0.08 s.
-`a_string_joined_onto_itself_reads_itself_whole` pins `"{s}{s}"` at a
-licensed site, where a join that took the string before rendering the rest
-would print half of it.
-
-CI's rows, against #2150 on main at #2146. The interpreter reads
-interp_instructions 636,804,390 -> 629,524,864 and interp_allocs 651,249 ->
-643,872, and interp_peak_bytes rises 1,298,220 -> 1,298,476. CI's
-interpreter gate runs under pinned glibc tunables, where memcpy costs little
-in the count, so the copies that took 2.3 seconds at 200,000 pieces read as
-7.3 million instructions there. `kanso check` never builds the interpreter's
-sets, so the compile rows move with the binary's layout:
-compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
--> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
-emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
-343,748,020 -> 343,857,683. Welfare stays at 95.15.
-
 ## 2026-10-25 — a scanned string is read where it stands on the interpreter
 
 The interpreter's `Text` held a long string as a `String`, so handing one to
@@ -1423,3 +1390,23 @@ a_field_read_of_a_list, and passes with it.
 
 The browser compile moves by two instructions, browser_compile_instructions
 343,196,938 (-2), and no other row moves.
+
+## 2026-10-29 — a parameter is not the function it shares a name with
+
+The none check asks, at each call whose argument can be a none, whether the
+callee's group has an arm for one. It found the group by name and arity
+alone. std/list's merge sort takes its key as a parameter named `key` and
+calls it on an element it reads by index, so a program with a one-argument
+function named `key` had that parameter read as its own function, and the
+read was refused twice inside std/list, at a line the program's author
+cannot change. The proof that the index is in bounds usually kept the
+question from being asked. A dispatch tie elsewhere in the program took that
+proof away, so the tie arrived with two errors nobody wrote. The senro
+routing prototype found it.
+
+The check now asks first whether the declaration binds the name, the
+question the box check already asks through the same per-declaration set.
+
+tests/golden/errors gains the program: a function named `key`, a tie, and a
+call into std/list. It was watched red through the corpus runner with the
+test switched off, reporting the two refusals in list.kso, and passes with it.

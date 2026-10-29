@@ -465,6 +465,7 @@ fn none_exhaustive_at(
     e: &Expr,
     tables: &AfterInfer,
     named: &BoundNones<'_>,
+    shadow: &dyn Fn(&str) -> bool,
     owner: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
@@ -497,6 +498,13 @@ fn none_exhaustive_at(
     let group = tables.nones.get(&(name.as_str(), args.len())).map(|&(_, named)| named);
     let builtin = group.is_none() && crate::check::BUILTINS.contains(&name.as_str());
     if group.is_none() && !builtin {
+        return;
+    }
+    // A name this declaration binds is the value bound to it, whatever group
+    // shares its spelling. The table is keyed by name and arity alone, so
+    // std/list's sort, which calls its `key` parameter, read as a call to a
+    // program's own `key` and was refused inside the library.
+    if shadow(name.as_str()) {
         return;
     }
     for (pos, arg) in args.iter().enumerate() {
@@ -1087,7 +1095,7 @@ fn check_after_infer<'p>(
             stack.push(e);
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
-                none_exhaustive_at(cur, &tables, &nones, &decl.file, none_diags);
+                none_exhaustive_at(cur, &tables, &nones, &shadow, &decl.file, none_diags);
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);

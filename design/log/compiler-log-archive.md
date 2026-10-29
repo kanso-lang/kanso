@@ -110752,3 +110752,36 @@ browser_compile_peak_bytes 743,930 -> 751,818, browser_run_instructions
 107,399,948 -> 111,470,514 and browser_run_peak_bytes 3,866,624 ->
 3,997,696. Welfare re-bases the six terms among these it weighs, each
 keeping its ratio to its baseline, and the floor stays at 95.15.
+
+## 2026-10-25 — a joined string grows where it stands on the interpreter
+
+`linear::string_builders` licenses a template whose first part is a string
+binding nothing reads afterwards, and native and the tab write those joins in
+place. The interpreter now asks the same question. At a licensed site
+`eval_template` renders the rest of the template first, so `"{s}{s}"` still
+reads all of `s`, then takes the string out of its binding and pushes the
+rest onto it. A string short enough to sit inline skips the question, since
+copying fifteen bytes costs less than building the analysis.
+
+The interpreter used to build `in_place_pushes` alone. It now calls
+`linear::for_the_interpreter`, which answers the push sites and the join
+sites from one analysis and drops it, so the run holds two sets and not the
+analysis behind them. Holding the analysis had cost interp_peak_bytes
+175,000 bytes in the first draft.
+
+`grown 200000` ran in 2.39 s and runs in 0.06 s, against native's 0.08 s.
+`a_string_joined_onto_itself_reads_itself_whole` pins `"{s}{s}"` at a
+licensed site, where a join that took the string before rendering the rest
+would print half of it.
+
+CI's rows, against #2150 on main at #2146. The interpreter reads
+interp_instructions 636,804,390 -> 629,524,864 and interp_allocs 651,249 ->
+643,872, and interp_peak_bytes rises 1,298,220 -> 1,298,476. CI's
+interpreter gate runs under pinned glibc tunables, where memcpy costs little
+in the count, so the copies that took 2.3 seconds at 200,000 pieces read as
+7.3 million instructions there. `kanso check` never builds the interpreter's
+sets, so the compile rows move with the binary's layout:
+compile_instructions 24,657,263 -> 24,694,028, entry_instructions 72,734,084
+-> 72,837,734, library_instructions 72,405,561 -> 72,508,468,
+emit_instructions 5,654,777 -> 5,657,388 and browser_compile_instructions
+343,748,020 -> 343,857,683. Welfare stays at 95.15.
