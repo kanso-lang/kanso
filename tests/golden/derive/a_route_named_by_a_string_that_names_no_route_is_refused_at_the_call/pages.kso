@@ -1,0 +1,6 @@
+import "./conventions"
+
+pub fn home id
+  shown = conventions/link "posts/show"
+  drafted = conventions/link "posts/shwo"
+  "{id}: {shown} {drafted}"

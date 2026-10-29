@@ -110826,3 +110826,85 @@ entry_instructions 72,954,229 -> 72,992,046, library_instructions
 72,625,200 -> 72,664,658 and emit_instructions 5,655,925 -> 5,657,365. The
 corpus re-base keeps the ratios #2150 measured against #2146. Welfare rises
 95.22 -> 95.24 and the rise is banked.
+
+## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
+
+Clay ruled #2085. Every function in a module is visible from every file of
+it, so a local in one file that reuses a name declared in another file
+shadows a callable name, which is what no-shadowing forbids. Eighteen of the
+twenty ports met it as action at a distance: a declaration added in `b.kso`
+refused a parameter in `a.kso`, and the refusal pointed at the parameter
+without naming the declaration.
+
+**The ruling.** The rule stands across files. The refusal names the
+declaration it collides with, by file and line, so the fix is a rename made
+knowing what clashed. Letting a local reuse a name declared only in another
+file was declined, because inside the local's scope the name would mean two
+things. File-scoped private names were declined, because they would end the
+sharing of helpers between a module's files.
+
+Owes, on #2085: the refusal names the colliding declaration's file and line;
+an error golden for a two-file module.
+
+## 2026-10-25 — gavel: `put` writes a list at an index
+
+Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
+`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
+list, so the ports built vectors from maps with integer keys and paid for
+keys they did not need.
+
+**The ruling.** `put xs i v` answers the list with element `i` replaced,
+1-based like `xs[i]`. An index outside the list answers `none`, as a read
+there does. A list nothing else holds is written in place, as a map already
+is.
+
+Owes, on #2086: `put` on a list on every engine; the in-place write under
+the existing uniqueness analysis; the checker accepting a list for `put`, and
+refusing at check what it refuses at run time (diff F9, inflate F8); micro and
+mem goldens; appendix B.
+
+## 2026-10-25 — a list walked by its rest joins the corpus
+
+`rest = list/to_list (list/drop xs 1)` is how most of this repository's
+scripts walk a list: the welfare script, the trend gate, `golden_prose` and
+the differentials among them. A battery of list and text shapes run at two
+sizes on both engines found it the worst of them. Each rest is built afresh,
+so a walk costs the square of the list on any engine, and `list/drop` builds
+it by stepping a cursor through the list one record at a time: `fold` has an
+arm that reads a capped cursor by index, which `take` reaches, and none for
+a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
+the interpreter, about 260 instructions an element stepped natively and
+12,700 interpreted.
+
+Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
+500 elements and the interpreted corpus with 70, measured on main at #2148
+before its fix. On this container the run program reads 888,090,230 with it
+and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
+interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
+same line for it.
+
+The rest of the battery is linear or n log n on both engines: `group_by`,
+`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
+elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
+natively and quadratic on the interpreter, 64 ms at 5,000 characters and
+563 ms at 20,000. On #2152's build, which shares a long string and slices
+an ASCII one by byte, the same two read 39 ms and 77 ms.
+
+CI's rows, against main at #2141. The run program reads work_runbench
+828,232,672 -> 869,011,503, and each rest's step records cost it memory as
+well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
+242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
+94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
+23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
+1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
+run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
+emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
+168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
+-> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
+interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
+623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
+browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
+1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
+344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
+re-bases the eight terms among these it weighs, each keeping its ratio to
+its baseline, and the floor stays at 95.22.

@@ -23,42 +23,6 @@
 
 
 
-## 2026-10-25 — gavel: a local may not reuse any name its module declares, and the refusal names where
-
-Clay ruled #2085. Every function in a module is visible from every file of
-it, so a local in one file that reuses a name declared in another file
-shadows a callable name, which is what no-shadowing forbids. Eighteen of the
-twenty ports met it as action at a distance: a declaration added in `b.kso`
-refused a parameter in `a.kso`, and the refusal pointed at the parameter
-without naming the declaration.
-
-**The ruling.** The rule stands across files. The refusal names the
-declaration it collides with, by file and line, so the fix is a rename made
-knowing what clashed. Letting a local reuse a name declared only in another
-file was declined, because inside the local's scope the name would mean two
-things. File-scoped private names were declined, because they would end the
-sharing of helpers between a module's files.
-
-Owes, on #2085: the refusal names the colliding declaration's file and line;
-an error golden for a two-file module.
-
-## 2026-10-25 — gavel: `put` writes a list at an index
-
-Clay ruled #2086. `xs[i]` reads a list the way `m[k]` reads a map, and
-`put m k v` answers a map with the value at `k` replaced. Nothing wrote a
-list, so the ports built vectors from maps with integer keys and paid for
-keys they did not need.
-
-**The ruling.** `put xs i v` answers the list with element `i` replaced,
-1-based like `xs[i]`. An index outside the list answers `none`, as a read
-there does. A list nothing else holds is written in place, as a map already
-is.
-
-Owes, on #2086: `put` on a list on every engine; the in-place write under
-the existing uniqueness analysis; the checker accepting a list for `put`, and
-refusing at check what it refuses at run time (diff F9, inflate F8); micro and
-mem goldens; appendix B.
-
 ## 2026-10-26 — gavel: a failure inside the library also names the program's line that called it
 
 Clay ruled #2099. Under #1975 a run-time failure names the line it happened
@@ -77,52 +41,6 @@ Owes, on #2099: the caller's line on every engine for a failure born in the
 library; error goldens on every engine for an operator, a builtin and a
 library function reached from a program file; CI's rows and the floor moved
 by them.
-
-## 2026-10-25 — a list walked by its rest joins the corpus
-
-`rest = list/to_list (list/drop xs 1)` is how most of this repository's
-scripts walk a list: the welfare script, the trend gate, `golden_prose` and
-the differentials among them. A battery of list and text shapes run at two
-sizes on both engines found it the worst of them. Each rest is built afresh,
-so a walk costs the square of the list on any engine, and `list/drop` builds
-it by stepping a cursor through the list one record at a time: `fold` has an
-arm that reads a capped cursor by index, which `take` reaches, and none for
-a skipped one. Walking 5,000 elements took 6.5 seconds natively and 23 on
-the interpreter, about 260 instructions an element stepped natively and
-12,700 interpreted.
-
-Under the 2026-09-05 corpus-first gavel `rested` joins the run program with
-500 elements and the interpreted corpus with 70, measured on main at #2148
-before its fix. On this container the run program reads 888,090,230 with it
-and 847,302,584 without it, a column of 40,787,646 (4.59%), and the
-interpreted corpus reads 525,925,462 -> 559,915,367. Both engines print the
-same line for it.
-
-The rest of the battery is linear or n log n on both engines: `group_by`,
-`index_by`, `tally`, `to_h`, `sort` and `text/split` at 5,000 and 20,000
-elements. Taking a string's tail with `text/slice s 2 (length s)` is linear
-natively and quadratic on the interpreter, 64 ms at 5,000 characters and
-563 ms at 20,000. On #2152's build, which shares a long string and slices
-an ASCII one by byte, the same two read 39 ms and 77 ms.
-
-CI's rows, against main at #2141. The run program reads work_runbench
-828,232,672 -> 869,011,503, and each rest's step records cost it memory as
-well: run_allocs 1,579,529 -> 1,832,525, run_alloc_bytes 221,800,088 ->
-242,831,624, run_sh_rec 4,034,336 -> 20,162,336, run_sh_buf 89,333,968 ->
-94,217,168, run_arena_blocks 4 -> 22, run_arena_peak_bytes 4,718,608 ->
-23,592,976, run_spare_peak_bytes 2,621,456 -> 21,495,824, run_perm_peak_bytes
-1,858,817 -> 1,867,025, run_push_mut_slow 1,644,216 -> 1,646,861 and
-run_bytes_malloc 7,919 -> 7,921. The new module adds machine code and
-emitted lines: text 5,653,121 -> 5,657,953, emitted_other_lines 167,704 ->
-168,561, emitted_other_branches 17,809 -> 17,916, emitted_other_calls 20,309
--> 20,437 and emitted_other_defines 2,222 -> 2,231. The interpreter reads
-interp_instructions 520,276,149 -> 554,451,443, interp_allocs 578,088 ->
-623,573 and interp_peak_bytes 1,281,313 -> 1,288,124. The tab reads
-browser_run_instructions 54,006,705 -> 63,054,006, browser_run_peak_bytes
-1,507,328 -> 2,490,368, browser_compile_instructions 334,848,599 ->
-344,866,301 and browser_compile_peak_bytes 743,876 -> 806,972. Welfare
-re-bases the eight terms among these it weighs, each keeping its ratio to
-its baseline, and the floor stays at 95.22.
 
 ## 2026-10-25 — the rest of a list after a drop is one copy
 
@@ -1404,3 +1322,69 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — gavel: `path_to` takes a record or a route's name
+
+#2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
+reverse, and the gavel on equality refuses to compare two functions, which
+the lookup needs at run time. Clay, ruling: "it could either take path_to
+post, or the string form that specifies the path followed by the id... both
+are available to the user. I'm not sure how you do that but you can be
+clever."
+
+So `path_to` has two forms. `path_to post` takes a record, and the record's
+type picks its show route, with its `id` for `:id`. `path_to "posts/show"
+post.id` names the route by a string. The form that takes a function is
+dropped. The string form runs as a lookup in a map the routing derivation
+declares, and the derivation refuses a string that names no route at the
+call that writes it. The record form runs by dispatch on the record's type:
+the derivation declares one `path_to` arm per model with a show route, which
+needs a derivation that can declare a function arm (`derive/define`, planned
+on #2198).
+
+## 2026-10-29 — a call's description carries the strings it was written with
+
+#2198's string form refuses `path_to "posts/shwo" id` at the call, so a
+derivation has to read the string. Each `derive/call` now carries `strings`
+beside `arguments`: an argument's text when it is a string written whole, and
+"" for anything else, including a string with an interpolation in it.
+
+tests/golden/derive gains a convention that refuses a link whose string
+names no route, at the call, on both engines. On the compiler before this
+change it was refused for a different reason, at the convention: no record
+type had a field `strings`.
+
+## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
+
+#2198's record form runs `path_to post` by dispatch on the record's type, so
+the routing convention has to write a `path_to` arm for each model. A
+derivation can now answer `derive/define origin source`: an arm written out as
+source, for the module `origin` names. A module may already add an arm to a
+library's function for a type it declares, so the arm goes there and not in
+the entry, which declares no models.
+
+When any derivation defines an arm, the entry's dependencies load a second
+time, and each module that was given arms reads them as one more of its own
+files, `posts.derived.kso` beside `posts.kso`. The arm is qualified, formatted
+and checked as code someone wrote in that module, and an error in it quotes
+the line the convention wrote. An arm for a module the derivation was not
+shown is refused at the `derive` line. `kanso derived` prints each arm under
+the module it went to. In the tab the modules arrive as text and the arms join
+them the same way.
+
+tests/golden/derive gains three cases, each run on both engines: a `path_to`
+arm defined for each record type in a module with a `show` action, an arm that
+reads a missing field and is refused in the derived file, and an arm for
+std/list, refused. With the second load switched off the first case printed
+"no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
+first case in the page; it was watched red with the derived files keyed so
+the module could not find them.
+
+The rows: bench/entry_corpus derives, so it pays for each call's strings and
+for the larger `lib/derive`: entry_instructions 85,282,135 (+134,173),
+compile_instructions 24,096,578 (+1,025), library_instructions 71,383,015
+(+2,479), and browser_compile_instructions 343,289,572 (-2). The first build
+keyed the derived files on every module load, which cost compile_allocs 14
+and interp_allocs 12 on programs that derive nothing; the key is asked for
+only while arms load, and neither row moves. Welfare falls by less than
+0.001, and the floor follows under the rule for a feature a ruling requires.
