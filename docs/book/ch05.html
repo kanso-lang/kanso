@@ -179,13 +179,13 @@ hojicha</code></pre>
   <div class="code-panel-title">boxed.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">length</span> os/args)</code></pre>
+<span class="f">print</span> (<span class="f">length</span> os/args)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check boxed.kso</div>
     <pre><code><span class="k">error[effect]</span>: this is an effect — a box the words open — and `length` takes a value; open it with `.&gt;`
-<span class="c">  --&gt; boxed.kso:3:26</span>
-   3 | pub play = print (length os/args)
-                                <span class="k">^</span></code></pre>
+<span class="c">  --&gt; boxed.kso:3:15</span>
+   3 | print (length os/args)
+                     <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -193,7 +193,7 @@ hojicha</code></pre>
 
 <h2>a box has a type</h2>
 
-<p>an io is a value, and a value can be handed around before anyone opens it. a function that wants the box itself, rather than what comes out of it, says so in its signature: <code>&lt;string&gt;effect</code> is the type of an io that will yield a string. the box arrives unopened, and the function opens it with <code>.&gt;</code> the way <code>play</code> did above:</p>
+<p>an io is a value, and a value can be handed around before anyone opens it. a function that wants the box itself, rather than what comes out of it, says so in its signature: <code>&lt;string&gt;effect</code> is the type of an io that will yield a string. the box arrives unopened, and the function opens it with <code>.&gt;</code> the way <code>count.kso</code> did above:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">counted.kso</div>
@@ -208,14 +208,14 @@ hojicha</code></pre>
 <span class="k">fn</span> <span class="f">counted</span> e:<span class="o">&lt;</span>string<span class="o">&gt;</span>effect
   <span class="f">e</span> <span class="o">.&gt;</span> <span class="f">count_lines</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">counted</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">counted</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run counted.kso</div>
+    <div class="code-panel-title">kanso play counted.kso</div>
     <pre><code>flavors.txt has 3 lines</code></pre>
   </div>
 </div>
 
-<p><code>counted</code> holds the read and hands it on with a step attached. nothing has been read when it returns. its answer is another io, the same box with <code>count_lines</code> wired behind it, and the runtime performs the whole chain when <code>play</code> reaches the executor. the annotation does one job: it names the parameter as a box, so an arm can dispatch on "an io that yields a string" the way another arm dispatches on <code>n:int</code>.</p>
+<p><code>counted</code> holds the read and hands it on with a step attached. nothing has been read when it returns. its answer is another io, the same box with <code>count_lines</code> wired behind it, and the runtime performs the whole chain when the program's last line reaches the executor. the annotation does one job: it names the parameter as a box, so an arm can dispatch on "an io that yields a string" the way another arm dispatches on <code>n:int</code>.</p>
 
 <p>the other direction is refused. <code>length</code> reads a string; hand it the io and <code>kanso check</code> stops before anything runs:</p>
 
@@ -250,7 +250,7 @@ hojicha</code></pre>
 local <span class="o">=</span> &amp;tax <span class="n">8</span>
 <span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run currying.kso</div>
+    <div class="code-panel-title">kanso play currying.kso</div>
     <pre><code>250 becomes 270
 and again: 108</code></pre>
   </div>
@@ -272,7 +272,7 @@ on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n
 </div>
 
 <div class="code-panel">
-  <div class="code-panel-title">kanso run running.kso</div>
+  <div class="code-panel-title">kanso play running.kso</div>
   <pre><code>still waiting: &lt;fn&gt;
 called: 270</code></pre>
 </div>
@@ -322,9 +322,9 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"an arm named <span class="i">{name yield}</span> caught it"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"yield == none is <span class="i">{yield == none}</span>"</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/write_file</span> <span class="s">"receipt.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">.&gt;</span> <span class="f">report</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"receipt.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">.&gt;</span> <span class="f">report</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run yielded.kso</div>
+    <div class="code-panel-title">kanso play yielded.kso</div>
     <pre><code>the write yielded &lt;done&gt;
 an arm named done caught it
 yield == none is false</code></pre>
@@ -348,8 +348,7 @@ yield == none is false</code></pre>
 <span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">greet</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play welcome.kso -- clay</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
-  born in first at welcome.kso:4</code></pre>
+    <pre><code>irasshaimase, clay</code></pre>
   </div>
 </div>
 
@@ -357,12 +356,12 @@ yield == none is false</code></pre>
   <div class="code-panel-title">shout.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
+<span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">printf 'hello from a pipe' | kanso run shout.kso</div>
+    <div class="code-panel-title">kanso play shout.kso &lt; pipe.txt</div>
     <pre><code>hello from a pipe!!</code></pre>
   </div>
 </div>
@@ -419,9 +418,9 @@ yield == none is false</code></pre>
 <span class="k">fn</span> <span class="f">orders</span> text
   <span class="s">"yesterday: <span class="i">{text}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.&gt;</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.&gt;</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run fallback.kso</div>
+    <div class="code-panel-title">kanso play fallback.kso</div>
     <pre><code>no orders yet</code></pre>
   </div>
 </div>
@@ -444,9 +443,9 @@ yield == none is false</code></pre>
 <span class="k">fn</span> <span class="f">orders</span> text
   <span class="s">"yesterday: <span class="i">{text}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">rescue</span> (<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span>) orders <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">rescue</span> (<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span>) orders <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run rescued.kso</div>
+    <div class="code-panel-title">kanso play rescued.kso</div>
     <pre><code>no orders yet</code></pre>
   </div>
 </div>
@@ -467,9 +466,9 @@ yield == none is false</code></pre>
 <span class="k">fn</span> <span class="f">orders</span> text
   <span class="s">"yesterday: <span class="i">{text}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.?</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.?</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run fused.kso</div>
+    <div class="code-panel-title">kanso play fused.kso</div>
     <pre><code>no orders yet</code></pre>
   </div>
 </div>

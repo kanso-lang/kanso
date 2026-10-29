@@ -390,7 +390,7 @@ x <span class="o">=</span> <span class="n">2</span>
   </div>
 </div>
 
-<p>one name is required rather than merely resolved. a program that the toolchain will run must define <code>main</code>—the constant the runtime asks for. this is the one diagnostic in the family that <code>kanso check</code> lets pass, because a file with no <code>main</code> is a perfectly good library; it surfaces only when you ask to <em>run</em> the file as a program:</p>
+<p>a program needs somewhere to start. <code>kanso run</code> starts at an entry: a file of statements, or a directory holding a <code>main.kso</code>. a file of definitions alone is a library, and <code>kanso check</code> passes it, because a library is a perfectly good thing to be. the refusal comes only when you ask to <em>run</em> one, and it names the two ways forward:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">no_main.kso</div>
@@ -512,7 +512,7 @@ size <span class="o">=</span> <span class="n">9</span>
   <pre><code><span class="k">type</span> box
   <span class="f">held</span>
 
-<span class="k">fn</span> <span class="f">double</span> n<span class="o">:</span><span class="t">int</span>
+<span class="k">fn</span> <span class="f">double</span> n:int
   n <span class="o">*</span> <span class="n">2</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
@@ -599,7 +599,7 @@ size <span class="o">=</span> <span class="n">9</span>
   <span class="f">partner</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  people <span class="o">=</span> <span class="f">list/tie</span> [<span class="s">"ada"</span> <span class="s">"bob"</span>] (name ref <span class="o">-&gt;</span> <span class="f">person</span> name (<span class="f">ref</span> <span class="s">"cy"</span>))
+  people <span class="o">=</span> <span class="f">list/tie</span> [<span class="s">"ada"</span> <span class="s">"bob"</span>] (<span class="f">name</span> ref <span class="o">-&gt;</span> <span class="f">person</span> name (<span class="f">ref</span> <span class="s">"cy"</span>))
   ada <span class="o">=</span> people[<span class="s">"ada"</span>]
   <span class="f">print</span> <span class="s">"<span class="i">{ada.name}</span>"</span></code></pre>
   <div class="code-output">
@@ -689,7 +689,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <span class="f">print</span> <span class="s">"<span class="i">{length (measured 0)}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run runtime_mismatch.kso</div>
+    <div class="code-panel-title">kanso play runtime_mismatch.kso</div>
     <pre><code><span class="k">error[runtime]</span>: length takes a list, string, or map, not 5
   failed in the entry at runtime_mismatch.kso:4</code></pre>
   </div>
@@ -709,7 +709,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <span class="f">print</span> <span class="s">"sum <span class="i">{weigh 1000000}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run deep_recursion.kso</div>
+    <div class="code-panel-title">kanso play deep_recursion.kso</div>
     <pre><code><span class="k">error[runtime]</span>: the program ran out of stack: recursion went deeper than the stack holds
   failed in weigh at deep_recursion.kso:5</code></pre>
   </div>

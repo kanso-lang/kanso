@@ -303,11 +303,11 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">hex_upper</span> c
   <span class="f">if</span> (<span class="n">64</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">71</span>) (c <span class="o">-</span> <span class="n">55</span>) (<span class="f">err</span> <span class="s">"invalid hex digit"</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
+<span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>))
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>))</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run unicode.kso</div>
+    <div class="code-panel-title">kanso play unicode.kso</div>
     <pre><code>é
 た
 简</code></pre>
@@ -727,9 +727,8 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
 <span class="k">fn</span> <span class="f">pad</span> n
   <span class="s">"  <span class="i">{pad (n - 1)}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  doc <span class="o">=</span> { <span class="s">"name"</span>:<span class="s">"kanso"</span> <span class="s">"port"</span>:<span class="n">8080</span> <span class="s">"tags"</span>:[<span class="s">"fast"</span> <span class="s">"simple"</span>] }
-  <span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
+doc <span class="o">=</span> { <span class="s">"name"</span>:<span class="s">"kanso"</span> <span class="s">"port"</span>:<span class="n">8080</span> <span class="s">"tags"</span>:[<span class="s">"fast"</span> <span class="s">"simple"</span>] }
+<span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
 
 <span class="k">fn</span> <span class="f">pretty</span> true _
   <span class="s">"true"</span>
@@ -761,7 +760,7 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
   inner <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">",\n"</span>
   <span class="s">"\<span class="i">{\n{inner}\n{pad d}}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run pretty.kso</div>
+    <div class="code-panel-title">kanso play pretty.kso</div>
     <pre><code>{
   "name": "kanso",
   "port": 8080,

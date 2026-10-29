@@ -58,7 +58,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">cloud</span> n acc
   <span class="f">point</span> <span class="n">2</span> [] <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc p))
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">cloud</span> <span class="n">3</span> [] <span class="o">.&gt;</span> (voters <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three voters: <span class="i">{voters}</span>"</span>)
+<span class="f">cloud</span> <span class="n">3</span> [] <span class="o">.&gt;</span> (voters <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three voters: <span class="i">{voters}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">point</span> <span class="n">0</span> acc
   <span class="f">acc</span>
@@ -66,7 +66,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">point</span> d acc
   <span class="f">math/random</span> <span class="n">1000</span> <span class="o">.&gt;</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run cloud.kso</div>
+    <div class="code-panel-title">kanso play cloud.kso</div>
     <pre><code>three voters: [[876 612] [601 850] [662 624]]</code></pre>
   </div>
 </div>
@@ -86,10 +86,9 @@ extra_css: /book/book.css
   <div class="code-panel-title">util.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  voter <span class="o">=</span> [<span class="n">3</span> <span class="n">4</span>]
-  <span class="f">print</span> <span class="s">"candidate at the origin: <span class="i">{util voter [0 0]}</span>"</span>
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"candidate next door: <span class="i">{util voter [3 3]}</span>"</span>)
+voter <span class="o">=</span> [<span class="n">3</span> <span class="n">4</span>]
+<span class="f">print</span> <span class="s">"candidate at the origin: <span class="i">{util voter [0 0]}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"candidate next door: <span class="i">{util voter [3 3]}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">sq</span> x
   x <span class="o">*</span> x
@@ -97,7 +96,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">util</span> v c
   <span class="n">0</span> <span class="o">-</span> math/sqrt (<span class="f">sq</span> (v[<span class="n">1</span>] <span class="o">-</span> c[<span class="n">1</span>]) <span class="o">+</span> sq (v[<span class="n">2</span>] <span class="o">-</span> c[<span class="n">2</span>]))</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run util.kso</div>
+    <div class="code-panel-title">kanso play util.kso</div>
     <pre><code>candidate at the origin: -5.0
 candidate next door: -1.0</code></pre>
   </div>

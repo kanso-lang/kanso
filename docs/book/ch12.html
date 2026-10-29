@@ -40,10 +40,9 @@ the result: [10 20 30]</code></pre>
   <div class="code-panel-title">bounded.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  firsts <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> list/naturals <span class="n">5</span>)
-  squares <span class="o">=</span> <span class="f">list/map</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n)
-  <span class="f">print</span> <span class="s">"<span class="i">{firsts}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 4)}</span>"</span>)</code></pre>
+firsts <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> list/naturals <span class="n">5</span>)
+squares <span class="o">=</span> <span class="f">list/map</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n)
+<span class="f">print</span> <span class="s">"<span class="i">{firsts}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 4)}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run bounded.kso</div>
     <pre><code>[1 2 3 4 5]
@@ -69,10 +68,9 @@ the result: [10 20 30]</code></pre>
   <div class="code-panel-title">stops.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  found <span class="o">=</span> <span class="f">list/find</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n <span class="o">&gt;</span> <span class="n">50</span>)
-  any_big <span class="o">=</span> <span class="f">list/any?</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">3</span>)
-  <span class="f">print</span> <span class="s">"<span class="i">{found}</span> <span class="i">{any_big}</span>"</span></code></pre>
+found <span class="o">=</span> <span class="f">list/find</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n <span class="o">&gt;</span> <span class="n">50</span>)
+any_big <span class="o">=</span> <span class="f">list/any?</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">3</span>)
+<span class="f">print</span> <span class="s">"<span class="i">{found}</span> <span class="i">{any_big}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run stops.kso</div>
     <pre><code>8 true</code></pre>
@@ -91,7 +89,7 @@ the result: [10 20 30]</code></pre>
 
 orders <span class="o">=</span> [<span class="s">"oat"</span> <span class="s">"soy"</span> <span class="s">"oat"</span> <span class="s">"whole"</span> <span class="s">"oat"</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally orders}</span>"</span>
+<span class="f">print</span> <span class="s">"tally <span class="i">{list/tally orders}</span>"</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"letters <span class="i">{list/group_by orders (s -&gt; s[1])}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run buckets.kso</div>
@@ -116,24 +114,23 @@ letters { "o":["oat" "oat" "oat"] "s":["soy"] "w":["whole"] }</code></pre>
 <span class="k">fn</span> <span class="f">build</span> n acc
   <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  xs <span class="o">=</span> <span class="f">build</span> <span class="n">1000</span> []
-  tripled <span class="o">=</span> <span class="f">list/map</span> xs (n <span class="o">-&gt;</span> n <span class="o">*</span> <span class="n">3</span>)
-  big <span class="o">=</span> <span class="f">list/select</span> tripled (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">150</span>)
-  <span class="f">print</span> <span class="s">"kept <span class="i">{list/sum big}</span>"</span></code></pre>
+xs <span class="o">=</span> <span class="f">build</span> <span class="n">1000</span> []
+tripled <span class="o">=</span> <span class="f">list/map</span> xs (n <span class="o">-&gt;</span> n <span class="o">*</span> <span class="n">3</span>)
+big <span class="o">=</span> <span class="f">list/select</span> tripled (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">150</span>)
+<span class="f">print</span> <span class="s">"kept <span class="i">{list/sum big}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run fused.kso</div>
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso play fused.kso</div>
     <pre><code>allocs=7
 alloc_bytes=28960
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
 cohort_kept=0
-perm_allocs=3
+perm_allocs=2
 beat_iters=0
 evac_allocs=3
 evac_bytes=80
-survive_slots=4
+survive_slots=0
 put_mut_fast=0
 put_mut_grow=0
 push_mut_fast=0

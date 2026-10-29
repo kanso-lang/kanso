@@ -63,16 +63,15 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">cheapest</span> prices
   (<span class="f">list/sort</span> prices)[<span class="n">1</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  prices <span class="o">=</span> [<span class="n">520</span> <span class="n">380</span> <span class="n">450</span> <span class="n">610</span> <span class="n">290</span>]
-  low <span class="o">=</span> <span class="f">cheapest</span> prices   <span class="c"># these two share nothing:</span>
-  total <span class="o">=</span> <span class="f">list/sum</span> prices  <span class="c"># the compiler may run them together</span>
-  <span class="f">report</span> low total         <span class="c"># reads both, so it waits for both</span>
+prices <span class="o">=</span> [<span class="n">520</span> <span class="n">380</span> <span class="n">450</span> <span class="n">610</span> <span class="n">290</span>]
+low <span class="o">=</span> <span class="f">cheapest</span> prices   <span class="c"># these two share nothing:</span>
+total <span class="o">=</span> <span class="f">list/sum</span> prices  <span class="c"># the compiler may run them together</span>
+<span class="f">report</span> low total         <span class="c"># reads both, so it waits for both</span>
 
 <span class="k">fn</span> <span class="f">report</span> low total
   <span class="f">print</span> <span class="s">"cheapest: <span class="i">{low}</span> yen / total: <span class="i">{total}</span> yen"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run dataflow.kso</div>
+    <div class="code-panel-title">kanso play dataflow.kso</div>
     <pre><code>cheapest: 290 yen / total: 2250 yen</code></pre>
   </div>
 </div>
@@ -179,7 +178,7 @@ brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">60</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">brew</span>
+<span class="f">brew</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">roll</span> <span class="n">1</span>)  <span class="c"># brew runs first now, and every roll</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">roll</span> <span class="n">2</span>)  <span class="c"># is bound after it, so each one</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">roll</span> <span class="n">3</span>)  <span class="c"># waits for the steep to finish</span>
@@ -189,7 +188,7 @@ brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew
 <span class="k">fn</span> <span class="f">roll</span> i
   <span class="f">math/random</span> <span class="n">6</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run ordered.kso</div>
+    <div class="code-panel-title">kanso play ordered.kso</div>
     <pre><code>brew: steeping
 brew: poured
 roll 1: a 3
@@ -226,15 +225,14 @@ gyoza <span class="o">=</span> <span class="f">print</span> <span class="s">"gyo
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">20</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"gyoza: plated"</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">gyoza</span>
-  <span class="f">ramen</span>
-
 ramen <span class="o">=</span> <span class="f">print</span> <span class="s">"ramen: boiling"</span>
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">30</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ramen: noodles in"</span>)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">30</span>)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ramen: bowled"</span>)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ramen: bowled"</span>)
+
+<span class="f">gyoza</span>
+<span class="f">ramen</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run race.kso</div>
     <pre><code>gyoza: in the pan

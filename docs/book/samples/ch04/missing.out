@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the executor: "cannot read no-such-file.txt: no such file"
-  born in missing/play at missing.kso:10
+  born in the entry at missing.kso:10

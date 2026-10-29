@@ -323,7 +323,32 @@ fn recorded_as gs
   parts = text/split (present gs[3]) "/"
   stem = present parts[length parts]
   plan = plan_of (regexp/match? " --plan\\b" title)
-  "{stem}{verb_of title stem}{counters_of (present gs[2])}{plan}"
+  given = given_of (regexp/groups given_pattern title)
+  "{stem}{verb_of title stem}{counters_of (present gs[2])}{plan}{given}"
+
+# What a title gives the program after naming it: `-- clay`, `< rain.txt`.
+# The recording is name@slug.out, where the slug is those words with every
+# run of other characters made one `_` and `<` read as `from`, so `-- a.txt`
+# and `< a.txt` stay apart; name@slug.args holds them as
+# written, for book_check to pass along.
+given_pattern = "kanso [a-z]+ [a-z_0-9/.]+ ((?:-- |&lt; )[^<]*)</div>"
+
+fn given_of none
+  ""
+
+fn given_of said
+  "@{slug (text/join (text/split (present said[1]) "&lt;") "from")}"
+
+fn slug words
+  marked = text/join (list/to_list (list/map (text/chars words) kept)) ""
+  parts = list/select (text/split marked "_") (w -> w != "")
+  text/join (list/to_list parts) "_"
+
+fn kept c
+  if (word_char? c) c "_"
+
+fn word_char? c
+  ("a" <= c and c <= "z") or ("0" <= c and c <= "9")
 
 # A check, test or build panel quotes that verb's recording. Its sample is
 # usually named for it already, as unused_check.kso is.
