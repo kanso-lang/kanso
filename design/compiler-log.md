@@ -1398,3 +1398,9 @@ question the box check already asks through the same per-declaration set.
 tests/golden/errors gains the program: a function named `key`, a tie, and a
 call into std/list. It was watched red through the corpus runner with the
 test switched off, reporting the two refusals in list.kso, and passes with it.
+
+The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
+browser_compile_instructions 343,289,574 (+70,464), entry_instructions
+85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
+falls by less than 0.001, and the floor follows under the rule for a change
+that makes the language do what its specification says.
