@@ -37,7 +37,7 @@ write=0
 # gate:what it reads:takes --write
 gates="golden_prose:the data-golden spans against the goldens they name:yes
 page_drift:docs/compiler.html against the log's budget of unpublished entries:no
-prose_check:docs and docs/book for the three mechanical slop families:no"
+prose_check:docs and docs/book for the three mechanical slop families and stray divs:no"
 
 # elsewhere:swept by
 #
