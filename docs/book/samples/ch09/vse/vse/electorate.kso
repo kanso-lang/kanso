@@ -1,0 +1,32 @@
+import "std/list"
+import "std/math"
+
+fn cloud 0 _ acc
+  acc
+
+fn cloud n d acc
+  point d [] .> (p -> cloud (n - 1) d (push acc p))
+
+dims = 2
+
+fn dist2 p q
+  sum (list/map (range (length p)) (d -> sq (p[d] - q[d])))
+
+ncand = 5
+
+nvot = 20
+
+fn point 0 acc
+  acc
+
+fn point d acc
+  math/random 1000 .> (c -> point (d - 1) (push acc c))
+
+fn sq x
+  x * x
+
+fn util vpos cpos
+  0 - math/sqrt (dist2 vpos cpos)
+
+fn utilities voters cands
+  to_list (list/map voters (v -> to_list (list/map cands (c -> util v c))))

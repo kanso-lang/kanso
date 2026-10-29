@@ -1,61 +1,36 @@
+import "std/list"
 import "std/text"
 
-fn classify s
+# The library's number path on its own. One call says where the number's
+# bytes end and whether a float mark went past, and that picks the converter.
+fn read_number s
   cs = text/bytes s
-  q = number_end cs 1
-  digits = text/slice cs 1 (q - 1)
-  floaty = mark_from cs 1 (q - 1)
-  shown floaty digits
+  converted cs (text/number_span cs 1)
 
-fn is_number_char 43
-  true
+fn converted _ 0
+  "refused"
 
-fn is_number_char 45
-  true
+fn converted cs e
+  if (e < 0) (float_of (bytes_to cs (0 - e))) (int_of (bytes_to cs e))
 
-fn is_number_char 46
-  true
+# The span ends one byte before the position number_span answers.
+fn bytes_to cs p
+  text/to_span cs 1 (p - 1)
 
-fn is_number_char 69
-  true
+fn float_of none
+  "refused"
 
-fn is_number_char 101
-  true
+fn float_of run
+  "float64 {text/to_float (text/slice run)}"
 
-fn is_number_char none
-  false
+fn int_of none
+  "refused"
 
-fn is_number_char c
-  47 < c and c < 58
+fn int_of run
+  "int {text/to_int (text/slice run)}"
 
-fn mark_from cs p q
-  if (p > q) false (mark_step cs cs[p] p q)
+fn line s
+  "{s} -> {read_number s}"
 
-fn mark_step _ 46 _ _
-  true
-
-fn mark_step _ 69 _ _
-  true
-
-fn mark_step _ 101 _ _
-  true
-
-fn mark_step _ none _ _
-  false
-
-fn mark_step cs _ p q
-  mark_from cs (p + 1) q
-
-fn number_end cs p
-  if (is_number_char cs[p]) (number_end cs (p + 1)) p
-
-fn shown _ none
-  err "no digits to read"
-
-fn shown floaty digits
-  if floaty "float64 {text/to_float digits}" "int {text/to_int digits}"
-
-print (classify "42")
-  .> (_ -> print (classify "-17"))
-  .> (_ -> print (classify "3.25"))
-  .> (_ -> print (classify "6e3"))
+inputs = ["42" "-17" "3.25" "6e3" "007" "1."]
+print (text/join (list/to_list (list/map inputs line)) "\n")

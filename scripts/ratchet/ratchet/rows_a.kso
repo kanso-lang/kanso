@@ -1290,6 +1290,16 @@ book_quotes = row
   (breaking "a_quoting_panel_stops_matching_its_file")
   release
 
+# The same harness, on what the panel does to the text it quotes: a name a
+# file declares, written with a mark the file does not have.
+book_verbatim = row
+  "a panel quoting a library file edits a declaration it shows"
+  true
+  "./target/release/kanso run scripts/book_quotes"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_quoting_panel_edits_what_it_quotes")
+  release
+
 diagnostics = row
   "one engine wording a failure the other does not"
   true
@@ -1490,6 +1500,14 @@ landing = row
   "./target/release/kanso run scripts/site_smoke"
   "site (landing sample and playground run in a browser)"
   (breaking "a_landing_sample_that_breaks_its_promise")
+  with_blob
+
+tab_guard = row
+  "a book panel that needs a filesystem offered a run button in the tab"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_tab_guard_that_names_the_old_module")
   with_blob
 
 in_the_page = row

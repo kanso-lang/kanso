@@ -1,0 +1,12 @@
+import "std/time"
+
+kettle = print "kettle: on"
+  .> (_ -> time/sleep 30)
+  .> (_ -> print "kettle: boiled")
+
+cups = print "cups: warming"
+  .> (_ -> time/sleep 10)
+  .> (_ -> print "cups: warm")
+
+kettle
+cups

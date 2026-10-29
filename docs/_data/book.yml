@@ -1,3 +1,8 @@
+- part: "start here"
+  start: 1
+  appendix: true
+  chapters:
+    - { num: "→", slug: "tour", title: "a tour of kanso" }
 - part: "part i — the language"
   start: 1
   chapters:
@@ -32,3 +37,4 @@
     - { num: "a", slug: "appa", title: "the diagnostics catalog" }
     - { num: "b", slug: "appb", title: "builtin reference" }
     - { num: "c", slug: "appc", title: "canonical form" }
+    - { num: "d", slug: "appd", title: "recipes" }

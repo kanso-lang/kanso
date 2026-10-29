@@ -1,0 +1,5 @@
+import "std/list"
+
+fn plurality_winner voters
+  firsts = list/map voters (v -> argmax v)
+  argmax (to_list (list/map (range ncand) (c -> count firsts (x -> x == c))))

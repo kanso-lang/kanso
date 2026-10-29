@@ -1,0 +1,9 @@
+import "std/list"
+
+type order
+  dish
+  price
+
+orders = [(order "ramen" 1200) (order "gyoza" 600) (order "udon" 900)]
+cheapest = list/sort_by orders (o -> o.price)
+print "{list/to_list (list/map cheapest (o -> o.dish))}"

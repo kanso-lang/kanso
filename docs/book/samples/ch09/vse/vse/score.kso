@@ -1,0 +1,13 @@
+import "std/list"
+import "std/math"
+
+fn score_ballot v c
+  lo = min v
+  hi = max v
+  math/round (5.0 * (v[c] - lo) / (hi - lo))
+
+fn score_col voters c
+  sum (list/map voters (v -> score_ballot v c))
+
+fn score_winner voters
+  argmax (to_list (list/map (range ncand) (c -> score_col voters c)))

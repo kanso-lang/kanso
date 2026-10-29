@@ -1,0 +1,4 @@
+fn ticket age
+  if (age < 13) "child" "adult"
+
+print (ticket 9) .> (_ -> print (ticket 40))

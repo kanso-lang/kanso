@@ -1,0 +1,5 @@
+import "std/list"
+
+teas = ["sencha" "hojicha" "gyokuro"]
+loud = list/to_list (list/map teas (t -> "{t}!"))
+print "first: {teas[1]}" .> (_ -> print "{loud}")

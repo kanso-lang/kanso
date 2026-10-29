@@ -1,0 +1,10 @@
+import "std/list"
+
+fn approval_col voters c
+  sum (list/map voters (v -> approves v c))
+
+fn approval_winner voters
+  argmax (to_list (list/map (range ncand) (c -> approval_col voters c)))
+
+fn approves v c
+  if (mean v < v[c]) 1 0

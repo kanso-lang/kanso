@@ -1,0 +1,9 @@
+import "std/list"
+
+fn add_tax rate yen
+  yen + yen * rate / 100
+
+with_tax = &add_tax 10
+prices = [350 500 300]
+print "{list/to_list (list/map prices with_tax)}"
+  .> (_ -> print "{list/to_list (list/select prices (p -> p < 400))}")
