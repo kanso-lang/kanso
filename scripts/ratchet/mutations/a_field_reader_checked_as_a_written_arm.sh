@@ -5,7 +5,7 @@
 # corpus fixture a_record_and_a_subtype_share_a_name gains a line.
 set -e
 old='    for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^    for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {$#    for decl in program.fns.iter() {#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/annotations.rs)" -eq 1 ]
+sed -i.bak 's#^    for decl in program.fns.iter().filter(|d| getter_field(&d.name).is_none()) {$#    for decl in program.fns.iter() {#' src/check/annotations.rs
+rm -f src/check/annotations.rs.bak
+! grep -qxF "$old" src/check/annotations.rs

@@ -5,7 +5,7 @@
 # nothing.
 set -e
 old='        for member in &ty.members {'
-[ "$(grep -cxF "$old" src/check.rs)" -eq 1 ]
-sed -i.bak 's#^        for member in &ty.members {$#        for member in ty.members.iter().filter(|_| false) {#' src/check.rs
-rm -f src/check.rs.bak
-! grep -qxF "$old" src/check.rs
+[ "$(grep -cxF "$old" src/check/annotations.rs)" -eq 1 ]
+sed -i.bak 's#^        for member in &ty.members {$#        for member in ty.members.iter().filter(|_| false) {#' src/check/annotations.rs
+rm -f src/check/annotations.rs.bak
+! grep -qxF "$old" src/check/annotations.rs
