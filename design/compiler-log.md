@@ -1386,7 +1386,7 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
 
-## 2026-10-29 — a missing clang is named, and so are missing tests
+## 2026-10-29 — five messages that named the wrong cause
 
 Two messages a newcomer meets in the first hour named the wrong cause
 (#2217). With no clang on `PATH`, `kanso run` and `kanso play` said
@@ -1414,3 +1414,15 @@ added. They stay listed in `tests/golden/unpinned_diagnostics.txt`, which
 says where their pin lives. The test message has a golden in
 `tests/golden/test_verb/statements.stderr`, and `front_door` checks the
 help line. Each spec was watched red on the compiler before the change.
+
+Two more came from the hako commands (#2234). `kanso install` printed
+`installed 0 hako(s):` above a list of the one it had pinned, because the
+count it printed was the names left to walk, which is none by the time it
+prints. It now counts the lines of its own report. And an import of a module
+an installed hako does not have, such as `kanso-lang/vse/methods`, said the
+hako was not in the cache and to run `kanso install`, which changed nothing.
+The resolver now checks whether the locked tree is there before blaming the
+cache, and when it is, names the modules the tree does have:
+``error: cannot resolve import "acme/widgets/gadgets" — `acme/widgets` is
+installed, and has no module `gadgets` (its modules: `acme/widgets`)``.
+tests/hako.rs asserts both, and both were watched red.
