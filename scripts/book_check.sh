@@ -163,6 +163,9 @@ here=$(pwd)
 scratch=$(mktemp -d)
 mkdir -p "$scratch/docs/book"
 (cd docs/book && tar cf - .) | (cd "$scratch/docs/book" && tar xf -)
+# the site pages book_panels also reads, and the examples they quote
+cp docs/index.html docs/about.html "$scratch/docs/"
+cp -R examples "$scratch/examples"
 "$KANSO" run scripts/stale_a_panel -- "$scratch/docs/book/ch04.html"
 if ! (cd "$scratch" && "$KANSO" run "$here/scripts/book_panels" -- --write \
       >"$scratch/log" 2>&1); then
