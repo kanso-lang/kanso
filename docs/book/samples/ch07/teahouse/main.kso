@@ -1,7 +1,5 @@
 import "./teahouse"
-import "std/testing"
 
 dango = price "dango"
-pocky = price "pocky"
-dango .> describe .> print
-  .> (_ -> print (testing/when_failed pocky (r -> "gomen: {r}")))
+pocky = price "pocky" .? (e -> "gomen: {e.reason}")
+dango .> describe .> print .> (_ -> print pocky)
