@@ -1,0 +1,3 @@
+440
+error[endpoint]: unhandled err reached the executor: "no one to share with"
+  born in share at failure.kso:2

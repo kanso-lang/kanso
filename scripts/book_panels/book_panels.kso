@@ -141,7 +141,7 @@ fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))
 
 fn chapter? n
-  regexp/match? "^(ch[0-9]+|app[a-z])\\.html$" n
+  regexp/match? "^(ch[0-9]+|app[a-z]|tour)\\.html$" n
 
 fn chapter_loop names at drift write
   walking names at drift write (at > length names)
