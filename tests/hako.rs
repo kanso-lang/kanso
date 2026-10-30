@@ -174,6 +174,54 @@ fn install_resolves_the_highest_release_and_the_build_reads_the_cache() {
     );
 }
 
+/// An import may name its qualifier, and a hako whose repository name carries
+/// a hyphen has to: `kanso-json/decode!` is not a name, so the only spelling a
+/// program can use is `import json "kanso-lang/kanso-json"`. The install scan
+/// read only lines beginning `import "`, so it answered "no hakos are
+/// imported" for exactly that program while the build asked for the hako
+/// (#2260).
+#[test]
+fn install_reads_an_import_that_names_its_qualifier() {
+    let root = std::env::temp_dir().join("kanso-hako-install-aliased");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import parts \"acme/widgets\"\n\nprint \"{parts/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+
+    let install = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["install", "."])
+        .env("KANSO_HAKO", &cache)
+        .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+        .current_dir(&app)
+        .output()
+        .expect("kanso install runs");
+    assert_eq!(
+        String::from_utf8_lossy(&install.stdout),
+        "installed 1 hako(s):\n  acme/widgets v0.2.0\n",
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+
+    let after = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "."])
+        .env("KANSO_HAKO", &cache)
+        .current_dir(&app)
+        .output()
+        .expect("kanso runs");
+    assert_eq!(
+        String::from_utf8_lossy(&after.stdout),
+        "widgets v2\n",
+        "{}",
+        String::from_utf8_lossy(&after.stderr)
+    );
+}
+
 /// The rest of the cycle: a release lands upstream, `list` says so, `update`
 /// walks the lock forward, and the build follows — still without a network,
 /// because the cache holds what the lock names.

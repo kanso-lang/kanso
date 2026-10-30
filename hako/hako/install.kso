@@ -55,7 +55,9 @@ fn source_or files full
 fn kso? full
   path/extension full == "kso"
 
-# `import "owner/repo"` — a std module and a relative path name no hako.
+# `import "owner/repo"`, or `import name "owner/repo"` naming the qualifier,
+# which a hako with a hyphen in its name needs. A std module and a relative
+# path name no hako.
 pub fn required root
   sources root .> (files -> read_all files [])
 
@@ -77,9 +79,14 @@ fn one_of seen name
 
 fn imported text
   rows = text/split text "\n"
-  quoted = list/select rows (row -> text/slice row 1 8 == "import \"")
+  quoted = list/select rows importing?
   specs = list/to_list (list/map quoted spec_of)
   list/to_list (list/map (list/reject specs local?) hako_name)
+
+# The path is the line's first quoted string, whatever names come before it.
+fn importing? row
+  quotes = list/any? (text/chars row) (c -> c == "\"")
+  text/slice row 1 7 == "import " and quotes
 
 fn spec_of row
   after = text/split row "\""
