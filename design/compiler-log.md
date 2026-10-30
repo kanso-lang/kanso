@@ -1117,4 +1117,5 @@ writers of a value's inline tag and payload. codegen.rs falls from 3,447
 lines to 2,911. Putting words.rs back in place of its include! gives main's
 codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
 section by their text and now name words.rs; each still applies to the line
-it did before.
+it did before. CI's cost-goldens job read every vein at main's values,
+compile_instructions among them, so no row moved.
