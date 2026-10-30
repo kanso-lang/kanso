@@ -1,0 +1,3 @@
+error[runtime]: net_secure takes a connection and a host string
+  failed in net/secured at std/net/net.kso:57
+  called from net_secure_takes_a_connection_and_a_host_string.kso:9
