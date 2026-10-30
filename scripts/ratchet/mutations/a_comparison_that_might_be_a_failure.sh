@@ -26,7 +26,7 @@
 # the whole set to TOP, which takes the fold out AND puts `k_force_fast` back,
 # so the two rows still say different things.
 set -e
-n=$(grep -cF 'if set != 0 && set & !infer::BOOL == 0 {' src/codegen.rs)
+n=$(grep -cF 'if set != 0 && set & !infer::BOOL == 0 {' src/codegen/words.rs)
 [ "$n" -eq 1 ] || { echo "the cannot-fail fold changed shape ($n); rewrite this" >&2; exit 1; }
-sed -i 's|if set != 0 && set & !infer::BOOL == 0 {|if set != 0 \&\& set \& !0 == 0 {|' src/codegen.rs
-grep -qF 'if set != 0 && set & !0 == 0 {' src/codegen.rs
+sed -i 's|if set != 0 && set & !infer::BOOL == 0 {|if set != 0 \&\& set \& !0 == 0 {|' src/codegen/words.rs
+grep -qF 'if set != 0 && set & !0 == 0 {' src/codegen/words.rs

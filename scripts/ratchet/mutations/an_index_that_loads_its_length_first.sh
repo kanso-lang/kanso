@@ -5,8 +5,8 @@
 # first, both compares sit side by side and LLVM folds them back into flags
 # and an `and`.
 set -e
-f=src/codegen.rs
-grep -q 'fn index_in_range(' src/codegen.rs
+f=src/codegen/words.rs
+grep -q 'fn index_in_range(' src/codegen/words.rs
 line='    f.line_fmt(format_args!("{len} = load i64, ptr {len_ptr}"));'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the index's length load moved; this mutation needs rewriting" >&2
