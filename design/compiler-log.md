@@ -1097,10 +1097,15 @@ serving the same certificate, logged in over TLS 1.3 on both engines, and
 the server's `pg_stat_ssl` agreed.
 
 Every program links the runtime, so each benchmark's text grows by 2,544
-bytes. The instruction rows move by about a thousand each, and by layout
-further on three: deepbench 198,242,376 -> 197,859,562, runbench 846,388,267
--> 846,337,653 and widebench 28,700,882 -> 28,686,318. No benchmark secures a
-connection. The compiler carries rustls and grows, and its rows move with
+bytes and the text row sums to 5,705,712. No benchmark secures a connection,
+and the instruction rows move by about a thousand each where the larger
+runtime is loaded: work_basket 18,296,044, work_digestbench 4,104,967,
+work_encodebench 2,335,340,353, work_escapebench 40,309,372, work_indexbench
+1,888,158, work_jsonbench 549,338,235, work_livebench 938,654,972,
+work_oneshot 9,979,521, work_pendbench 154,124,736, work_readbench 4,584,375
+and work_scanbench 268,194. Three move further, by layout: deepbench
+198,242,376 -> 197,859,562, runbench 846,388,267 -> 846,337,653 and widebench
+28,700,882 -> 28,686,318. The compiler carries rustls and grows, and its rows move with
 the binary: compile_instructions 24,096,607 -> 24,097,537,
 entry_instructions 86,792,132 -> 86,793,470, library_instructions
 72,615,607 -> 72,618,778, emit_instructions 5,598,851 -> 5,598,399,
