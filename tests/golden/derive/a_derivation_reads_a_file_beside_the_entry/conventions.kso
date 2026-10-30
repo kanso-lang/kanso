@@ -1,0 +1,13 @@
+import "std/derive"
+import "std/text"
+
+# A convention that reads a file the app keeps beside its entry, the way a
+# models convention reads `schema.sql`, and declares each line of it.
+pub fn listed p
+  [(derive/declare "tables" "tables" (lines p.files["tables.txt"]))]
+
+fn lines none
+  []
+
+fn lines t
+  text/split (text/trim t) "\n"
