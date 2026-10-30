@@ -110,7 +110,7 @@ fn body_for "/playground.html" set
 fn body_for "/book-play.js" set
   set.book
 
-fn body_for "/book/ch04.html" set
+fn body_for "/book/failure.html" set
   set.chapter
 
 fn body_for "/numbers.html" set
@@ -515,7 +515,7 @@ fn judged_read set chrome failures read
 
 fn visiting_book set chrome failures
   on = (report -> booked set chrome failures report)
-  visiting set chrome book_port "/book/ch04.html" on
+  visiting set chrome book_port "/book/failure.html" on
 
 fn booked set chrome failures report
   on = (_ -> read_book set chrome failures report)
@@ -604,9 +604,9 @@ fn missing_panels read acc
   noted acc why (any_live? read["live"])
 
 # A panel that reads a file needs a machine the tab is not, so it keeps the
-# output the book recorded. The guard once named io/read_file after the
-# function had moved to os/, and ch04's three file-reading panels each grew a
-# run button that could only fail.
+# output the book recorded. The guard once named io/read_file after the function
+# had moved to os/, and the failure chapter's three file-reading panels each
+# grew a run button that could only fail.
 fn machine_panels read acc
   why = "a chapter 04 panel that reads a file became runnable in the tab"
   noted acc why (read["machine"] == 0)
@@ -719,7 +719,7 @@ wanted_files = [
   "docs/index.html"
   "docs/playground.html"
   "docs/book-play.js"
-  "docs/book/ch04.html"
+  "docs/book/failure.html"
   "docs/numbers.html"
   # The runtime a compiled program links against, which the pages fetch beside
   # the engine. Without it every run on these pages would be interpreted.
