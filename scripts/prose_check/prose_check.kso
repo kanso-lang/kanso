@@ -15,8 +15,8 @@ import "std/text"
 # program is allowed to say anything.
 #
 # One check is about markup rather than prose: a page's `<div>` tags must pair
-# up. ch07 shipped with a stray `</div>` that the browser forgave and every
-# other gate passed over.
+# up. The modules chapter shipped with a stray `</div>` that the browser forgave
+# and every other gate passed over.
 type finding
   page
   line

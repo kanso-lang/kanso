@@ -1,4 +1,4 @@
-//! A field is read without importing the type that owns it (ch03, and the
+//! A field is read without importing the type that owns it (the types chapter, and the
 //! 2026-10-12 gavel on #1894). regex's port read `h.start` in a module that
 //! imports nothing, on a value another module built, and every engine refused
 //! it at check with "no record type has a field `start`". A library checked

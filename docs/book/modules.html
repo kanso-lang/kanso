@@ -1,0 +1,455 @@
+---
+layout: book
+title: "chapter 07—modules and tests"
+description: "an entry and a module, one namespace across a module's files, the ordering rules, pub and private-by-default, tests as test_ constants; then what crosses between modules: imports, shared names, privacy, renaming, re-exports and derive."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 07</span>
+<h1>modules and tests</h1>
+
+<p>a kanso module is a directory of library files. the files share one namespace: a name declared in one is in scope in all the others, with no import or export between them. a program is an entry file that imports the modules it uses. here is a small teahouse laid out that way:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the teahouse on disk</div>
+  <pre><code>teahouse/
+  main.kso                 the entry: statements that run
+  teahouse/
+    menu.kso               the module: two files, one namespace
+    service.kso
+    service_test.kso       tests, read only by kanso test</code></pre>
+</div>
+
+<p>the module holds the prices. <code>menu.kso</code> knows what each item costs, and <code>service.kso</code> adds the service charge and says how to describe a total:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/teahouse/menu.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">base_price</span> <span class="s">"dango"</span>
+  <span class="n">350</span>
+
+<span class="k">fn</span> <span class="f">base_price</span> <span class="s">"taiyaki"</span>
+  <span class="n">500</span>
+
+<span class="k">fn</span> <span class="f">base_price</span> item
+  <span class="f">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/teahouse/service.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">describe</span> n
+  <span class="s">"<span class="i">{n}</span> yen, service included"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">price</span> item
+  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span></code></pre>
+</div>
+
+<p><code>price</code> calls <code>base_price</code>, which lives in the other file, and neither file imports anything. the entry is the only file that names the module:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
+
+dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
+pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span> <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="s">"gomen: <span class="i">{e.reason}</span>"</span>)
+<span class="f">dango</span> <span class="o">.&gt;</span> <span class="f">describe</span> <span class="o">.&gt;</span> <span class="f">print</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> pocky)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run teahouse</div>
+    <pre><code>400 yen, service included
+gomen: we do not serve pocky</code></pre>
+  </div>
+</div>
+
+<p>point the toolchain at the directory and it finds the entry. <code>import "./teahouse"</code> brings in the module's <code>pub</code> names, and <code>main.kso</code> calls them bare, as <code>price</code> and <code>describe</code>. three earlier chapters meet in these files. string-literal dispatch is the menu. an <code>err</code> is the missing item, and it passes the <code>+ 50</code> in <code>price</code> without running it (chapter 04). the entry rescues it with <code>.?</code>, which it may do because the err was born in another module, and the callback reads the failure's <code>reason</code>. <code>describe</code> has no arm for an err, so the dango total reaches it through <code>.&gt;</code>, which hands on a value and steps past a failure.</p>
+
+<p>an entry file holds statements and nothing else. the definitions live in the module, and the compiler refuses a <code>fn</code> or a <code>type</code> in an entry. that is why the rescue's callback is a lambda: a named function would have to be declared in a library file. a single file that holds both, as most of the earlier chapters' samples do, is a play file, run with <code>kanso play</code>; it is the scratch-pad form, and it may import only the standard library.</p>
+
+<h2>one namespace, many files</h2>
+
+<p>in most languages a file is a unit of encapsulation: each file is its own scope, and moving a name from one file to another costs an import at one end and an export at the other. in kanso the module is the unit, and the files are where you chose to put things. every top-level name in <code>menu.kso</code> is visible in <code>service.kso</code>, and the reverse holds too.</p>
+
+<p>the reason is that a file boundary with meaning is a second boundary to keep consistent with the first. two files that must agree on what crosses between them drift the moment someone forgets one side. file names still carry information—<code>menu.kso</code> holds the menu—and a name is defined in exactly one place in the directory, so finding it is a search. imports work the other way: each file imports what it calls, so a file that calls <code>list/fold</code> imports <code>std/list</code> even when the file beside it already does.</p>
+
+<h2>canonical order within a file</h2>
+
+<p>inside a file, two things about order are fixed. imports come first, in alphabetical order, and types come before functions. get either wrong and the file does not compile. everything else is in the order you write it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shop.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">type</span> receipt
+  <span class="f">total</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">checkout</span> item qty
+  <span class="f">receipt</span> (<span class="f">line</span> item qty)
+
+<span class="k">fn</span> <span class="f">line</span> item qty
+  qty <span class="o">*</span> price item <span class="o">+</span> service
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout </span>"</span>matcha<span class="s">" 2}"</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"matcha"</span>
+  <span class="n">600</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"mochi"</span>
+  <span class="n">300</span>
+
+service <span class="o">=</span> <span class="n">50</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run shop.kso</div>
+    <pre><code>shop/receipt 1250</code></pre>
+  </div>
+</div>
+
+<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>play</code>, <code>price</code>, <code>service</code>. that is the order the author chose, and the compiler has nothing to say about it. definition order is not scope either: <code>checkout</code> calls <code>line</code> and <code>line</code> reads <code>service</code>, both defined below them, and it all resolves.</p>
+
+<p>so put a helper beside the thing it helps, and keep the entry point wherever a reader will look for it. the two <code>price</code> arms sit together here because reading them together is the point. nothing requires it: an overload set is one declaration split across arms, and the arms may be written wherever they read best.</p>
+
+<p>there is no formatter to run and no ordering debate to have in review. the two rules that are enforced, imports first and alphabetical and types before functions, are errors the compiler names and points at, the same as a stray brace.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>imports at the top, types next, and then the order that reads best. i keep each helper under the function that calls it, so a file reads downward like a recipe. split files by <em>topic</em>, the way a real library does, and the file names become the module's table of contents.</p>
+</div>
+</div>
+
+<h2>private by default</h2>
+
+<p>look again at the two module files: <code>base_price</code> is bare, and <code>price</code> and <code>describe</code> wear <code>pub</code>. that keyword is the whole visibility system. a top-level name is private to its module unless it is marked, so <code>base_price</code> is the teahouse's own business and the entry cannot reach it. there is no export list to maintain. <code>pub</code> sits on the declaration, so a reader sees the surface where each thing is defined: in <code>shop.kso</code> above, <code>receipt</code>, <code>checkout</code> and <code>play</code> are the api, and <code>line</code>, <code>price</code> and <code>service</code> are interior.</p>
+
+<p><code>pub</code> goes on every kind of declaration: <code>pub fn</code>, <code>pub type</code>, and <code>pub</code> on a constant. an importer sees only <code>pub</code> names, and reaching for anything else is <code>error[opacity]</code>, which names the module whose interior you touched. the last section of this chapter shows one.</p>
+
+<h2>tests are constants</h2>
+
+<p>chapter 01 showed that a test is a constant whose name starts with <code>test_</code>. a test file sits in the module's directory and its name ends in <code>_test.kso</code>. <code>kanso test</code> compiles it as an importer of the module beside it, so it sees what any caller sees: <code>price</code> and <code>describe</code>, and not <code>base_price</code>. helpers the tests need stay in the test file, and <code>kanso run</code>, <code>check</code> and <code>build</code> never read it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/teahouse/service_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
+
+test_dango_price <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">400</span>
+
+test_describe <span class="o">=</span> <span class="f">describe</span> <span class="n">400</span> <span class="o">==</span> <span class="s">"400 yen, service included"</span>
+
+test_unknown_item_fails <span class="o">=</span> <span class="f">testing/failed?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test teahouse</div>
+    <pre><code>test_dango_price ... ok
+test_describe ... ok
+test_unknown_item_fails ... ok
+3 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>a test is a boolean constant. the runner evaluates each <code>test_</code> name and reports what came back. <code>test_dango_price</code> is the comparison <code>price "dango" == 400</code>, and nothing else is needed to write it. <code>test_unknown_item_fails</code> needs one helper from <code>std/testing</code>, because a failure is a box and <code>==</code> reads only values (chapter 04). <code>testing/failed?</code> rescues the box and answers whether there was a failure in it, which it may do because the failure comes from the module under test.</p>
+
+<p>when a plain comparison fails, the report can only say that it came out false. by the time the runner has the boolean, the two values that were compared are gone:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">double_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">double</span> n
+  n <span class="o">*</span> <span class="n">2</span>
+
+test_double <span class="o">=</span> <span class="f">double</span> <span class="n">4</span> <span class="o">==</span> <span class="n">9</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test double_test.kso</div>
+    <pre><code>test_double ... FAILED (returned false)
+0 passed, 1 failed</code></pre>
+  </div>
+</div>
+
+<p><code>std/expect</code> keeps them. <code>expect</code> hands its value on unchanged, and <code>to (equal 9)</code> answers <code>true</code> when the value matches and a <code>mismatch</code> record holding both sides when it does not. the runner prints whatever a failing test returned, so the record is the diagnostic:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">double_expect_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/expect"</span>
+
+<span class="k">fn</span> <span class="f">double</span> n
+  n <span class="o">*</span> <span class="n">2</span>
+
+test_double <span class="o">=</span> <span class="f">expect</span> (<span class="f">double</span> <span class="n">4</span>) <span class="o">.</span> <span class="f">to</span> (<span class="f">equal</span> <span class="n">9</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test double_expect_test.kso</div>
+    <pre><code>test_double ... FAILED (returned expect/mismatch 9 8)
+0 passed, 1 failed</code></pre>
+  </div>
+</div>
+
+<p>read the record as <em>wanted, got</em>: the test wanted 9 and <code>double 4</code> gave 8. use <code>==</code> for a quick check and <code>expect</code> where a failure needs to say what it saw. the same constants pin a teahouse's prices here and, in chapter 12, a json parser's escapes, unicode handling and error positions.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p>a test is a value, so everything you know about values applies: no setup, no teardown, no ordering, no shared state to leak between examples. a suite of constants cannot flake—there is nothing in it that time can touch. i have checked.</p>
+</div>
+</div>
+
+<h2>importing another module</h2>
+
+<p>one directory is one module; a program grows by putting modules side by side. an <code>import</code> names a sibling directory, and every <code>pub</code> name inside arrives under the module's own name as a qualifier—<code>teahouse/price</code>, spelled where it is used, so a reader never wonders where a name came from:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shop/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
+
+<span class="f">print</span> <span class="s">"dango costs <span class="i">{teahouse/price </span>"</span>dango<span class="s">"}"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run main.kso</div>
+    <pre><code>dango costs 370</code></pre>
+  </div>
+</div>
+
+<p>the boundary works in both directions. inside the teahouse, <code>base_price</code> is an ordinary name any file of the module may read; from outside, it does not exist, and asking for it is a compile error rather than a discouraged convention:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shady/peek_check.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
+
+<span class="f">print</span> <span class="s">"the wholesale number is <span class="i">{teahouse/base_price}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check peek_check.kso</div>
+    <pre><code><span class="k">error[opacity]</span>: `base_price` is private to module `teahouse` — only pub names cross an import
+<span class="c">  --&gt; peek_check.kso:3:33</span>
+   3 | print "the wholesale number is {teahouse/base_price}"
+                                       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>that is one import of one module. the rest of this chapter is what happens between modules: what an import brings in, which names cross, and how two modules share a name without a conflict.</p>
+
+<h2>an import enrolls names</h2>
+
+<p>here is a small geometry module and a program that uses it. <code>geo/geo.kso</code> marks two functions <code>pub</code>; a third is private working machinery.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">geo/geo.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">area</span> r
+  <span class="n">3.14159</span> <span class="o">*</span> square r
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">ride_km</span> a b
+  <span class="f">math/sqrt</span> (<span class="f">area</span> a <span class="o">+</span> area b)
+
+<span class="k">fn</span> <span class="f">square</span> x
+  x <span class="o">*</span> x</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">trip/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"one wheel: <span class="i">{area 3.0}</span>"</span>
+<span class="f">print</span> <span class="s">"the pair: <span class="i">{geo/area 2.0}</span>"</span>
+<span class="f">print</span> <span class="s">"a ride: <span class="i">{ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run trip</div>
+    <pre><code>one wheel: 28.27431
+the pair: 12.56636
+a ride: 3.963325623765981</code></pre>
+  </div>
+</div>
+
+<p>one line declares the dependency, and every <code>pub</code> name arrives twice over. the bare spelling—<code>area</code>, <code>ride_km</code>—enrolls into the file's overload space, where it dispatches like any local function. the qualified spelling—<code>geo/area</code>—is the name's permanent identity, always valid, and it doubles as a tool: writing the qualifier narrows dispatch to that module's arms alone.</p>
+
+<p>there is no list of imported names to maintain. the compiler prunes whatever the file never uses, and your editor's language server answers "where did this come from?"—provenance is tooling's job.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>in a file that imports more than one module, i reach for the qualified spelling—<code>geo/area</code> answers where a name came from without leaving the line. save the bare spelling for the vocabulary your file is actually about.</p>
+</div>
+</div>
+
+<h2>shared names are the normal case</h2>
+
+<p>two modules will export the same word, and a local function may use it too. all of them land in one overload space, and dispatch picks by specificity—the same mechanism that chooses between a <code>fact 0</code> arm and a <code>fact n</code> arm chooses between a local <code>select</code> on invoices and the list module's <code>select</code>. a local arm sorts before an imported one when the shapes tie, so your own definitions win the close calls. when two imports collide head-on—the same name, the same shape, and no local arm to break the tie—a bare call is refused, and the fix is one qualifier.</p>
+
+<h2>a value brings its arms</h2>
+
+<p>a module can be handed a value whose type it has never imported. geometry writes <code>area</code> for its own <code>circle</code>, and a report module that takes a circle as a parameter may call <code>area c</code> without importing geo: the circle arrived as an argument, and it carries the arms its owner wrote. the same holds for a field of an argument, an element of a list passed in, and whatever such an arm answers.</p>
+
+<p>a value the file made itself carries nothing extra. <code>area 3</code> in the report module is an unknown name, because nothing the module declares or imports is called <code>area</code>. an arm travels only from the module that owns the type, so a module that does not own <code>circle</code> cannot add an arm that goes wherever circles go. checked on its own, the report module accepts <code>area c</code> on a parameter. the program that hands it a circle is where the compiler finds geo's arm, or refuses the call when no owner wrote one.</p>
+
+<p>a module may write the same name for a type of its own. if the report module declares a <code>square</code> and an <code>area</code> for it, a square it is handed takes that arm and a circle it is handed still takes geo's. a local arm hides only an owner's arm of the same shape, one that matches the same types in the same places. when two owners write arms that are equally specific for one call, as when one matches its own type first and the other matches its own type second, the compiler refuses the pair and asks for an arm that is the more specific everywhere.</p>
+
+<h2>privacy holds at the boundary</h2>
+
+<p>inside a module, files see everything; <code>pub</code> only matters to outsiders. reach for private machinery across an import and the boundary answers:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">nosy/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{geo/square 3.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run nosy</div>
+    <pre><code><span class="k">error[opacity]</span>: `square` is private to module `geo` — only pub names cross an import
+<span class="c">  --&gt; nosy/main.kso:3:9</span>
+   3 | print "{geo/square 3.0}"
+               <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>renaming on the way in</h2>
+
+<p>sometimes an imported name deserves a different one in your file—it collides with a word you want, or your domain has a better word. braces rename, and an identifier before them aliases the qualifier itself. the two combine:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">picks/main.kso</div>
+  <pre><code><span class="k">import</span> g { area:disc } <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"renamed: <span class="i">{disc 2.0}</span> and <span class="i">{g/disc 2.0}</span>"</span>
+<span class="f">print</span> <span class="s">"the alias still reaches: <span class="i">{g/ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run picks</div>
+    <pre><code>renamed: 12.56636 and 12.56636
+the alias still reaches: 3.963325623765981</code></pre>
+  </div>
+</div>
+
+<p>a rename replaces the spelling. after <code>area:disc</code>, this file says <code>disc</code> or <code>g/disc</code>; bare <code>area</code> no longer resolves here. the whole module still enrolls—the braces adjust one token, they never select a subset.</p>
+
+<h2>re-exports shape a surface</h2>
+
+<p>a module's surface is its own <code>pub</code> names. what it imports stays off that surface: depend on a module and you get its exports, never its suppliers'. when a module genuinely wants to pass a name through—the resort below is built on geometry and its guests will need <code>area</code>—it says so with a bare <code>pub</code> line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">resort/resort.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="k">pub</span> <span class="f">area</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">lap</span> r
+  <span class="f">area</span> r <span class="o">+</span> area r</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">visitor/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../resort"</span>
+
+<span class="f">print</span> <span class="s">"a lap: <span class="i">{lap 1.0}</span>"</span>
+<span class="f">print</span> <span class="s">"area came through: <span class="i">{area 1.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run visitor</div>
+    <pre><code>a lap: 6.28318
+area came through: 3.14159</code></pre>
+  </div>
+</div>
+
+<p><code>pub area</code> puts one imported export on the resort's surface. <code>pub geo</code> would re-export the whole module by its qualifier, and <code>pub area:footprint</code> renames on the way out. anything not re-exported stays sealed:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">sealed/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../resort"</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{resort/ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run sealed</div>
+    <pre><code><span class="k">error[name]</span>: unknown name `resort/ride_km`
+<span class="c">  --&gt; sealed/main.kso:3:9</span>
+   3 | print "{resort/ride_km 1.0 2.0}"
+               <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the visitor imported the resort, and <code>ride_km</code> belongs to geometry—the resort never re-exported it, so it never arrived.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>a surface is easiest to keep small from the start. export the two names your first caller needs and let the next caller ask for the third—adding a <code>pub</code> line is a one-word change, and taking one back breaks somebody.</p>
+</div>
+</div>
+
+<h2>a convention runs while the program compiles</h2>
+
+<p>a web framework often places code by its name: a function called <code>index</code> in a module called <code>posts</code> answers a request for <code>/posts/index</code>. kanso lets a library state a convention like that as an ordinary function, which runs while your program compiles. the entry asks for it with a <code>derive</code> line after its imports:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./conventions"</span>
+<span class="k">import</span> <span class="s">"./posts"</span>
+
+<span class="k">derive</span> conventions/routing
+
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/posts/show"</span> <span class="n">7</span>)
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/posts/index"</span> <span class="n">2</span>)
+<span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/nowhere"</span> <span class="n">2</span>)</code></pre>
+</div>
+
+<p>the compiler describes the entry and the modules it imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, each record type with its fields, and every call a module's functions make to a named function. the entry comes first, under its file's name, and since it holds only statements it carries only its calls. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/conventions.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/derive"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="c"># Every pub function of every module, keyed by its path.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">routing</span> p
+  rows <span class="o">=</span> <span class="f">list/fold</span> p<span class="o">.</span>modules {} (<span class="f">acc</span> m <span class="o">-&gt;</span> <span class="f">list/fold</span> m<span class="o">.</span><span class="f">functions</span> acc (<span class="f">row</span> m))
+  [(<span class="f">derive/declare</span> <span class="s">"routes"</span> <span class="s">"routes"</span> rows)]
+
+<span class="k">fn</span> <span class="f">row</span> m
+  (<span class="f">acc</span> f <span class="o">-&gt;</span> <span class="f">put</span> acc <span class="s">"/<span class="i">{m.name}</span>/<span class="i">{f.name}</span>"</span> f<span class="o">.</span>reference)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> table path arg
+  <span class="f">called</span> table[path] path arg
+
+<span class="k">fn</span> <span class="f">called</span> none path _
+  <span class="s">"no route for <span class="i">{path}</span>"</span>
+
+<span class="k">fn</span> <span class="f">called</span> f _ arg
+  <span class="f">f</span> arg</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">routed/posts.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> page
+  <span class="s">"all posts, page <span class="i">{page}</span>"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> id:int
+  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run routed</div>
+    <pre><code>post 7
+all posts, page 2
+no route for /nowhere</code></pre>
+  </div>
+</div>
+
+<p>the checker reads <code>routes</code> as it reads code you wrote, so a route that names a function nobody declared fails to compile. three more declarations exist. <code>derive/declare_type</code> adds a record type to the entry. <code>derive/define</code> adds an arm, written out as source, to one of the app's modules: an arm <code>fn path_to p:post</code> belongs in the module that declares <code>post</code>, and that module checks it like code someone wrote there. <code>derive/refuse</code> makes a compile error at the function or type it names, and <code>derive/refuse_call</code> makes one at a call the description listed, which is how a convention reports something that does not fit it. <code>kanso derived routed</code> prints every constant, type and arm a build derived.</p>
+
+<p>a derivation only computes. it cannot read a file or the clock, and it learns about the app only from the description: a convention that imports one of the modules it describes is refused. the same source therefore derives the same declarations every time, on every engine, including the one in the playground.</p>
+
+
+<h2>what you can do now</h2>
+
+<p>you can lay a program out as an entry file and a module directory, and split the module across files that share one namespace. you know the two ordering rules the compiler enforces, imports first and alphabetical and types before functions, and that the rest of a file is in the order its author chose. you can mark a module's surface with <code>pub</code> and leave everything else private. and you can test that surface with <code>test_</code> constants in a <code>_test.kso</code> file, using <code>==</code> for a plain check and <code>std/expect</code> when a failure should report what it saw. the next chapter turns to sequences, and chapter 12 reads a real library built from these pieces.</p>
+
+<p>between modules, the rules are these:</p>
+
+<ul>
+<li>a module is a directory; its files share one namespace.</li>
+<li><code>import "path"</code> declares the dependency and enrolls every pub name, bare and qualified. the compiler prunes what you don't use.</li>
+<li>overloading is the resolution mechanism. specificity picks; a local arm outranks an import on a tie; a head-on collision between imports is an error with a one-word fix.</li>
+<li>a value carries the arms its type's owner wrote: code handed one calls them bare without importing the owner. a value the file made reaches only names its module declares or imports.</li>
+<li><code>import g { theirs:yours } "path"</code> aliases the qualifier and renames a token. a rename replaces the bare spelling.</li>
+<li>a surface is a module's own pubs plus its explicit re-exports—<code>pub name</code>, <code>pub qualifier</code>, <code>pub theirs:yours</code>. nothing leaks through on its own.</li>
+<li><code>derive module/fn</code> runs a convention while the entry compiles. it is handed a description of the app's own modules and answers constants, record types and refusals, which are checked like code you wrote.</li>
+</ul>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>split the teahouse further. add a third module file <code>order.kso</code> holding a <code>pub fn total</code> that takes a list of item names, prices each through <code>price</code>, and sums them. it calls into <code>service.kso</code> across the file boundary with no import. add a <code>test_</code> constant for a two-item order and run <code>kanso test teahouse</code>.</li>
+  <li>trigger the canonical-order error on purpose in two ways: two imports out of alphabetical order, and a <code>type</code> placed below a <code>fn</code>. read each <code>error[formatting]</code> and predict the fix before you make it.</li>
+  <li>write a test that must fail, once with <code>==</code> and once with <code>expect</code>, and compare the two reports. then make both pass by fixing the assertion and watch the count change.</li>
+  <li>from a file <em>outside</em> the teahouse module, import it and try to read <code>base_price</code>. read the <code>error[opacity]</code> you get back. then mark <code>base_price</code> as <code>pub</code>, watch the error disappear, and decide whether you meant it. widening a surface is a one-word edit; narrowing it later breaks whoever came to rely on it.</li>
+  <li>make two small modules that both export a function named <code>area</code> with the same shape, import both from a third, and call <code>area</code> bare. read the refusal, then qualify both calls and confirm each spelling reaches its own module.</li>
+  <li>in the resort module from this chapter, re-export <code>area</code> under a new name with <code>pub area:footprint</code>. confirm the visitor can call <code>footprint</code> and that bare <code>area</code> no longer arrives.</li>
+  <li>call a private helper of an imported module by its qualified name. read the <code>error[opacity]</code> diagnostic, then make the helper <code>pub</code> and watch the same call succeed.</li>
+  <li>geo's <code>ride_km</code> takes two arguments. declare a local <code>ride_km</code> with a different arity (in a library file beside your entry), import geo, and confirm both dispatch by argument count with no qualifier. then match the arity and work out which one answers a bare call—your own declaration outranks the import—and confirm <code>geo/ride_km</code> still reaches the other.</li>
+</ol>

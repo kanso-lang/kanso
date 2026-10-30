@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "the kanso book"
-description: "the kanso book: the language taught in order, with appendices—values, dispatch, failure, effects, concurrency, modules, two real programs, the compiler that keeps receipts, and the full reference."
+description: "the kanso book: the language taught in order: values, dispatch, failure, effects, concurrency, modules and sequences; then two programs built and shipped, two read closely, the compiler that keeps receipts, and the full reference."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">the book</span>
@@ -19,43 +19,23 @@ extra_css: /book/book.css
 
 <h2>how the book is organized</h2>
 
-<p><strong>part i—the language</strong> teaches kanso from nothing: values, bindings, and the canonical form; dispatch as the only branch; failure as a value; effects as descriptions; the flow model that makes concurrency a property of data dependence; and modules with tests. each chapter builds on the last and ends with exercises.</p>
+<p><strong>part i—the language</strong> teaches kanso from nothing: values, bindings, and the canonical form; dispatch as the only branch; failure as a value; effects as descriptions; the flow model that makes concurrency a property of data dependence; modules, imports and tests; and sequences that run as one loop. each chapter builds on the last and ends with exercises.</p>
 
-<p><strong>part ii—real programs</strong> reads two programs that earn their living: kanso-json, the standard library's json decoder—the one that outruns hand-tuned parsers in chapter 10—and a voting-theory simulator that reproduces the canonical results of the field, method by method.</p>
+<p><strong>part ii—building and shipping</strong> builds two programs from an empty directory, a command-line tool and a web service, then measures one, makes it cheaper, and ships both as binaries.</p>
 
-<p><strong>part iii—under the hood</strong> is the performance story: how a pure language with no memory syntax decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture—and how those wins are held by cost goldens and structural specs instead of stopwatches. we measured; chapter 10 keeps the receipts.</p>
+<p><strong>part iii—real programs</strong> reads two larger programs closely: kanso-json, the json decoder from the standard library, and a voting-theory simulator that reproduces the field's known results, method by method.</p>
 
-<p><strong>part iv—shipping</strong> builds two programs from an empty directory, a command-line tool and a web service, then measures one, makes it cheaper, and ships both as binaries.</p>
+<p><strong>part iv—under the hood</strong> is the performance story: how a pure language with no memory syntax decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture, and how cost goldens and structural specs hold those results in place.</p>
 
-<p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, and the complete canonical-form law.</p>
+<p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, the complete canonical-form law, and recipes for everyday jobs.</p>
 
 <ul class="book-toc">
-  <li><div class="toc-part">start here</div></li>
-  <li><a href="tour.html"><span class="ch-num">→</span><span class="ch-title">a tour of kanso</span><span class="ch-blurb">eighteen programs you can edit and run in the page, a minute each</span></a></li>
-  <li><div class="toc-part">part i — the language</div></li>
-  <li><a href="ch01.html"><span class="ch-num">01</span><span class="ch-title">hello, kanso</span><span class="ch-blurb">the toolchain, the first program, and a compile error worth meeting</span></a></li>
-  <li><a href="ch02.html"><span class="ch-num">02</span><span class="ch-title">values and bindings</span><span class="ch-blurb">every value form, arbitrary-precision ints, widening, and the rebind rule</span></a></li>
-  <li><a href="ch03.html"><span class="ch-num">03</span><span class="ch-title">types and dispatch</span><span class="ch-blurb">overloads, typesets, markers, destructuring—the only branch you get</span></a></li>
-  <li><a href="ch04.html"><span class="ch-num">04</span><span class="ch-title">failure is a value</span><span class="ch-blurb">err, none, the railway, and the taxonomy of things going wrong</span></a></li>
-  <li><a href="ch05.html"><span class="ch-num">05</span><span class="ch-title">effects are io</span><span class="ch-blurb">programs that describe their side effects and tests that need no mocks</span></a></li>
-  <li><a href="ch06.html"><span class="ch-num">06</span><span class="ch-title">flow and concurrency</span><span class="ch-blurb">groups, binds, and green threads—dependence declared, order earned</span></a></li>
-  <li><a href="ch07.html"><span class="ch-num">07</span><span class="ch-title">modules and tests</span><span class="ch-blurb">a directory is a module, private is the default, tests are constants</span></a></li>
-  <li><div class="toc-part">part ii — real programs</div></li>
-  <li><a href="ch08.html"><span class="ch-num">08</span><span class="ch-title">a json library</span><span class="ch-blurb">kanso-json read closely: dispatch at byte level, failure with positions</span></a></li>
-  <li><a href="ch09.html"><span class="ch-num">09</span><span class="ch-title">a voting simulator</span><span class="ch-blurb">monte carlo in a pure language; six voting methods, honestly compared</span></a></li>
-  <li><div class="toc-part">part iii — under the hood</div></li>
-  <li><a href="ch10.html"><span class="ch-num">10</span><span class="ch-title">fast by construction</span><span class="ch-blurb">past serde_json without memory syntax, and the ratchet that holds it</span></a></li>
-  <li><a href="ch11.html"><span class="ch-num">11</span><span class="ch-title">modules</span><span class="ch-blurb">a directory is a module, an import enrolls its names, and a surface is a kept promise</span></a></li>
-  <li><a href="ch12.html"><span class="ch-num">12</span><span class="ch-title">sequences</span><span class="ch-blurb">adapters are recipes, consumers pull one element at a time, and the chain fuses to one loop</span></a></li>
-  <li><div class="toc-part">part iv — shipping</div></li>
-  <li><a href="ch13.html"><span class="ch-num">13</span><span class="ch-title">a command-line tool</span><span class="ch-blurb">a project from an empty directory: arguments, stdin, exit codes, tests, a binary</span></a></li>
-  <li><a href="ch14.html"><span class="ch-num">14</span><span class="ch-title">a web service</span><span class="ch-blurb">a handler is a function from a request and state to a response, tested by calling it</span></a></li>
-  <li><a href="ch15.html"><span class="ch-num">15</span><span class="ch-title">measuring and shipping</span><span class="ch-blurb">counters that never vary, a cost golden ci diffs, and a binary on a server</span></a></li>
-  <li><div class="toc-part">appendices</div></li>
-  <li><a href="appa.html"><span class="ch-num">a</span><span class="ch-title">the diagnostics catalog</span><span class="ch-blurb">every error kind, what it protects, and the exact message</span></a></li>
-  <li><a href="appb.html"><span class="ch-num">b</span><span class="ch-title">builtin reference</span><span class="ch-blurb">the whole surface: the ambient names, the std modules and the list vocabulary</span></a></li>
-  <li><a href="appc.html"><span class="ch-num">c</span><span class="ch-title">canonical form</span><span class="ch-blurb">the formatting law: one rendering per program, enforced</span></a></li>
-  <li><a href="appd.html"><span class="ch-num">d</span><span class="ch-title">recipes</span><span class="ch-blurb">short programs for everyday jobs, each with its output</span></a></li>
+{%- for section in site.data.book %}
+  <li><div class="toc-part">{{ section.part }}</div></li>
+  {%- for ch in section.chapters %}
+  <li><a href="{{ ch.slug }}.html"><span class="ch-num">{{ ch.num }}</span><span class="ch-title">{{ ch.title }}</span><span class="ch-blurb">{{ ch.blurb }}</span></a></li>
+  {%- endfor %}
+{%- endfor %}
 </ul>
 
-<p class="book-start"><a href="ch01.html">start with chapter 01—hello, kanso →</a></p>
+<p class="book-start"><a href="hello.html">start with chapter 01—hello, kanso →</a></p>

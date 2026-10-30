@@ -437,7 +437,7 @@ shipping/order "tea" 2 "placed"</code></pre>
 
 <h3 id="b-bytes"><code>text/bytes</code></h3>
 <p class="builtin-sig"><code>text/bytes string → int[]</code></p>
-<p>the utf-8 encoding of a string as a list of byte values (0–255). an ascii string gives one byte per character; <code>"café"</code> gives five bytes, because <code>é</code> takes two. this is the entry point to byte-level work—scanning, chunking, decoding—used heavily by the json library in chapter 08.</p>
+<p>the utf-8 encoding of a string as a list of byte values (0–255). an ascii string gives one byte per character; <code>"café"</code> gives five bytes, because <code>é</code> takes two. this is the entry point to byte-level work—scanning, chunking, decoding—used heavily by the json library in chapter 12.</p>
 
 <h3 id="b-find2"><code>text/find2</code></h3>
 <p class="builtin-sig"><code>text/find2 int[] int int int → int</code></p>
@@ -731,7 +731,7 @@ third</code></pre>
 </div>
 </div>
 
-<p>that is the whole surface: the ambient names, a handful of std modules, two shapes, one failure convention. (std/json, the decoder the book builds by hand in chapter 08, ships ready-made too.) you now have the signature, the behavior, and the failure mode of everything kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right verb instead of hand-rolling it. the chapters build real programs on exactly this surface; the json library of chapter 08 is little more than <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code> worn smooth.</p>
+<p>that is the whole surface: the ambient names, a handful of std modules, two shapes, one failure convention. (std/json, the decoder the book builds by hand in chapter 12, ships ready-made too.) you now have the signature, the behavior, and the failure mode of everything kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right verb instead of hand-rolling it. the chapters build real programs on exactly this surface; the json library of chapter 12 is little more than <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code> worn smooth.</p>
 
 <h2>exercises</h2>
 <ol>
@@ -740,10 +740,3 @@ third</code></pre>
 <li>the lenient subscript <code>xs[i]</code> answers a missing index with <code>none</code> while the strict form <code>xs[i]!</code> answers a box whose failure is the miss. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
 <li>write a two-overload <code>label</code> function—one arm matching <code>none</code>, one matching a value—and drive it from a <code>math/random</code> roll that indexes into a short list. run it a few times and note that the roll is the same each run.</li>
 </ol>
-
-<nav class="chapter-nav">
-  <a href="index.html">contents</a>
-  <span class="nav-spacer"></span>
-  <a href="appa.html">← the diagnostics catalog</a>
-  <a href="appc.html">next: canonical form →</a>
-</nav>

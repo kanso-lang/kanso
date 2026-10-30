@@ -5,7 +5,7 @@
 # went unread and the page kept a diagnostic the compiler had since reworded.
 # The mutation puts that old wording back.
 set -e
-page=docs/book/ch11.html
+page=docs/book/modules.html
 if ! grep -q 'kanso run sealed</div>' "$page"; then
   echo "expected a \`kanso run sealed\` panel in $page; the shape moved and" >&2
   echo "this mutation needs rewriting" >&2
