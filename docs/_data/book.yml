@@ -20,15 +20,16 @@
     - { num: "09", slug: "cli", title: "a command-line tool", blurb: "a project from an empty directory: arguments, stdin, exit codes, tests, a binary" }
     - { num: "10", slug: "web", title: "a web service", blurb: "a handler is a function from a request and state to a response, tested by calling it" }
     - { num: "11", slug: "shipping", title: "measuring and shipping", blurb: "counters that never vary, a cost golden ci diffs, and a binary on a server" }
+    - { num: "12", slug: "packages", title: "packages", blurb: "depending on a published hako: the import is the manifest, a tag is a release, the lock is exact" }
 - part: "part iii — real programs"
-  start: 12
+  start: 13
   chapters:
-    - { num: "12", slug: "json", title: "a json library", blurb: "kanso-json read closely: dispatch at byte level, failure with positions" }
-    - { num: "13", slug: "voting", title: "a voting simulator", blurb: "monte carlo in a pure language; six voting methods, honestly compared" }
+    - { num: "13", slug: "json", title: "a json library", blurb: "kanso-json read closely: dispatch at byte level, failure with positions" }
+    - { num: "14", slug: "voting", title: "a voting simulator", blurb: "monte carlo in a pure language; six voting methods, honestly compared" }
 - part: "part iv — under the hood"
-  start: 14
+  start: 15
   chapters:
-    - { num: "14", slug: "fast", title: "fast by construction", blurb: "past serde_json without memory syntax, and the ratchet that holds it" }
+    - { num: "15", slug: "fast", title: "fast by construction", blurb: "past serde_json without memory syntax, and the ratchet that holds it" }
 - part: "appendices"
   start: 1
   appendix: true

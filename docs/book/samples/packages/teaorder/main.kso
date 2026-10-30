@@ -1,0 +1,5 @@
+import json "kanso-lang/kanso-json"
+import "std/os"
+
+os/read_file! "order.json" .> json/decode!
+  .> (order -> print "{order["tea"]}, {order["grams"]} grams")
