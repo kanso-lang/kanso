@@ -1,8 +1,8 @@
 # What a derivation is handed and what it may answer (#2186).
 #
 # An entry that writes `derive conventions/routes` has the compiler call that
-# function, during the build, with a `program` describing the modules the
-# entry imports. The function answers a list of declarations, and the
+# function, during the build, with a `program` describing the entry and the
+# modules it imports. The function answers a list of declarations, and the
 # compiler adds them to the entry before it checks anything, so a declaration
 # is checked like code someone wrote.
 #
@@ -16,16 +16,21 @@
 # module's own types, and it is checked like code someone wrote there.
 # `refuse` makes a compile error at the item `origin` names, which is how a
 # convention reports a function it cannot place.
+#
+# The entry comes first in `modules`, under its file's name. It holds
+# statements only, so it lists only its calls, and a convention that checks
+# calls checks the ones the entry writes too.
 pub type program
   modules
 
 # `constants` maps each pub constant's name to its value, which is how a
 # derivation reads data the app keeps, such as its migrations.
 # `calls` lists every call a function in the module makes to a named
-# function, in the order they are written: the function that makes it, the
-# function it calls, each argument's name, or "" for an argument that is not
-# a name, and each argument's text, or "" for an argument that is not a string
-# written whole. `refuse_call` makes a compile error at one of them.
+# function, in the order they are written: the function that makes it, or ""
+# for a call in the entry's statements; the function it calls; each
+# argument's name, or "" for an argument that is not a name; and each
+# argument's text, or "" for an argument that is not a string written whole.
+# `refuse_call` makes a compile error at one of them.
 pub type module
   name
   functions

@@ -1,0 +1,7 @@
+import "./conventions"
+import "./pages"
+
+derive conventions/linked
+
+print (pages/home 7)
+print (conventions/link "posts/shwo")

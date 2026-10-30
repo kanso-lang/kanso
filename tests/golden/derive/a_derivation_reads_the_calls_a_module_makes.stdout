@@ -1,2 +1,2 @@
-["pages/home -> posts/show"]
+["main/ -> print" "main/ -> print" "main/ -> pages/home" "pages/home -> posts/show"]
 home: post 7

@@ -2,7 +2,7 @@
 //! compiles.
 //!
 //! An entry that writes `derive conventions/routes` has the compiler build a
-//! `derive/program` describing the local modules the entry imports, call
+//! `derive/program` describing the entry and the local modules it imports, call
 //! `conventions/routes` with it on the interpreter, and read back a list of
 //! declarations. A `derive/constant` becomes a constant in the entry, written
 //! out as the literal its value spells, and a `derive/refusal` becomes a
@@ -68,6 +68,7 @@ enum Made {
 /// refusal or a misbehaving derivation produced.
 pub fn derive(
     entry: &Program,
+    root: &str,
     deps: &Program,
     exports: &Exports,
 ) -> Result<Derived, Vec<Diagnostic>> {
@@ -76,13 +77,13 @@ pub fn derive(
         return Err(diags);
     }
     let interp = Interp::copying(deps);
-    let description = describe(entry, deps, exports, &interp)?;
+    let description = describe(entry, root, deps, exports, &interp)?;
     let mut made = Derived::default();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
             Ok(decls) => {
                 for decl in decls {
-                    match declared(&interp, entry, deps, d, &decl) {
+                    match declared(&interp, entry, root, deps, d, &decl) {
                         Ok(Some(Made::Constant(c))) => made.constants.push(c),
                         Ok(Some(Made::Type(t))) => made.types.push(t),
                         Ok(Some(Made::Definition(path, source))) => {
@@ -102,21 +103,41 @@ pub fn derive(
     }
 }
 
-/// The app's own modules the entry imports, each with its pub functions, its
-/// pub constants and its record types. The modules a derivation lives in are
-/// left out: they hold the convention, not the program it describes.
+/// The entry, then the app's own modules it imports, each with its pub
+/// functions, its pub constants and its record types. The modules a
+/// derivation lives in are left out: they hold the convention, not the
+/// program it describes.
 fn describe(
     entry: &Program,
+    root: &str,
     deps: &Program,
     exports: &Exports,
     interp: &Interp,
 ) -> Result<Value, Vec<Diagnostic>> {
-    let modules = described(entry)
-        .iter()
-        .map(|name| module(deps, name, exports, interp))
-        .collect::<Result<_, _>>()
-        .map_err(|d| vec![d])?;
+    let mut modules = vec![entry_module(entry, root)];
+    for name in described(entry) {
+        modules.push(module(deps, &name, exports, interp).map_err(|d| vec![d])?);
+    }
     Ok(record("derive/program", vec![list(modules)]))
+}
+
+/// The entry as a module, under its file's stem. It holds statements only and
+/// declares nothing, so it lists only its calls, each from the caller "", and
+/// a convention that checks calls checks the ones written in the entry too
+/// (#2198).
+fn entry_module(entry: &Program, root: &str) -> Value {
+    let mut calls = Vec::new();
+    for decl in entry.fns.iter().filter(|f| f.name == crate::ast::ENTRY) {
+        calls_of(decl, root, "", &mut calls);
+    }
+    let fields = vec![
+        text(root),
+        list(Vec::new()),
+        Value::Map(Rc::new(Entries::new())),
+        list(Vec::new()),
+        list(calls),
+    ];
+    record("derive/module", fields)
 }
 
 /// The modules a derivation is shown, by the qualifier the entry reaches each
@@ -257,15 +278,19 @@ fn calls_in(deps: &Program, name: &str) -> Vec<Value> {
         if caller.contains('/') || crate::ast::getter_field(caller).is_some() {
             continue;
         }
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } => expr,
-                Stmt::Expr(e) => e,
-            };
-            calls_from(e, name, caller, &mut calls);
-        }
+        calls_of(decl, name, caller, &mut calls);
     }
     calls
+}
+
+fn calls_of(decl: &FnDecl, module: &str, caller: &str, calls: &mut Vec<Value>) {
+    for stmt in &decl.body {
+        let e = match stmt {
+            Stmt::Bind { expr, .. } => expr,
+            Stmt::Expr(e) => e,
+        };
+        calls_from(e, module, caller, calls);
+    }
 }
 
 fn calls_from(e: &Expr, module: &str, caller: &str, calls: &mut Vec<Value>) {
@@ -389,6 +414,7 @@ fn failed(d: &Derive, reason: &str) -> Diagnostic {
 fn declared(
     interp: &Interp,
     entry: &Program,
+    root: &str,
     deps: &Program,
     d: &Derive,
     decl: &Value,
@@ -420,7 +446,7 @@ fn declared(
             return Err(refused_at(deps, &origin, message, d.span));
         }
         if &**ty == "derive/call_refusal" {
-            return Err(refused_at_call(interp, deps, d, &fields));
+            return Err(refused_at_call(interp, entry, root, deps, d, &fields));
         }
         if &**ty == "derive/type_declaration" {
             return declared_type(interp, d, &fields).map(|t| Some(Made::Type(t)));
@@ -494,7 +520,14 @@ fn defined(
 
 /// A refusal at one call a description listed, in the file of the function
 /// that makes it.
-fn refused_at_call(interp: &Interp, deps: &Program, d: &Derive, fields: &[Value]) -> Diagnostic {
+fn refused_at_call(
+    interp: &Interp,
+    entry: &Program,
+    root: &str,
+    deps: &Program,
+    d: &Derive,
+    fields: &[Value],
+) -> Diagnostic {
     let message = plain_text(interp, &fields[1]);
     let call = match interp.demand(&fields[0]) {
         Ok(Value::Record { ty, fields }) if &*ty == "derive/call" => fields.borrow().clone(),
@@ -504,9 +537,13 @@ fn refused_at_call(interp: &Interp, deps: &Program, d: &Derive, fields: &[Value]
         Ok(Value::Int(n)) => n.to_string().parse::<u32>().ok(),
         _ => None,
     };
-    let caller = format!("{}/{}", plain_text(interp, &call[0]), plain_text(interp, &call[1]));
+    let (module, caller) = (plain_text(interp, &call[0]), plain_text(interp, &call[1]));
     let at = number(&call[5]).zip(number(&call[6]));
-    match (deps.fns.iter().find(|f| f.name == caller), at) {
+    let made = match module == root && caller.is_empty() {
+        true => entry.fns.iter().find(|f| f.name == crate::ast::ENTRY),
+        false => deps.fns.iter().find(|f| f.name == format!("{module}/{caller}")),
+    };
+    match (made, at) {
         (Some(f), Some((line, col))) => {
             Diagnostic::new("derive", message, Span { line, col }).about(&f.file)
         }

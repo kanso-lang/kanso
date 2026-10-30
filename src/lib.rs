@@ -174,8 +174,10 @@ fn compile_parsed_entry(
     // Before anything reads the entry's names: what a derivation declares
     // mentions the modules it describes, and those imports are in use.
     if !program.derives.is_empty() {
-        let made = phase::watched("derive", || derive::derive(&program, &dep_program, &exports))
-            .map_err(|d| render_merged(&d, file, source))?;
+        let root = root_name(std::path::Path::new(file));
+        let made =
+            phase::watched("derive", || derive::derive(&program, &root, &dep_program, &exports))
+                .map_err(|d| render_merged(&d, file, source))?;
         // An arm a derivation defined belongs to a module the entry imports,
         // and that module compiles it as one of its own files.
         if !made.definitions.is_empty() {
