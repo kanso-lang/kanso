@@ -1095,3 +1095,17 @@ rustls reports that close as an error, and with the error passed through the
 interpreter's case failed. senro's `pg/connect_tls`, run against Postgres 16
 serving the same certificate, logged in over TLS 1.3 on both engines, and
 the server's `pg_stat_ssl` agreed.
+
+Every program links the runtime, so each benchmark's text grows by 2,544
+bytes. The instruction rows move by about a thousand each, and by layout
+further on three: deepbench 198,242,376 -> 197,859,562, runbench 846,388,267
+-> 846,337,653 and widebench 28,700,882 -> 28,686,318. No benchmark secures a
+connection. The compiler carries rustls and grows, and its rows move with
+the binary: compile_instructions 24,096,607 -> 24,097,537,
+entry_instructions 86,792,132 -> 86,793,470, library_instructions
+72,615,607 -> 72,618,778, emit_instructions 5,598,851 -> 5,598,399,
+codegen_instructions_dev 116,821,778 -> 116,926,412,
+codegen_instructions_release 371,573,350 -> 371,827,256, interp_instructions
+571,786,909 -> 571,683,168, browser_compile_instructions 343,289,570 ->
+343,307,533 and browser_run_instructions 64,598,060 -> 64,598,061. The
+floor follows under the rule for a feature a ruling requires.
