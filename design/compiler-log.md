@@ -1109,8 +1109,8 @@ and work_scanbench 268,194. Three move further, by layout: deepbench
 the binary: compile_instructions 24,096,607 -> 24,097,537,
 entry_instructions 86,792,132 -> 86,793,470, library_instructions
 72,615,607 -> 72,618,778, emit_instructions 5,598,851 -> 5,598,399,
-codegen_instructions_dev 116,821,778 -> 116,926,412,
-codegen_instructions_release 371,573,350 -> 371,827,256, interp_instructions
+codegen_instructions_dev 116,821,778 -> 116,926,477,
+codegen_instructions_release 371,573,350 -> 371,827,207, interp_instructions
 571,786,909 -> 571,683,168, browser_compile_instructions 343,289,570 ->
 343,307,533 and browser_run_instructions 64,598,060 -> 64,598,061. The
 floor follows under the rule for a feature a ruling requires.
