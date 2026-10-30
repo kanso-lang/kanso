@@ -153,6 +153,10 @@ impl<'a> Interp<'a> {
                 Ok(handle) => Value::int(handle),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            Desc::Secure(conn, host) => Ok(match executor.secure(*conn, host) {
+                Ok(handle) => Value::int(handle),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
                 Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
@@ -407,6 +411,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
         Desc::ReceiveBytes(conn) => out.push_str(&format!("  receive_bytes {conn}\n")),
         Desc::Dial(host, port) => out.push_str(&format!("  dial {host:?} {port}\n")),
+        Desc::Secure(conn, host) => out.push_str(&format!("  secure {conn} {host:?}\n")),
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::SendBytes(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),

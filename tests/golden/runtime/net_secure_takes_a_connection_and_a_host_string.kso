@@ -1,0 +1,9 @@
+import "std/net"
+
+pub type stand_in
+  handle
+
+pub fn opaque x
+  x
+
+pub play = net/secured (opaque (stand_in 3)) (opaque 7) .> (r -> print "{r}")

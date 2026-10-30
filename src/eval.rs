@@ -261,6 +261,7 @@ pub enum Desc {
     Receive(i64),
     ReceiveBytes(i64),
     Dial(String, i64),
+    Secure(i64, String),
     Send(i64, String),
     SendBytes(i64, Rc<Vec<u8>>),
     CloseSocket(i64),

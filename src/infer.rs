@@ -2278,7 +2278,10 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 // the handle a later kill names, a listener's port, and the
                 // socket handles the net wrappers read into their records
                 Expr::Ident(n, _, _)
-                    if matches!(base(n), "start" | "listen" | "accept" | "net_port" | "dial") =>
+                    if matches!(
+                        base(n),
+                        "start" | "listen" | "accept" | "net_port" | "dial" | "net_secure"
+                    ) =>
                 {
                     INT
                 }
@@ -2495,6 +2498,7 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "net_read"
             | "net_read_bytes"
             | "dial"
+            | "net_secure"
             | "net_write"
             | "net_close"
             | "args"

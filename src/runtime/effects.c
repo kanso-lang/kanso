@@ -51,7 +51,9 @@ KValue k_b_read_bytes(KValue path) {
    handle — a small number counted from one, the same number the interpreter
    hands out, so a program that prints one reads the same on both engines. */
 #define K_SOCKETS 64
-static struct { int used; int fd; } k_sockets[K_SOCKETS];
+/* `tls` is the OpenSSL session of a connection `net/secured` upgraded, and
+   NULL for a plain one. */
+static struct { int used; int fd; void* tls; } k_sockets[K_SOCKETS];
 static struct { int used; pid_t pid; int out; int err; int started;
                 char* obuf; long long olen; long long ocap;
                 char* ebuf; long long elen; long long ecap; } k_kids[K_SOCKETS];
@@ -109,6 +111,7 @@ static long long k_hold_socket(int fd) {
     if (h < 0) k_die("too many sockets open at once");
     k_sockets[h % K_SOCKETS].used = 1;
     k_sockets[h % K_SOCKETS].fd = fd;
+    k_sockets[h % K_SOCKETS].tls = NULL;
     return h;
 }
 
@@ -155,6 +158,12 @@ KValue k_b_dial(KValue host, KValue port) {
     if (__builtin_expect(!k_not_failure(host) || !k_not_failure(port), 0)) return k_failed2(host, port);
     if (host.tag != K_STR || port.tag != K_INT) k_die("dial takes a host string and a port number");
     return k_mkdesc(34, host, port);
+}
+
+KValue k_b_net_secure(KValue conn, KValue host) {
+    if (__builtin_expect(!k_not_failure(conn) || !k_not_failure(host), 0)) return k_failed2(conn, host);
+    if (conn.tag != K_INT || host.tag != K_STR) k_die("net_secure takes a connection and a host string");
+    return k_mkdesc(36, conn, host);
 }
 
 KValue k_b_net_write(KValue conn, KValue text) {
@@ -652,6 +661,127 @@ static KStep k_step(KDesc* d);
 static int k_argc_global = 0;
 static char** k_argv_global = NULL;
 
+/* TLS for `net/secured` (#2178), through the machine's OpenSSL, opened the
+   first time a program secures a connection. Linking libssl would put it in
+   every binary's start-up, and most programs never speak TLS. The calls are
+   OpenSSL 3's, looked up by name; the numbers are its constants
+   (SSL_VERIFY_PEER, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name).
+   The handshake checks the server against the default roots, which
+   `SSL_CERT_FILE` replaces, as rustls reads them in the interpreter. */
+#ifndef __wasm__
+static struct {
+    int tried;
+    void* ctx;
+    void* (*ssl_new)(void*);
+    int (*set_fd)(void*, int);
+    long (*ctrl)(void*, int, long, void*);
+    int (*set1_host)(void*, const char*);
+    void* (*get0_param)(void*);
+    int (*set1_ip_asc)(void*, const char*);
+    int (*connect)(void*);
+    int (*read)(void*, void*, int);
+    int (*write)(void*, const void*, int);
+    int (*pending)(const void*);
+    int (*shutdown)(void*);
+    void (*free)(void*);
+} k_ssl;
+
+static int k_ssl_opened(void) {
+    if (k_ssl.tried) return k_ssl.ctx != NULL;
+    k_ssl.tried = 1;
+    const char* names[] = {"libssl.so.3", "libssl.3.dylib",
+                           "/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib",
+                           "/usr/local/opt/openssl@3/lib/libssl.3.dylib", NULL};
+    void* lib = NULL;
+    for (int i = 0; names[i] && !lib; i++) lib = dlopen(names[i], RTLD_NOW);
+    if (!lib) return 0;
+    void* (*method)(void) = (void* (*)(void))dlsym(lib, "TLS_client_method");
+    void* (*ctx_new)(void*) = (void* (*)(void*))dlsym(lib, "SSL_CTX_new");
+    int (*roots)(void*) = (int (*)(void*))dlsym(lib, "SSL_CTX_set_default_verify_paths");
+    void (*verify)(void*, int, void*) = (void (*)(void*, int, void*))dlsym(lib, "SSL_CTX_set_verify");
+    k_ssl.ssl_new = (void* (*)(void*))dlsym(lib, "SSL_new");
+    k_ssl.set_fd = (int (*)(void*, int))dlsym(lib, "SSL_set_fd");
+    k_ssl.ctrl = (long (*)(void*, int, long, void*))dlsym(lib, "SSL_ctrl");
+    k_ssl.set1_host = (int (*)(void*, const char*))dlsym(lib, "SSL_set1_host");
+    k_ssl.get0_param = (void* (*)(void*))dlsym(lib, "SSL_get0_param");
+    k_ssl.set1_ip_asc = (int (*)(void*, const char*))dlsym(lib, "X509_VERIFY_PARAM_set1_ip_asc");
+    k_ssl.connect = (int (*)(void*))dlsym(lib, "SSL_connect");
+    k_ssl.read = (int (*)(void*, void*, int))dlsym(lib, "SSL_read");
+    k_ssl.write = (int (*)(void*, const void*, int))dlsym(lib, "SSL_write");
+    k_ssl.pending = (int (*)(const void*))dlsym(lib, "SSL_pending");
+    k_ssl.shutdown = (int (*)(void*))dlsym(lib, "SSL_shutdown");
+    k_ssl.free = (void (*)(void*))dlsym(lib, "SSL_free");
+    if (!method || !ctx_new || !roots || !verify || !k_ssl.ssl_new || !k_ssl.set_fd
+        || !k_ssl.ctrl || !k_ssl.set1_host || !k_ssl.get0_param || !k_ssl.set1_ip_asc
+        || !k_ssl.connect || !k_ssl.read || !k_ssl.write || !k_ssl.pending
+        || !k_ssl.shutdown || !k_ssl.free)
+        return 0;
+    void* ctx = ctx_new(method());
+    if (!ctx || roots(ctx) != 1) return 0;
+    verify(ctx, 1, NULL);
+    k_ssl.ctx = ctx;
+    return 1;
+}
+
+/* The reason names the host and nothing from OpenSSL, so both engines word a
+   refusal alike. A host written as an address is checked against the
+   certificate's addresses and sent no server name, as rustls does. */
+static __attribute__((noinline)) KValue k_secure(long long h, KValue host) {
+    const char* name = k_cstr(k_as_str(host));
+    char said[512];
+    snprintf(said, sizeof said, "cannot secure the connection to %s", name);
+    int fd = k_socket_of(h);
+    if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
+    if (!k_ssl_opened()) return k_err(k_str(said), NULL);
+    void* ssl = k_ssl.ssl_new(k_ssl.ctx);
+    if (!ssl) return k_err(k_str(said), NULL);
+    unsigned char addr[16];
+    int literal = inet_pton(AF_INET, name, addr) == 1 || inet_pton(AF_INET6, name, addr) == 1;
+    int named = literal ? k_ssl.set1_ip_asc(k_ssl.get0_param(ssl), name)
+                        : k_ssl.ctrl(ssl, 55, 0, (void*)name) == 1 && k_ssl.set1_host(ssl, name);
+    k_out_settle();
+    if (!named || k_ssl.set_fd(ssl, fd) != 1 || k_ssl.connect(ssl) != 1) {
+        k_ssl.free(ssl);
+        return k_err(k_str(said), NULL);
+    }
+    k_sockets[h % K_SOCKETS].tls = ssl;
+    return k_int(h);
+}
+#else
+static KValue k_secure(long long h, KValue host) {
+    (void)h;
+    return k_err(k_concat(k_str("cannot secure the connection to "), host), NULL);
+}
+#endif
+
+/* Bytes from a connection, through its TLS session when it has one. */
+static ssize_t k_conn_take(long long h, int fd, char* buf, size_t n) {
+#ifndef __wasm__
+    void* ssl = k_sockets[h % K_SOCKETS].tls;
+    if (ssl) {
+        /* 0 is the peer's goodbye or its close without one, read as the end
+           the way a plain socket's close is; below 0 is a failure. */
+        int got = k_ssl.read(ssl, buf, (int)n);
+        if (got < 0) return -1;
+        return got;
+    }
+#else
+    (void)h;
+#endif
+    return read(fd, buf, n);
+}
+
+/* Bytes to a connection, through its TLS session when it has one. */
+static ssize_t k_conn_give(long long h, int fd, const char* buf, size_t n) {
+#ifndef __wasm__
+    void* ssl = k_sockets[h % K_SOCKETS].tls;
+    if (ssl) return k_ssl.write(ssl, buf, (int)n);
+#else
+    (void)h;
+#endif
+    return write(fd, buf, n);
+}
+
 /* A read from a connection, out of line for its 64 KiB buffer. Inside k_exec
    the buffer was part of every k_exec frame, and a bind chain built from the
    left enters k_exec once a link, so each link held 64 KiB of stack it never
@@ -661,7 +791,7 @@ static __attribute__((noinline)) KValue k_conn_read(long long h, int raw) {
     if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
     char buf[65536];
     k_out_settle();
-    ssize_t got = read(fd, buf, sizeof(buf));
+    ssize_t got = k_conn_take(h, fd, buf, sizeof(buf));
     if (got < 0) return k_err(k_str("cannot read"), NULL);
     if (!raw) return k_str_n(buf, (long long)got);
     unsigned char* data = (unsigned char*)k_alloc((size_t)(got > 0 ? got : 1));
@@ -863,6 +993,8 @@ static KValue k_exec(KDesc* d) {
             return k_conn_read(d->x.payload, 1);
         case 34:
             return k_dial(d->x, d->y.payload);
+        case 36:
+            return k_secure(d->x.payload, d->y);
         case 23: {
             int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
@@ -879,7 +1011,7 @@ static KValue k_exec(KDesc* d) {
             }
             long long sent = 0;
             while (sent < tlen) {
-                ssize_t n = write(fd, tdata + sent, (size_t)(tlen - sent));
+                ssize_t n = k_conn_give(d->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
                 if (n <= 0) return k_err(k_str("cannot write"), NULL);
                 sent += n;
             }
@@ -889,6 +1021,14 @@ static KValue k_exec(KDesc* d) {
             long long h = d->x.payload;
             int fd = k_socket_of(h);
             if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
+#ifndef __wasm__
+            void* ssl = k_sockets[h % K_SOCKETS].tls;
+            if (ssl) {
+                k_ssl.shutdown(ssl);
+                k_ssl.free(ssl);
+                k_sockets[h % K_SOCKETS].tls = NULL;
+            }
+#endif
             close(fd);
             k_sockets[h % K_SOCKETS].used = 0;
             return k_done();
@@ -1389,8 +1529,10 @@ static KStep k_step(KDesc* d) {
                the read answers what it always did. */
 #ifndef __wasm__
             int fd = k_socket_of(d->x.payload);
+            void* ssl = fd >= 0 ? k_sockets[d->x.payload % K_SOCKETS].tls : NULL;
             char one;
-            if (fd >= 0 && recv(fd, &one, 1, MSG_PEEK | MSG_DONTWAIT) < 0
+            if (fd >= 0 && !(ssl && k_ssl.pending(ssl) > 0)
+                && recv(fd, &one, 1, MSG_PEEK | MSG_DONTWAIT) < 0
                 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 KStep s = {1, 1, k_mkdesc(d->dtag, d->x, d->y), k_none()};
                 return s;
