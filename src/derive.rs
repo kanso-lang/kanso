@@ -69,6 +69,7 @@ enum Made {
 pub fn derive(
     entry: &Program,
     root: &str,
+    files: &[(String, String)],
     deps: &Program,
     exports: &Exports,
 ) -> Result<Derived, Vec<Diagnostic>> {
@@ -77,7 +78,7 @@ pub fn derive(
         return Err(diags);
     }
     let interp = Interp::copying(deps);
-    let description = describe(entry, root, deps, exports, &interp)?;
+    let description = describe(entry, root, files, deps, exports, &interp)?;
     let mut made = Derived::default();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
@@ -104,12 +105,13 @@ pub fn derive(
 }
 
 /// The entry, then the app's own modules it imports, each with its pub
-/// functions, its pub constants and its record types. The modules a
-/// derivation lives in are left out: they hold the convention, not the
-/// program it describes.
+/// functions, its pub constants and its record types, and the files beside
+/// the entry. The modules a derivation lives in are left out: they hold the
+/// convention, not the program it describes.
 fn describe(
     entry: &Program,
     root: &str,
+    files: &[(String, String)],
     deps: &Program,
     exports: &Exports,
     interp: &Interp,
@@ -118,7 +120,31 @@ fn describe(
     for name in described(entry) {
         modules.push(module(deps, &name, exports, interp).map_err(|d| vec![d])?);
     }
-    Ok(record("derive/program", vec![list(modules)]))
+    let mut texts = Entries::new();
+    for (name, body) in files {
+        texts.insert(MapKey::Str(name.clone().into()), text(body));
+    }
+    Ok(record("derive/program", vec![list(modules), Value::Map(Rc::new(texts))]))
+}
+
+/// The files directly beside the entry that a derivation is handed by name:
+/// every one that is not kanso source and reads as text, such as the
+/// `schema.sql` a models convention reads in place of its migrations (#2186).
+/// They are inputs like the source, so the same tree derives the same
+/// declarations. A compile with no directory under it, as in the tab, hands
+/// none.
+pub fn beside(dir: &std::path::Path) -> Vec<(String, String)> {
+    let dir = if dir.as_os_str().is_empty() { std::path::Path::new(".") } else { dir };
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut files: Vec<(String, String)> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|name| !name.ends_with(".kso"))
+        .filter_map(|name| std::fs::read_to_string(dir.join(&name)).ok().map(|t| (name, t)))
+        .collect();
+    files.sort();
+    files
 }
 
 /// The entry as a module, under its file's stem. It holds statements only and

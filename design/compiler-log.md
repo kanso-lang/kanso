@@ -23,27 +23,6 @@
 
 
 
-## 2026-10-26 — lib/json drops the escape its encoder stopped calling
-
-#2173. `escape_onto`, `escape_clean` and `escape_split` in lib/json had no
-caller once a string value went out through `builtin_append_string`, and
-nothing in this repository, kq or kanso-json calls `json/escape_onto`. They
-are gone. The two ratchet mutations that wrote a string and a key the old
-way now append the old escape to the library before calling it, and each
-still turns its row red. A codegen comment and a runtime fixture that named
-the escape describe what is still there.
-
-CI's rows, against main at #2172. The library every compile reads is
-smaller: compile_instructions 24,873,029 -> 24,871,095, entry_instructions
-73,712,018 -> 73,693,860, library_instructions 73,349,447 -> 73,331,088,
-compile_allocs 13,941 -> 13,940 and browser_compile_instructions
-353,650,925 -> 353,638,408, browser_compile_peak_bytes 847,746 -> 847,738.
-The interpreter does 62 instructions less, interp_instructions 577,237,254,
-and one allocation less, interp_allocs 653,377. work_runbench moves
-825,009,976 -> 825,010,172, 196 more; the run program never called the
-escape, and nothing here isolates what moved it. Welfare rises within its
-second decimal and is banked.
-
 ## 2026-10-27 — gavel: templates are Slim-like, and they compile
 
 #2178. Clay, on how the framework's pages are written: "well you can find a
@@ -1053,6 +1032,30 @@ compiles with the embedded `lib/derive`, whose comments grew, and
 browser_compile_instructions moved 343,289,578 -> 343,289,570 (-8). No other
 row moved, the library and module rows included. Welfare fell by less than a hundredth, and the floor
 follows under the rule for a feature a ruling requires.
+
+## 2026-10-30 — a derivation reads the files beside the entry
+
+#2186's models ruling makes `schema.sql` the opt-in for a migration that
+needs raw SQL the fold cannot interpret: the app checks in `pg_dump` output
+"and the compiler reads that file instead". A derivation reads only the
+description it is handed, and nothing in it carried a file.
+
+`derive/program` now has `files`, a map from the name of each file directly
+beside the entry that is not kanso source and reads as text to that text.
+senro's models convention reads `schema.sql` from it when the app keeps one
+and folds the migrations when it does not. The files are inputs like the
+source, so the same tree still derives the same declarations. The tab has no
+directory under its compile and hands none.
+
+tests/golden/derive gains a convention that declares the lines of a
+`tables.txt` beside its entry, on both engines. With the directory read
+pointed at a path that does not exist, it declares an empty list and the
+case fails.
+
+bench/entry_corpus derives, so it now reads its directory, and the entry row
+prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
+row moved. Welfare fell by less than a hundredth, and the floor follows under
+the rule for a feature a ruling requires.
 
 ## 2026-10-30 — a connection can be secured with TLS
 
