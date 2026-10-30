@@ -111652,3 +111652,70 @@ browser_compile_peak_bytes 843,030 -> 847,565, browser_run_instructions
 a page more for the copies. Under the corpus-first gavel each moved welfare
 term's baseline is scaled so its ratio to what it reads holds, so the phase
 leaves welfare where it was and the fix below scores as a rise.
+
+## 2026-10-26 — a builder handed on round a cycle is still a builder
+
+The fix for the corpus phase above. A string joined onto itself is a builder,
+and the emitter converts a seed where it enters the group from outside, which
+copies it. Three hops counted as entering when the string they carried was
+the builder the join had just made:
+
+- A join handed straight to the next group as an argument. The emitter knew
+  a name bound to a join was carrying the builder, and asked nothing of the
+  join itself.
+- A join bound below a `return … if` guard. The guard holds the statements
+  after it, and the walk for names bound to a join read only the function's
+  own list.
+- A group whose name is also declared at another count. A call at another
+  count read as the group handed on as a value, called from somewhere no call
+  site describes, so no caller could be proved to hand the string over. A
+  call whose count is another declared group's calls that group, and only a
+  count no group has still counts as the group escaping.
+
+regexp's `replace_all` also handed `stepped_over` its accumulator beside the
+join made from it, so the accumulator was read twice and could not be joined
+in place; `stepped_over` never read it, and the argument is gone. Over 64,000
+words `replace_all` took 49.8 seconds natively and takes 0.15. Each of the
+three loops in `relayed` took between 2.3 and 13.9 seconds at 80,000 steps and
+takes under 0.01.
+
+Three mem fixtures pin the copies, each red with its own change undone and
+green with the other two undone:
+`a_join_handed_on_as_an_argument_is_still_a_builder` and
+`a_join_below_a_guard_is_still_a_builder` read 198 bytes where main reads
+5,337, and `a_name_at_two_counts_keeps_its_builder` 196 where main reads
+1,936. `a_digest_holds_every_block_it_walked` hands a join on as an argument
+too, and its vein falls: `allocs` 266 -> 123, `alloc_bytes` 18,657 ->
+14,090, `bytes_malloc` 81 -> 10 and `sh_str` 1,344 -> 192. Three regexp
+fixtures move too. `a_scan_keeps_its_place_in_the_text` reads `alloc_bytes`
+106,537 (from 108,672) and `a_scan_that_finds_nothing_keeps_nothing`
+2,781,801 (from 2,783,936), both with the argument change alone;
+`a_split_stops_where_the_separator_does` reads 24,487 (from 24,639), and
+undoing either the argument change or the count change puts part of that
+back.
+
+CI's rows, against #2171's phase on main at #2165. The run program reads
+work_runbench 836,794,013 -> 825,009,976, 3,766,610 above main without the
+phase, which is the three loops' linear work. The interpreted corpus reads
+interp_instructions 579,993,703 -> 577,237,316: at 1,500 steps the copies
+were 2,756,387 of the phase's 17,946,504, and `tagged` now grows linearly on
+the interpreter as well, 0.04 s at 20,000 steps and 0.11 s at 80,000 where
+main takes 0.12 s and 1.25 s. interp_allocs reads 653,378 and interp_peak_bytes 1,356,556. Natively the run
+vein falls to run_alloc_bytes 224,043,124, run_allocs 1,582,921,
+run_bytes_malloc 7,850, run_evac_bytes 4,602,208 and run_sh_str 16,816,384,
+while run_beat_iters reads 193,074, run_perm_allocs 106, run_str_scan_bytes
+18,358,325 and run_str_scans 3,387, a scan per lap where the copy used to
+stand. regexp's argument change moves work_scanbench 274,220 -> 266,360 and
+work_digestbench 4,122,972 -> 4,103,700, and their veins with it:
+scan_allocs 149 -> 91, scan_alloc_bytes 11,069 -> 8,934, digest_allocs
+7,194 -> 7,051 and digest_alloc_bytes 697,073 -> 692,506. The three
+analyses cost the front end a little: compile_instructions 24,864,430 ->
+24,873,029, entry_instructions 73,696,160 -> 73,712,018,
+library_instructions 73,344,720 -> 73,349,447 and emit_instructions
+5,703,136 -> 5,715,797, and the tab's browser_compile_instructions reads
+353,650,925, browser_compile_peak_bytes 847,746 and browser_run_instructions
+64,598,033. The emitted rows grow
+with the new module: emitted_other_defines 2,262 -> 2,276,
+emitted_other_calls 20,540 -> 20,700, emitted_other_branches 17,831 ->
+17,925, emitted_other_lines 170,150 -> 171,135 and text 5,622,043 ->
+5,624,571. Welfare rises 95.52 -> 95.55 and is banked.

@@ -172,7 +172,7 @@ area came through: 3.14159</code></pre>
 <span class="f">print</span> (<span class="f">conventions/handle</span> routes <span class="s">"/nowhere"</span> <span class="n">2</span>)</code></pre>
 </div>
 
-<p>the compiler describes the entry and the modules it imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, each record type with its fields, and every call a module's functions make to a named function. the entry comes first, under its file's name, and since it holds only statements it carries only its calls. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
+<p>the compiler describes the entry and the modules it imports by a <code>./</code> path: each pub function with its parameters, each pub constant with its value, each record type with its fields, and every call a module's functions make to a named function. the entry comes first, under its file's name, and since it holds only statements it carries only its calls. the description also carries the text of each file beside the entry that is not kanso source, by name, so a convention can read a <code>schema.sql</code> the app checks in. it calls <code>conventions/routing</code> with that description on the interpreter. the function answers a list of declarations, and <code>derive/declare</code> adds a constant to the entry. here the constant is <code>routes</code>, a map whose values are the functions themselves:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">routed/conventions.kso</div>

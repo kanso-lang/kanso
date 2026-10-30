@@ -20,8 +20,14 @@
 # The entry comes first in `modules`, under its file's name. It holds
 # statements only, so it lists only its calls, and a convention that checks
 # calls checks the ones the entry writes too.
+#
+# `files` maps the name of each file directly beside the entry that is not
+# kanso source and reads as text to that text, such as a `schema.sql` a
+# convention reads. A compile with no directory under it, as in the tab, is
+# handed none.
 pub type program
   modules
+  files
 
 # `constants` maps each pub constant's name to its value, which is how a
 # derivation reads data the app keeps, such as its migrations.
