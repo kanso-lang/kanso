@@ -10,8 +10,9 @@ import "std/text"
 # recorded-output panel is compared against the .out file and rewritten from it
 # when the two disagree, which is where a recorded body gets escaped into html.
 #
-# A chapter carrying both is what this needs. ch03 has no output panel at all,
-# so its title is only ever a `.kso` name and the comparison never runs.
+# A chapter carrying both is what this needs. The types chapter has no output
+# panel at all, so its title is only ever a `.kso` name and the comparison never
+# runs.
 #
 # Deleting the .out reaches neither: a recorded output that is missing leaves
 # the panel alone, on the reading that the chapter may be quoting something the

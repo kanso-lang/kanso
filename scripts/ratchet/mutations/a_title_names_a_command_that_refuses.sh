@@ -6,7 +6,7 @@
 # puts the run title back, which is how dozens of panels read until the
 # harness held titles to the verb it used.
 set -e
-page=docs/book/ch05.html
+page=docs/book/effects.html
 if ! grep -q 'code-panel-title">kanso play currying.kso' "$page"; then
   echo "expected a \`kanso play currying.kso\` panel in $page; the shape moved" >&2
   echo "and this mutation needs rewriting" >&2

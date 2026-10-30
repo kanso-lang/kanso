@@ -1,0 +1,30 @@
+{%- comment -%}
+The links at the foot of a chapter, worked out from _data/book.yml so that
+the order lives in one place. A page that is not in book.yml gets none.
+{%- endcomment -%}
+{%- assign found = false -%}
+{%- assign prev = nil -%}
+{%- assign next = nil -%}
+{%- assign last = nil -%}
+{%- for section in site.data.book -%}
+  {%- for ch in section.chapters -%}
+    {%- assign churl = "/book/" | append: ch.slug | append: ".html" -%}
+    {%- if found and next == nil -%}{%- assign next = ch -%}{%- endif -%}
+    {%- if churl == page.url -%}{%- assign found = true -%}{%- assign prev = last -%}{%- endif -%}
+    {%- unless found -%}{%- assign last = ch -%}{%- endunless -%}
+  {%- endfor -%}
+{%- endfor -%}
+{%- if found %}
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  {%- if prev %}
+  <a href="{{ prev.slug }}.html">← {{ prev.title }}</a>
+  {%- endif %}
+  {%- if next %}
+  <a href="{{ next.slug }}.html">next: {{ next.title }} →</a>
+  {%- else %}
+  <a href="index.html">contents →</a>
+  {%- endif %}
+</nav>
+{%- endif %}

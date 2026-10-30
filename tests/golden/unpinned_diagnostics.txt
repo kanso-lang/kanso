@@ -139,7 +139,7 @@ this build is named `{}`, and a directory of that name is here —
 #                           and a directory of that name is here"))
 #
 # `main is not an io; there is no plan to show` sat here beside it until the
-# scan learned to read the book's samples. docs/book/samples/ch05/quiet_plan.out
+# scan learned to read the book's samples. docs/book/samples/effects/quiet_plan.out
 # is that whole sentence and nothing else, executed and diffed by the
 # book-samples job, so the entry is gone rather than reworded.
 #
@@ -268,7 +268,7 @@ parallel group exceeds the scheduler's fiber cap
 # `integer overflow (int64 native build; spec int is arbitrary precision)` was
 # the last entry here, excused as pinned somewhere the scan could not look. The
 # excuse named the extension and the barrier was the extension AND the
-# directory: docs/book/samples/ch02/overflow.out is outside the corpus root as
+# directory: docs/book/samples/values/overflow.out is outside the corpus root as
 # well as outside the file type, and each change alone pinned nothing. The scan
 # reads both now and the entry is gone.
 #

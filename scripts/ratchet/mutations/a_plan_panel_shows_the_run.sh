@@ -4,7 +4,7 @@
 # The mutation puts brew.kso's run output under its --plan title, which is
 # what the harness wrote there while it matched plan panels against brew.out.
 set -e
-page=docs/book/ch05.html
+page=docs/book/effects.html
 if ! grep -q 'kanso run brew.kso --plan</div>' "$page"; then
   echo "expected a brew.kso --plan panel in $page; the shape moved and this" >&2
   echo "mutation needs rewriting" >&2

@@ -2,39 +2,38 @@
   start: 1
   appendix: true
   chapters:
-    - { num: "→", slug: "tour", title: "a tour of kanso" }
+    - { num: "→", slug: "tour", title: "a tour of kanso", blurb: "eighteen programs you can edit and run in the page, a minute each" }
 - part: "part i — the language"
   start: 1
   chapters:
-    - { num: "01", slug: "ch01", title: "hello, kanso" }
-    - { num: "02", slug: "ch02", title: "values and bindings" }
-    - { num: "03", slug: "ch03", title: "types and dispatch" }
-    - { num: "04", slug: "ch04", title: "failure is a value" }
-    - { num: "05", slug: "ch05", title: "effects are io" }
-    - { num: "06", slug: "ch06", title: "flow and concurrency" }
-    - { num: "07", slug: "ch07", title: "modules and tests" }
-- part: "part ii — real programs"
-  start: 8
+    - { num: "01", slug: "hello", title: "hello, kanso", blurb: "the toolchain, the first program, and a compile error worth meeting" }
+    - { num: "02", slug: "values", title: "values and bindings", blurb: "every value form, arbitrary-precision ints, widening, and the rebind rule" }
+    - { num: "03", slug: "types", title: "types and dispatch", blurb: "overloads, typesets, markers, destructuring—the only branch you get" }
+    - { num: "04", slug: "failure", title: "failure is a value", blurb: "err, none, the railway, and the taxonomy of things going wrong" }
+    - { num: "05", slug: "effects", title: "effects are io", blurb: "programs that describe their side effects and tests that need no mocks" }
+    - { num: "06", slug: "flow", title: "flow and concurrency", blurb: "groups, binds, and green threads—dependence declared, order earned" }
+    - { num: "07", slug: "modules", title: "modules and tests", blurb: "a directory is a module, tests are constants, and an import enrolls a module's names" }
+    - { num: "08", slug: "sequences", title: "sequences", blurb: "adapters are recipes, consumers pull one element at a time, and the chain fuses to one loop" }
+- part: "part ii — building and shipping"
+  start: 9
   chapters:
-    - { num: "08", slug: "ch08", title: "a json library" }
-    - { num: "09", slug: "ch09", title: "a voting simulator" }
-- part: "part iii — under the hood"
-  start: 10
+    - { num: "09", slug: "cli", title: "a command-line tool", blurb: "a project from an empty directory: arguments, stdin, exit codes, tests, a binary" }
+    - { num: "10", slug: "web", title: "a web service", blurb: "a handler is a function from a request and state to a response, tested by calling it" }
+    - { num: "11", slug: "shipping", title: "measuring and shipping", blurb: "counters that never vary, a cost golden ci diffs, and a binary on a server" }
+- part: "part iii — real programs"
+  start: 12
   chapters:
-    - { num: "10", slug: "ch10", title: "fast by construction" }
-    - { num: "11", slug: "ch11", title: "modules" }
-    - { num: "12", slug: "ch12", title: "sequences" }
-- part: "part iv — shipping"
-  start: 13
+    - { num: "12", slug: "json", title: "a json library", blurb: "kanso-json read closely: dispatch at byte level, failure with positions" }
+    - { num: "13", slug: "voting", title: "a voting simulator", blurb: "monte carlo in a pure language; six voting methods, honestly compared" }
+- part: "part iv — under the hood"
+  start: 14
   chapters:
-    - { num: "13", slug: "ch13", title: "a command-line tool" }
-    - { num: "14", slug: "ch14", title: "a web service" }
-    - { num: "15", slug: "ch15", title: "measuring and shipping" }
+    - { num: "14", slug: "fast", title: "fast by construction", blurb: "past serde_json without memory syntax, and the ratchet that holds it" }
 - part: "appendices"
   start: 1
   appendix: true
   chapters:
-    - { num: "a", slug: "appa", title: "the diagnostics catalog" }
-    - { num: "b", slug: "appb", title: "builtin reference" }
-    - { num: "c", slug: "appc", title: "canonical form" }
-    - { num: "d", slug: "appd", title: "recipes" }
+    - { num: "a", slug: "appa", title: "the diagnostics catalog", blurb: "every error kind, what it protects, and the exact message" }
+    - { num: "b", slug: "appb", title: "builtin reference", blurb: "the whole surface: the ambient names, the std modules and the list vocabulary" }
+    - { num: "c", slug: "appc", title: "canonical form", blurb: "the formatting law: one rendering per program, enforced" }
+    - { num: "d", slug: "appd", title: "recipes", blurb: "short programs for everyday jobs, each with its output" }

@@ -1,0 +1,592 @@
+---
+layout: book
+title: "chapter 05—effects are io"
+description: "print that doesn't print, sequencing with a bind that ignores its value, pipes that bind, real i/o with read_file and args, and testing effects with transcripts instead of mocks."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 05</span>
+<h1>effects are io</h1>
+
+<p>every kanso function is pure, so evaluating <code>print "hi"</code> performs no i/o. it answers an <code>io</code>, a value like any other, that describes the printing. a whole program evaluates to one such value describing everything it means to do, and the runtime receives that value and performs it. evaluating decides what will happen; the runtime makes it happen.</p>
+
+<p>you can see the seam directly, because an <code>io</code> is data, and data can be rendered instead of executed. a bind whose callback ignores its argument, <code>.&gt; (_ -&gt; next)</code>, glues io values into bigger ones, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">brew.kso</div>
+  <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run brew.kso --plan</div>
+    <pre><code>plan:
+  print "brewing"    # from line 1
+  print "steeping"    # from line 1
+  print "pouring"    # from line 1</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run brew.kso</div>
+    <pre><code>brewing
+steeping
+pouring</code></pre>
+  </div>
+</div>
+
+<p><code>--plan</code> needs no machinery of its own. the plan already exists as a value, and the flag prints it instead of handing it to the executor. each step carries the source span it came from, which is where the <code># from line</code> comments come from. the rest of this chapter follows from the same fact: an effect is a value.</p>
+
+<h2>an io is a value</h2>
+
+<p>take that fact one consequence at a time. first, a program whose value is a plain number is legal. it computes the number, tells no one, and exits cleanly, because there is no io to perform:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">quiet.kso</div>
+  <pre><code><span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run quiet.kso --plan</div>
+    <pre><code>error: main is not an io; there is no plan to show</code></pre>
+  </div>
+</div>
+
+<p><code>kanso run quiet.kso</code> prints nothing and exits zero. the answer 42 was computed and discarded, because a print is itself a value, and this program never built one. ask for the plan and the toolchain says so in as many words.</p>
+
+<p>second: a value can be bound to a name, and a name can be used more than once. an io doesn't remember having run, because it hasn't—splice it in three times and the program means three prints:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">knock.kso</div>
+  <pre><code>knock <span class="o">=</span> <span class="f">print</span> <span class="s">"kon kon"</span>
+
+<span class="f">knock</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run knock.kso --plan</div>
+    <pre><code>plan:
+  print "kon kon"    # from line 1
+  print "kon kon"    # from line 1
+  print "kon kon"    # from line 1</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run knock.kso</div>
+    <pre><code>kon kon
+kon kon
+kon kon</code></pre>
+  </div>
+</div>
+
+<p>in a language where <code>print</code> fires on evaluation, <code>knock</code> would print once, at definition, and the reuse would be a mystery. here the constant is an io, the three uses are three copies in the final value, and the plan shows all three—each pointing back at the one line that built it.</p>
+
+<p>third: interpolate an io into a string and you get its face, not its result. there is no result yet; nothing has run:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">render.kso</div>
+  <pre><code>step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span>
+
+<span class="f">print</span> <span class="s">"an io renders as <span class="i">{step}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run render.kso</div>
+    <pre><code>an io renders as &lt;io&gt;</code></pre>
+  </div>
+</div>
+
+<p>and fourth: because intent is a value, dropping intent on the floor is visible—and refused. bind an io and never use it, and the program has written down a thing it will never do. kanso treats that as a bug at compile time, as it does any binding nobody reads:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">dropped_check.kso</div>
+  <pre><code>goodbye <span class="o">=</span> <span class="f">print</span> <span class="s">"sayonara"</span>
+<span class="f">print</span> <span class="s">"the goodbye never ran"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check dropped_check.kso</div>
+    <pre><code><span class="k">error[unused]</span>: unused binding `goodbye`
+<span class="c">  --&gt; dropped_check.kso:1:1</span>
+   1 | goodbye = print "sayonara"
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>those four programs show that nothing about <code>print</code> is special. it obeys binding, reuse, interpolation and the unused-binding check like every other value in chapter 02, because it is one.</p>
+
+<h2>pipes, and pipes into effects</h2>
+
+<p>the other operator you've been glimpsing is <code>.</code>—the dot. <code>x . f</code> is <code>f x</code>, read left to right, so data flows the way your eye does:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pipes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"hello, <span class="i">{name}</span>"</span>
+
+<span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>hello, kanso</code></pre>
+  </div>
+</div>
+
+<p>the dot does not stop at one argument. whatever follows the function is written after the piped value, which arrives first — so a function meant to be piped into takes its subject first and its settings after:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pipe_args.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">clamp</span> n lo hi
+  <span class="f">return</span> lo if n <span class="o">&lt;</span> lo
+  <span class="f">return</span> hi if hi <span class="o">&lt;</span> n
+  <span class="f">n</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>10
+4</code></pre>
+  </div>
+</div>
+
+<p><code>12 . clamp 0 10</code> is <code>clamp 12 0 10</code>. read the arguments after the name as the ones you were always going to write, with the subject lifted out in front of them.</p>
+
+<p>now pipe out of an <em>io</em>. <code>read_file path</code> doesn't return a string—it returns an <code>io</code> describing the read, and the file's contents don't exist until the runtime performs it. so an io is piped with <code>.&gt;</code>, the bind dot, and kanso wires the function to receive the value <em>once it exists</em>. piping into an io is bind, and the spelling says so:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">flavors.txt</div>
+  <pre><code>matcha
+ube
+hojicha</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">count.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span> <span class="o">.&gt;</span> <span class="f">count_lines</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run count.kso</div>
+    <pre><code>flavors.txt has 3 lines</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run count.kso --plan</div>
+    <pre><code>plan:
+  read_file "flavors.txt"
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;</code></pre>
+  </div>
+</div>
+
+<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." compare the plan for <code>brew.kso</code>, which listed every step. each of its callbacks was <code>_ -&gt; next</code>, which ignores what it is handed, so the plan could call it without a value. <code>count_lines</code> reads the file's contents, so its step cannot be shown until the read has happened. <code>.&gt;</code> is the only way to say "before" in kanso. everywhere else the runtime chooses the order, which is chapter 06's subject.</p>
+
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+
+<p>effects still have types. an effect has the type <code>&lt;t&gt;effect</code>, and the compiler infers it from the io values you use, the way it infers every other type. so the compiler knows which of your expressions is a box, and refuses one wherever the thing inside is what is wanted:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">boxed.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="f">print</span> (<span class="f">length</span> os/args)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check boxed.kso</div>
+    <pre><code><span class="k">error[effect]</span>: this is an effect — a box the words open — and `length` takes a value; open it with `.&gt;`
+<span class="c">  --&gt; boxed.kso:3:15</span>
+   3 | print (length os/args)
+                     <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p><code>os/args</code> is an io, so <code>length</code> is being handed the box rather than the list inside it, and the compiler says so before the program runs. the same refusal covers <code>+</code>, <code>if</code>, an index, <code>==</code>, and any function of your own that wants a value. the fix is the operator you already know: <code>os/args .&gt; (a -&gt; print (length a))</code> opens the box and lets <code>length</code> see the list. a box is opened only by <code>.&gt;</code> and its relatives, never by accident.</p>
+
+<h2>a box has a type</h2>
+
+<p>an io is a value, and a value can be handed around before anyone opens it. a function that wants the box itself, rather than what comes out of it, says so in its signature: <code>&lt;string&gt;effect</code> is the type of an io that will yield a string. the box arrives unopened, and the function opens it with <code>.&gt;</code> the way <code>count.kso</code> did above:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">counted.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
+
+<span class="k">fn</span> <span class="f">counted</span> e:<span class="o">&lt;</span>string<span class="o">&gt;</span>effect
+  <span class="f">e</span> <span class="o">.&gt;</span> <span class="f">count_lines</span>
+
+<span class="f">counted</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play counted.kso</div>
+    <pre><code>flavors.txt has 3 lines</code></pre>
+  </div>
+</div>
+
+<p><code>counted</code> holds the read and hands it on with a step attached. nothing has been read when it returns. its answer is another io, the same box with <code>count_lines</code> wired behind it, and the runtime performs the whole chain when the program's last line reaches the executor. the annotation does one job: it names the parameter as a box, so an arm can dispatch on "an io that yields a string" the way another arm dispatches on <code>n:int</code>.</p>
+
+<p>the other direction is refused. <code>length</code> reads a string; hand it the io and <code>kanso check</code> stops before anything runs:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unopened_check.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">length</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check unopened_check.kso</div>
+    <pre><code><span class="k">error[effect]</span>: this is an effect — a box the words open — and `length` takes a value; open it with `.&gt;`
+<span class="c">  --&gt; unopened_check.kso:3:27</span>
+   3 | pub play = print (length (os/read_file! "flavors.txt"))
+                                 <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the message names the fix. a box travels wherever a value travels—into a parameter, a list, an interpolation—but where something reads the value inside, the box has to be opened first, and <code>.&gt;</code> is how. the compiler refuses only what it can prove is a box: an io from the standard library, or a function of your own whose every arm ends in one.</p>
+
+<h2>holding an argument back</h2>
+
+<p>the dot threads a value into a function that is ready for it. sometimes the function is not ready — it wants two things and you only have one. <code>&amp;</code> supplies what you have and waits for the rest:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">currying.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">tax</span> rate price
+  price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
+
+<span class="k">fn</span> <span class="f">quote</span> pricer amount
+  <span class="s">"<span class="i">{amount}</span> becomes <span class="i">{pricer amount}</span>"</span>
+
+local <span class="o">=</span> &amp;tax <span class="n">8</span>
+<span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play currying.kso</div>
+    <pre><code>250 becomes 270
+and again: 108</code></pre>
+  </div>
+</div>
+
+<p><code>&amp;tax 8</code> fixes the rate and hands back something that still wants a price. it is a value like any other: bind it to a name, pass it to <code>quote</code>, call it twice. no lambda was written and no wrapper function was declared.</p>
+
+<p>the sigil is required. <code>tax 8</code> on its own is a call, and a call that matches no arm is an error, so a bare application never means "wait for more". with overloading, whether an application is finished cannot be read off the text: if <code>tax</code> also had a one-argument arm, <code>tax 8</code> would be a complete call, and the partial you meant would be unreachable. <code>&amp;</code> says which one you meant, so the meaning cannot change when somebody adds an arm later.</p>
+
+<p><code>&amp;</code> supplies arguments and never runs anything, and that stays true when there is nothing left to supply. <code>&amp;tax 8 250</code> has handed over both arguments and is still a value — one that is waiting to be called. <code>()</code> is what calls it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">running.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">tax</span> rate price
+  price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
+
+on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n">250</span>
+<span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span>)</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso play running.kso</div>
+  <pre><code>still waiting: &lt;fn&gt;
+called: 270</code></pre>
+</div>
+
+<p><code>&amp;</code> supplies arguments without running anything, and <code>()</code> runs without supplying anything. a value that still wants arguments cannot be run with <code>()</code>, because <code>()</code> brings none and an arm that wants one does not match.</p>
+
+<h2>the rest of the i/o vocabulary</h2>
+
+<p>writing is an io too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here one bind puts a write before a read of the same file, and a second hands the read's contents onward:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">save.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
+<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/read_file!</span> <span class="s">"order.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run save.kso --plan</div>
+    <pre><code>plan:
+  write_file "order.txt"
+  read_file "order.txt"
+  . &lt;continuation&gt;
+  . &lt;continuation&gt;</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run save.kso</div>
+    <pre><code>one taiyaki, extra custard</code></pre>
+  </div>
+</div>
+
+<p>the round trip proves the sequencing: the read found the file because the first bind put the write before it. the two binds do different jobs: the first ignores what the write yields and only orders the two effects, and the second moves the read's result into <code>print</code>.</p>
+
+<p>every effect that succeeds yields a value, including the ones with nothing to report. a write yields <code>done</code>, the fourth nullary alongside <code>true</code>, <code>false</code> and <code>none</code>. the <code>_</code> in <code>save.kso</code> throws that yield away. give the callback a parameter it reads and you can look at it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">yielded.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">name</span> done
+  <span class="s">"done"</span>
+
+<span class="k">fn</span> <span class="f">name</span> none
+  <span class="s">"none"</span>
+
+<span class="k">fn</span> <span class="f">report</span> yield
+  <span class="f">print</span> <span class="s">"the write yielded <span class="i">{yield}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"an arm named <span class="i">{name yield}</span> caught it"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"yield == none is <span class="i">{yield == none}</span>"</span>)
+
+<span class="f">os/write_file</span> <span class="s">"receipt.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">.&gt;</span> <span class="f">report</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play yielded.kso</div>
+    <pre><code>the write yielded &lt;done&gt;
+an arm named done caught it
+yield == none is false</code></pre>
+  </div>
+</div>
+
+<p>it renders in brackets because it is not data, the same convention that prints <code>&lt;none&gt;</code> and <code>&lt;io&gt;</code>. otherwise it is an ordinary value: an arm can name it, a typeset can hold it, and it equals itself and nothing else. <code>done</code> exists to keep two things apart. <code>none</code> means something is absent—a key that was not in the map, an environment variable nobody set. a finished write is not an absence. while both yielded <code>none</code>, a chain that bound the result could not tell the two apart.</p>
+
+<p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are io values—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">welcome.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">first</span> xs
+  xs[<span class="n">1</span>]!
+
+<span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
+
+<span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">greet</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play welcome.kso -- clay</div>
+    <pre><code>irasshaimase, clay</code></pre>
+  </div>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">shout.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
+
+<span class="k">fn</span> <span class="f">shout</span> text
+  <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play shout.kso &lt; pipe.txt</div>
+    <pre><code>hello from a pipe!!</code></pre>
+  </div>
+</div>
+
+<p>so the i/o of part i is <code>print</code>, which needs no import, and <code>os/read_file</code>, <code>os/write_file</code>, <code>os/args</code> and <code>io/stdin</code> behind two imports, all combined with the operators you already know. the two modules split the way go splits them: <code>std/os</code> is the machine the program runs on, its files, environment, arguments and processes, and <code>std/io</code> is what it reads and writes through.</p>
+
+<h2>failure at the edge</h2>
+
+<p>run <code>welcome.kso</code> with no argument and the strict index inside <code>first</code> fails—at execution time, because that's when the argument list exists:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">welcome.kso, run bare</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">first</span> xs
+  xs[<span class="n">1</span>]!
+
+<span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
+
+<span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">greet</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play welcome.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
+  born in first at welcome.kso:4</code></pre>
+  </div>
+</div>
+
+<p>read the wording against chapter 04. there the message ended "reached the entry," because the entry was where evaluation stopped. here it ends "reached the executor": evaluation finished long ago and handed back a perfectly healthy io, and the failure happened while the runtime was walking it. the err takes the same path, and the report still names where it was born. only the place it was reported has moved, one step later.</p>
+
+<p>a file that isn't there fails the same way:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">missing.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run missing.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file"
+  born in the entry at missing.kso:3</code></pre>
+  </div>
+</div>
+
+<p>one distinction is worth pinning before you plan for a missing file. a failure born at the edge—the missing file, the absent argument—arrives after evaluation is over, and like any failure it passes every continuation waiting downstream. an outcome the program can anticipate is a value instead, and an arm takes it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fallback.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">file_not_found</span> _)
+  <span class="s">"no orders yet"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> text
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.&gt;</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play fallback.kso</div>
+    <pre><code>no orders yet</code></pre>
+  </div>
+</div>
+
+<p>that arm fires, and no rescue was needed. a file that is not there is an outcome the program can anticipate, so <code>os/read_file</code> answers <code>text | file_not_found</code> and dispatch picks the arm the way it picks any other.</p>
+
+<p>the failure channel is for what the program did not plan for—a permission it does not have, a device that went away, bytes that are not text. those still go straight to the endpoint, with a message addressed to whoever ran the program, the one party who can do anything about it.</p>
+
+<p>a caller who knows the file is there says so with a bang. <code>os/read_file! path</code> is insisting, and absence comes out of it as a failure like any other. it is the same choice <code>foo[k]</code> and <code>foo[k]!</code> make over a missing key: the <code>!</code> decides whether absence is an answer or a failure.</p>
+
+<p>a chain carries a failure past every step to the endpoint. one step is written to read it instead. <code>rescue</code> takes the effect and a callback, and the callback runs only when the effect failed—so the sample below insists, to have a failure for it to catch:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">rescued.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+  <span class="s">"no orders yet"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> text
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="f">rescue</span> (<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span>) orders <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play rescued.kso</div>
+    <pre><code>no orders yet</code></pre>
+  </div>
+</div>
+
+<p><code>orders</code> has an <code>(err _)</code> arm, and it fires here because <code>rescue</code> hands its callback the err out of its box, where an arm can read it. downstream of a dot, nothing hands a function a failure. a read that succeeded goes straight past <code>rescue</code> untouched, so the callback sees an err or nothing at all. <code>os</code> is a package of the standard library, so the failure is foreign to this file, which is what licenses the rescue.</p>
+
+<p><code>rescue</code> has two siblings, both ordinary two-argument functions taking the effect first. <code>bind</code> is the other side of the same rule&#8212;its callback sees the value and never the failure. <code>annotate</code> reads the failure channel like <code>rescue</code> and re-wraps whatever the callback answers, so it can say more about a failure and can never clear one. so <code>rescue</code> is the only way out of a failure, and a reader looking for where a program recovers has one word to search for.</p>
+
+<p>each of the three has a fused spelling, and those are the forms most code wears: <code>.&gt;</code> for <code>bind</code>, <code>.!</code> for <code>annotate</code>, <code>.?</code> for <code>rescue</code>. the program below is the one above with both steps written that way, and it prints the same line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fused.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+  <span class="s">"no orders yet"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> text
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.?</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play fused.kso</div>
+    <pre><code>no orders yet</code></pre>
+  </div>
+</div>
+
+<p><code>rescue (os/read_file! "yesterday.txt") orders</code> and <code>os/read_file! "yesterday.txt" .? orders</code> are the same call. the fused form reads left to right with the rest of the chain, which is why a chain of several steps usually wears it, and appendix C gives the wrapping rule for a statement that runs past eighty columns.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>i work execution time too. a file that isn't there, an argument that wasn't passed—same me, same box, same railway. i ride past every step to the endpoint and name the line that bore me, unless a <code>.?</code> from another package takes me out first. you do not need a second error model for i/o, and kanso declines to sell you one.</p>
+</div>
+</div>
+
+<h2>the executor at the edge</h2>
+
+<p>so who actually performs? at the very edge of the toolchain sits the executor—the one component allowed to touch the world. in the interpreter it is a rust trait with one method per effect, and the shape of that trait is the shape of everything kanso can do to your machine:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">src/eval/executor.rs</div>
+  <pre><code><span class="k">pub trait</span> <span class="t">Executor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>);
+    <span class="k">fn</span> <span class="f">args</span>(&amp;<span class="k">mut</span> self) -&gt; <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">stdin</span>(&amp;<span class="k">mut</span> self) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">write_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>, content: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;(), <span class="t">String</span>&gt;;
+}
+
+<span class="k">impl</span> <span class="t">Executor</span> <span class="k">for</span> <span class="t">RealExecutor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>) {
+        println!(<span class="s">"{text}"</span>);
+    }
+
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; {
+        std::fs::read_to_string(path).map_err(|e| format!(<span class="s">"cannot read {path}: {e}"</span>))
+    }
+    <span class="c">// ...</span>
+}</code></pre>
+</div>
+
+<p>this is the split sometimes called functional core, imperative shell, and here the language enforces it. your program—every function you write, every module you'll build in chapter 07—lives in the pure core. the shell is a short loop that walks the io and calls these trait methods. chapter 01 promised "two engines, one meaning," and this seam is why the promise is cheap to keep: <code>kanso run</code> compiles your program to a native binary while <code>--plan</code> and <code>kanso test</code> stay on the interpreter, and they can't disagree about what your program <em>means</em>, because the meaning is a value fixed before any executor gets involved.</p>
+
+<h2>testing without mocks</h2>
+
+<p>in most languages, testing effectful code means interception: patch the i/o call, record what would have happened, and hope the patch behaves like the real thing. in kanso there is nothing to intercept, because evaluation never does i/o. testing happens on two levels, and neither needs a mock.</p>
+
+<p>the ground floor you already have. the logic in an effectful pipeline lives in pure functions—<code>count_lines</code>, <code>shout</code>, <code>greet</code>—and pure functions are tested by calling them, with the <code>test_</code> constants from chapter 01:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">core_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+
+test_counts_lines <span class="o">=</span> <span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span> <span class="o">==</span> <span class="n">3</span>
+
+test_empty_text_has_no_lines <span class="o">=</span> <span class="f">count_lines</span> <span class="s">""</span> <span class="o">==</span> <span class="n">0</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test core_test.kso</div>
+    <pre><code>test_counts_lines ... ok
+test_empty_text_has_no_lines ... ok
+2 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>no file was faked, because no file was involved. the function under test takes a string, and where the program gets that string is not its concern. the file stays at the edge of the program, and the test never goes there.</p>
+
+<p>the second level is the effects themselves, and it is how the toolchain tests itself. evaluating a program is pure, fast and free of side effects, and it gives the program's <em>entire intent</em> as a value. the interpreter makes this concrete: <code>Executor</code> is a trait, so alongside the real executor there is a scripted one that performs nothing and appends each effect to a transcript, feeding the program canned args, canned stdin, and an in-memory map of files:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">src/eval/executor.rs</div>
+  <pre><code><span class="k">pub struct</span> <span class="t">ScriptedExecutor</span> {
+    <span class="k">pub</span> transcript: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
+    <span class="k">pub</span> script_args: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
+    <span class="k">pub</span> script_stdin: <span class="t">String</span>,
+    <span class="k">pub</span> files: std::collections::<span class="t">HashMap</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;,
+}
+
+<span class="k">impl</span> <span class="t">Executor</span> <span class="k">for</span> <span class="t">ScriptedExecutor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>) {
+        self.transcript.push(format!(<span class="s">"print {text:?}"</span>));
+    }
+
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; {
+        self.transcript.push(format!(<span class="s">"read_file {path:?}"</span>));
+        self.files.get(path).cloned().ok_or_else(|| format!(<span class="s">"cannot read {path}"</span>))
+    }
+    <span class="c">// ...</span>
+}</code></pre>
+</div>
+
+<p>a rust test hands the program's io to the scripted executor and asserts on the transcript with plain data equality—<code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no stubbing framework, no argument matchers, no "verify this was called once." the program <em>said</em> what it would do, and the test reads the saying:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">cargo test scripted_executor</div>
+  <pre><code>running 1 test
+test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
+</div>
+
+<p>this book is tested the same way. every output panel is a golden file that a harness re-runs against the real toolchain, and the goldens hold because a kanso program's output is a function of its source, even, as chapter 06 shows, when the program is concurrent and rolls dice under a fixed seed.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p>when a program surprises you, reach for <code>--plan</code> before you reach for a debugger. the plan is what your program <em>is</em>; running it is merely what it does. most bugs are visible in the intent.</p>
+</div>
+</div>
+
+<p>you can now split a program into the part that decides and the part that touches the world: io values on one side, one executor on the other. you can read <code>.&gt; (_ -&gt; ...)</code> as pure sequence and a bind into a named parameter as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 is about two io values that need no order between them, which is where kanso's concurrency comes from.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>write a program that binds one <code>print</code> io to a name and uses it twice in the program, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
+  <li>write a file copier: pipe <code>read_file "flavors.txt"</code> into a lambda that returns <code>write_file "copy.txt" text</code>. run it with <code>--plan</code> first and explain why the write step doesn't appear in the plan, then run it for real and confirm the copy exists.</li>
+  <li>change <code>first</code> in <code>welcome.kso</code> to index <code>xs[2]</code> and run it with one argument, then with two. for each run, say whether the failure (if any) happened during evaluation or during execution, and quote the part of the message that told you.</li>
+  <li>extract the pure function from <code>shout.kso</code> into a file of its own with two <code>test_</code> constants—one for ordinary text, one for the empty string. decide what the empty-string result <em>should</em> be before you run <code>kanso test</code>, and reconcile if the toolchain disagrees.</li>
+</ol>

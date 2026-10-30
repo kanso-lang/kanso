@@ -344,8 +344,8 @@ fn recorded_of path
   "{parts[1]}.out"
 
 # A sample that imports a module beside it needs a directory, and the tab is
-# handed one source. ch04's boundary.kso was left out only because its
-# recorded output began with its error, and stdout now comes first.
+# handed one source. the failure chapter's boundary.kso was left out only
+# because its recorded output began with its error, and stdout now comes first.
 fn book_keep acc path src said calls
   refused = text/slice said 1 5 == "error"
   beside = local_import? src

@@ -145,10 +145,11 @@ says what happened. Read the queue with
   silently drops a kernel must turn CI red; one once deleted Eisel-Lemire from
   main and nothing noticed.
 - **Counters changed means regenerate every vein in the same PR**: the .mem
-  files, every cost golden, `bench/emitted_golden.txt`, the ch10 sample, the
-  book panels, and the siblings' own veins. `sh scripts/gates/all_counters.sh
-  --list` prints the cost goldens; the sweep without a flag reads every one and
-  names each that moved, and `--write` regenerates them with headers intact.
+  files, every cost golden, `bench/emitted_golden.txt`, the fast chapter's
+  sample, the book panels, and the siblings' own veins.
+  `sh scripts/gates/all_counters.sh --list` prints the cost goldens; the sweep
+  without a flag reads every one and names each that moved, and `--write`
+  regenerates them with headers intact.
 - **The runtime sweep does not read the compile veins, and a library change
   moves them**, because `lib/*.kso` is `include_str!`'d into the compiler.
   `sh scripts/gates/all_compile.sh` runs the compile gates, and `--list` prints

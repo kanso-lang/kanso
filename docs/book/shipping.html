@@ -1,0 +1,254 @@
+---
+layout: book
+title: "chapter 11—measuring and shipping"
+description: "count what a program does with KANSO_COUNTERS, find the stage that costs, change it and measure again, pin the cost in a golden ci diffs, and ship the binary to a server."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 11</span>
+<h1>measuring and shipping</h1>
+
+<p>chapter 09's <code>wordfreq</code> is correct and tested. this chapter asks what it costs, makes it cheaper, and keeps it that way. then it puts the binary on a server.</p>
+
+<p>kanso gives two kinds of measurement. a clock tells you how long a run took, and it changes from run to run and machine to machine. a counter tells you how much work the program did: how many allocations, how many bytes. counters are deterministic. the same program on the same input gives the same numbers every time, on every engine and every machine, so a change in a counter is a change in the program. this chapter measures with counters first and reaches for the clock last.</p>
+
+<h2>counting</h2>
+
+<p>set <code>KANSO_COUNTERS=1</code> and kanso prints its counters to standard error when the program ends. there are several dozen, and chapter 14 shows the full list. this chapter needs one: <code>allocs</code>, the number of allocations the program made. three copies of the tea text, at one, ten and a hundred times its length, show how the count grows:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea.txt 2&gt;&amp;1 | grep '^allocs='</div>
+  <pre><code>allocs=366</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea10.txt 2&gt;&amp;1 | grep '^allocs='</div>
+  <pre><code>allocs=1309</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea100.txt 2&gt;&amp;1 | grep '^allocs='</div>
+  <pre><code>allocs=15864</code></pre>
+</div>
+
+<p>the count grows in step with the input: about 160 allocations for each copy of a three-line text, or about 6 for each of its 26 words. growth in proportion to the input is the shape you want, since anything faster would mean work repeated for every word already seen. 6 allocations a word is still more than splitting and counting need.</p>
+
+<h2>finding the stage that costs</h2>
+
+<p>the program has three stages: split the text into words, count them, render the top five. the quickest way to see what one stage costs is to run it alone. this program is <code>words</code> from chapter 09 and nothing else:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">split.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/regexp"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="f">io/stdin</span>
+  <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">regexp/split</span> <span class="s">"[^a-z']+"</span> (<span class="f">text/lowercase</span> t))
+  <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">list/to_list</span> (<span class="f">list/reject</span> ws (w <span class="o">-&gt;</span> w <span class="o">==</span> <span class="s">""</span>)))
+  <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{length ws}</span> words"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run split.kso &lt; tea100.txt 2&gt;&amp;1 | grep -E '^allocs=|words$'</div>
+    <pre><code>allocs=15685
+2600 words</code></pre>
+  </div>
+</div>
+
+<p>the split is almost all of it: 15,685 of the program's 15,864 allocations. counting and rendering cost under two hundred between them. inside the split, the regular-expression engine does the work, and it allocates as it walks.</p>
+
+<p>the pattern <code>[^a-z']+</code> says something simple: every character that is not a letter or an apostrophe separates words. that can be said without a regular expression. turn each such character into a space, and split on spaces:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">chars.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">spaced</span> c
+  <span class="f">if</span> (<span class="f">word_char?</span> c) c <span class="s">" "</span>
+
+<span class="k">fn</span> <span class="f">word_char?</span> c
+  (<span class="s">"a"</span> <span class="o">&lt;=</span> c and c <span class="o">&lt;=</span> <span class="s">"z"</span>) or c <span class="o">==</span> <span class="s">"'"</span>
+
+<span class="k">fn</span> <span class="f">words</span> text
+  marked <span class="o">=</span> <span class="f">list/map</span> (<span class="f">text/chars</span> (<span class="f">text/lowercase</span> text)) spaced
+  pieces <span class="o">=</span> <span class="f">text/split</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> marked) <span class="s">""</span>) <span class="s">" "</span>
+  <span class="f">list/to_list</span> (<span class="f">list/reject</span> pieces (w <span class="o">-&gt;</span> w <span class="o">==</span> <span class="s">""</span>))
+
+<span class="f">io/stdin</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{length (words t)}</span> words"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso play chars.kso &lt; tea100.txt 2&gt;&amp;1 | grep -E '^allocs=|words$'</div>
+    <pre><code>allocs=3128
+2600 words</code></pre>
+  </div>
+</div>
+
+<p>the same 2,600 words, from 3,128 allocations rather than 15,685. the regular expression was the right first version, because it said what a word is in eight characters. now there is a measurement that says what it costs, and a replacement that is still short enough to read.</p>
+
+<h2>making the change</h2>
+
+<p><code>wordfreq2</code> is a copy of the project with the new <code>words</code> in <code>count.kso</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wordfreq2/freq/count.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">pub</span> <span class="k">type</span> ranked
+  <span class="f">count</span>
+  <span class="f">word</span>
+
+<span class="c"># The words of a text, lowercased, in the order they appear. Every character</span>
+<span class="c"># that cannot be part of a word becomes a space, and the spaces split it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">words</span> text
+  marked <span class="o">=</span> <span class="f">list/map</span> (<span class="f">text/chars</span> (<span class="f">text/lowercase</span> text)) spaced
+  pieces <span class="o">=</span> <span class="f">text/split</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> marked) <span class="s">""</span>) <span class="s">" "</span>
+  <span class="f">list/to_list</span> (<span class="f">list/reject</span> pieces (w <span class="o">-&gt;</span> w <span class="o">==</span> <span class="s">""</span>))
+
+<span class="k">fn</span> <span class="f">spaced</span> c
+  <span class="f">if</span> (<span class="f">word_char?</span> c) c <span class="s">" "</span>
+
+<span class="k">fn</span> <span class="f">word_char?</span> c
+  (<span class="s">"a"</span> <span class="o">&lt;=</span> c and c <span class="o">&lt;=</span> <span class="s">"z"</span>) or c <span class="o">==</span> <span class="s">"'"</span>
+
+<span class="c"># The n most common words, the most common first. A map's entries come in</span>
+<span class="c"># key order and sort_by keeps ties in the order they arrived, so words with</span>
+<span class="c"># the same count stay alphabetical.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">top</span> n ws
+  ranks <span class="o">=</span> <span class="f">list/map</span> (<span class="f">entries</span> (<span class="f">list/tally</span> ws)) (e <span class="o">-&gt;</span> <span class="f">ranked</span> e<span class="o">.</span><span class="f">value</span> e<span class="o">.</span>key)
+  <span class="f">list/to_list</span> (<span class="f">list/take</span> (<span class="f">list/sort_by</span> ranks (r <span class="o">-&gt;</span> <span class="n">0</span> <span class="o">-</span> r<span class="o">.</span>count)) n)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">render</span> rows
+  <span class="f">text/join</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> rows line)) <span class="s">"\n"</span>
+
+<span class="k">fn</span> <span class="f">line</span> (<span class="f">ranked</span> count word)
+  <span class="s">"<span class="i">{text/pad_start </span>"</span>{count}<span class="s">" 4 "</span> <span class="s">"}  <span class="i">{word}</span>"</span></code></pre>
+</div>
+
+<p><code>words</code> no longer answers an effect, because nothing in it can fail, so <code>cli.kso</code> calls it directly and the tests compare its answer with <code>==</code>. the tests are the same five, and they still pass:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso test wordfreq2</div>
+  <pre><code>test_words_are_lowercased ... ok
+test_top_two ... ok
+test_defaults ... ok
+test_top_and_path ... ok
+test_top_needs_a_number ... ok
+5 passed, 0 failed</code></pre>
+</div>
+
+<p>the output on the largest text is what the old program printed, scaled by a hundred:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run wordfreq2 -- --top 3 tea100.txt</div>
+  <pre><code> 500  the
+ 400  tea
+ 300  and</code></pre>
+</div>
+
+<p>and the count, measured the same way as before:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq2 -- tea100.txt 2&gt;&amp;1 | grep '^allocs='</div>
+  <pre><code>allocs=3307</code></pre>
+</div>
+
+<p>15,864 became 3,307, about a fifth. on a 1.27 MB text the release binaries made 1,040,272 and 310,218 allocations. <code>kanso run</code> and a release build count the same events, so the counters above describe the binary you ship. the regular expression used to cost more: <a href="https://github.com/kanso-lang/kanso/issues/2214">#2214</a> made <code>regexp/split</code> stop allocating at every letter it skips, and before that the first program made 85,660 allocations on the largest text. the book's build reran these panels when it changed.</p>
+
+<h2>the clock, last</h2>
+
+<p>fewer allocations usually means less time, and the clock is what a user feels, so measure it too, with a release build and a large input, several times:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell, on a 4-core x86-64 container, 2026-10-29</div>
+  <pre><code><span class="prompt">$ </span>time ./wordfreq big.txt > /dev/null     # regexp/split, three runs
+0.292s  0.275s  0.339s
+<span class="prompt">$ </span>time ./wordfreq2 big.txt > /dev/null    # chars and text/split, three runs
+0.216s  0.205s  0.255s</code></pre>
+</div>
+
+<p>about three quarters of the time, on a 1.27 MB text. these numbers belong to that machine on that day, which is why the panel says so, and the spread within each set of three runs is between ten and twenty percent. a clock is good for telling you which way a change went and roughly how far. it is a poor way to catch a regression of a few percent, and the counters are how you catch that.</p>
+
+<h2>keeping it cheap</h2>
+
+<p>a measurement taken once describes the program on that day. to keep the allocation count from creeping back, write it down and have ci compare it on every change. the kanso repository does this for its own benchmarks: it calls the files cost goldens. a project can keep one with a few lines of shell:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">costs.sh</div>
+  <pre><code>#!/bin/sh
+# wordfreq's cost golden: the allocations it makes on three fixed texts.
+# CI runs this and fails when the result differs from costs.txt.
+set -e
+for f in tea.txt tea10.txt tea100.txt; do
+  printf '%s ' "$f"
+  KANSO_COUNTERS=1 kanso run wordfreq2 -- "$f" 2&gt;&amp;1 &gt;/dev/null | grep '^allocs='
+done</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">costs.txt</div>
+  <pre><code>tea.txt allocs=245
+tea10.txt allocs=526
+tea100.txt allocs=3307</code></pre>
+</div>
+
+<p>in ci, the check is one line: <code>sh costs.sh &gt; costs.now &amp;&amp; diff costs.txt costs.now</code>. because the counts are exact, the comparison is equality, with no tolerance band to tune. a change that makes the program cheaper fails the diff too. regenerate <code>costs.txt</code> in the same change and say in the commit which way the number moved and why. a rise then has to be explained in review, and a drop is kept on record.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 56 58" role="img" aria-label="tsuru" shape-rendering="crispEdges"><title>tsuru - folds your program until it is small enough to fly</title><rect x="39" y="3" width="1" height="1" fill="#dfc9a2"/><rect x="39" y="4" width="1" height="1" fill="#dfc9a2"/><rect x="38" y="5" width="3" height="1" fill="#dfc9a2"/><rect x="38" y="6" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="7" width="1" height="1" fill="#f03a00"/><rect x="37" y="7" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="8" width="3" height="1" fill="#f03a00"/><rect x="37" y="8" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="9" width="5" height="1" fill="#f03a00"/><rect x="36" y="9" width="5" height="1" fill="#dfc9a2"/><rect x="3" y="10" width="2" height="1" fill="#f2e3c8"/><rect x="5" y="10" width="4" height="1" fill="#f03a00"/><rect x="36" y="10" width="6" height="1" fill="#dfc9a2"/><rect x="2" y="11" width="2" height="1" fill="#f2e3c8"/><rect x="4" y="11" width="2" height="1" fill="#f03a00"/><rect x="6" y="11" width="4" height="1" fill="#f2e3c8"/><rect x="35" y="11" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="12" width="1" height="1" fill="#2b2320"/><rect x="3" y="12" width="10" height="1" fill="#f2e3c8"/><rect x="35" y="12" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="13" width="1" height="1" fill="#2b2320"/><rect x="3" y="13" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="13" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="14" width="2" height="1" fill="#2b2320"/><rect x="3" y="14" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="14" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="15" width="3" height="1" fill="#2b2320"/><rect x="4" y="15" width="8" height="1" fill="#f2e3c8"/><rect x="33" y="15" width="10" height="1" fill="#dfc9a2"/><rect x="0" y="16" width="4" height="1" fill="#2b2320"/><rect x="4" y="16" width="9" height="1" fill="#f2e3c8"/><rect x="33" y="16" width="10" height="1" fill="#dfc9a2"/><rect x="2" y="17" width="2" height="1" fill="#2b2320"/><rect x="4" y="17" width="9" height="1" fill="#f2e3c8"/><rect x="32" y="17" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="18" width="6" height="1" fill="#f2e3c8"/><rect x="32" y="18" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="19" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="19" width="12" height="1" fill="#dfc9a2"/><rect x="7" y="20" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="20" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="21" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="22" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="23" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="23" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="24" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="24" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="25" width="8" height="1" fill="#f2e3c8"/><rect x="28" y="25" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="26" width="7" height="1" fill="#f2e3c8"/><rect x="28" y="26" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="27" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="27" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="28" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="28" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="29" width="8" height="1" fill="#f2e3c8"/><rect x="25" y="29" width="1" height="1" fill="#f2e3c8"/><rect x="26" y="29" width="19" height="1" fill="#dfc9a2"/><rect x="10" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="24" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="30" width="15" height="1" fill="#dfc9a2"/><rect x="10" y="31" width="8" height="1" fill="#f2e3c8"/><rect x="23" y="31" width="18" height="1" fill="#f2e3c8"/><rect x="41" y="31" width="5" height="1" fill="#dfc9a2"/><rect x="10" y="32" width="8" height="1" fill="#f2e3c8"/><rect x="22" y="32" width="25" height="1" fill="#f2e3c8"/><rect x="10" y="33" width="8" height="1" fill="#f2e3c8"/><rect x="20" y="33" width="27" height="1" fill="#f2e3c8"/><rect x="11" y="34" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="35" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="36" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="37" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="38" width="37" height="1" fill="#f2e3c8"/><rect x="12" y="39" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="40" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="41" width="1" height="1" fill="#dfc9a2"/><rect x="13" y="41" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="42" width="2" height="1" fill="#dfc9a2"/><rect x="14" y="42" width="37" height="1" fill="#f2e3c8"/><rect x="10" y="43" width="4" height="1" fill="#dfc9a2"/><rect x="15" y="43" width="37" height="1" fill="#f2e3c8"/><rect x="9" y="44" width="5" height="1" fill="#dfc9a2"/><rect x="16" y="44" width="33" height="1" fill="#f2e3c8"/><rect x="8" y="45" width="6" height="1" fill="#dfc9a2"/><rect x="17" y="45" width="27" height="1" fill="#f2e3c8"/><rect x="7" y="46" width="8" height="1" fill="#dfc9a2"/><rect x="18" y="46" width="19" height="1" fill="#f2e3c8"/><rect x="37" y="46" width="2" height="1" fill="#2b2320"/><rect x="6" y="47" width="9" height="1" fill="#dfc9a2"/><rect x="19" y="47" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="47" width="2" height="1" fill="#2b2320"/><rect x="29" y="47" width="5" height="1" fill="#f2e3c8"/><rect x="37" y="47" width="2" height="1" fill="#2b2320"/><rect x="5" y="48" width="10" height="1" fill="#dfc9a2"/><rect x="20" y="48" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="48" width="2" height="1" fill="#2b2320"/><rect x="37" y="48" width="2" height="1" fill="#2b2320"/><rect x="4" y="49" width="12" height="1" fill="#dfc9a2"/><rect x="21" y="49" width="3" height="1" fill="#f2e3c8"/><rect x="27" y="49" width="2" height="1" fill="#2b2320"/><rect x="37" y="49" width="2" height="1" fill="#2b2320"/><rect x="3" y="50" width="10" height="1" fill="#dfc9a2"/><rect x="27" y="50" width="2" height="1" fill="#2b2320"/><rect x="37" y="50" width="2" height="1" fill="#2b2320"/><rect x="2" y="51" width="6" height="1" fill="#dfc9a2"/><rect x="27" y="51" width="2" height="1" fill="#2b2320"/><rect x="37" y="51" width="2" height="1" fill="#2b2320"/><rect x="1" y="52" width="2" height="1" fill="#dfc9a2"/><rect x="27" y="52" width="2" height="1" fill="#2b2320"/><rect x="37" y="52" width="2" height="1" fill="#2b2320"/><rect x="27" y="53" width="2" height="1" fill="#2b2320"/><rect x="37" y="53" width="2" height="1" fill="#2b2320"/><rect x="27" y="54" width="2" height="1" fill="#2b2320"/><rect x="37" y="54" width="2" height="1" fill="#2b2320"/><rect x="27" y="55" width="2" height="1" fill="#2b2320"/><rect x="27" y="56" width="2" height="1" fill="#2b2320"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">tsuru</span>
+<p>a counter does not care how busy the machine is. if <code>allocs</code> moved, the program moved, and the diff points at the change that did it.</p>
+</div>
+</div>
+
+<h2>shipping it</h2>
+
+<p><code>kanso build . --release</code> writes one executable named after the project directory. chapter 09 built it and looked inside: it links the c library and the maths library and nothing else. three facts decide where it can go:</p>
+
+<ul>
+  <li>it runs on the operating system and processor that built it. kanso has no cross-compilation flag, so build on the kind of machine you deploy to.</li>
+  <li>it links the c library dynamically, so the server's c library must be at least as new as the build machine's. building on the oldest system you deploy to avoids the problem.</li>
+  <li>it needs nothing else: no runtime, no interpreter, no files beside it.</li>
+</ul>
+
+<p>for a container, that means a slim image with the binary copied in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">Dockerfile</div>
+  <pre><code>FROM debian:stable-slim
+COPY wordfreq /usr/local/bin/wordfreq
+ENTRYPOINT ["wordfreq"]</code></pre>
+</div>
+
+<p>build the binary on a debian stable machine (or in a debian stable container) so the two c libraries agree. the chapter 10 teashop can run as a systemd service the same way:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">/etc/systemd/system/teashop.service</div>
+  <pre><code>[Unit]
+Description=the teashop order service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/teashop
+DynamicUser=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+</div>
+
+<p><code>Restart=on-failure</code> restarts the shop if it crashes, and leaves it closed after a <code>POST /close</code>, because closing ends the program with status 0.</p>
+
+<h2>what you can do now</h2>
+
+<p>you can count what a program does with <code>KANSO_COUNTERS=1</code>, check that the count grows with the input the way it should, find the stage that costs by running it alone, and measure a replacement before you adopt it. you can keep the result in a cost golden that ci compares exactly. and you can ship the release binary to a container or a service, knowing the three things it depends on.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li><code>text/chars</code> makes a string for every character, and <code>chars.kso</code> still allocates once for each. find a way to split with fewer, measure it the same way, and decide whether the code is still clear enough to keep.</li>
+  <li>add <code>alloc_bytes</code> to <code>costs.sh</code>. which of the two numbers would you rather pin, and why?</li>
+  <li>run <code>KANSO_COUNTERS=1 kanso run day.kso</code> for the chapter 10 teashop, then add a thousand orders to <code>customer.sh</code>. how do the counts grow with the number of orders, and what in <code>server.kso</code> explains it?</li>
+  <li>build <code>wordfreq2</code> in a <code>debian:stable</code> container with the toolchain installed, copy the binary into the image above, and run it on <code>tea.txt</code>.</li>
+</ol>

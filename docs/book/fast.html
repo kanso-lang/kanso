@@ -1,0 +1,351 @@
+---
+layout: book
+title: "chapter 14—fast by construction"
+description: "the compiled json decoder edges serde_json on one honest harness, and the wins are pinned as tests: deterministic cost counters and ir shape-checks that fail a build the way a wrong answer does."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 14</span>
+<h1>fast by construction</h1>
+
+<p>nine chapters have asked you to give things up. no mutation. no loops—recursion is the only way to repeat yourself. seven small overloads where another language writes one <code>switch</code>. a reasonable person reads all that and waits for the bill: elegance this thorough must cost something once the program actually runs.</p>
+
+<table class="bench-table">
+  <caption>milliseconds per decode, min of an interleaved best-of-25 run, one 188kb json document, m-series mac. the recipe is in the repo—you can run it yourself.</caption>
+  <thead>
+    <tr><th scope="col">decoder</th><th scope="col">ms / decode</th></tr>
+  </thead>
+  <tbody>
+    <tr class="bench-us"><td>kanso</td><td>0.81</td></tr>
+    <tr><td>serde_json</td><td>0.83</td></tr>
+    <tr><td>reasonably-written rust</td><td>0.98</td></tr>
+    <tr><td>go encoding/json</td><td>1.73</td></tr>
+  </tbody>
+</table>
+
+<p>the tax is negative. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. the rest of the chapter answers two questions: how, and how do we keep it true.</p>
+
+<p>the honest asterisks, up front. the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 5.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
+
+<h2>two other people's harnesses</h2>
+
+<p>the table runs every decoder through one harness so nobody gets a hometown advantage. still, it's worth watching the two rivals that matter run on their own turf, so you trust that the bar is real and not something we drew ourselves.</p>
+
+<p>the easy bar is go's standard library—one of the most exercised json decoders in production anywhere. here it is on its own benchmark, same 188kb fixture:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">go run bench/main.go</div>
+  <pre><code>go decoded 160 top-level values, mean over 150: 1.827406ms</code></pre>
+</div>
+
+<p>about 1.83ms a decode. respectable, and not the one to beat. the hard bar is rust: <code>serde_json</code>, measured in its own harness on the very same bytes, comes in under a millisecond:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">serde_bench/target/release/serde_bench bench/large.json</div>
+  <pre><code>serde mean over 150 decodes: 863.687µs</code></pre>
+</div>
+
+<p>863 microseconds in serde's own harness—the sub-millisecond wall. a tree-walking interpreter is never going to touch it, and we won't pretend otherwise. the compiled binary does, but only after we look honestly at that interpreter first.</p>
+
+<h2>the same program, two engines</h2>
+
+<p>one module, two ways to run it. start with the interpreter, <code>kanso run --interp</code>. and be fair to it: this clock times the <em>whole</em> pipeline. parse the source, type-check it, infer it, then tree-walk the json parser across 188kb of json, a hundred and fifty times over:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code><span class="prompt">$ </span>time kanso run bench/jsonbench --interp
+<span class="s">decoded 150 times, checksum 24000</span>
+kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total</code></pre>
+</div>
+
+<p>a quarter of a second for 150 full decodes, tree-walked. that's far closer to compiled speed than the folklore about interpreters would let you guess—and winning this race was never the interpreter's job anyway. its job is to answer in milliseconds on human-sized programs, carry no state between runs, and stand as the reference the compiler has to match to the bit. notice the checksum on that line: <code>24000</code>. hold onto it.</p>
+
+<p>now hand the exact same module to the compiler. nothing changes—no annotation, no rewritten <code>fn</code>, no buffer given a name. <code>kanso build</code>, then run the binary it produces:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code><span class="prompt">$ </span>kanso build bench/jsonbench --release
+<span class="s">built ./jsonbench (llvm ir at jsonbench.ll)</span>
+<span class="prompt">$ </span>time ./jsonbench
+<span class="s">decoded 150 times, checksum 24000</span>
+./jsonbench  0.14s user 0.00s system 99% cpu 0.140 total</code></pre>
+</div>
+
+<p>0.14 seconds for the same 150 decodes, and the same <code>24000</code> falls out the bottom. the fixture is read at runtime, so the optimizer can't cheat by folding the answer in at compile time; the matching checksum proves each of the 150 decodes really happened. that <code>24000</code> is not decoration. the interpreter printed it, the binary prints it, and every future run on every machine has to print it too—or something is broken. that agreement is the first of this chapter's three safety nets, and we'll build on it later.</p>
+
+<p>wall-clock <code>time</code> is a blunt instrument, though: it counts process startup, and it can't interleave runs to cancel out heat and noise. the careful measurement is the interleaved best-of-25 from the table up top, where the binary lands at 0.81ms against serde's 0.83. the win didn't arrive in one heroic stroke—it came in a few measured steps, none of which touched the module you wrote in chapter 12. the biggest was teaching the compiler to inline a batch of one-line helpers directly in its own ir, where the linker had been quietly declining to: −10.7%. the compiler got better at the same program.</p>
+
+<h2>where the time goes</h2>
+
+<p>"zero-cost abstraction" is a promise nearly every compiled language makes and nearly none will show you the evidence for. here is the evidence—a cpu profile of that binary, caught mid-benchmark, sorted by what sat on top of the stack most often:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">sample jsonbench (top of stack)</div>
+  <pre><code>Sort by top of stack, same collapsed (when >= 5):
+        d__value_for_3  (in jsonbench)        504
+        k_truthy  (in jsonbench)        180
+        k_b_push_mut  (in jsonbench)        179
+        k_utf8_bad  (in jsonbench)        132
+        _platform_memmove  (in libsystem_platform.dylib)        126
+        d__str_char_4  (in jsonbench)        114
+        d__obj_key_start_4  (in jsonbench)        106
+        k_b_find2  (in jsonbench)        98
+        k_b_put  (in jsonbench)        97</code></pre>
+</div>
+
+<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's <code>value_for</code>, which chapter 12 read: the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
+
+<p>now look at what's <em>missing</em>. there is no interpreter in this list. no dispatcher walking a table of function pointers. no tag-checking loop, no garbage collector. <code>memmove</code>—raw byte copying, the floor of any parser—has sunk to fifth. the overloads, the pattern matches, the railway you spent nine chapters learning: none of them appear, because by the time the compiler is done they aren't separate things in the program anymore.</p>
+
+<p>take the hottest function as the case study. in the source, <code>value_for</code> is eight arms, one per kind of first byte. you might picture running it as asking each arm in turn whether it matches until one says yes. the machine does something else. the compiler knows all eight arms ahead of time, so it emits one indexed jump: take the byte, go straight to the arm that handles it.</p>
+
+<p>the word for turning "one function that works for many types" into "a separate specialized copy for each concrete type actually used" is <strong>monomorphization</strong>. that's all it is—the compiler saw exactly which bytes flow through <code>_value_for</code> and stamped out the specialized switchboard, so dispatch, the "only switch" from chapter 03, costs nothing at runtime. you can watch it happen on a program small enough to hold in one hand.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">samples/ch10/classify.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">kind</span> <span class="n">43</span>
+  <span class="s">"plus"</span>
+
+<span class="k">fn</span> <span class="f">kind</span> <span class="n">45</span>
+  <span class="s">"minus"</span>
+
+<span class="k">fn</span> <span class="f">kind</span> <span class="n">46</span>
+  <span class="s">"dot"</span>
+
+<span class="k">fn</span> <span class="f">kind</span> <span class="n">101</span>
+  <span class="s">"exponent"</span>
+
+<span class="k">fn</span> <span class="f">kind</span> _
+  <span class="s">"other"</span>
+
+<span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play classify.kso</div>
+    <pre><code>dot</code></pre>
+  </div>
+</div>
+
+<p>five overloads, each matching one byte literal, plus a catch-all <code>_</code>. build it and look at the emitted ir—the whole group is a single indexed branch:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">classify.ll</div>
+  <pre><code>  <span class="k">switch</span> i64 %t3, label %arm4 [
+    i64 43, label %arm0
+    i64 45, label %arm1
+    i64 46, label %arm2
+    i64 101, label %arm3
+  ]</code></pre>
+</div>
+
+<p>the catch-all <code>_</code> became the <code>default</code> label, and each byte literal became one case. the real decoder compiles the same way. here is <code>value_for</code> in a release build of the benchmark today: its six byte arms are <code>34 91 102 110 116 123</code>, which are <code>" [ f n t {</code>, the <code>none</code> arm is the case for 256, a value no byte can have, and the arm for everything else is the default:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jsonbench.ll, value_for</div>
+  <pre><code>  switch i64 %x0r, label %arm7 [
+    i64 34, label %arm0
+    i64 91, label %arm1
+    i64 102, label %arm2
+    i64 110, label %arm3
+    i64 116, label %arm4
+    i64 123, label %arm5
+    i64 256, label %arm6
+  ]</code></pre>
+</div>
+
+<p>overloads in the source, one jump in the machine, at any scale. it is the same thing every chapter has landed: kanso deletes things. commas, wrappers, exceptions, mocks—and now the runtime cost of its own abstractions.</p>
+
+<p>one more symbol is worth a glance. <code>k_b_push_mut</code>, sitting third from the top, is list-append that extends the list <em>in place</em> instead of copying it—the parser's accumulator grows without ever cloning itself, which is a big part of why <code>memmove</code> fell so far down. that trick rests on a lineage of published papers, and the full story—how the language's guardrails let the compiler get away with it, and which papers we raided to get there—lives on <a href="/compiler.html">the compiler page</a>. this chapter hands you the receipt; that page opens up the machine.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 56 58" role="img" aria-label="tsuru" shape-rendering="crispEdges"><title>tsuru - folds your program until it is small enough to fly</title><rect x="39" y="3" width="1" height="1" fill="#dfc9a2"/><rect x="39" y="4" width="1" height="1" fill="#dfc9a2"/><rect x="38" y="5" width="3" height="1" fill="#dfc9a2"/><rect x="38" y="6" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="7" width="1" height="1" fill="#f03a00"/><rect x="37" y="7" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="8" width="3" height="1" fill="#f03a00"/><rect x="37" y="8" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="9" width="5" height="1" fill="#f03a00"/><rect x="36" y="9" width="5" height="1" fill="#dfc9a2"/><rect x="3" y="10" width="2" height="1" fill="#f2e3c8"/><rect x="5" y="10" width="4" height="1" fill="#f03a00"/><rect x="36" y="10" width="6" height="1" fill="#dfc9a2"/><rect x="2" y="11" width="2" height="1" fill="#f2e3c8"/><rect x="4" y="11" width="2" height="1" fill="#f03a00"/><rect x="6" y="11" width="4" height="1" fill="#f2e3c8"/><rect x="35" y="11" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="12" width="1" height="1" fill="#2b2320"/><rect x="3" y="12" width="10" height="1" fill="#f2e3c8"/><rect x="35" y="12" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="13" width="1" height="1" fill="#2b2320"/><rect x="3" y="13" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="13" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="14" width="2" height="1" fill="#2b2320"/><rect x="3" y="14" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="14" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="15" width="3" height="1" fill="#2b2320"/><rect x="4" y="15" width="8" height="1" fill="#f2e3c8"/><rect x="33" y="15" width="10" height="1" fill="#dfc9a2"/><rect x="0" y="16" width="4" height="1" fill="#2b2320"/><rect x="4" y="16" width="9" height="1" fill="#f2e3c8"/><rect x="33" y="16" width="10" height="1" fill="#dfc9a2"/><rect x="2" y="17" width="2" height="1" fill="#2b2320"/><rect x="4" y="17" width="9" height="1" fill="#f2e3c8"/><rect x="32" y="17" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="18" width="6" height="1" fill="#f2e3c8"/><rect x="32" y="18" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="19" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="19" width="12" height="1" fill="#dfc9a2"/><rect x="7" y="20" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="20" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="21" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="22" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="23" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="23" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="24" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="24" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="25" width="8" height="1" fill="#f2e3c8"/><rect x="28" y="25" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="26" width="7" height="1" fill="#f2e3c8"/><rect x="28" y="26" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="27" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="27" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="28" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="28" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="29" width="8" height="1" fill="#f2e3c8"/><rect x="25" y="29" width="1" height="1" fill="#f2e3c8"/><rect x="26" y="29" width="19" height="1" fill="#dfc9a2"/><rect x="10" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="24" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="30" width="15" height="1" fill="#dfc9a2"/><rect x="10" y="31" width="8" height="1" fill="#f2e3c8"/><rect x="23" y="31" width="18" height="1" fill="#f2e3c8"/><rect x="41" y="31" width="5" height="1" fill="#dfc9a2"/><rect x="10" y="32" width="8" height="1" fill="#f2e3c8"/><rect x="22" y="32" width="25" height="1" fill="#f2e3c8"/><rect x="10" y="33" width="8" height="1" fill="#f2e3c8"/><rect x="20" y="33" width="27" height="1" fill="#f2e3c8"/><rect x="11" y="34" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="35" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="36" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="37" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="38" width="37" height="1" fill="#f2e3c8"/><rect x="12" y="39" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="40" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="41" width="1" height="1" fill="#dfc9a2"/><rect x="13" y="41" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="42" width="2" height="1" fill="#dfc9a2"/><rect x="14" y="42" width="37" height="1" fill="#f2e3c8"/><rect x="10" y="43" width="4" height="1" fill="#dfc9a2"/><rect x="15" y="43" width="37" height="1" fill="#f2e3c8"/><rect x="9" y="44" width="5" height="1" fill="#dfc9a2"/><rect x="16" y="44" width="33" height="1" fill="#f2e3c8"/><rect x="8" y="45" width="6" height="1" fill="#dfc9a2"/><rect x="17" y="45" width="27" height="1" fill="#f2e3c8"/><rect x="7" y="46" width="8" height="1" fill="#dfc9a2"/><rect x="18" y="46" width="19" height="1" fill="#f2e3c8"/><rect x="37" y="46" width="2" height="1" fill="#2b2320"/><rect x="6" y="47" width="9" height="1" fill="#dfc9a2"/><rect x="19" y="47" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="47" width="2" height="1" fill="#2b2320"/><rect x="29" y="47" width="5" height="1" fill="#f2e3c8"/><rect x="37" y="47" width="2" height="1" fill="#2b2320"/><rect x="5" y="48" width="10" height="1" fill="#dfc9a2"/><rect x="20" y="48" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="48" width="2" height="1" fill="#2b2320"/><rect x="37" y="48" width="2" height="1" fill="#2b2320"/><rect x="4" y="49" width="12" height="1" fill="#dfc9a2"/><rect x="21" y="49" width="3" height="1" fill="#f2e3c8"/><rect x="27" y="49" width="2" height="1" fill="#2b2320"/><rect x="37" y="49" width="2" height="1" fill="#2b2320"/><rect x="3" y="50" width="10" height="1" fill="#dfc9a2"/><rect x="27" y="50" width="2" height="1" fill="#2b2320"/><rect x="37" y="50" width="2" height="1" fill="#2b2320"/><rect x="2" y="51" width="6" height="1" fill="#dfc9a2"/><rect x="27" y="51" width="2" height="1" fill="#2b2320"/><rect x="37" y="51" width="2" height="1" fill="#2b2320"/><rect x="1" y="52" width="2" height="1" fill="#dfc9a2"/><rect x="27" y="52" width="2" height="1" fill="#2b2320"/><rect x="37" y="52" width="2" height="1" fill="#2b2320"/><rect x="27" y="53" width="2" height="1" fill="#2b2320"/><rect x="37" y="53" width="2" height="1" fill="#2b2320"/><rect x="27" y="54" width="2" height="1" fill="#2b2320"/><rect x="37" y="54" width="2" height="1" fill="#2b2320"/><rect x="27" y="55" width="2" height="1" fill="#2b2320"/><rect x="27" y="56" width="2" height="1" fill="#2b2320"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">tsuru</span>
+<p>profile before you tune. a kanso profile names <em>your</em> functions, monomorphized—so if the hot symbol is one you wrote, the algorithm is what to fix; if the hot symbol is <code>memmove</code>, you're already at the metal, and you should go find something better to do with your afternoon.</p>
+</div>
+</div>
+
+<h2>a loop that isn't a loop</h2>
+
+<p>recursion is kanso's only way to repeat, so the compiler can't treat tail calls as a nicety it applies when it's in a good mood. a call in tail position—the last thing a function does before it returns—becomes a jump that reuses the current stack frame instead of stacking a new one on top. here is mutual recursion ten million frames deep:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">samples/ch10/pingpong.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">even?</span> <span class="n">0</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">even?</span> n
+  <span class="f">odd?</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">odd?</span> <span class="n">0</span>
+  <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">odd?</span> n
+  <span class="f">even?</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10000000</span>
+
+<span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play pingpong.kso</div>
+    <pre><code>10000000 even? true</code></pre>
+  </div>
+</div>
+
+<p>ten million alternating calls, no annotation asking for anything, and the stack never grows past a single frame. built with <code>kanso build pingpong.kso --release</code>, the binary takes about three milliseconds. the guarantee is right there in the ir—<code>musttail</code>, llvm's strongest promise: emit the jump, or refuse to compile the module at all.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pingpong.ll</div>
+  <pre><code>  %t13 = <span class="k">musttail call</span> tailcc %KValue @d_odd_1(i64 %t12)
+  ...
+  %t13 = <span class="k">musttail call</span> tailcc %KValue @d_even_1(i64 %t12)</code></pre>
+</div>
+
+<p>a plain tail-call <em>hint</em> is advisory: the backend may honor it, and on a bad day for register allocation it may not, and your ten-million-deep recursion overflows the stack in production while passing every test on your laptop. <code>musttail</code> makes the call a jump or makes the compile fail, so a tail call kanso emits always runs in constant stack.</p>
+
+<p>and now it can be said as a contract rather than a description: a call in tail position consumes no stack, in every engine, and a program may lean on that the way a scheme program does. the accumulator rewrite the appendix shows for simple counting shapes is a different thing — an optimization the compiler is free to widen or narrow between releases. the promise is tail position, and nothing wider.</p>
+
+<h2>the ratchet</h2>
+
+<p>every number so far has a shelf life. the profile was one afternoon on one machine; the gauntlet drifts with the temperature of the room. a benchmark you run once and quote forever isn't evidence of much. the part of this chapter that outlives any single run is the part that turned these numbers into <em>tests</em>—things ci checks on every commit, that fail a build the exact way a wrong answer fails a build. that's the ratchet: it lets a win go forward and won't let it slide back.</p>
+
+<p>the ratchet has teeth on three surfaces. the first you've already met: the interpreter and the compiled binary have to print the same bytes on every example in the suite, the whole json corpus included. that <code>24000</code> we held onto is one tooth—when the compiler rewrites the entire program and not a single output bit moves, the rewriting is trustworthy. the other two teeth are new.</p>
+
+<h3>costs are facts, not measurements</h3>
+
+<p>a deterministic language has deterministic costs. run a program with <code>KANSO_COUNTERS=1</code>, under <code>kanso run</code> or <code>kanso play</code> or as a binary built with <code>kanso build --counters</code>, and, instead of how long it took, the runtime tells you what it <em>did</em>. take a program small enough to check by eye: build a thousand-element list one <code>push</code> at a time, then sum it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">counters.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">build</span> <span class="n">0</span> acc
+  <span class="f">acc</span>
+
+<span class="k">fn</span> <span class="f">build</span> n acc
+  <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
+
+<span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso play counters.kso</div>
+    <pre><code>allocs=7
+alloc_bytes=28960
+arena_blocks=1
+arena_peak_bytes=1048576
+cohort_frees=0
+cohort_kept=0
+perm_allocs=2
+beat_iters=0
+evac_allocs=3
+evac_bytes=80
+survive_slots=0
+put_mut_fast=0
+put_mut_grow=0
+push_mut_fast=0
+push_mut_slow=1000
+thunk_allocs=0
+thunk_forces=0
+thunk_evals=0
+thunk_frees=0
+thunk_escaped=0
+thunk_live_exit=0
+el_parses=0
+ryu_renders=0
+ryu_short=0
+utf8_bytes=0
+find2_calls=0
+number_spans=0
+append_fast=0
+append_grow=0
+append_rendered=0
+utf8_zerocopy=0
+carry_dedup=0
+bytes_malloc=3
+bytes_freed=2
+perm_live_bytes=16400
+perm_peak_bytes=16400
+str_scans=0
+str_scan_bytes=0
+seek_resumes=0
+seek_steps=0
+buf_reuse=0
+held_peak_bytes=0
+view_allocs=0
+view_frees=0
+ten_blocks=0
+ten_frees=0
+ten_handups=0
+chain_finds=0
+sh_str=64
+sh_rec=0
+sh_buf=112
+sh_map=0
+sh_bytes=0
+spare_peak_bytes=0
+sum 500500</code></pre>
+  </div>
+</div>
+
+<p>a thousand pushes cost seven allocations. not "about seven." not "seven on my laptop." seven—run it again, run it on a different chip, a loaded cpu, a cold cache, and every one of those integers comes back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
+
+<p>the same instrument, pointed at the gauntlet, gives the first lines of the file ci keeps for it:</p>
+
+<p>two of those integers tell the memory story. <code>arena_blocks</code> is <span data-golden="decode.arena_blocks">2</span> across all hundred and fifty decodes: each decode hands its scratch space back before the next begins, so the count does not grow with the number of decodes. <code>beat_iters</code> is <span data-golden="decode.beat_iters">150</span>, one for each decode. none of these numbers moves between runs, so ci keeps them in a file and diffs it like program output:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">bench/cost_golden.txt</div>
+  <pre><code>allocs=<span data-golden="decode.allocs">1125014</span>
+alloc_bytes=<span data-golden="decode.alloc_bytes">152572448</span>
+arena_blocks=<span data-golden="decode.arena_blocks">2</span>
+arena_peak_bytes=<span data-golden="decode.arena_peak_bytes">2097152</span>
+cohort_frees=<span data-golden="decode.cohort_frees">1</span>
+cohort_kept=<span data-golden="decode.cohort_kept">0</span>
+perm_allocs=<span data-golden="decode.perm_allocs">4</span>
+beat_iters=<span data-golden="decode.beat_iters">150</span></code></pre>
+</div>
+
+<p>a regression in the compiler's folding now shows up as a changed integer in a diff—the same way a broken behavior shows up as a failed assertion. if a future edit to <code>push</code> loses the in-place reuse, <code>allocs</code> jumps, the golden fails, and it fails on every machine, before anyone has to file a "feels slower lately." no clocks, no flaky thresholds, no "it was fine on ci but slow on mine." that −10.7% inlining win from a few pages back stopped being an anecdote the day <code>alloc_bytes</code> became a committed integer.</p>
+
+<h3>and the shape of the code</h3>
+
+<p>counters pin what the program does when it runs. they can't see the <em>shape</em> of the code the compiler emitted—and some of this chapter's best guarantees live in that shape. that the scanner is a jump table and not a chain of comparisons. that every tail call is a real <code>musttail</code> and not an advisory hint one register-allocation change could quietly drop. a benchmark won't catch the day a jump table decays into an if-ladder, because the program still gives the right answer, just slower on inputs the benchmark never tries. a check on the emitted code will.</p>
+
+<p>the emitted <code>.ll</code> is plain text, so the check is a plain grep committed as a golden. the tail-call guarantee for the ten-million-frame program is exactly two <code>musttail</code> calls—one per direction of the recursion:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">structural spec: pingpong.ll</div>
+  <pre><code><span class="prompt">$ </span>grep -c "musttail call" pingpong.ll
+2</code></pre>
+</div>
+
+<p>the day someone changes codegen and a tail call comes out as a plain <code>call</code>, that count drops and the check fails—loudly, at build time, long before a stack overflow reaches a user. the dispatch shape is pinned the same way. the scanner's decision has to stay a <code>switch</code> over its byte literals:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">structural spec: classify.ll</div>
+  <pre><code><span class="prompt">$ </span>grep -A5 "switch i64 %t3" classify.ll
+  switch i64 %t3, label %arm4 [
+    i64 43, label %arm0
+    i64 45, label %arm1
+    i64 46, label %arm2
+    i64 101, label %arm3
+  ]</code></pre>
+</div>
+
+<p>turn that literal dispatch back into a cascade of comparisons and the <code>switch</code> line stops matching and the golden fails. the property stops being a sentence in a book and becomes a wall the codegen has to keep clearing. three surfaces, three sets of teeth: behavior goldens prove the answer is right, cost goldens prove the work stayed bounded, structural goldens prove the fast shape held.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p>her binary and my evaluation have to agree byte for byte on every example, every ci run—the whole json suite included. when the compiler rewrites everything and not one output bit budges, you're allowed to trust the folding.</p>
+</div>
+</div>
+
+<p>you can now read a kanso binary's cost the way you read its output. you can prove a tail call is real, prove a dispatch group stayed a jump table, prove an allocation count didn't creep, each one a golden that ci diffs on every commit. the abstractions from the earlier chapters cost nothing at run time, and the goldens are what keep that true from one commit to the next. the appendices that follow are for looking things up.</p>
+
+<h2>exercises</h2>
+
+<ol class="exercises">
+  <li>build <code>samples/ch10/counters.kso</code>, then change the loop count from <code>1000</code> to <code>2000</code> and rebuild. run it under <code>KANSO_COUNTERS=1</code> and write down the new <code>allocs</code> and <code>alloc_bytes</code>. from your two data points, work out the list's growth policy: does doubling the element count double the allocation count, or add a fixed few?</li>
+  <li>write your own two-overload tail-recursive function—say, a countdown that prints as it goes—build it, and grep the <code>.ll</code> for <code>musttail call</code>. now rewrite one arm so its recursive call is <em>not</em> the last thing it does—wrap the call in a bit of arithmetic—rebuild, and grep again. say what happened to the count, and what that predicts about the stack at ten million frames.</li>
+  <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>47 &lt; c and c &lt; 58</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
+  <li>the cost golden in <code>bench/cost_golden.txt</code> is committed. break it on purpose: edit one integer, run the counters, and diff the two. then describe what a real regression would have to change in the program to produce that same diff—and why a wall-clock benchmark would have waved it through.</li>
+</ol>
