@@ -222,6 +222,62 @@ fn install_reads_an_import_that_names_its_qualifier() {
     );
 }
 
+/// The lock owns versions (design/hako.md): `install` fetches what it pins, and
+/// only `update` walks a release forward. Install used to keep a branch pin
+/// and re-resolve every release pin to the newest tag, so a fresh clone of a
+/// project locked at v0.1.0 installed v0.2.0 the day it was published.
+#[test]
+fn install_fetches_the_release_the_lock_pins() {
+    let root = std::env::temp_dir().join("kanso-hako-install-locked");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets\"\n\nprint \"{widgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+    let v1 = Command::new("git")
+        .args(["rev-parse", "v0.1.0"])
+        .current_dir(remote.join("acme/widgets"))
+        .output()
+        .expect("git runs");
+    let sha = String::from_utf8_lossy(&v1.stdout).trim().to_string();
+    std::fs::write(app.join("hako.lock"), format!("acme/widgets v0.1.0 {sha} git\n"))
+        .expect("the lock writes");
+
+    let install = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["install", "."])
+        .env("KANSO_HAKO", &cache)
+        .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+        .current_dir(&app)
+        .output()
+        .expect("kanso install runs");
+    assert_eq!(
+        String::from_utf8_lossy(&install.stdout),
+        "installed 1 hako(s):\n  acme/widgets v0.1.0\n",
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+    let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock is kept");
+    assert_eq!(lock, format!("acme/widgets v0.1.0 {sha} git\n"));
+
+    let after = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "."])
+        .env("KANSO_HAKO", &cache)
+        .current_dir(&app)
+        .output()
+        .expect("kanso runs");
+    assert_eq!(
+        String::from_utf8_lossy(&after.stdout),
+        "widgets v1\n",
+        "{}",
+        String::from_utf8_lossy(&after.stderr)
+    );
+}
+
 /// The rest of the cycle: a release lands upstream, `list` says so, `update`
 /// walks the lock forward, and the build follows — still without a network,
 /// because the cache holds what the lock names.

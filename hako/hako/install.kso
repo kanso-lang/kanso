@@ -179,9 +179,11 @@ fn speakable_name n
 fn dotted? owner
   length (text/split owner ".") > 1
 
+# The lock owns versions, so a hako it already pins is fetched as pinned,
+# release or branch alike; only `update` walks a release forward.
 fn chosen n wanted held root origin
   pinned = list/find wanted (a -> a[1] == n)
-  standing = list/find held (p -> p.name == n and not release? p.tag)
+  standing = list/find held (p -> p.name == n)
   plain = unasked n standing root origin
   if (pinned == none) plain (by_branch n pinned root origin)
 
