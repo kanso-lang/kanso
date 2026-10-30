@@ -1115,7 +1115,8 @@ the binary does not carry, which stopped being true when it shipped; it now
 says a module read from disk keeps the IR's key.
 
 bench/entry_corpus derives, so the entry row prices collecting the entry's
-calls: entry_instructions 86,700,038 -> 86,751,224 (+51,186). No other row
-moved, the library and module rows included, though `lib/derive` is embedded
-and its comments grew. Welfare fell by less than a hundredth, and the floor
+calls: entry_instructions 86,700,038 -> 86,751,224 (+51,186). The tab
+compiles with the embedded `lib/derive`, whose comments grew, and
+browser_compile_instructions moved 343,289,578 -> 343,289,570 (-8). No other
+row moved, the library and module rows included. Welfare fell by less than a hundredth, and the floor
 follows under the rule for a feature a ruling requires.
