@@ -1,10 +1,10 @@
 ---
 layout: book
-title: "chapter 14—fast by construction"
+title: "chapter 15—fast by construction"
 description: "the compiled json decoder edges serde_json on one honest harness, and the wins are pinned as tests: deterministic cost counters and ir shape-checks that fail a build the way a wrong answer does."
 extra_css: /book/book.css
 ---
-<span class="eyebrow">chapter 14</span>
+<span class="eyebrow">chapter 15</span>
 <h1>fast by construction</h1>
 
 <p>nine chapters have asked you to give things up. no mutation. no loops—recursion is the only way to repeat yourself. seven small overloads where another language writes one <code>switch</code>. a reasonable person reads all that and waits for the bill: elegance this thorough must cost something once the program actually runs.</p>
@@ -72,7 +72,7 @@ kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total<
 
 <p>0.14 seconds for the same 150 decodes, and the same <code>24000</code> falls out the bottom. the fixture is read at runtime, so the optimizer can't cheat by folding the answer in at compile time; the matching checksum proves each of the 150 decodes really happened. that <code>24000</code> is not decoration. the interpreter printed it, the binary prints it, and every future run on every machine has to print it too—or something is broken. that agreement is the first of this chapter's three safety nets, and we'll build on it later.</p>
 
-<p>wall-clock <code>time</code> is a blunt instrument, though: it counts process startup, and it can't interleave runs to cancel out heat and noise. the careful measurement is the interleaved best-of-25 from the table up top, where the binary lands at 0.81ms against serde's 0.83. the win didn't arrive in one heroic stroke—it came in a few measured steps, none of which touched the module you wrote in chapter 12. the biggest was teaching the compiler to inline a batch of one-line helpers directly in its own ir, where the linker had been quietly declining to: −10.7%. the compiler got better at the same program.</p>
+<p>wall-clock <code>time</code> is a blunt instrument, though: it counts process startup, and it can't interleave runs to cancel out heat and noise. the careful measurement is the interleaved best-of-25 from the table up top, where the binary lands at 0.81ms against serde's 0.83. the win didn't arrive in one heroic stroke—it came in a few measured steps, none of which touched the module you wrote in chapter 13. the biggest was teaching the compiler to inline a batch of one-line helpers directly in its own ir, where the linker had been quietly declining to: −10.7%. the compiler got better at the same program.</p>
 
 <h2>where the time goes</h2>
 
@@ -92,7 +92,7 @@ kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total<
         k_b_put  (in jsonbench)        97</code></pre>
 </div>
 
-<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's <code>value_for</code>, which chapter 12 read: the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
+<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's <code>value_for</code>, which chapter 13 read: the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
 
 <p>now look at what's <em>missing</em>. there is no interpreter in this list. no dispatcher walking a table of function pointers. no tag-checking loop, no garbage collector. <code>memmove</code>—raw byte copying, the floor of any parser—has sunk to fifth. the overloads, the pattern matches, the railway you spent nine chapters learning: none of them appear, because by the time the compiler is done they aren't separate things in the program anymore.</p>
 

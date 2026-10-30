@@ -1,10 +1,10 @@
 ---
 layout: book
-title: "chapter 12—a json library"
+title: "chapter 13—a json library"
 description: "a close reading of kanso-json: six files, parsing by byte dispatch, the escape path, numbers, failure positions, the test suite, encode and a pretty-printer."
 extra_css: /book/book.css
 ---
-<span class="eyebrow">chapter 12</span>
+<span class="eyebrow">chapter 13</span>
 <h1>a json library</h1>
 
 <p>the repository ships <code>lib/json</code>, a complete json decoder and encoder that handles escapes, <code>\uXXXX</code>, ints and floats, and failure positions. it is six files, and this chapter reads the core of each. every panel titled <code>lib/json/…</code> is cut from the real file, whole declarations unchanged, and the book's build fails if a panel stops matching. the other samples either run the library or replay one of its moves on a page. first, what using it looks like:</p>
@@ -247,7 +247,7 @@ err at 1: unexpected character `?`</code></pre>
 
 <p>the tail predicates compare bytes: <code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>word</code> reports the mismatch. <code>?</code> starts no value, so the catch-all arm names it. in the library a bad literal becomes an <code>err</code> deep inside and comes back out with its position, past every function in between, and none of them mentions it. the sample's <code>fail</code> answers a <code>parse_failure</code> record instead, the shape chapter 04 gives an outcome the caller handles, and <code>report</code>'s <code>show</code> reads the position from it.</p>
 
-<p>arrays and objects work the same way one level up. <code>array_delim</code> dispatches on the byte after an element: <code>44</code>, a comma, means more items, <code>93</code> means the array is done, <code>none</code> means the input ended inside it, and anything else is whitespace to skip or a mistake to name. the object path adds a key: <code>obj_key_start</code> insists on a quote, <code>obj_key_end</code> demands the colon, and <code>obj_value</code> puts each pair into the map. every step passes its whole state, the bytes and a position, forward as arguments, so there is no parser state to restore. the comments in <code>value.kso</code> record why some of these states call themselves and others hand off to a twin: each choice was measured, in instructions, on the benchmark chapter 14 describes.</p>
+<p>arrays and objects work the same way one level up. <code>array_delim</code> dispatches on the byte after an element: <code>44</code>, a comma, means more items, <code>93</code> means the array is done, <code>none</code> means the input ended inside it, and anything else is whitespace to skip or a mistake to name. the object path adds a key: <code>obj_key_start</code> insists on a quote, <code>obj_key_end</code> demands the colon, and <code>obj_value</code> puts each pair into the map. every step passes its whole state, the bytes and a position, forward as arguments, so there is no parser state to restore. the comments in <code>value.kso</code> record why some of these states call themselves and others hand off to a twin: each choice was measured, in instructions, on the benchmark chapter 15 describes.</p>
 
 <h2>strings and the escape path</h2>
 

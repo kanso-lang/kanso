@@ -8,6 +8,7 @@
 #   name_plan.out       kanso run name.kso --plan
 #   name_counters.out   KANSO_COUNTERS=1 kanso run name.kso
 #   name@slug.out       kanso run name.kso, given the words in name@slug.args
+#   name_install.out    kanso install name   (and _list, _update the same way)
 # A sibling name.manual file (holding one line of why) exempts an .out the
 # harness cannot replay — repl transcripts, wall-clock timings, IR greps.
 # BOOK_WRITE=1 rewrites each .out that differs from what its sample now does,
@@ -22,6 +23,22 @@ set -e
 export KANSO_SEED=2685821657736338717
 KANSO=$(pwd)/target/release/kanso
 fail=0
+# The hako cache is state no sample produced, so every run starts from an
+# empty one. A sample that depends on a hako commits its hako.lock, and the
+# hakos it names are installed before any panel runs: the recordings are read
+# in name order, and a program's run sorts ahead of its install.
+KANSO_HAKO=$(mktemp -d)
+export KANSO_HAKO
+for lock in $(find docs/book/samples -name hako.lock | sort); do
+  dir=$(dirname "$lock")
+  stage=$(mktemp -d)
+  cp -R "$dir/." "$stage/"
+  if ! (cd "$stage" && "$KANSO" install . >/dev/null 2>"$stage.err"); then
+    echo "HAKO: $dir does not install: $(cat "$stage.err")"
+    fail=1
+  fi
+  rm -rf "$stage" "$stage.err"
+done
 # How a reader runs a sample file. `run` takes a file of statements alone and
 # `play` one with definitions beside its statements; a file of definitions
 # and constants alone is a library, and a library that exports `play` runs
@@ -49,6 +66,12 @@ for out in docs/book/samples/*/*.out; do
     *_check)    mode=check; stripped="${base%_check}" ;;
     *_test)     mode=test;  stripped="${base%_test}" ;;
     *_build)    mode=build; stripped="${base%_build}" ;;
+    # a hako verb runs on a directory, and only when no sample has the whole
+    # name: values/long_list.out is a run of long_list.kso
+    *_install|*_list|*_update)
+      if [ ! -e "$base.kso" ] && [ ! -e "$base" ]; then
+        mode=${base##*_}; stripped="${base%_*}"
+      fi ;;
     *_plan)     mode=run; extra="--plan"; stripped="${base%_plan}" ;;
     *_counters) mode=run; env_prefix="KANSO_COUNTERS=1"; stripped="${base%_counters}" ;;
   esac

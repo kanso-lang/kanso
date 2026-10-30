@@ -1,0 +1,108 @@
+---
+layout: book
+title: "chapter 12—packages"
+description: "depending on code someone else published: a hako's name is its GitHub path, the import is the manifest, a release is a vX.Y.Z tag, and hako.lock records exactly what was fetched. kanso install, list and update."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 12</span>
+<h1>packages</h1>
+
+<p>so far every module a program imported was either in the standard library or in a directory beside it. this chapter depends on code someone else published. kanso calls a package a <em>hako</em>, and the package manager is the <code>kanso</code> binary itself: <code>kanso install</code>, <code>kanso list</code> and <code>kanso update</code>.</p>
+
+<p>three rules cover most of it. a hako's name is its GitHub path, such as <code>kanso-lang/kanso-json</code>, so there is no registry and no account to create. the import is the manifest: there is no separate file listing dependencies, because the <code>import</code> lines already say what the program uses. and a release is a git tag of the form <code>vX.Y.Z</code>, recorded in a lock file so that every build fetches the same code.</p>
+
+<h2>a program that imports a hako</h2>
+
+<p>kanso-json is the decoder chapter 13 reads closely, published on its own as a hako. (the standard library ships the same decoder as <code>std/json</code>; here it stands in for any library you depend on.) this program reads an order and prints it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teaorder/main.kso</div>
+  <pre><code>import json "kanso-lang/kanso-json"
+import "std/os"
+
+os/read_file! "order.json" .&gt; json/decode!
+  .&gt; (order -&gt; print "{order["tea"]}, {order["grams"]} grams")</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">order.json</div>
+  <pre><code>{"tea": "sencha", "grams": 3}</code></pre>
+</div>
+
+<p>an import's last path segment is the qualifier its names are used under, so <code>import "std/os"</code> gives you <code>os/read_file!</code>. the last segment of <code>kanso-lang/kanso-json</code> is <code>kanso-json</code>, and a hyphen cannot appear in a name, so the import gives the module a name of its own: <code>import json "kanso-lang/kanso-json"</code> makes its functions <code>json/decode!</code> and <code>json/encode</code>.</p>
+
+<p>a program that has never been installed cannot build, because nothing has fetched the hako yet. here is the same program in a directory that has not been installed:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run fresh_order</div>
+  <pre><code>error: cannot resolve import "kanso-lang/kanso-json" — a bare path names a hako, and it is not in the cache (run `kanso install`)</code></pre>
+</div>
+
+<h2>installing</h2>
+
+<p><code>kanso install</code> reads the program's imports, finds each hako's highest release tag, fetches it into a local cache, and writes the lock:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso install teaorder</div>
+  <pre><code>installed 1 hako(s):
+  kanso-lang/kanso-json v0.1.0</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">teaorder/hako.lock</div>
+  <pre><code>kanso-lang/kanso-json v0.1.0 a68bd47d0e8147231b159357736c7f8df95277bf git</code></pre>
+</div>
+
+<p>the lock has one line per hako: its name, the release tag, the sha git reported for that tag, and the protocol it was fetched with. commit it with the program. anyone who clones the repository and runs <code>kanso install</code> fetches exactly the same code, and a build never chooses a version on its own.</p>
+
+<p>the cache lives in <code>~/.hako</code>, keyed by name and that sha, and <code>KANSO_HAKO</code> moves it. the compiler itself never touches the network: a build reads the lock and the cache, so once a hako is installed the program builds offline.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run teaorder</div>
+  <pre><code>sencha, 3 grams</code></pre>
+</div>
+
+<h2>staying current</h2>
+
+<p><code>kanso list</code> prints what the lock pins. when a newer release exists upstream, the line says so.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso list teaorder</div>
+  <pre><code>kanso-lang/kanso-json v0.1.0 a68bd47d0e81 git</code></pre>
+</div>
+
+<p><code>kanso update</code> walks each pin forward to the highest release and rewrites the lock. given a hako's name as well, <code>kanso update teaorder kanso-lang/kanso-json</code>, it moves that hako alone. run the tests after an update: the lock changing is the whole of what happened, so a failing test points straight at the dependency.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso update teaorder</div>
+  <pre><code>every hako is already at its highest release</code></pre>
+</div>
+
+<h2>working against a branch</h2>
+
+<p>sometimes you need a fix that has not been released yet. <code>kanso install teaorder --from kanso-lang/kanso-json@main</code> pins the hako to the commit that branch points at. the lock records the branch name, <code>kanso list</code> marks the line as an interim pin, and <code>kanso update</code> will not walk it forward, because a branch is not a release. when the fix ships in a tag, delete that hako's line from <code>hako.lock</code> and run <code>kanso install</code>, which takes the newest release.</p>
+
+<h2>publishing your own</h2>
+
+<p>a hako is a GitHub repository of kanso source. to publish a release, tag a commit and push the tag:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code>git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0</code></pre>
+</div>
+
+<p>a tag is permanent history. a lock records what it named, so moving a published tag would change what other people's locks mean; publish a new version instead. only tags of the form <code>vX.Y.Z</code> count as releases, so a prerelease such as <code>v1.0.0-rc1</code> is never chosen by <code>install</code> or <code>update</code>.</p>
+
+<h2>what you can do now</h2>
+
+<p>you can depend on a published hako by importing it, give it a qualifier when its name does not make one, install it, and commit the lock that makes every build fetch the same code. you can see what is out of date with <code>kanso list</code>, move forward with <code>kanso update</code>, pin a branch while you wait for a release, and publish a release of your own by pushing a tag.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>delete <code>teaorder/hako.lock</code> and run <code>kanso install teaorder</code> again. compare the new lock with the old one: what decided which release it picked?</li>
+  <li>point <code>KANSO_HAKO</code> at an empty directory and run <code>kanso run teaorder</code>. read the error, then install and run again.</li>
+  <li>change the import to <code>import "kanso-lang/kanso-json"</code> and run <code>kanso check teaorder</code>. why can't the program reach the module's functions now?</li>
+  <li>add a second hako to the program, install it, and read the lock again.</li>
+</ol>

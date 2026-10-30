@@ -13,7 +13,7 @@ extra_css: /book/book.css
 
 <h2>counting</h2>
 
-<p>set <code>KANSO_COUNTERS=1</code> and kanso prints its counters to standard error when the program ends. there are several dozen, and chapter 14 shows the full list. this chapter needs one: <code>allocs</code>, the number of allocations the program made. three copies of the tea text, at one, ten and a hundred times its length, show how the count grows:</p>
+<p>set <code>KANSO_COUNTERS=1</code> and kanso prints its counters to standard error when the program ends. there are several dozen, and chapter 15 shows the full list. this chapter needs one: <code>allocs</code>, the number of allocations the program made. three copies of the tea text, at one, ten and a hundred times its length, show how the count grows:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea.txt 2&gt;&amp;1 | grep '^allocs='</div>
