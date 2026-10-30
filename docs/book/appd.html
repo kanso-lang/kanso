@@ -49,7 +49,7 @@ print "{list/group_by words (w -&gt; text/slice w 1 1)}"</code></pre>
 
 <h3>sort records by a field</h3>
 
-<p><code>list/sort_by</code> sorts by the key a function computes, here a field read with the dot. <code>list/map</code> answers a lazy sequence, so <code>list/to_list</code> realizes it before printing (chapter 12).</p>
+<p><code>list/sort_by</code> sorts by the key a function computes, here a field read with the dot. <code>list/map</code> answers a lazy sequence, so <code>list/to_list</code> realizes it before printing (chapter 08).</p>
 
 <div class="code-panel">
   <div class="code-panel-title">sort_by.kso</div>
@@ -176,7 +176,7 @@ mochi costs 250</code></pre>
 
 <h3>decode json from a file</h3>
 
-<p><code>json/decode!</code> insists the text is json and answers the decoded value; an object becomes a map. chapter 08 builds this decoder.</p>
+<p><code>json/decode!</code> insists the text is json and answers the decoded value; an object becomes a map. chapter 12 builds this decoder.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">order.json</div>
@@ -226,7 +226,7 @@ os/read_file! "broken.json" .&gt; json/decode! .&gt; described .&gt; print</code
 
 <h3>read the command-line arguments</h3>
 
-<p><code>os/args</code> is an effect that answers the arguments as a list of strings. everything after <code>--</code> on the command line is the program's. chapter 13 builds a full command-line tool around this.</p>
+<p><code>os/args</code> is an effect that answers the arguments as a list of strings. everything after <code>--</code> on the command line is the program's. chapter 09 builds a full command-line tool around this.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">args.kso</div>
@@ -296,10 +296,3 @@ io/write_err "wordfreq: no such file: notes.txt\n" .&gt; (_ -&gt; os/exit 2)</co
 </div>
 
 <p>the shell sees status 2. for testing these programs, see chapter 07; for running several effects at once, chapter 06.</p>
-
-<nav class="chapter-nav">
-  <a href="index.html">contents</a>
-  <span class="nav-spacer"></span>
-  <a href="appc.html">← canonical form</a>
-  <a href="index.html">contents →</a>
-</nav>

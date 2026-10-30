@@ -73,7 +73,7 @@ for out in docs/book/samples/*/*.out; do
     verb="$mode"
     target="$name"
     # Every sample runs in a fresh copy of its directory, under the same
-    # name. Samples write files (ch04's ordered.kso leaves slow.txt, which
+    # name. Samples write files (the failure chapter's ordered.kso leaves slow.txt, which
     # grouped.kso must not find), so running them in place made a second
     # run read what the first one left behind.
     stage=$(mktemp -d)
@@ -115,9 +115,9 @@ done
 # all; the samples named here keep one until the toolchain can run them
 # another way (#2204: `play --plan`; #2205: named groups, constants and
 # siblings in play files).
-waiting=" appb/timing.kso ch05/count.kso ch06/concurrency.kso "
-waiting="$waiting ch06/accumulate.kso ch06/dice.kso "
-waiting="$waiting ch06/join.kso ch07/shop.kso ch08/escapes.kso "
+waiting=" appb/timing.kso effects/count.kso flow/concurrency.kso "
+waiting="$waiting flow/accumulate.kso flow/dice.kso "
+waiting="$waiting flow/join.kso modules/shop.kso json/escapes.kso "
 titles=$(for page in docs/book/*.html; do
   ch=$(basename "$page" .html)
   grep -oE 'code-panel-title">(KANSO_COUNTERS=1 )?kanso (run|play) [a-z_0-9/]+\.kso' "$page" \
@@ -169,7 +169,7 @@ cp docs/index.html docs/about.html "$scratch/docs/"
 cp -R examples "$scratch/examples"
 mkdir -p "$scratch/tests/golden"
 cp -R tests/golden/examples tests/golden/errors "$scratch/tests/golden/"
-"$KANSO" run scripts/stale_a_panel -- "$scratch/docs/book/ch04.html"
+"$KANSO" run scripts/stale_a_panel -- "$scratch/docs/book/failure.html"
 if ! (cd "$scratch" && "$KANSO" run "$here/scripts/book_panels" -- --write \
       >"$scratch/log" 2>&1); then
   echo "WRITE PATH: book_panels --write did not finish"
@@ -179,7 +179,7 @@ elif ! grep -q '2 panel(s) rewritten' "$scratch/log"; then
   echo "WRITE PATH: both staled panels were not rewritten"
   tail -3 "$scratch/log"
   fail=1
-elif grep -q STALE "$scratch/docs/book/ch04.html"; then
+elif grep -q STALE "$scratch/docs/book/failure.html"; then
   echo "WRITE PATH: a staled panel was not put back"
   fail=1
 else

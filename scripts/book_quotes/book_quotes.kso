@@ -6,15 +6,14 @@ import "std/text"
 
 # A book panel titled with a PATH — `lib/json/number.kso` — quotes a file
 # the repository owns, where a panel titled with a bare name renders a sample
-# under
-# the chapter's own directory. scripts/book_panels regenerates the second kind
-# and cannot see the first: a title resolves as `<samples>/<title>` or as a
+# under the chapter's own directory. scripts/book_panels regenerates the second
+# kind and cannot see the first: a title resolves as `<samples>/<title>` or as a
 # bare filename one directory deeper, and the deeper branch compares a path's
 # LAST SEGMENT to the whole title, so a title carrying a slash matches nothing
-# and is left alone. Eight such panels sat in ch08, four of them quoting a
-# library that had moved on — one showed `at cs p` for an index the language
-# no longer spells that way, one named `_is_ws` for a function since renamed to
-# `ws?`, and two named byte-array constants the library had replaced.
+# and is left alone. Eight such panels sat in the json chapter, four of them
+# quoting a library that had moved on — one showed `at cs p` for an index the
+# language no longer spells that way, one named `_is_ws` for a function since
+# renamed to `ws?`, and two named byte-array constants the library had replaced.
 #
 # A panel of this kind is an excerpt: whole declarations chosen from the file
 # and left as the file writes them. Three checks read it:
@@ -51,7 +50,7 @@ title_path = "[a-z_0-9]+(?:/[a-z_0-9]+)*\\.kso"
 
 quote_head = "<div class=\"code-panel-title\">({title_path})</div>"
 
-# `ch08.html` samples live in `docs/book/samples/ch08`.
+# `json.html` samples live in `docs/book/samples/json`.
 fn samples_of name
   "{chapters}/samples/{(text/split name ".")[1]}"
 
@@ -330,12 +329,13 @@ fn checked qs at found after
 fn checking _ _ found after true
   after found
 
-# Four shapes resolve, tried in order, and a title that resolves as none of
-# them is left alone. The order matters: a repository file first, then the
-# chapter's own sample directory, then the two roots a title may be written
-# against — `docs/book` (ch10 writes `samples/ch10/classify.kso`) and a
-# sample directory one level in (ch07 writes `teahouse/menu.kso` for
-# `samples/ch07/teahouse/teahouse/menu.kso`, ch09 the same shape for `vse`).
+# Four shapes resolve, tried in order, and a title that resolves as none of them
+# is left alone. The order matters: a repository file first, then the chapter's
+# own sample directory, then the two roots a title may be written against —
+# `docs/book` (the fast chapter writes `samples/fast/classify.kso`) and a sample
+# directory one level in (the modules chapter writes `teahouse/menu.kso` for
+# `samples/modules/teahouse/teahouse/menu.kso`, the voting chapter the same
+# shape for `vse`).
 fn checking qs at found after false
   q = present qs[at]
   on = (there -> as_file qs at found after q there)
@@ -352,17 +352,17 @@ fn beside qs at found after q names
   with_package qs at found after q [q.title] wanted
 
 # Otherwise a directory module under the chapter's own samples — `literal.kso`
-# for `samples/ch08/literal/`, whose panel merges the module's files into one
+# for `samples/json/literal/`, whose panel merges the module's files into one
 # excerpt. Every .kso under it is both what the panel may declare and what it
 # may name.
 fn as_file qs at found after q false
   on = (owned -> not_a_sample qs at found after q owned)
   os/exists "{q.samples}/{q.title}" .> on
 
-# A title that resolves to a FILE beside its chapter is book_panels' panel:
-# that harness regenerates the body from the sample and this must not second-
-# guess it. ch07 has both `shop.kso` and a `shop/` directory, and reading the
-# panel for one against the other is how this first went wrong.
+# A title that resolves to a FILE beside its chapter is book_panels' panel: that
+# harness regenerates the body from the sample and this must not second- guess
+# it. The modules chapter has both `shop.kso` and a `shop/` directory, and
+# reading the panel for one against the other is how this first went wrong.
 fn not_a_sample qs at found after _ true
   checked qs (at + 1) found after
 
@@ -443,7 +443,7 @@ fn picking_each mine wanted bodies at acc false
   pick_loop mine wanted bodies (at + 1) "{acc}\n{one}"
 
 fn chapter? n
-  regexp/match? "^(ch[0-9]+|app[a-z])\\.html$" n
+  regexp/match? "^[a-z]+\\.html$" n
 
 fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))

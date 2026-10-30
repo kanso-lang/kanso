@@ -13,7 +13,7 @@
 //! err born at the edge used to reach the endpoint without knocking at any
 //! continuation, because a chain step's synthesised callback returns a
 //! failure argument instead of entering its body (`call_closure` in eval.rs).
-//! docs/book/samples/ch05/fallback.kso is that program, and its golden is the
+//! docs/book/samples/effects/fallback.kso is that program, and its golden is the
 //! endpoint message.
 
 use std::path::PathBuf;
