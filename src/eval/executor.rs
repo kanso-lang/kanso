@@ -422,7 +422,8 @@ impl Executor for RealExecutor {
             .map_err(|_| refused())?
             .with_root_certificates(roots)
             .with_no_client_auth();
-        let name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|_| refused())?;
+        let name =
+            rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|_| refused())?;
         let mut tls = rustls::ClientConnection::new(std::sync::Arc::new(config), name)
             .map_err(|_| refused())?;
         while tls.is_handshaking() {
