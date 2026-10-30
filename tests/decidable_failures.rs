@@ -8,7 +8,7 @@
 //! Clay put it plainly while arguing that err should come only from io: a
 //! conversion failure on a literal "would fail to compile". It does not.
 //!
-//! Consequence recorded with the task: docs/book/samples/ch04/teas.kso is built
+//! Consequence recorded with the task: docs/book/samples/failure/teas.kso is built
 //! on two of these, and folding them makes the book's own demonstration of the
 //! err merge a pair of compile errors. That is the thesis arriving rather than
 //! a cost — the two most obvious "fails at runtime" examples turned out to be

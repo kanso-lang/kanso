@@ -1724,9 +1724,9 @@ lex_openers = row
 
 rows_dq61 = list/concat rows_dq60 [lex_lines lex_openers]
 
-# A page's <div> tags pair up (2026-10-29). ch07 and appendix a both shipped
-# with a stray </div> that every gate passed over. The mutation puts one back
-# after ch07's first panel.
+# A page's <div> tags pair up (2026-10-29). The modules chapter and appendix a
+# both shipped with a stray </div> that every gate passed over. The mutation
+# puts one back after the modules chapter's first panel.
 stray_div = row
   "a page closing a <div> it never opened"
   true
