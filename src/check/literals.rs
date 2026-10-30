@@ -105,6 +105,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("net_read", &[&[Int]]),
         ("net_read_bytes", &[&[Int]]),
         ("dial", &[&[Str], &[Int]]),
+        ("net_secure", &[&[Int], &[Str]]),
         ("net_write", &[&[Int], &[Str]]),
         ("net_close", &[&[Int]]),
         ("concat", &[&[List], &[List]]),

@@ -31,6 +31,18 @@ fn taken h
 pub fn dial host at
   builtin_dial host at .> taken
 
+# The connection's traffic through TLS from here on, after a handshake that
+# checks the server's certificate for `host` against the machine's trusted
+# roots (`SSL_CERT_FILE` names others). It upgrades a connection already open
+# because Postgres asks for TLS inside a plain one; a dial straight into TLS
+# is a dial and then this. A refusal names the host.
+pub fn secured c host
+  builtin_net_secure c.handle host .> taken
+
+# A connection out that speaks TLS from its first byte, as HTTPS does.
+pub fn dial_tls host at
+  dial host at .> (c -> secured c host)
+
 pub fn read c
   builtin_net_read c.handle
 

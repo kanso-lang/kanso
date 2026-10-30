@@ -111607,3 +111607,48 @@ browser_compile_peak_bytes 843,030. The run program emits the arm too:
 emitted_other_lines 170,150, emitted_other_calls 20,540,
 emitted_other_branches 17,831 and emitted_other_defines 2,262, and text
 reads 5,622,043. Welfare rises 95.41 -> 95.52 and is banked.
+
+## 2026-10-26 — a string handed on round a cycle joins the corpus
+
+The corpus phase for the next fix, under the 2026-09-05 corpus-first gavel.
+A battery of core-library shapes at 4,000 and 16,000 elements on both engines
+found one cliff: natively, `regexp/replace_all` over 64,000 words took 49.8
+seconds, where the interpreter took 4.8. Three separate causes sit under it,
+each reduced to a loop of two groups that joins onto a string in place in the
+first group and hands it to the second:
+
+- `built` hands the join straight on, `built s (at + 1) "{acc}{s}x" n`.
+- `marked` binds the join below a `return acc if …` guard, and the guard holds
+  the statements after it.
+- `tagging` is also declared with one parameter, as regexp's `swapped` is.
+
+Natively, each hop copies the string built so far, so each loop costs the
+square of its length: 80,000 steps of `built` took 13.9 seconds, of `marked`
+11.4 and of `tagged` 2.3. The interpreter asks the same analysis and has the
+third cliff too, at 1.57 seconds for 80,000 steps of `tagged` against 0.10
+for 20,000, so `relayed 1500` joins the interpreted corpus: on this
+container it reads 580,418,637 with it and 563,943,189 with it reading
+nothing, a column of 16,475,448 (2.84%). The run program's module is
+`bench/runbench/runbench/relayed`, at 3,000 steps for the first two and
+1,500 for the third. On this container the run program reads 837,824,222
+with it and 822,287,654 with it reading nothing, a column of 15,536,568
+(1.85%). The run program's allocation vein moves with it. Welfare re-bases
+each moved term once CI's rows are in, so the fix scores as a rise.
+
+CI's rows, against main at #2165. work_runbench reads 821,243,366 ->
+836,794,013 with the phase, and its allocation vein moves with the three
+loops: run_alloc_bytes 223,916,952 -> 282,819,050, run_allocs 1,581,593 ->
+1,596,597, run_arena_blocks 4 -> 5, run_arena_peak_bytes 4,718,608 ->
+5,767,184, run_spare_peak_bytes 2,621,456 -> 3,670,032, run_beat_iters
+178,072 -> 193,074, run_bytes_malloc 7,924 -> 13,926, run_evac_allocs 1,732
+-> 1,744, run_evac_bytes 4,602,176 -> 4,635,024, run_perm_allocs 103 -> 106,
+run_sh_str 16,769,952 -> 21,455,984, run_str_scan_bytes 18,352,322 ->
+18,358,325 and run_str_scans 1,885 -> 1,888. The interpreted corpus reads
+interp_instructions 562,047,199 -> 579,993,703, interp_allocs 631,738 ->
+653,569 and interp_peak_bytes 1,328,317 -> 1,339,129, and the tab compiles
+and runs it: browser_compile_instructions 348,471,187 -> 353,823,116,
+browser_compile_peak_bytes 843,030 -> 847,565, browser_run_instructions
+61,478,759 -> 64,252,748 and browser_run_peak_bytes 1,572,864 -> 2,621,440,
+a page more for the copies. Under the corpus-first gavel each moved welfare
+term's baseline is scaled so its ratio to what it reads holds, so the phase
+leaves welfare where it was and the fix below scores as a rise.

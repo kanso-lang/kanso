@@ -298,6 +298,18 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Dial(host.to_string(), port.to_i64().unwrap_or(-1)))))
             }
+            b"net_secure" => {
+                let [conn, host] = arity(args, name, span)?;
+                let (Value::Int(conn), Value::Str(host)) = (&conn, &host) else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "net_secure takes a connection and a host string".to_string(),
+                        span,
+                    });
+                };
+                let conn = conn.to_i64().unwrap_or(-1);
+                Ok(Value::Desc(Rc::new(Desc::Secure(conn, host.to_string()))))
+            }
             b"net_write" => {
                 let [conn, text] = arity(args, name, span)?;
                 match (&conn, &text) {

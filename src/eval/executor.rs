@@ -128,6 +128,11 @@ pub trait Executor {
     fn dial(&mut self, _host: &str, _port: i64) -> Result<i64, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// The connection's traffic through TLS from here on, once a handshake
+    /// has checked the server's certificate for `host`. Answers the handle.
+    fn secure(&mut self, _conn: i64, _host: &str) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
     fn send(&mut self, _conn: i64, _text: &str) -> Result<(), String> {
         Err("this engine has no sockets".to_string())
     }
@@ -177,6 +182,10 @@ struct Sockets {
     next: i64,
     listeners: Map<i64, std::net::TcpListener>,
     conns: Map<i64, std::net::TcpStream>,
+    /// The TLS session of each connection `net/secured` upgraded, beside the
+    /// stream it reads and writes through.
+    #[cfg(not(target_arch = "wasm32"))]
+    secured: Map<i64, rustls::ClientConnection>,
 }
 
 impl Sockets {
@@ -392,8 +401,44 @@ impl Executor for RealExecutor {
         })
     }
 
+    /// The handshake checks the certificate against the machine's trusted
+    /// roots, which `SSL_CERT_FILE` replaces, as OpenSSL reads them for
+    /// native code. The reason names the host and nothing from the TLS
+    /// library, so both engines word a refusal alike.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn secure(&mut self, conn: i64, host: &str) -> Result<i64, String> {
+        let refused = || format!("cannot secure the connection to {host}");
+        let stream = SOCKETS.with(|s| s.borrow().conns.get(&conn).map(|c| c.try_clone()));
+        let Some(Ok(mut stream)) = stream else {
+            return Err("that is not a connection".to_string());
+        };
+        let mut roots = rustls::RootCertStore::empty();
+        for cert in rustls_native_certs::load_native_certs().certs {
+            let _ = roots.add(cert);
+        }
+        let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+        let config = rustls::ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|_| refused())?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|_| refused())?;
+        let mut tls = rustls::ClientConnection::new(std::sync::Arc::new(config), name)
+            .map_err(|_| refused())?;
+        while tls.is_handshaking() {
+            tls.complete_io(&mut stream).map_err(|_| refused())?;
+        }
+        SOCKETS.with(|s| s.borrow_mut().secured.insert(conn, tls));
+        Ok(conn)
+    }
+
     fn receive_bytes(&mut self, conn: i64) -> Result<Vec<u8>, String> {
         use std::io::Read;
+        let mut buffer = [0u8; 65536];
+        if let Some(read) = through_tls(conn, |tls| tls.read(&mut buffer)) {
+            let read = read?.map_err(|e| format!("cannot read: {e}"))?;
+            return Ok(buffer[..read].to_vec());
+        }
         let mut stream = SOCKETS.with(|s| {
             let s = s.borrow();
             let found = s.conns.get(&conn);
@@ -402,7 +447,6 @@ impl Executor for RealExecutor {
         let Some(stream) = stream.as_mut() else {
             return Err("that is not a connection".to_string());
         };
-        let mut buffer = [0u8; 65536];
         let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
         Ok(buffer[..read].to_vec())
     }
@@ -416,6 +460,15 @@ impl Executor for RealExecutor {
     }
 
     fn close_socket(&mut self, handle: i64) -> Result<(), String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::io::Write;
+            let _ = through_tls(handle, |tls| {
+                tls.conn.send_close_notify();
+                tls.flush()
+            });
+            SOCKETS.with(|s| s.borrow_mut().secured.remove(&handle));
+        }
         SOCKETS.with(|s| {
             let mut s = s.borrow_mut();
             let closed = s.conns.remove(&handle).is_some() || s.listeners.remove(&handle).is_some();
@@ -556,6 +609,9 @@ impl Executor for RealExecutor {
 /// utf-8, a bytes value writes itself, and the socket sees no difference.
 fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     use std::io::Write;
+    if let Some(sent) = through_tls(conn, |tls| tls.write_all(raw).and_then(|()| tls.flush())) {
+        return sent?.map_err(|e| format!("cannot write: {e}"));
+    }
     let mut stream = SOCKETS.with(|s| {
         let s = s.borrow();
         let found = s.conns.get(&conn);
@@ -566,6 +622,38 @@ fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     };
     stream.write_all(raw).map_err(|e| format!("cannot write: {e}"))?;
     stream.flush().map_err(|e| format!("cannot write: {e}"))
+}
+
+/// Runs `io` on a connection's TLS stream when `net/secured` upgraded it, and
+/// answers `None` for a plain one. The session leaves the table while it is
+/// in use, so the table is never borrowed across a read that blocks.
+#[cfg(not(target_arch = "wasm32"))]
+fn through_tls<T>(
+    conn: i64,
+    io: impl FnOnce(&mut rustls::StreamOwned<rustls::ClientConnection, std::net::TcpStream>) -> T,
+) -> Option<Result<T, String>> {
+    let (tls, tcp) = SOCKETS.with(|s| {
+        let mut s = s.borrow_mut();
+        let tls = s.secured.remove(&conn)?;
+        let tcp = s.conns.get(&conn).map(|c| c.try_clone());
+        Some((tls, tcp))
+    })?;
+    let tcp = match tcp {
+        Some(Ok(tcp)) => tcp,
+        _ => return Some(Err("that is not a connection".to_string())),
+    };
+    let mut stream = rustls::StreamOwned::new(tls, tcp);
+    let done = io(&mut stream);
+    SOCKETS.with(|s| s.borrow_mut().secured.insert(conn, stream.conn));
+    Some(Ok(done))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn through_tls<T>(
+    _conn: i64,
+    _io: impl FnOnce(&mut std::net::TcpStream) -> T,
+) -> Option<Result<T, String>> {
+    None
 }
 
 /// One line as `read_line` hands it over: the `\n` and a `\r` before it go,

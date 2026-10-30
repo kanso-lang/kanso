@@ -110,6 +110,7 @@ fn the_reading_finds_every_effect_builtin() {
             "net_port",
             "net_read",
             "net_read_bytes",
+            "net_secure",
             "net_write",
             "now",
             "print",
