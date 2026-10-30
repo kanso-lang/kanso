@@ -111566,3 +111566,44 @@ emitted_other_branches 17,762 -> 17,826, emitted_other_calls 20,468 ->
 5,622,379. Under the corpus-first gavel each moved welfare term's baseline
 is scaled so its ratio to what it reads holds, so the phase leaves welfare
 where it was and the fix in #2165 scores as a rise.
+
+## 2026-10-26 — the last element of a list is read at its end
+
+`list/last` gains an arm for a list, `last xs:[]some`, which answers
+`xs[length xs]`: the last element, or none for an empty list, as the fold did.
+Anything that is not a list keeps the fold, so a lazy sequence, a string,
+bytes and a map are walked to their last element as before.
+
+5,000 reads of a 5,000-element list took 0.38 s natively and 17.7 s on the
+interpreter, and take 0.07 s and 0.015 s. At 20,000 they take 0.09 s and
+0.03 s, where the interpreter ran past two minutes.
+
+`a_list_is_read_at_its_end` (micro, both engines) reads the last of a list of
+numbers, of records and of lists, of one element and of none, and of a lazy
+sequence, a string, bytes and a map. Its output is main's interpreter, and
+both engines on main and on this branch print it. Reading one before the end
+turns the micro corpus red.
+
+The new arm moves std/list's lines below it down by four, so
+`runtime/tie_takes_a_list_of_ids` names `list/tie` at line 602 where it named
+598.
+
+CI's rows, against #2164's phase on main at #2175. The run program's 800
+reads cost what an index costs: work_runbench 859,187,448 -> 821,243,366,
+below main's 821,299,208 without the phase, run_allocs 1,582,393 ->
+1,581,593, run_alloc_bytes 223,955,352 -> 223,916,952 and run_sh_rec
+4,136,736 -> 4,098,336, the 800 step records the fold built. The interpreted
+corpus falls the same way: interp_instructions 588,905,757 -> 562,047,199
+and interp_allocs 656,976 -> 631,738, while interp_peak_bytes reads
+1,328,317, 1,060 more, for the library's extra arm. In the tab
+browser_run_instructions falls 64,341,530 -> 61,478,759. The arm is library
+code every compile reads, so the compile rows rise a little:
+compile_instructions 24,862,623 -> 24,864,430, entry_instructions
+73,686,908 -> 73,696,160, library_instructions 73,325,258 -> 73,344,720,
+emit_instructions 5,702,866 -> 5,703,136, codegen_instructions_dev
+116,733,865 -> 116,733,909, codegen_instructions_release 371,551,519 ->
+371,551,607, browser_compile_instructions 348,471,187 and
+browser_compile_peak_bytes 843,030. The run program emits the arm too:
+emitted_other_lines 170,150, emitted_other_calls 20,540,
+emitted_other_branches 17,831 and emitted_other_defines 2,262, and text
+reads 5,622,043. Welfare rises 95.41 -> 95.52 and is banked.
