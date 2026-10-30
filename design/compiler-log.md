@@ -57,14 +57,6 @@ which on main printed no line. field_read_in_a_deep_library and
 two_owners_tie_on_a_traveling_call gain the line their goldens had pinned
 as missing.
 
-## 2026-10-26 — gavel: an entry reads its key and value by name
-
-#2163, option 1. An entry is an ordinary record, so `e.key` and `e.value`
-read by name on every engine and are checked like any record's fields. The
-pattern `(entry k v)` keeps working. Clay asked about Ruby's two-argument
-blocks (`|k, v|`); destructuring the entry in a parameter already gives that,
-and a two-argument walk over maps would need a twin of every list function.
-
 ## 2026-10-27 — an entry reads its key and value by name
 
 #2163. A field read becomes a call on the field's getter, and getters were
@@ -1114,3 +1106,16 @@ codegen_instructions_release 371,573,350 -> 371,827,207, interp_instructions
 571,786,909 -> 571,683,168, browser_compile_instructions 343,289,570 ->
 343,307,533 and browser_run_instructions 64,598,060 -> 64,598,061. The
 floor follows under the rule for a feature a ruling requires.
+
+## 2026-10-30 — the emitter's word helpers move into codegen/words.rs
+
+The cleanup owed after #2251 to #2258. The free functions between ir_scan.rs
+and the `Backend` impl move into src/codegen/words.rs, read with include!
+where they stood: the symbol names (`wsym` and its kin), `literal_word`, the
+lift around a call that may fail, word arithmetic, and the readers and
+writers of a value's inline tag and payload. codegen.rs falls from 3,447
+lines to 2,911. Putting words.rs back in place of its include! gives main's
+codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
+section by their text and now name words.rs; each still applies to the line
+it did before. CI's cost-goldens job read every vein at main's values,
+compile_instructions among them, so no row moved.

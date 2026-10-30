@@ -111740,3 +111740,11 @@ and one allocation less, interp_allocs 653,377. work_runbench moves
 825,009,976 -> 825,010,172, 196 more; the run program never called the
 escape, and nothing here isolates what moved it. Welfare rises within its
 second decimal and is banked.
+
+## 2026-10-26 — gavel: an entry reads its key and value by name
+
+#2163, option 1. An entry is an ordinary record, so `e.key` and `e.value`
+read by name on every engine and are checked like any record's fields. The
+pattern `(entry k v)` keeps working. Clay asked about Ruby's two-argument
+blocks (`|k, v|`); destructuring the entry in a parameter already gives that,
+and a two-argument walk over maps would need a twin of every list function.

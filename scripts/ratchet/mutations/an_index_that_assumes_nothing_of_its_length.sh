@@ -5,8 +5,8 @@
 # lets LLVM fold `1 <= i <= len` into one unsigned compare. Take the promise
 # back and the read is two signed compares and an `and` again.
 set -e
-f=src/codegen.rs
-grep -q 'fn assume_length(' src/codegen.rs
+f=src/codegen/words.rs
+grep -q 'fn assume_length(' src/codegen/words.rs
 line='    f.line_fmt(format_args!("{ok} = icmp ult i64 {len}, {}", 1i64 << 62));'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the length assumption moved; this mutation needs rewriting" >&2
