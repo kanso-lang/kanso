@@ -1072,3 +1072,8 @@ tests/golden/derive gains a convention that declares the lines of a
 `tables.txt` beside its entry, on both engines. With the directory read
 pointed at a path that does not exist, it declares an empty list and the
 case fails.
+
+bench/entry_corpus derives, so it now reads its directory, and the entry row
+prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
+row moved. Welfare fell by less than a hundredth, and the floor follows under
+the rule for a feature a ruling requires.
