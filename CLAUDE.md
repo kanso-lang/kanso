@@ -56,8 +56,10 @@ which it is before it edits anything.
   the docs and this file. It measures, builds, writes up, opens pull requests
   and merges them. Clay: "all development is for you. the chat session is only
   for me to talk with and make decisions with."
-- **The chat is where Clay talks and decides.** It files, labels and closes
-  issues and writes rulings onto them.
+- **The chat is where Clay talks and decides.** It files issues and writes
+  rulings onto them. Nothing waits on the chat to be closed: cloud closes an
+  issue when its work is done. Clay: "nothing needs to be closed from the chat
+  lane."
 - **Cloud keeps the page level with the log.** `page_drift` fails a tree more
   than three log entries ahead of docs/compiler.html, so a pull request that
   adds the fourth entry writes the page's section for them. A `data-golden`
@@ -76,12 +78,16 @@ says what happened. Read the queue with
   the search behind it (the log, the archive, the docs, the tests), the options
   and a recommendation, so a sitting can be a yes or a no. A question left in a
   pull request body or a log paragraph is one nobody sees. A performance
-  question with no surface area is the implementer's and never goes to Clay. A
-  question already ruled is never re-asked: cite the ruling and close the issue.
-- **When Clay rules, the chat records it on the issue**: it closes the issue
-  (nothing to build) or relabels it `ruled` and `lane:cloud` with what is owed
-  as a checklist. When the chat has not written the `— gavel:` log entry,
-  cloud writes it in its next pull request. Cite a ruling by
+  question with no surface area is the implementer's and never goes to Clay,
+  and neither is the book's or the site's structure (chapter order, which page
+  holds what): the docs lane decides it and Clay edits later. Clay: "the book
+  order you can just take executive action on and do what makes sense because
+  I can always edit it later." A question already ruled is never re-asked:
+  cite the ruling and close the issue.
+- **When Clay rules, whichever session heard it records it on the issue**: it
+  closes the issue (nothing to build) or relabels it `ruled` and `lane:cloud`
+  with what is owed as a checklist. When no `— gavel:` log entry has been
+  written, cloud writes it in its next pull request. Cite a ruling by
   its log heading or issue number, never by a session task id.
 - **Cloud chooses the build order, from the whole list.** It reads every open
   `ruled` issue at each check-in and before opening a pull request, and a pull
@@ -114,7 +120,9 @@ says what happened. Read the queue with
   from `get_session` before believing it.
 - **A blocked action goes back to Clay, never sideways to another session.**
   When the permission classifier refuses something (a push to main, deleting a
-  remote ref), say what was refused and let him choose. He does not want work
+  remote ref), say what was refused and let him choose. A refusal is reported
+  as a refusal, naming the action and the error; it is never framed as a
+  design question. He does not want work
   driven through a second session on his behalf.
 - **Never offer a direct push to main.** It skips CI, the only gate this
   project has. Clay: "you always make a PR and then merge it."
