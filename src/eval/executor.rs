@@ -435,8 +435,14 @@ impl Executor for RealExecutor {
     fn receive_bytes(&mut self, conn: i64) -> Result<Vec<u8>, String> {
         use std::io::Read;
         let mut buffer = [0u8; 65536];
+        // A peer that closes without TLS's goodbye reads as the end, as a
+        // plain socket's close does and as OpenSSL reads it natively.
         if let Some(read) = through_tls(conn, |tls| tls.read(&mut buffer)) {
-            let read = read?.map_err(|e| format!("cannot read: {e}"))?;
+            let read = match read? {
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => 0,
+                Err(e) => return Err(format!("cannot read: {e}")),
+            };
             return Ok(buffer[..read].to_vec());
         }
         let mut stream = SOCKETS.with(|s| {

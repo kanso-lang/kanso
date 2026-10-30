@@ -759,8 +759,10 @@ static ssize_t k_conn_take(long long h, int fd, char* buf, size_t n) {
 #ifndef __wasm__
     void* ssl = k_sockets[h % K_SOCKETS].tls;
     if (ssl) {
+        /* 0 is the peer's goodbye or its close without one, read as the end
+           the way a plain socket's close is; below 0 is a failure. */
         int got = k_ssl.read(ssl, buf, (int)n);
-        return got < 0 ? 0 : got;
+        return got < 0 ? -1 : got;
     }
 #else
     (void)h;

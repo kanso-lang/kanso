@@ -62,7 +62,7 @@ fn ran(tag: &str, source: &str, interp: bool, roots: &std::path::Path) -> (Strin
 /// Listens, completes one TLS handshake as `localhost`, answers "world" to
 /// what the program says, and hands back what it heard. A handshake the
 /// program refuses ends the thread with nothing heard.
-fn serve_once() -> (u16, std::thread::JoinHandle<Vec<u8>>) {
+fn serve_once(goodbye: bool) -> (u16, std::thread::JoinHandle<Vec<u8>>) {
     let certs: Vec<CertificateDer<'static>> =
         CertificateDer::pem_file_iter(fixture("localhost.pem"))
             .expect("the certificate reads")
@@ -104,8 +104,10 @@ fn serve_once() -> (u16, std::thread::JoinHandle<Vec<u8>>) {
         }
         stream.write_all(b"world").expect("the answer goes out");
         stream.flush().expect("the answer is sent");
-        tls.send_close_notify();
-        let _ = tls.complete_io(&mut tcp);
+        if goodbye {
+            tls.send_close_notify();
+            let _ = tls.complete_io(&mut tcp);
+        }
         heard.to_vec()
     });
     (port, served)
@@ -114,7 +116,7 @@ fn serve_once() -> (u16, std::thread::JoinHandle<Vec<u8>>) {
 #[test]
 fn a_program_secures_a_connection_and_talks_through_it_on_both_engines() {
     for (tag, interp) in [("native", false), ("interp", true)] {
-        let (port, served) = serve_once();
+        let (port, served) = serve_once(true);
         let (out, err) = ran(tag, &program(port, "localhost"), interp, &fixture("ca.pem"));
         let heard = served.join().expect("the server thread finishes");
         assert_eq!(out, "heard world\n", "{tag}: {err}");
@@ -137,12 +139,35 @@ fn a_server_the_program_cannot_verify_is_refused_alike_on_both_engines() {
             "error[endpoint]: unhandled err reached the executor: \"cannot secure the connection to {host}\"\n"
         );
         for (engine, interp) in [("native", false), ("interp", true)] {
-            let (port, served) = serve_once();
+            let (port, served) = serve_once(true);
             let tag = format!("{case}-{engine}");
             let (out, err) = ran(&tag, &program(port, host), interp, &roots);
             let _ = served.join();
             assert_eq!(out, "", "{tag}");
             assert_eq!(err, want, "{tag}");
         }
+    }
+}
+
+/// A server that closes without TLS's close_notify, as plenty do, ends the
+/// conversation the way a plain socket's close does: the next read is empty,
+/// on both engines.
+#[test]
+fn a_close_without_goodbye_reads_as_the_end_on_both_engines() {
+    for (tag, interp) in [("abrupt-native", false), ("abrupt-interp", true)] {
+        let (port, served) = serve_once(false);
+        let source = format!(
+            "import \"std/net\"\n\n\
+             fn spoken c\n  \
+             net/write c \"hello\"\n    \
+             .> (_ -> net/read c)\n    \
+             .> (t -> print \"heard {{t}}\")\n    \
+             .> (_ -> net/read c)\n    \
+             .> (t -> print \"then {{length t}} bytes\")\n\n\
+             net/dial \"localhost\" {port} .> (c -> net/secured c \"localhost\") .> spoken\n"
+        );
+        let (out, err) = ran(tag, &source, interp, &fixture("ca.pem"));
+        let _ = served.join();
+        assert_eq!(out, "heard world\nthen 0 bytes\n", "{tag}: {err}");
     }
 }

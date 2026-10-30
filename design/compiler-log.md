@@ -1118,7 +1118,10 @@ tests/a_program_secures_a_connection.rs plays a server with rustls and a
 certificate for `localhost` signed by a test authority whose key was thrown
 away after signing (`tests/fixtures/tls`). Both engines dial it, secure the
 connection, say hello and print the answer. Trusting only the server's own
-certificate, and naming another host, are each refused with the same words on
-both engines. senro's `pg/connect_tls`, run against Postgres 16 serving the
-same certificate, logged in over TLS 1.3 on both engines, and the server's
-`pg_stat_ssl` agreed.
+certificate, and naming another host, are each refused with the same words
+on both engines. A server that closes without TLS's close_notify ends the
+conversation the way a plain close does, with an empty read on both engines;
+rustls reports that close as an error, and with the error passed through the
+interpreter's case failed. senro's `pg/connect_tls`, run against Postgres 16
+serving the same certificate, logged in over TLS 1.3 on both engines, and
+the server's `pg_stat_ssl` agreed.
