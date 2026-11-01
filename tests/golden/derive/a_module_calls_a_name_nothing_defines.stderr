@@ -1,0 +1,4 @@
+error[name]: unknown name `post_form`
+  --> tests/golden/derive/a_module_calls_a_name_nothing_defines/posts.kso:9:38
+   9 |   read = list/to_list (list/map rows post_form)
+                                            ^

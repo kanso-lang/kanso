@@ -1,0 +1,14 @@
+import "std/derive"
+import "std/list"
+
+# Each record type gets a reader named after it, written into the module that
+# declares the type. Nothing declares that name beforehand, so the module's
+# own call to it is the first anyone sees of it (#2265).
+pub fn readers p
+  list/fold p.modules [] (acc m -> list/concat acc (written m))
+
+fn written m
+  list/to_list (list/map m.records (r -> reader m.name r.name))
+
+fn reader m t
+  derive/define m "pub fn {t}_from row\n  {t} row[2]\n"

@@ -102,6 +102,30 @@ thread_local! {
     /// convention wrote for it as one more of its own files.
     static DERIVED_FILES: std::cell::RefCell<crate::hash::Map<String, String>> =
         std::cell::RefCell::new(crate::hash::Map::default());
+
+    /// Set while an entry that derives loads its dependencies the first time,
+    /// to describe them to its derivations. A module may name a function a
+    /// derivation is about to write into it, and nothing has written it yet,
+    /// so an unknown name is set aside rather than refused (#2265).
+    /// `DEFERRED` records that one was; the second load, with the
+    /// derivations' arms in place, refuses whatever is still unknown.
+    static DESCRIBING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static DEFERRED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Loads an entry's dependencies to describe them to its derivations, setting
+/// aside the names only a derivation could supply. Answers what it loaded and
+/// whether it set any name aside.
+fn load_to_describe(
+    base: &std::path::Path,
+    imports: &[ast::Import],
+) -> (Result<Loaded, String>, bool) {
+    DESCRIBING.with(|d| d.set(true));
+    DEFERRED.with(|d| d.set(false));
+    let mut visited = crate::hash::Set::default();
+    let loaded = load_dependencies(base, imports, &mut visited);
+    DESCRIBING.with(|d| d.set(false));
+    (loaded, DEFERRED.with(|d| d.replace(false)))
 }
 
 /// A module's path as the derived files are keyed: the canonical path when
@@ -970,6 +994,13 @@ fn compile_module_loaded(
                     "`{name}` is already a declaration, in {other} at line {line}; rename the \
                      binding"
                 );
+            }
+        }
+        if DESCRIBING.with(|d| d.get()) {
+            let before = diags.len();
+            diags.retain(|d| !(d.kind == "name" && d.message.starts_with("unknown name `")));
+            if diags.len() < before {
+                DEFERRED.with(|d| d.set(true));
             }
         }
         diags.sort_by_key(|d| (d.span.line, d.span.col));
