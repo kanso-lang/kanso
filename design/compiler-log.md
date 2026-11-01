@@ -23,43 +23,6 @@
 
 
 
-## 2026-10-27 — the unbuilt-arm prune moves from codegen.rs into unbuilt.rs
-
-#2137. `without_unbuilt_arms`, `kept_arms`, `Given` and `UnreadPositions`
-move into src/codegen/unbuilt.rs, read with include! where they stood, so
-the items keep their order and their module. codegen.rs falls from 4,231
-lines to 3,987. One ratchet mutation patched the prune by its text and now
-names unbuilt.rs. As with calls.rs, the compile, entry, library, emit,
-interpreter and browser rows read what main's goldens hold on this
-container.
-
-## 2026-10-27 — FnEmit moves from codegen.rs into fn_emit.rs
-
-#2137. `FnEmit`, the impl that keeps it, and the helpers beside it
-(`release_cells`, `writes_state`, `is_a_stack_slot`) move into
-src/codegen/fn_emit.rs, read with include! where they stood. codegen.rs falls
-from 3,987 lines to 3,443. Three ratchet mutations patched FnEmit's methods
-by their text and now name fn_emit.rs. The compile, entry, library, emit,
-interpreter and browser rows read what main's goldens hold on this container.
-
-## 2026-10-28 — gavel: senro, with kata inside it, Postgres over the wire, and a guestbook first
-
-#2178. Clay ruled four things about the web framework:
-
-- It is named senro (線路, railway track).
-- kata, the Slim-style template compiler, lives inside senro as its view
-  layer.
-- The database is Postgres, reached by a client written in kanso that speaks
-  the wire protocol over a socket. Clay: "I just want to do postgres. I don't
-  know why any kind of sea binding is necessary." Development starts against
-  Docker, and TLS for hosted connections comes from the runtime, backed by
-  OpenSSL natively and a Rust TLS library in the interpreter.
-- The first application is a guestbook.
-
-The build order is cloud's: `net` dials out and reads bytes, then the
-Postgres client, then derivations (#2186), then routing with kata, then
-models.
-
 ## 2026-10-28 — gavel: a framework's conventions are derivations
 
 #2186. Clay asked for "some language construct that can allow you to do
@@ -1209,3 +1172,58 @@ rise by the set-aside check and the layout it moves: compile_instructions
 entry_instructions 1,961 to 86,798,967. Welfare falls 0.000004, and the
 floor is lowered by exactly that to 95.61270397: the feature is #2186's
 ruling that derived declarations join the program as if written.
+
+## 2026-11-01 — gavel: a pool is a channel without order
+
+#2264 asked how fibers hand each other a value, since a connection pool needs
+one fiber to wait for another to give a connection back. Clay ruled for a
+pool: "a generic structure similar to a channel which is basically just a
+channel without order and doesn't care particularly about connections or
+anything like that. it can be used on any arbitrary thing."
+
+- A pool holds up to n values of any kind. Taking waits while it is empty and
+  answers some value in it, with no order promised. Putting waits while it is
+  full. Both are effects, parked and woken by the scheduler that #2263
+  reworked.
+- No order is promised to the program, but the scheduler stays deterministic,
+  so a program takes values in the same order on every run and every engine.
+- FIFO channels are not added. A later need for them comes back as its own
+  question.
+- The public names go to Clay as one question before they ship: #2274, which
+  recommends `std/pool` with `make`, `take`, `give` and `with`.
+
+Owed: the pool on both engines and in the tab; goldens for a take waiting on
+an empty pool, a give waiting on a full one, the hand-out order on every
+engine, and a deadlock reported rather than hung; and senro's per-request
+connections moved onto a pool.
+
+## 2026-11-01 — gavel: a server rescues its handler's failure in library code
+
+#2252 proposed endpoint policy as an ordinary function, `on_failure report`.
+Clay declined it as a language feature. senro and the application are
+separate hakos, and rescue works across hakos, so senro's serve loop can
+already rescue a handler's failure and answer 500. Clay: "if the server code
+itself needed to rescue, then you should have just been using some
+alternative to exceptions in the first place because you don't want to use
+exceptions for control flow." A failure a hako expects to handle itself is a
+value (`none` or a marker), not a boxed err. A plain program's top-level
+report is unchanged.
+
+Owed in senro: the serve loop rescues a handler's failure and answers 500,
+with a spec showing the server keeps serving afterwards.
+
+## 2026-11-01 — gavel: an HTTP status is a value, never an err
+
+#2253 proposed classifying a failure by where it was born and a `retry n` on
+events. Clay closed both: "an HTTP code is not an exception. it's a thing that
+can actually happen." A status is part of the response, which the program
+dispatches on, so an HTTP client never turns a status into an err; only a
+round trip that could not complete fails. This follows from #2087's ruling
+that expected outcomes are values. Whether to try again is the author's
+decision in ordinary code, because the author knows whether the request is
+idempotent. A library `retry` comes back as a question when an application
+needs one.
+
+The checks it asked for come back clean. std/net/http has no client yet, only
+the server, so nothing turns a status into an err. Chapter 04 and the rest of
+the site carry no prose built on the retired page's status-code example.
