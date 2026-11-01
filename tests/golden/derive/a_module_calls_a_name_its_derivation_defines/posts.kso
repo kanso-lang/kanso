@@ -1,0 +1,10 @@
+import "std/list"
+
+pub type post
+  title
+
+# `post_from` is the reader models/readers writes into this module, and the
+# list reads every row with it.
+pub fn titles rows
+  read = list/to_list (list/map rows post_from)
+  list/to_list (list/map read (p -> p.title))

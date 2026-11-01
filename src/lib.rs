@@ -168,9 +168,11 @@ fn compile_parsed_entry(
             renames: Vec::new(),
         });
     }
-    let mut visited = crate::hash::Set::default();
-    let (mut dep_program, mut exports, mut surfaced) =
-        load_dependencies(&base, &import_list, &mut visited)?;
+    let (loaded, deferred) = match program.derives.is_empty() {
+        true => (load_dependencies(&base, &import_list, &mut crate::hash::Set::default()), false),
+        false => load_to_describe(&base, &import_list),
+    };
+    let (mut dep_program, mut exports, mut surfaced) = loaded?;
     // Before anything reads the entry's names: what a derivation declares
     // mentions the modules it describes, and those imports are in use.
     if !program.derives.is_empty() {
@@ -181,8 +183,9 @@ fn compile_parsed_entry(
         })
         .map_err(|d| render_merged(&d, file, source))?;
         // An arm a derivation defined belongs to a module the entry imports,
-        // and that module compiles it as one of its own files.
-        if !made.definitions.is_empty() {
+        // and that module compiles it as one of its own files. A name the
+        // first load set aside is refused here if nothing defined it.
+        if !made.definitions.is_empty() || deferred {
             (dep_program, exports, surfaced) =
                 load_with_definitions(&base, &import_list, &made.definitions)?;
         }

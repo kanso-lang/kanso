@@ -111843,3 +111843,17 @@ startup_instructions 52,528 -> 50,254, interp_instructions 577,237,254 ->
 371,551,576; it counts clang and the linker, and nothing here isolates why
 they did 31 fewer. No allocation, memory or runtime row moved. Welfare rises
 95.55 -> 95.57 and is banked.
+
+## 2026-10-27 — call emission moves from emit.rs into calls.rs
+
+#2137. The methods from `emit_call_full` to the end of emit.rs form a second
+`impl Backend` block in src/codegen/calls.rs, read with include! right after
+emit.rs, so they stay in the codegen module. emit.rs falls from 4,324 lines
+to 3,001.
+
+The same cut was declined before #2181 because the browser row moved 52
+units with no code changed. Built as one codegen unit, the compiler binary
+now differs only in the file names its panic messages carry, and on this
+container, which reads CI's rows exactly, compile_instructions, the entry,
+library, emit and interpreter rows and the browser row all read what main's
+goldens hold.
