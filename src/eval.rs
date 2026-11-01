@@ -371,11 +371,12 @@ fn entropy_seed() -> u64 {
 /// remaining Desc tree, made explicit. A fiber that reaches a join hands its
 /// members to the scheduler (`Forked`) with the work that follows the join, as
 /// a function of what the group yields; the scheduler runs that once every
-/// member is done (#2263).
+/// member is done (#2263). No rejoin means the join was all the fiber had
+/// left.
 enum Step {
     Done(Value),
     Blocked(u64, Rc<Desc>),
-    Forked(Vec<Rc<Desc>>, Rejoin),
+    Forked(Vec<Rc<Desc>>, Option<Rejoin>),
 }
 
 /// What follows a join a fiber reached: the chain of binds around it, rebuilt
@@ -754,8 +755,12 @@ pub struct Interp<'a> {
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
-    /// term -- the same reason `cycles` above is a `OnceCell`.
-    names: RefCell<Map<String, Named<'a>>>,
+    /// term -- the same reason `cycles` above is a `OnceCell`. Beside each
+    /// name, the slot in `slots` its nodes are stamped with once one has been
+    /// taken. A node built while the program runs is a new node, and the pipe
+    /// builds its callback's body that way on every pass: keying the slot by
+    /// the node took one per pass, until the table was full.
+    names: RefCell<Map<String, (Named<'a>, Option<usize>)>>,
     /// What a global resolved to, by the slot its node was stamped with.
     /// Filled on first sight, for the reason `names` above is.
     slots: RefCell<Vec<Named<'a>>>,
@@ -1744,7 +1749,7 @@ impl<'a> Interp<'a> {
                 self.names
                     .borrow()
                     .get(name.as_str())
-                    .is_some_and(|by_name| by_name.same_as(&named)),
+                    .is_some_and(|by_name| by_name.0.same_as(&named)),
                 "`{}` at {:?} read slot {} and it is not what the name resolves to",
                 name.as_str(),
                 span,
@@ -1822,11 +1827,17 @@ impl<'a> Interp<'a> {
         // A slot is taken only when the stamp can be written, so a node that
         // cannot be stamped -- stamping switched off, or the table full --
         // resolves by name each time rather than growing the table each time.
-        let stamp = {
+        let taken = self.names.borrow().get(name).and_then(|(_, slot)| *slot);
+        let stamp = if let Some(slot) = taken {
+            Resolution::stamped(self.generation, slot)
+        } else {
             let mut slots = self.slots.borrow_mut();
             match Resolution::stamped(self.generation, slots.len()) {
                 Resolution::GLOBAL => Resolution::GLOBAL,
                 stamp => {
+                    if let Some(entry) = self.names.borrow_mut().get_mut(name) {
+                        entry.1 = Some(slots.len());
+                    }
                     let fixed = match &named {
                         Named::FnRef(n) => Some(Value::FnRef(n.clone())),
                         Named::True => Some(Value::True),
@@ -1866,12 +1877,12 @@ impl<'a> Interp<'a> {
         // The borrow is dropped before anything below runs: `knotted` evaluates
         // a constant's body, which reaches `eval_ident` again and would find
         // this cell already borrowed.
-        let known = self.names.borrow().get(name).cloned();
+        let known = self.names.borrow().get(name).map(|(named, _)| named.clone());
         match known {
             Some(named) => Ok(named),
             None => {
                 let named = self.resolve(name, span)?;
-                self.names.borrow_mut().insert(name.to_string(), named.clone());
+                self.names.borrow_mut().insert(name.to_string(), (named.clone(), None));
                 Ok(named)
             }
         }
