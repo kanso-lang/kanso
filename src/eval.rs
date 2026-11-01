@@ -267,6 +267,11 @@ pub enum Desc {
     CloseSocket(i64),
     Sleep(u64),
     Random(u64),
+    /// A pool's three effects (#2264): make one that holds up to n values,
+    /// take a value out, and give one in.
+    PoolMake(i64),
+    PoolTake(i64),
+    PoolGive(i64, Value),
     Nil,
     /// A box whose outcome is already known: the value, or the err, that
     /// `effect v` was handed. The box is only ever explicit (ruled
@@ -684,6 +689,12 @@ impl Named<'_> {
     }
 }
 
+/// One pool: how many values it may hold, and the values it holds now.
+struct Pool {
+    cap: usize,
+    items: Vec<Value>,
+}
+
 pub struct Interp<'a> {
     fns: Map<&'a str, Rc<Vec<&'a FnDecl>>>,
     types: Map<&'a str, &'a TypeDecl>,
@@ -724,6 +735,16 @@ pub struct Interp<'a> {
     /// the cache names it. A put that writes in place regardless, at a site
     /// the linearity analysis proved unique, empties the cache first.
     entries_at: RefCell<Option<EntriesAt>>,
+    /// The pools the program has made, by handle (#2264). Each holds up to
+    /// its capacity of values; a take answers the last value given, which is
+    /// one order among those the ruling allows and the one the native runtime
+    /// keeps too. `pool_moved` is set by every take or give that succeeds, so
+    /// the scheduler knows to try again the fibers parked on a pool.
+    pools: RefCell<Vec<Pool>>,
+    pool_moved: Cell<bool>,
+    /// Set when the scheduler found every fiber parked on a pool, and cleared
+    /// by the next take or give that goes through.
+    pool_failing: Cell<bool>,
     /// Where the last slice of a string with a wider character ended: the
     /// string, a character's position and the byte it starts at. A scan asks
     /// for each next character of one string in turn, so the walk to it goes
@@ -888,6 +909,9 @@ impl<'a> Interp<'a> {
             tie_serial: Cell::new(0),
             spare_binds: RefCell::new(Vec::new()),
             entries_at: RefCell::new(None),
+            pools: RefCell::new(Vec::new()),
+            pool_moved: Cell::new(false),
+            pool_failing: Cell::new(false),
             text_cursor: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
             linearity: std::cell::OnceCell::new(),

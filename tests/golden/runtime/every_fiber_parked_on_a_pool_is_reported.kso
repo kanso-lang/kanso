@@ -1,0 +1,13 @@
+import "std/pool"
+
+# Two fibers wait on a pool nobody will give to. When every fiber is parked
+# nothing can move, so each waiting take answers that it never will, and the
+# program ends with both reasons rather than waiting forever.
+fn waiter p name
+  pool/take p .> (v -> print "{name} got {v}")
+
+fn both p
+  waiter p "first"
+  waiter p "second"
+
+pub play = pool/make 1 .> both

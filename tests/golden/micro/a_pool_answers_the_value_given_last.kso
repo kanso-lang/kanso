@@ -1,0 +1,15 @@
+import "std/pool"
+
+# A take answers some value in the pool and promises no order (#2264). The
+# order every engine keeps is the value given last, so a program takes the
+# same values in the same order on each of them.
+fn filled p
+  pool/give p "a" .> (_ -> pool/give p "b") .> (_ -> pool/give p "c")
+
+fn emptied p
+  pool/take p
+    .> print
+    .> (_ -> pool/take p .> print)
+    .> (_ -> pool/take p .> print)
+
+pub play = pool/make 3 .> (p -> filled p .> (_ -> emptied p))

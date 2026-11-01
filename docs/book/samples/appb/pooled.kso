@@ -1,0 +1,21 @@
+import "std/pool"
+import "std/time"
+
+pub play = pool/make 2 .> filled
+
+fn filled p
+  pool/give p "cup" .> (_ -> pool/give p "mug") .> (_ -> four p)
+
+fn four p
+  served p "ana"
+  served p "ben"
+  served p "cy"
+  served p "dee"
+
+fn served p name
+  pool/with p (c -> drink name c)
+
+fn drink name c
+  print "{name} has the {c}"
+    .> (_ -> time/sleep 5)
+    .> (_ -> print "{name} is done")

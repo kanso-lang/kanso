@@ -67,6 +67,7 @@ extra_css: /book/book.css
 <a href="#b-vocabulary"><code>list/…</code></a>
 <a href="#b-pad_end"><code>text/pad_end</code></a>
 <a href="#b-pad_start"><code>text/pad_start</code></a>
+<a href="#b-pool"><code>pool/…</code></a>
 <a href="#b-print"><code>print</code></a>
 <a href="#b-wrap_err"><code>wrap_err</code></a>
 <a href="#b-push"><code>push</code></a>
@@ -654,6 +655,48 @@ third</code></pre>
 </div>
 
 <p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." a step written <code>_ -&gt; next</code> ignores the value it is handed, so the plan can list it; <code>show</code> reads its value, so the plan stops there. the plan renders that step with a bare dot, which is the notation of the printed plan rather than the operator you write.</p>
+
+<h3 id="b-pool"><code>std/pool</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>pool/make int → io (yields pool)</code><br><code>pool/take pool → io (yields a value)</code><br><code>pool/give pool value → io</code><br><code>pool/with pool (value → io) → io</code></p>
+<p>a pool holds up to a fixed number of values that fibers share, such as open database connections. <code>pool/make n</code> yields an empty pool that holds up to <code>n</code> values. <code>pool/give</code> puts a value in, and waits while the pool is full. <code>pool/take</code> takes one out, and waits while the pool is empty. a take promises no particular value, but every engine answers the same one, so a run replays. <code>pool/with p work</code> takes a value, hands it to <code>work</code> and gives it back when the work ends, whether the work succeeded or failed, so a failure part way through cannot lose the value. the failure still rises with its reason and the place it was born.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pooled.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/pool"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">pool/make</span> <span class="n">2</span> <span class="o">.&gt;</span> <span class="f">filled</span>
+
+<span class="k">fn</span> <span class="f">filled</span> p
+  <span class="f">pool/give</span> p <span class="s">"cup"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">pool/give</span> p <span class="s">"mug"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">four</span> p)
+
+<span class="k">fn</span> <span class="f">four</span> p
+  <span class="f">served</span> p <span class="s">"ana"</span>
+  <span class="f">served</span> p <span class="s">"ben"</span>
+  <span class="f">served</span> p <span class="s">"cy"</span>
+  <span class="f">served</span> p <span class="s">"dee"</span>
+
+<span class="k">fn</span> <span class="f">served</span> p name
+  <span class="f">pool/with</span> p (c <span class="o">-&gt;</span> <span class="f">drink</span> name c)
+
+<span class="k">fn</span> <span class="f">drink</span> name c
+  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> has the <span class="i">{c}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">5</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{name}</span> is done"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run pooled.kso</div>
+    <pre><code>ana has the mug
+ben has the cup
+ana is done
+ben is done
+cy has the cup
+dee has the mug
+cy is done
+dee is done</code></pre>
+  </div>
+</div>
+
+<p>four fibers share two values. ana and ben take them at once; cy and dee wait until those two give them back. a waiting fiber costs nothing while it waits. when every fiber is waiting on a pool, none of them can ever be woken, so each waiting take or give answers an err saying so, and the program ends with those reasons instead of hanging.</p>
 
 <h3 id="b-modified"><code>os/modified</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/modified string → io (yields int | file_not_found)</code></p>

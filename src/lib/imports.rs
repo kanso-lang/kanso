@@ -68,6 +68,7 @@ fn load_dependencies(
                 Some(("http", &[("http.kso", include_str!("../../lib/net/http/http.kso"))]))
             }
             "std/path" => Some(("path", &[("path.kso", include_str!("../../lib/path/path.kso"))])),
+            "std/pool" => Some(("pool", &[("pool.kso", include_str!("../../lib/pool/pool.kso"))])),
             "std/sha256" => {
                 Some(("sha256", &[("sha256.kso", include_str!("../../lib/sha256/sha256.kso"))]))
             }

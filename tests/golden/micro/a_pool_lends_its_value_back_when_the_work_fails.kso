@@ -1,0 +1,16 @@
+import "std/pool"
+import "std/text"
+
+# `pool/with` gives the value back even when the work fails, and the failure
+# still rises with its reason. The work here fails inside std/text, so this
+# sample may rescue it and then show the value is back in the pool.
+fn counted c
+  text/to_int! c
+
+fn after p
+  pool/take p .> (c -> print "back in the pool: {c}")
+
+fn lent p
+  pool/with p counted .? (u -> print "failed: {u.reason}") .> (_ -> after p)
+
+pub play = pool/make 1 .> (p -> pool/give p "seven" .> (_ -> lent p))

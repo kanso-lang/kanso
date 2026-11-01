@@ -1,0 +1,34 @@
+# A pool holds up to a fixed number of values that fibers share: a fiber
+# takes one out, uses it, and gives it back. Taking waits while the pool is
+# empty and giving waits while it is full, each parked by the scheduler until
+# another fiber gives or takes. A take answers some value in the pool; no
+# order is promised, though a given program takes them in the same order on
+# every run (#2264). Nothing here is about connections: a connection pool is
+# a pool filled with connections.
+pub type pool
+  handle
+
+# An empty pool that holds up to `n` values. It is an effect because what it
+# answers is state the fibers that hold it share.
+pub fn make n
+  builtin_pool_make n .> made
+
+fn made h
+  pool h
+
+pub fn take p
+  builtin_pool_take p.handle
+
+pub fn give p v
+  builtin_pool_give p.handle v
+
+# Takes a value, hands it to `work`, and gives it back whether the work
+# succeeds or fails, so a failure part way through cannot lose it. A failure
+# still rises, with the reason and birthplace it had.
+pub fn with p work
+  take p .> (v -> lent p v work)
+
+fn lent p v work
+  work v
+    .? (u -> give p v .> (_ -> effect u))
+    .> (r -> give p v .> (_ -> effect r))
