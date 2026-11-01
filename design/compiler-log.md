@@ -1248,14 +1248,19 @@ out of native stack. It is fixed on its own branch, since it needs no pool to
 show.
 
 The pool is a ruled feature, so the welfare floor drops by exactly what CI
-measured, 0.00056276, to 95.61214121. Every benchmark's machine code is 3,488
-bytes longer, because the runtime carries the pool's code. runbench's work
-rises 143,949 to 891,926,236, because the scheduler asks whether a pool moved
-before each pick. The tab runs the interpreted corpus 185,998 instructions
-dearer and compiles it 42,305 dearer. `compile_instructions` rises 3,674,
-`library_instructions` 7,973, `entry_instructions` 10,728 and
-`interp_instructions` 74,282, with the bigger builtin tables and library. No
-peak and no allocation counter moves.
+measured, 0.00056276, to 95.61214121. The runtime carries the pool's code, so
+every benchmark's machine code is 3,488 bytes longer: `text` sums to 5,804,000.
+`work_runbench` rises 143,949 to 891,926,236, because the scheduler asks
+whether a pool moved before each pick. The other work rows move by layout,
+within 64 instructions either way: `work_jsonbench` 549,338,266,
+`work_widebench` 28,766,318, `work_digestbench` 4,104,996 and
+`work_readbench` 4,584,406 rise by 64. The tab runs the interpreted corpus
+dearer, `browser_run_instructions` 78,547,549, and compiles it dearer,
+`browser_compile_instructions` 349,271,241. The compiler's rows move with the
+bigger builtin tables and library: `compile_instructions` 24,102,309,
+`entry_instructions` 86,809,695, `library_instructions` 72,627,848,
+`emit_instructions` 5,599,665, `codegen_instructions_dev` 117,023,184 and
+`interp_instructions` 621,943,505. No peak and no allocation counter moves.
 
 One CI run landed on an Intel runner (family 6), where every work row reads
 130 instructions lower and the codegen rows differ too, because glibc picks
