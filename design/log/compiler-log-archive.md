@@ -111782,3 +111782,34 @@ tests/golden/errors_module gains a_field_read_in_a_modules_second_file,
 which on main printed no line. field_read_in_a_deep_library and
 two_owners_tie_on_a_traveling_call gain the line their goldens had pinned
 as missing.
+
+## 2026-10-27 — an entry reads its key and value by name
+
+#2163. A field read becomes a call on the field's getter, and getters were
+made only for fields some type in the program declares. `entry` is built
+into the language, so `e.key` had no getter: the checker refused it, and
+`e.value` got past the checker only when std/list happened to declare a
+`value` of its own, then failed in the interpreter. The checker now counts
+`key` and `value` as declared, the way it counts an err's three readers.
+`prune_unused_getters` already gathers every getter a program names, and
+when `Get_key` or `Get_value` is among them it writes that group an `entry`
+arm, keeping one a dependency already wrote. A program that never reads the
+fields builds neither arm. The first version built both in every compile and
+pruned them after, which CI read as 63 more allocations in the interpreter's
+corpus and 502,143 more browser compile instructions.
+
+tests/golden/micro/an_entry_reads_its_key_and_value_by_name reads both
+fields beside a local type that declares a `key` of its own; on main it was
+refused at `e.key`. tests/golden/errors/an_entry_has_no_field_but_its_key_and_value
+pins the refusal of a field an entry does not have. Appendix B names the two
+fields.
+
+CI's rows, on main after #2179. The tab compiles the corpus in fewer
+instructions, browser_compile_instructions 353,638,408 -> 353,555,358, and
+the interpreter's run allocates less, interp_allocs 653,377 -> 653,375, as
+does the front end, compile_allocs 13,940 -> 13,939; nothing here isolates
+why any of the three fell. The compile rows rise with the new code in the
+checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
+entry_instructions 73,693,860 -> 73,701,590 and library_instructions
+73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
+banked.
