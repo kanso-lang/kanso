@@ -1993,7 +1993,7 @@ static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
     kc->at_blocks = (const void*)k_blocks;
 }
 
-static KValue k_schedule(KDesc* join) {
+static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
     /* The live fibers in spawn order, which breaks ties between equal wake
        times. A join a fiber reaches puts its members where that fiber stood,
        so a nested group that never waits runs as it would inline, and the
@@ -2032,7 +2032,7 @@ static KValue k_schedule(KDesc* join) {
         k_sched_stage(&f, groups, ngroups);
         /* A take or give went through: the fibers parked on a pool try
            again, in spawn order, and nothing is stuck any more. */
-        if (k_pool_moved && !resuming) {
+        if (__builtin_expect(k_pool_moved, 0) && !resuming) {
             k_pool_moved = 0;
             k_pool_failing = 0;
             for (int i = 0; i < f.n; i++)
@@ -2044,7 +2044,7 @@ static KValue k_schedule(KDesc* join) {
         }
         /* Every fiber is parked on a pool: nothing can give or take, so each
            parked operation is woken to answer that it never will. */
-        if (f.wake[pick] == K_PARKED) {
+        if (__builtin_expect(f.wake[pick] == K_PARKED, 0)) {
             k_pool_failing = 1;
             for (int i = 0; i < f.n; i++) f.wake[i] = now;
             continue;
@@ -2079,7 +2079,8 @@ static KValue k_schedule(KDesc* join) {
            of its own did the same and cost runbench 2.5 million
            instructions in the scheduler's code around it. */
         if (s.blocked == 1 || s.blocked == 3) {
-            if (s.blocked == 1) f.wake[pick] = s.ms == K_PARKED ? K_PARKED : now + s.ms;
+            if (s.blocked == 1)
+                f.wake[pick] = __builtin_expect(s.ms == K_PARKED, 0) ? K_PARKED : now + s.ms;
             f.work[pick] = s.cont;
         } else if (s.blocked == 2) {
             int g;
