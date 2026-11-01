@@ -654,7 +654,11 @@ static long long k_rng_below(long long n) {
    the group, `cont` the work after it, and `hole` the settled node in that
    work the group's result goes into, #2263). Blocking threads the
    continuation up through Bind, so `sleep` may sit anywhere and suspension
-   needs no coroutine. Mirrors eval.rs's Step exactly. */
+   needs no coroutine. Mirrors eval.rs's Step exactly, with one addition the
+   interpreter has no use for: blocked=3 is a chain that ran long within its
+   step and stopped so the scheduler could reclaim what the links before left
+   behind. `cont` is the rest of it, and the same fiber steps again at once,
+   so nothing about the order of the program changes (#2276). */
 typedef struct {
     int blocked;
     unsigned long long ms;
@@ -666,6 +670,7 @@ typedef struct {
 
 static KValue k_schedule(KDesc* join);
 static KStep k_step(KDesc* d);
+static int k_sched_due(void);
 
 static int k_argc_global = 0;
 static char** k_argv_global = NULL;
@@ -1508,7 +1513,11 @@ static KValue k_kill_kid(KValue handle) {
 }
 
 static KStep k_step(KDesc* d) {
-    switch (d->dtag) {
+    /* A chain whose steps never block runs inside one step, and each link
+       that answers another description goes round this loop rather than into
+       a deeper call: the recursion it replaced held a C frame per link and ran
+       out of stack at a hundred thousand of them (#2276). */
+    for (;;) switch (d->dtag) {
         case 21: {
             /* A fiber waiting for a connection has nothing to do: it goes back
                in the queue and the group's other statements run, which is how
@@ -1634,7 +1643,14 @@ static KStep k_step(KDesc* d) {
                 return in;
             }
             KValue next = k_worded_step(d->dtag, in.value, d->y);
-            if (next.tag == K_DESC) return k_step(k_as_desc(next));
+            if (next.tag == K_DESC) {
+                if (k_sched_due()) {
+                    KStep s = {3, 0, next, k_none()};
+                    return s;
+                }
+                d = k_as_desc(next);
+                continue;
+            }
             KStep s = {0, 0, k_none(), next};
             return s;
         }
@@ -1761,14 +1777,23 @@ static KDesc* k_hole_of(KValue cont) {
    back. A continuation's settled node is found again by walking the copy
    rather than carried as a root of its own, so the copy cannot split it from
    the continuation it was written for. */
-static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
+/* Whether the region has drifted far enough since the last stage that the
+   next one would reclaim something. A chain inside one step asks too, so it
+   can stop and let the stage run. */
+static int k_sched_due(void) {
     long long d = k_beat_depth - 1;
-    if (d < 0 || d >= K_BEAT_MAX) return;
+    if (d < 0 || d >= K_BEAT_MAX) return 0;
     KCarry* kc = &k_carries[d];
     size_t wait = (size_t)1 << 18;
     if (2 * kc->last_copy > wait) wait = 2 * kc->last_copy;
-    if (kc->at_arena && kc->at_blocks == (const void*)k_blocks
-        && (size_t)(k_arena - kc->at_arena) < wait) return;
+    return !(kc->at_arena && kc->at_blocks == (const void*)k_blocks
+             && (size_t)(k_arena - kc->at_arena) < wait);
+}
+
+static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
+    if (!k_sched_due()) return;
+    long long d = k_beat_depth - 1;
+    KCarry* kc = &k_carries[d];
     long long n = f->n;
     for (int g = 0; g < ngroups; g++) {
         if (g > 0 && groups[g].parent < 0) continue;
@@ -1862,6 +1887,11 @@ static KValue k_schedule(KDesc* join) {
             now = f.wake[pick];
         }
         KStep s = k_step(k_as_desc(f.work[pick]));
+        while (s.blocked == 3) {
+            f.work[pick] = s.cont;
+            k_sched_stage(&f, groups, ngroups);
+            s = k_step(k_as_desc(f.work[pick]));
+        }
         if (s.blocked == 1) {
             f.wake[pick] = now + s.ms;
             f.work[pick] = s.cont;

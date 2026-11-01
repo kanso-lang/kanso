@@ -1,0 +1,14 @@
+# A fiber's chain that never waits runs within one step, and the scheduler
+# reclaims only between steps, so every link's garbage used to stay until the
+# chain ended: 140 bytes a link, 425 MB for three million (#2276). The chain
+# now stops when its region has drifted as far as a stage allows, the stage
+# reclaims, and the same fiber goes on at once. arena_peak_bytes stays at one
+# block however long the chain is.
+fn counted tag n
+  if (n == 0) (print "{tag} done") (effect n .> (_ -> counted tag (n - 1)))
+
+fn both n
+  counted "long" n
+  counted "short" 3
+
+pub play = both 20000

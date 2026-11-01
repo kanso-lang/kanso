@@ -1,0 +1,12 @@
+# A chain whose links never wait runs within one step of its fiber. Beside a
+# second fiber, each link used to cost a frame of the native stack, and a
+# hundred thousand of them ran out of it (#2276). The links now go round a
+# loop, so the chain's length costs no stack.
+fn counted tag n
+  if (n == 0) (print "{tag} done") (effect n .> (_ -> counted tag (n - 1)))
+
+fn both n
+  counted "long" n
+  counted "short" 3
+
+pub play = both 150000

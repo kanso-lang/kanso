@@ -215,6 +215,29 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
     }
 }
 
+/// A chain whose links never wait runs within one step of its fiber, and the
+/// interpreter used to walk it by recursion, a frame per link. The gigabyte
+/// stack `evaluate` pins hid that until three million links (#2276). On eight
+/// megabytes the micro corpus's long chain overflows the recursion and fits
+/// the loop that replaced it, which needs no more stack for a long chain than
+/// a short one.
+#[test]
+fn a_long_chain_in_a_fiber_needs_no_stack_per_link() {
+    let program = manifest_dir()
+        .join("tests/golden/micro/a_long_chain_beside_another_fiber_runs_to_the_end.kso");
+    let compiled = compile_case(&program);
+    let run = std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(8 << 20)
+            .spawn_scoped(scope, || evaluate_on_stack(&compiled, Vec::new()))
+            .expect("spawns")
+            .join()
+            .expect("evaluation thread completes")
+    });
+    assert_eq!(run.stdout, expected(&program, "out"));
+    assert_eq!(run.status, 0, "{}", run.stderr);
+}
+
 #[test]
 fn mem_corpus_interp_matches_the_semantic_counters() {
     // Evaluation counts are semantics: the .mem goldens' thunk_* lines are
