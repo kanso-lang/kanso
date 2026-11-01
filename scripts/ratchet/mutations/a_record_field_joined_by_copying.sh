@@ -7,9 +7,9 @@
 # work as before.
 set -e
 line='                    if a.field_moves(p, f, decl) {'
-grep -qxF "$line" src/linear.rs || {
+grep -qxF "$line" src/linear/builders.rs || {
   echo "the field join's test moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                    if a.field_moves(p, f, decl) {$/                    if false \&\& a.field_moves(p, f, decl) {/' src/linear.rs
-if grep -qxF "$line" src/linear.rs; then exit 1; fi
+sed -i 's/^                    if a.field_moves(p, f, decl) {$/                    if false \&\& a.field_moves(p, f, decl) {/' src/linear/builders.rs
+if grep -qxF "$line" src/linear/builders.rs; then exit 1; fi
