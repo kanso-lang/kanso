@@ -1,0 +1,20 @@
+# A server's loop without the network. Each pass forks the request's handler
+# beside the rest of the loop, so every pass is a group the next pass is a
+# member of, and the groups nest as deep as the loop has run (#2263). The
+# handler builds a small page and yields; nothing it allocates outlives it.
+import "std/text"
+import "std/time"
+
+fn handled n
+  page = text/join ["<p>" "request {n}" "</p>"] ""
+  time/sleep 0 .> (_ -> effect (length page))
+
+fn served 0
+  effect 0
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub fn total n
+  served n .> (_ -> effect n)

@@ -318,6 +318,7 @@ import "./deep"
 import "./drained"
 import "./escape"
 import "./fold"
+import "./forked"
 import "./guarded"
 import "./handed"
 import "./index"
@@ -347,6 +348,8 @@ decode_rounds = 98
 encode_rounds = 90
 
 deep_trials = 545
+
+forked_passes = 16000
 
 pend_cards = 50
 
@@ -484,5 +487,8 @@ fn insisted raw doc a b
   insist/total insist_laps .> told
 
 pub fn run raw
-  on = (doc -> deep/total deep_trials .> (a -> shaped raw doc a))
+  on = (doc -> deep/total deep_trials .> (a -> forked_then raw doc a))
   json/decode raw .> on
+
+fn forked_then raw doc a
+  forked/total forked_passes .> (_ -> shaped raw doc a)
