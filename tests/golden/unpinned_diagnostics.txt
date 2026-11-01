@@ -262,9 +262,23 @@ a string builder was expected here
 #   a group out of memory    k_schedule's fiber and group arrays grow by
 #                            realloc (#2263), and only a failed realloc says
 #                            this; the fixture exhausts the runner's memory
+#   a pool out of memory     k_pool_make and k_pool_kept allocate a pool's
+#                            slots and each given value's copy with malloc,
+#                            and only a failed malloc says this (#2264)
 string too long
 too many sockets open at once
 out of memory growing a parallel group
+out of memory making a pool
+out of memory giving to a pool
+#
+# A POOL'S HANDLE IS ALWAYS ONE THE POOL MADE. take and give refuse a handle
+# that is not an int, and none reaches them. Only std/pool builds a `pool` (a
+# program outside it is refused with error[opacity]), and the one place it does
+# is `made`, which wraps the int builtin_pool_make answered. A failed make is a
+# failure, and a failure passes through pool/take and pool/give without
+# calling them (#2264).
+take takes a pool
+give takes a pool
 #
 # A SCHEDULER INVARIANT. When a group is down to one member that will pass its
 # result up, k_schedule moves that member, a fiber or a nested group, to the

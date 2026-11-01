@@ -1,0 +1,4 @@
+import "std/pool"
+
+# A pool holds a count of values, so the size it is made with is a number.
+pub play = pool/make "three" .> (p -> pool/give p 1)

@@ -665,8 +665,6 @@ third</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/pool"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">pool/make</span> <span class="n">2</span> <span class="o">.&gt;</span> <span class="f">filled</span>
-
 <span class="k">fn</span> <span class="f">filled</span> p
   <span class="f">pool/give</span> p <span class="s">"cup"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">pool/give</span> p <span class="s">"mug"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">four</span> p)
 
@@ -682,9 +680,11 @@ third</code></pre>
 <span class="k">fn</span> <span class="f">drink</span> name c
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span> has the <span class="i">{c}</span>"</span>
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">time/sleep</span> <span class="n">5</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{name}</span> is done"</span>)</code></pre>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{name}</span> is done"</span>)
+
+<span class="f">pool/make</span> <span class="n">2</span> <span class="o">.&gt;</span> <span class="f">filled</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run pooled.kso</div>
+    <div class="code-panel-title">kanso play pooled.kso</div>
     <pre><code>ana has the mug
 ben has the cup
 ana is done
