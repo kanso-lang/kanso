@@ -23,32 +23,6 @@
 
 
 
-## 2026-10-28 — gavel: a framework's conventions are derivations
-
-#2186. Clay asked for "some language construct that can allow you to do
-compile time mapping", so that senro can map controller functions to routes
-and model names to tables the way Rails does, and the compiler can check the
-result. A derivation is a pure kanso function that a framework ships and the
-compiler runs on the interpreter during the build. It reads a description of
-the program and returns declarations built from constructors the compiler
-defines (a route, a record type, a table binding), each naming the source
-item it came from. The compiler adds them to the program and checks them like
-any other code, and `kanso derived` prints them.
-
-Inside a derivation any computation is allowed, including pluralizing a
-model's name. What comes out is a finite list that is checked against real
-functions and real tables, which is what makes an arbitrary convention safe
-to run.
-
-A pub function in `app/` that matches no route is a compile error. Clay
-first agreed to a schema file written in kanso, then asked why Rails keeps a
-schema file at all. Rails keeps `schema.rb` mainly because old Ruby
-migrations stop running when the models they call change. A kanso migration
-is a value built from a fixed set of changes, so it cannot break that way,
-and the ruling became: no schema file by default, the schema folded from the
-migrations at compile time, and `schema.sql` only for a migration that needs
-raw SQL.
-
 ## 2026-10-28 — net dials out and reads bytes
 
 #2178, the first item owed on the Postgres ruling. `net/dial host at` opens
@@ -1227,3 +1201,62 @@ needs one.
 The checks it asked for come back clean. std/net/http has no client yet, only
 the server, so nothing turns a status into an err. Chapter 04 and the rest of
 the site carry no prose built on the retired page's status-code example.
+
+## 2026-11-01 — a long chain inside a fiber costs no stack and keeps no garbage
+
+#2276: a chain of `.>` steps that never waits runs within one step of its
+fiber, and both engines walked it by recursion, one frame per link. Natively
+that ran out of stack at a hundred thousand links once a second fiber stood
+beside the chain. The interpreter's gigabyte stack held out until three
+million. A chain in a program's only fiber never reached this code, because
+`k_exec` already walks a chain in a loop.
+
+Both steps now go round a loop: a link that answers another description
+becomes the next thing to step, and the interpreter's three chain words share
+one arm where they had three. The order of the program cannot change, since
+the whole chain still runs within the step it ran in.
+
+The loop exposed the native step's second problem. The scheduler reclaims
+only between steps, so a long chain kept every link's garbage until it ended:
+140 bytes a link, 425 MB at three million. Every 256 links the step now
+asks whether the region has drifted as far as the scheduler lets it before
+staging. When it has, the step returns the rest of the chain as a new kind of
+step. The scheduler keeps the fiber's wake time, stages at the top of its
+loop, and picks the same fiber again, since nothing else moved. Peak memory
+for the reproduction is 10 MB at a thousand links and at three million.
+
+The first version cost runbench 2.1 million instructions (CI's reading,
+891,782,287 to 893,890,434). Measured under callgrind in this container, which
+read runbench within a hundred instructions of CI: the loop alone made it
+1.28 million cheaper than main. Asking about drift after every link cost
+650,000, and a separate loop in the scheduler for the new kind of step cost
+2.5 million in the scheduler code around it, which is inlined into `k_exec`.
+Asking every 256 links, and folding the new kind into the branch that already
+handles a blocked fiber, leaves runbench 685,000 instructions under main
+here.
+
+Specs, each watched red against main:
+
+- `micro/a_long_chain_beside_another_fiber_runs_to_the_end`, 150,000 links on
+  every engine. On main the native run dies with "the program ran out of
+  stack".
+- `oracle.rs`'s `a_long_chain_in_a_fiber_needs_no_stack_per_link` runs the
+  interpreter on that sample with an eight-megabyte stack. On main the thread
+  overflows.
+- `mem/a_long_chain_in_a_fiber_reclaims_as_it_goes`, 20,000 links:
+  `arena_blocks=1` and `arena_peak_bytes=1048576`. On main it reads 4 blocks
+  and 4 MB.
+
+No existing allocation golden moves. With the test after every link, the
+server loop and the run program each staged 1,152 bytes fewer; asked every 256
+links, both read what they read on main.
+
+CI's rows, read on the recorded AMD silicon: `work_runbench` falls 684,996 to
+891,097,291. The interpreter's step loop costs the interpreted corpus 426,003
+instructions, `interp_instructions` 622,295,226, the price of one loop in
+place of three recursive arms. The runtime's machine code is 1,568 bytes
+longer in every benchmark, `text` 5,777,120, and the dev tier compiles it in
+`codegen_instructions_dev` 116,955,821 while the release tier falls to
+371,732,303. The tab runs the same runtime and gains the same loop: it runs the
+interpreted corpus 205,146 instructions cheaper, at 78,156,405. Welfare rises,
+and the floor is banked with it.

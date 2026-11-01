@@ -111894,3 +111894,29 @@ interpreter and browser rows read what main's goldens hold on this container.
 The build order is cloud's: `net` dials out and reads bytes, then the
 Postgres client, then derivations (#2186), then routing with kata, then
 models.
+
+## 2026-10-28 — gavel: a framework's conventions are derivations
+
+#2186. Clay asked for "some language construct that can allow you to do
+compile time mapping", so that senro can map controller functions to routes
+and model names to tables the way Rails does, and the compiler can check the
+result. A derivation is a pure kanso function that a framework ships and the
+compiler runs on the interpreter during the build. It reads a description of
+the program and returns declarations built from constructors the compiler
+defines (a route, a record type, a table binding), each naming the source
+item it came from. The compiler adds them to the program and checks them like
+any other code, and `kanso derived` prints them.
+
+Inside a derivation any computation is allowed, including pluralizing a
+model's name. What comes out is a finite list that is checked against real
+functions and real tables, which is what makes an arbitrary convention safe
+to run.
+
+A pub function in `app/` that matches no route is a compile error. Clay
+first agreed to a schema file written in kanso, then asked why Rails keeps a
+schema file at all. Rails keeps `schema.rb` mainly because old Ruby
+migrations stop running when the models they call change. A kanso migration
+is a value built from a fixed set of changes, so it cannot break that way,
+and the ruling became: no schema file by default, the schema folded from the
+migrations at compile time, and `schema.sql` only for a migration that needs
+raw SQL.
