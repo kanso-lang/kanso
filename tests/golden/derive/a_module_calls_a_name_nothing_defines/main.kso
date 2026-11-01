@@ -1,0 +1,6 @@
+import "./models"
+import "./posts"
+
+derive models/readers
+
+print (posts/titles [["title" "hello"] ["title" "again"]])

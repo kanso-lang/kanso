@@ -1,0 +1,10 @@
+import "std/list"
+
+pub type post
+  title
+
+# `post_form` is a misspelling: models/readers writes `post_from`. A name no
+# derivation supplies is refused at the reference, as it always was.
+pub fn titles rows
+  read = list/to_list (list/map rows post_form)
+  list/to_list (list/map read (p -> p.title))
