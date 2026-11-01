@@ -1256,19 +1256,31 @@ leaves parked fibers alone until the chain's step is done.
 the guard, the native run printed the taker's line first.
 
 The pool is a ruled feature, so the welfare floor drops by exactly what CI
-measured, 0.00056276, to 95.61214121. The runtime carries the pool's code, so
-every benchmark's machine code is 3,488 bytes longer: `text` sums to 5,804,000.
-`work_runbench` rises 143,949 to 891,926,236, because the scheduler asks
-whether a pool moved before each pick. The other work rows move by layout,
-within 64 instructions either way: `work_jsonbench` 549,338,266,
-`work_widebench` 28,766,318, `work_digestbench` 4,104,996 and
-`work_readbench` 4,584,406 rise by 64. The tab runs the interpreted corpus
-dearer, `browser_run_instructions` 78,547,549, and compiles it dearer,
+measured, 0.00159831, to 95.61462007. The figures below are against main with
+the scheduler kept out of line (#2279).
+
+`work_runbench` rises 527,874 to 890,913,940, because the scheduler asks
+whether a pool moved before each pick and tells a parked step from the others
+after it. The first version cost more. Inlined into `k_exec`, the bigger
+scheduler made every effect dearer, which is what #2279 fixed. Giving a
+parked fiber its own step kind, in place of a blocked step with an
+unreachable wake time, took about 320,000 more off runbench under callgrind
+here.
+
+The runtime carries the pool's code, so every benchmark's machine code is
+3,712 bytes longer, and `text` sums to 5,828,864. The other work rows move by
+layout: `work_oneshot` rises 325 to 9,979,993, `work_encodebench` 262 to
+2,335,341,049, and `work_jsonbench` 549,338,238, `work_widebench` 28,686,321,
+`work_digestbench` 4,104,970, `work_readbench` 4,584,378 and `work_livebench`
+938,655,549 rise by 3. Clang compiles the bigger runtime in
+`codegen_instructions_dev` 117,030,226 and `codegen_instructions_release`
+371,871,683. The tab runs the interpreted corpus dearer, at
+`browser_run_instructions` 78,338,381, and compiles it dearer, at
 `browser_compile_instructions` 349,271,241. The compiler's rows move with the
 bigger builtin tables and library: `compile_instructions` 24,102,309,
 `entry_instructions` 86,809,695, `library_instructions` 72,627,848,
-`emit_instructions` 5,599,665, `codegen_instructions_dev` 117,023,184 and
-`interp_instructions` 621,943,505. No peak and no allocation counter moves.
+`emit_instructions` 5,599,665 and `interp_instructions` 622,391,507. No peak
+and no allocation counter moves.
 
 One CI run landed on an Intel runner (family 6), where every work row reads
 130 instructions lower and the codegen rows differ too, because glibc picks
