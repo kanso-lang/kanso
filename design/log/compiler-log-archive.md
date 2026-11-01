@@ -111748,3 +111748,20 @@ read by name on every engine and are checked like any record's fields. The
 pattern `(entry k v)` keeps working. Clay asked about Ruby's two-argument
 blocks (`|k, v|`); destructuring the entry in a parameter already gives that,
 and a two-argument walk over maps would need a twin of every list function.
+
+## 2026-10-27 — gavel: templates are Slim-like, and they compile
+
+#2178. Clay, on how the framework's pages are written: "well you can find a
+way to make the templates compilable but they should be like slim or Haml".
+A template is markup structured by indentation, in the Slim family, and it
+compiles to kanso, so the checker reads its field accesses and its
+parameters the way it reads any other code. How a database gets in and what
+the first application is stay open on #2178.
+
+The prototype is on branch claude/kata-prototype under design/kata, a
+generator written in kanso. A template becomes one function. Each `- if`
+branch and each `- for` body becomes a helper taking exactly the names in
+scope it uses, because kanso refuses an unused parameter, and a body that
+uses none becomes a constant. A misspelled field in the sample page is
+refused by `kanso check` at the generated line, and both engines print the
+same page.

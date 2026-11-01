@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-27 — gavel: templates are Slim-like, and they compile
-
-#2178. Clay, on how the framework's pages are written: "well you can find a
-way to make the templates compilable but they should be like slim or Haml".
-A template is markup structured by indentation, in the Slim family, and it
-compiles to kanso, so the checker reads its field accesses and its
-parameters the way it reads any other code. How a database gets in and what
-the first application is stay open on #2178.
-
-The prototype is on branch claude/kata-prototype under design/kata, a
-generator written in kanso. A template becomes one function. Each `- if`
-branch and each `- for` body becomes a helper taking exactly the names in
-scope it uses, because kanso refuses an unused parameter, and a body that
-uses none becomes a constant. A misspelled field in the sample page is
-refused by `kanso check` at the generated line, and both engines print the
-same page.
-
 ## 2026-10-27 — a dependency's diagnostic quotes its own line
 
 The merged check names the file a diagnostic is about, and a module compile
@@ -1119,3 +1102,18 @@ codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
 section by their text and now name words.rs; each still applies to the line
 it did before. CI's cost-goldens job read every vein at main's values,
 compile_instructions among them, so no row moved.
+
+## 2026-11-01 — a request carries its headers
+
+`std/net/http`'s `request` gains a fourth field, `headers`: each header's
+name, lowercased, mapped to its value with the surrounding spaces trimmed. A
+colon inside a value stays part of it, and a name sent twice keeps the last
+value. The parser had already split the head into lines and discarded all
+but the first. A server could not read a cookie, so senro could not keep a
+session.
+
+A pattern on `request` takes four places now, so the teashop's `handle` arms
+in the web chapter end in `_`, and the chapter says what the last two places
+hold. Three tests in http_test.kso pin it: a name read in lowercase with its
+value trimmed and its inner colon kept, the host header, and a request with
+no headers answering none. Breaking the lowercasing turns two of them red.
