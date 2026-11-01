@@ -1250,3 +1250,11 @@ Specs, each watched red against main:
 No existing allocation golden moves. With the test after every link, the
 server loop and the run program each staged 1,152 bytes fewer; asked every 256
 links, both read what they read on main.
+
+CI's rows, read on the recorded AMD silicon: `work_runbench` falls 684,996 to
+891,097,291. The interpreter's step loop costs the interpreted corpus 426,003
+instructions, `interp_instructions` 622,295,226, the price of one loop in
+place of three recursive arms. The runtime's machine code is 1,568 bytes
+longer in every benchmark, `text` 5,777,120, and the dev tier compiles it in
+`codegen_instructions_dev` 116,955,821 while the release tier falls to
+371,732,303. Welfare rises, and the floor is banked with it.
