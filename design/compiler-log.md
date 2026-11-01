@@ -23,58 +23,6 @@
 
 
 
-## 2026-10-28 — derivations: a convention runs while the program compiles
-
-#2186, the first slice of the ruling. An entry may write `derive
-conventions/routing` after its imports. The compiler builds a
-`derive/program` describing the app's own modules, which are the ones the
-entry imports by a `./` path. Each module is listed with its pub functions,
-their parameters and annotations, and the function itself, and with each
-record type and its fields. The compiler calls the named function on the
-interpreter and reads back a list of declarations. `derive/declare` makes a
-constant in the entry, written out as the literal its value spells, with a
-function written as its name, so a route table names real handlers and the
-checker resolves each one. `derive/refuse` makes a compile error at the item
-it names, in that item's own file.
-
-The derivation's module is compiled as an ordinary dependency. No executor
-is supplied, so a derivation that answers an effect is refused. A name in
-the deriving module that reaches a module it describes is refused where it
-is written, because the description is the whole of what a derivation may
-know about the app; what it declares then follows from what `kanso derived`
-shows. The modules it describes count as used imports, because the
-convention reads them. `kanso derived` prints each declared constant with
-functions spelled by name.
-
-The derivation runs on an interpreter that copies at every container write.
-The first build asked the linearity analysis which writes could go in place,
-and that analysis covers every function the program holds: on
-bench/entry_corpus it was 24M of the derivation's 25.8M instructions. Without
-it the derivation costs 1.8M.
-
-tests/golden/derive holds nine programs, each run on both engines: a route
-table that dispatches to real functions, a misspelled action refused on its
-own line, a library beside the app left out of the description, and six ways
-a derivation can be wrong. It was watched red with function references
-written as none, with `../` libraries described, and with a derivation that
-imported the module it described. bench/entry_corpus now derives a small
-route table, so the entry row, and with it welfare's compile term, prices
-what a derivation costs.
-
-The entry row rises to entry_instructions 83,728,840 (+12,558,754): the
-corpus gained two modules and a derivation. `lib/derive` is embedded in the
-compiler, so the other compile rows move by layout: compile_instructions
-24,064,178 (+3,144), library_instructions 70,863,285 (+6,049),
-codegen_instructions_release 371,551,844 (+46), emit_instructions 5,598,851
-(-674), interp_instructions 571,786,909 (-1), compile_peak_bytes 598,588 (+96)
-and browser_compile_instructions 343,190,365 (+30,287). Welfare fell by 0.018
-and the floor moves to 95.550 under the rule for a feature a ruling requires;
-the fall is past what `--set` takes, so the floor was edited by hand and
-`--set` recorded the reason.
-
-Still owed on #2186: the browser compile's derivation golden, a record type
-or table binding as a declaration, and the senro derivations themselves.
-
 ## 2026-10-28 — a derivation reads constants, declares types, and runs in the page
 
 #2186's second slice. A module in a derivation's description now carries
@@ -1218,6 +1166,36 @@ longer in every benchmark, `text` 5,777,120, and the dev tier compiles it in
 `codegen_instructions_dev` 116,955,821 while the release tier falls to
 371,732,303. The tab runs the same runtime and gains the same loop: it runs the
 interpreted corpus 205,146 instructions cheaper, at 78,156,405. Welfare rises,
+and the floor is banked with it.
+
+## 2026-11-01 — the scheduler is kept out of line
+
+`k_schedule` is static and has one caller, `k_exec`, so clang inlined it. The
+scheduler's loop then sat inside `k_exec`, which is called once for every
+effect a program runs, and every one of those calls paid for its wider frame
+and prologue whether or not the program ever forked. Marking it `noinline`
+takes runbench from 891,097,386 to 890,386,161 instructions under callgrind in
+this container. Runbench calls `k_exec` about 122,000 times, so that is close
+to 6 instructions a call.
+
+I found it while pricing the pool (#2264), which adds to the scheduler loop
+and so to the inlined body. It lands first so the pool's floor drop counts
+only the pool.
+
+CI's rows, read on the recorded AMD silicon. `work_runbench` falls 711,225 to
+890,386,066, `work_deepbench` falls 1,971,289 to 197,859,562 and
+`work_widebench` falls 79,936 to 28,686,318. The runtime's machine code is 16
+bytes shorter in every benchmark, `text` 5,776,896.
+
+Five rows rose by small amounts: `work_jsonbench` to 549,338,235,
+`work_readbench` to 4,584,375, `work_digestbench` to 4,104,967,
+`work_livebench` to 938,655,546 and `work_encodebench` to 2,335,340,787. That
+is 33 to 581 instructions on runs of 4 million to 2.3 billion. Callgrind
+shows no `k_schedule` frame in readbench or livebench, so none of this is the
+scheduler's own work. I read it as code that moved when the function left
+`k_exec`, without having isolated it. Clang does a little more work compiling
+the runtime with the function kept apart: `codegen_instructions_dev` rises to
+116,962,031 and `codegen_instructions_release` to 371,787,670. Welfare rises,
 and the floor is banked with it.
 
 ## 2026-11-01 — std/pool: fibers share values through a pool
