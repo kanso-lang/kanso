@@ -1200,7 +1200,7 @@ shows no `k_schedule` frame in readbench or livebench, so none of this is the
 scheduler's own work. I read it as code that moved when the function left
 `k_exec`, without having isolated it. Clang does a little more work compiling
 the runtime with the function kept apart: `codegen_instructions_dev` rises to
-116,962,031 and `codegen_instructions_release` to 371,787,670. Welfare rises,
+116,962,084 and `codegen_instructions_release` to 371,787,654. Welfare rises,
 and the floor is banked with it.
 
 ## 2026-11-01 — std/pool: fibers share values through a pool
