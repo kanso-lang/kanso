@@ -23,37 +23,6 @@
 
 
 
-## 2026-10-27 — an entry reads its key and value by name
-
-#2163. A field read becomes a call on the field's getter, and getters were
-made only for fields some type in the program declares. `entry` is built
-into the language, so `e.key` had no getter: the checker refused it, and
-`e.value` got past the checker only when std/list happened to declare a
-`value` of its own, then failed in the interpreter. The checker now counts
-`key` and `value` as declared, the way it counts an err's three readers.
-`prune_unused_getters` already gathers every getter a program names, and
-when `Get_key` or `Get_value` is among them it writes that group an `entry`
-arm, keeping one a dependency already wrote. A program that never reads the
-fields builds neither arm. The first version built both in every compile and
-pruned them after, which CI read as 63 more allocations in the interpreter's
-corpus and 502,143 more browser compile instructions.
-
-tests/golden/micro/an_entry_reads_its_key_and_value_by_name reads both
-fields beside a local type that declares a `key` of its own; on main it was
-refused at `e.key`. tests/golden/errors/an_entry_has_no_field_but_its_key_and_value
-pins the refusal of a field an entry does not have. Appendix B names the two
-fields.
-
-CI's rows, on main after #2179. The tab compiles the corpus in fewer
-instructions, browser_compile_instructions 353,638,408 -> 353,555,358, and
-the interpreter's run allocates less, interp_allocs 653,377 -> 653,375, as
-does the front end, compile_allocs 13,940 -> 13,939; nothing here isolates
-why any of the three fell. The compile rows rise with the new code in the
-checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
-entry_instructions 73,693,860 -> 73,701,590 and library_instructions
-73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
-banked.
-
 ## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
 
 The release profile had no settings, so rustc split the crate into sixteen
@@ -1145,3 +1114,27 @@ in the web chapter end in `_`, and the chapter says what the last two places
 hold. Three tests in http_test.kso pin it: a name read in lowercase with its
 value trimmed and its inner colon kept, the host header, and a request with
 no headers answering none. Breaking the lowercasing turns two of them red.
+
+## 2026-11-01 — a module may name a function a derivation writes into it
+
+#2265. An entry that derives loads its dependencies twice: once to describe
+them to its derivations, and again with the arms those derivations defined,
+each joined to its module as one more file. The first load refused any name
+nothing had written yet. A module could still call such a name on an
+argument, because a call on a value a function was handed travels to the
+module that owns the value's type and is resolved later. Passed as a value,
+as in `list/map rows post_from`, the same name was refused. senro's
+guestbook hit it with a reader `models/tables` could have written for each
+model.
+
+The first load now sets an unknown name aside instead of refusing it, and
+records that it did. The second load runs whenever a name was set aside,
+even when no derivation defined anything, and refuses whatever is still
+unknown with the same words as before. An entry that derives nothing loads
+once, as it did.
+
+Two goldens in tests/golden/derive pin it on both engines:
+a_module_calls_a_name_its_derivation_defines prints `["hello" "again"]`,
+and a_module_calls_a_name_nothing_defines is refused at `post_form` with
+the message an unknown name always had. With the setting-aside turned off,
+the first goes red with `unknown name \`post_from\``.
