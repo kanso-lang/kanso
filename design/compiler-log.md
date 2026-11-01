@@ -1178,6 +1178,11 @@ takes runbench from 891,097,386 to 890,386,161 instructions under callgrind in
 this container. Runbench calls `k_exec` about 122,000 times, so that is close
 to 6 instructions a call.
 
+The tab runs the same runtime compiled to wasm, and there the inlined loop is
+the cheaper one: out of line, `browser_run_instructions` rose 42,057 to
+78,198,462. The attribute applies only outside wasm, and the tab reads its
+golden again.
+
 I found it while pricing the pool (#2264), which adds to the scheduler loop
 and so to the inlined body. It lands first so the pool's floor drop counts
 only the pool.
