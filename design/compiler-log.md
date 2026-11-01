@@ -1137,4 +1137,4 @@ Two goldens in tests/golden/derive pin it on both engines:
 a_module_calls_a_name_its_derivation_defines prints `["hello" "again"]`,
 and a_module_calls_a_name_nothing_defines is refused at `post_form` with
 the message an unknown name always had. With the setting-aside turned off,
-the first goes red with `unknown name \`post_from\``.
+the first goes red, refused as an unknown name at `post_from`.
