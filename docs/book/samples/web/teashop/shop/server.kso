@@ -13,16 +13,16 @@ pub opening = till 0 []
 pub fn handle (bad_request reason) t
   http/reply (http/text_page "not a request: {reason}\n") (seen t)
 
-pub fn handle (request "GET" "/menu" _) t
+pub fn handle (request "GET" "/menu" _ _) t
   http/reply (http/text_page menu) (seen t)
 
-pub fn handle (request "POST" "/order" body) t
+pub fn handle (request "POST" "/order" body _) t
   sold (order_of body) (seen t)
 
-pub fn handle (request "GET" "/sales" _) t
+pub fn handle (request "GET" "/sales" _ _) t
   http/reply (http/text_page "{summary t}\n") (seen t)
 
-pub fn handle (request "POST" "/close" _) t
+pub fn handle (request "POST" "/close" _ _) t
   http/reply (http/text_page "closed\n") (http/stop (seen t))
 
 pub fn handle _ t

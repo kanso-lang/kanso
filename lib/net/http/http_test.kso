@@ -41,3 +41,14 @@ test_parsed_keeps_the_body = asked.body == "the body"
 
 fn contains? haystack needle
   length (text/split haystack needle) > 1
+
+# A header's name arrives in whatever case the client chose and is read in
+# lowercase; its value keeps its case and loses the spaces around it, and a
+# colon inside the value is part of the value.
+headed = parsed "GET / HTTP/1.1\r\nHost: x\r\nCookie:  s=a:b \r\n\r\n"
+
+test_a_header_name_is_lowercased = headed.headers["cookie"] == "s=a:b"
+
+test_parsed_reads_the_host_header = headed.headers["host"] == "x"
+
+test_a_request_without_headers_has_none = asked.headers["cookie"] == none
