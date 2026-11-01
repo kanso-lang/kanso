@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-27 — gavel: templates are Slim-like, and they compile
-
-#2178. Clay, on how the framework's pages are written: "well you can find a
-way to make the templates compilable but they should be like slim or Haml".
-A template is markup structured by indentation, in the Slim family, and it
-compiles to kanso, so the checker reads its field accesses and its
-parameters the way it reads any other code. How a database gets in and what
-the first application is stay open on #2178.
-
-The prototype is on branch claude/kata-prototype under design/kata, a
-generator written in kanso. A template becomes one function. Each `- if`
-branch and each `- for` body becomes a helper taking exactly the names in
-scope it uses, because kanso refuses an unused parameter, and a body that
-uses none becomes a constant. A misspelled field in the sample page is
-refused by `kanso check` at the generated line, and both engines print the
-same page.
-
 ## 2026-10-27 — a dependency's diagnostic quotes its own line
 
 The merged check names the file a diagnostic is about, and a module compile
@@ -1119,3 +1102,37 @@ codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
 section by their text and now name words.rs; each still applies to the line
 it did before. CI's cost-goldens job read every vein at main's values,
 compile_instructions among them, so no row moved.
+
+## 2026-11-01 — a join a fiber reaches runs beside the fibers already running
+
+#2263. A join that a fiber reached while it ran, rather than one its group
+started with, went to `execute` from `step` (and to `k_exec` from `k_step`),
+and a join there started a second scheduler that returned only when its
+group was done. Every other fiber in the outer group waited for it. A server
+that forks per connection (after each accept, one bare line answers and the
+other accepts the next) is that shape: five concurrent requests to a handler
+that sleeps 300 ms got one answer and four timeouts, on both engines.
+
+Both schedulers now hold their fibers in spawn order, pick the earliest
+wake, and break ties by position. A join a fiber reaches hands its members
+to the running scheduler (`Step::Forked`, `blocked == 2` natively), which puts
+them where that fiber stood; the work bound after the join waits in the
+group and takes the place of the member that finishes last, with the
+group's failures as its value. A nested group that never waits therefore
+runs as it did inline. Natively the work after the join is built around a
+fresh settled node, and the group's result is written into it. The fiber
+arrays grow as they need to, so the 256-fiber cap is gone.
+
+tests/golden/joins pins two programs on both engines.
+`staggered_sleeps` printed `woke b`, `long done`, `woke a` and now prints the
+order its sleeps set: a at 100 ms, b at 130, the long sleep at 1030.
+`what_follows_a_join_waits_for_it` printed the sibling last and now prints
+it at 20 ms, between the group's quick and slow members, with `after the
+group` still after both. Five concurrent 300 ms requests to the fork-per-accept
+server finish in 0.31 s on both engines.
+
+Open: natively a group still runs under one beat, grow-only until the group
+ends, and a server's group never ends. A native fork-per-accept server held
+2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
+1.7 KB a request. Reclaiming at the scheduler's idle points, with the
+fibers' work as the roots, is the second half of #2263.

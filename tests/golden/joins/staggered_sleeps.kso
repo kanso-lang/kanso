@@ -1,0 +1,14 @@
+import "std/time"
+
+fn step name
+  time/sleep 100 .> (_ -> print "woke {name}")
+
+fn nested _
+  step "b"
+  time/sleep 1000 .> (_ -> print "long done")
+
+fn both _
+  step "a"
+  time/sleep 30 .> nested
+
+both 0

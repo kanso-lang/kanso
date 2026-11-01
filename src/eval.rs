@@ -368,11 +368,19 @@ fn entropy_seed() -> u64 {
 /// `sleep` for `ms` with the rest of its work as the continuation. Blocking
 /// propagates up through `Bind`, so `sleep` may sit anywhere in a
 /// description and suspension needs no coroutine — the continuation is the
-/// remaining Desc tree, made explicit.
+/// remaining Desc tree, made explicit. A fiber that reaches a join hands its
+/// members to the scheduler (`Forked`) with the work that follows the join, as
+/// a function of what the group yields; the scheduler runs that once every
+/// member is done (#2263).
 enum Step {
     Done(Value),
     Blocked(u64, Rc<Desc>),
+    Forked(Vec<Rc<Desc>>, Rejoin),
 }
+
+/// What follows a join a fiber reached: the chain of binds around it, rebuilt
+/// around the group's result.
+type Rejoin = Rc<dyn Fn(Rc<Desc>) -> Rc<Desc>>;
 
 include!("eval/env.rs");
 
