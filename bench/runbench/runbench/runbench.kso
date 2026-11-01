@@ -306,6 +306,18 @@
 # `worded` splits a page into its words with `regexp/split "[^a-z']+"`, the
 # way a word count reads its input. The scan tries every letter, and testing
 # one against the class read the class's bytes and the letter's afresh.
+#
+# One more joined on 2026-11-01, measured on main before kanso#2268's fix.
+# Its column is the whole program with it, 892,161,749, less the whole
+# without, 846,331,178, and its share is of the former.
+#
+#   forked    16,000 passes of a loop that forks          45,830,571  5.14%
+#
+# `forked` is a server's loop without the network: each pass forks a small
+# handler beside the rest of the loop, so the groups nest as deep as the
+# loop has run (#2263). Natively every pass's group and its garbage stayed
+# in the arena until the loop ended, which took the program from 4 arena
+# blocks to 15.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -318,6 +330,7 @@ import "./deep"
 import "./drained"
 import "./escape"
 import "./fold"
+import "./forked"
 import "./guarded"
 import "./handed"
 import "./index"
@@ -347,6 +360,8 @@ decode_rounds = 98
 encode_rounds = 90
 
 deep_trials = 545
+
+forked_passes = 16000
 
 pend_cards = 50
 
@@ -484,5 +499,8 @@ fn insisted raw doc a b
   insist/total insist_laps .> told
 
 pub fn run raw
-  on = (doc -> deep/total deep_trials .> (a -> shaped raw doc a))
+  on = (doc -> deep/total deep_trials .> (a -> forked_then raw doc a))
   json/decode raw .> on
+
+fn forked_then raw doc a
+  forked/total forked_passes .> (_ -> shaped raw doc a)
