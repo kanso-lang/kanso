@@ -1131,6 +1131,16 @@ it at 20 ms, between the group's quick and slow members, with `after the
 group` still after both. Five concurrent 300 ms requests to the fork-per-accept
 server finish in 0.31 s on both engines.
 
+The runtime's scheduler is larger, so each benchmark's text grows by 1,392
+bytes and the text row sums to 5,725,200; no benchmark reaches a join inside
+a fiber. CI's rows move by layout, both ways: work_basket 18,296,046,
+work_escapebench 40,309,374, work_indexbench 1,888,160, work_scanbench
+268,196, work_oneshot 9,980,369 and work_livebench 938,655,428 rose, and
+deepbench (197,807,203), runbench (846,331,178), jsonbench, encodebench,
+digestbench, pendbench, readbench and widebench fell. clang compiles the
+larger runtime at the dev tier in codegen_instructions_dev 116,928,442 and
+at the release tier in 371,713,655, fewer than before.
+
 Open: natively a group still runs under one beat, grow-only until the group
 ends, and a server's group never ends. A native fork-per-accept server held
 2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
