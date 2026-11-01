@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
-
-The release profile had no settings, so rustc split the crate into sixteen
-codegen units by module and optimized each without the others. Cargo.toml
-now asks for one unit and fat LTO. The optimizer sees the whole crate and
-its dependencies when it inlines, and a release build takes about a minute
-longer, 2m34s against 1m41s on this container.
-
-It came out of #2137. Moving call emission out of emit.rs had been declined
-because the browser row moved 52 units with no code changed, and the guess
-was the file path in panic strings. Neither a longer path nor a shifted line
-number moves the row. The units do: they are cut along module lines, so a
-move between modules changed what was inlined. With one unit that coupling
-is gone, and the split can be retried.
-
-The interpreter gate anchors its count on `run_interpreted_on_stack`, and the
-one-unit build inlined it into its thread's closure, so the gate read a drop
-glue carrying its name. It is now `#[inline(never)]`, as `emit_ir_for` is.
-
-CI's rows, on main after #2180. Every row the compiler's own build reaches
-falls: compile_instructions 24,874,251 -> 24,057,877 (-3.28%),
-entry_instructions 73,701,590 -> 71,165,551, library_instructions
-73,338,936 -> 70,852,827, emit_instructions 5,715,797 -> 5,597,787,
-startup_instructions 52,528 -> 50,254, interp_instructions 577,237,254 ->
-571,649,741 and, in the tab, browser_compile_instructions 353,555,358 ->
-343,131,848 (-2.95%). codegen_instructions_release moves 371,551,607 ->
-371,551,576; it counts clang and the linker, and nothing here isolates why
-they did 31 fewer. No allocation, memory or runtime row moved. Welfare rises
-95.55 -> 95.57 and is banked.
-
 ## 2026-10-27 — call emission moves from emit.rs into calls.rs
 
 #2137. The methods from `emit_call_full` to the end of emit.rs form a second
@@ -1151,3 +1121,73 @@ run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
 take the emitted rows of the other benchmarks to emitted_other_defines
 2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
 emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
+
+## 2026-11-01 — a server's loop holds what one request holds
+
+The second half of #2263. A server forks each request's handler beside the
+rest of its loop, so every pass is a group the next pass is a member of, and
+the groups nest as deep as the server has run. Both engines kept every one.
+tests/golden/mem/a_server_loop_holds_what_one_request_holds.kso is that
+shape without the network: natively 4,000 passes held 4 arena blocks and
+16,000 held 13; interpreted, the peaks were 1,420,281 and 5,581,819 bytes.
+
+Three things held the memory, and each fix was watched red on its own
+before the spec passed.
+
+A group whose other members have finished cleanly, and whose join was all
+its fiber had left, will yield exactly what its last member yields. The
+scheduler now hands that member to the parent group and frees the group's
+slot; the next join takes it. Nothing observable moves. The settled node the
+group would have handed back ran next in any case, at the same position,
+because every fiber ahead of it waits until later, so a failure lands in
+the parent at the same point in the order it did before. The interpreter
+learns that the join was the fiber's whole work from a rejoin that is
+absent; the runtime learns it from a continuation that is its settled node.
+
+Natively, the scheduler ran under one beat, so everything its fibers
+allocated stayed in the arena until it returned. It now stages the way the
+bind chain does. Once the arena has drifted a quarter megabyte past the last
+stage (or twice what that stage copied), the fibers' work and the live
+groups' continuations and results go out through the carry pair as one list,
+and the beat is rewound. A continuation's settled node is found again by
+walking the copy, since binds and rescues keep what they wrap in `x`, rather
+than carried as a root of its own; two roots could be copied apart, and the
+group's result would then be written into a node its continuation no longer
+holds.
+
+In the interpreter, a global's resolution slot was keyed by the syntax node.
+The pipe builds its callback's body by cloning the head on every evaluation,
+so each pass's clone took a new slot until the table reached its cap of
+65,535, after which every new node resolved by name. A name now keeps the
+slot it first took. An effect chain of 16,000 links peaked at 1,134,478
+bytes and now at 21,608, one byte more than at 4,000.
+
+After: one arena block at either size natively, each stage copying about
+350 bytes (beat_iters 49 and evac_bytes 17,488 in the mem golden), and
+interpreted peaks of 41,986 and 41,987 bytes.
+tests/a_server_loop_holds_no_more_the_longer_it_runs.rs compares the two
+sizes on both engines. #2263 is done.
+
+Rows, from CI, against the corpus with the forking shape. runbench's arena
+falls from 15 blocks to run_arena_blocks 4, run_arena_peak_bytes 4,718,608
+and run_spare_peak_bytes 2,621,456. The stages that buy that copy a little:
+run_beat_iters 211,349, run_evac_allocs 2,156, run_evac_bytes 4,599,264,
+run_allocs 1,930,602, run_alloc_bytes 237,920,257 and run_sh_buf
+92,424,544. The interpreted corpus peaks at interp_peak_bytes 1,366,143
+against 1,953,942, with interp_instructions 621,869,223 and interp_allocs
+810,137, and the tab runs it in browser_run_instructions 78,361,551 with
+browser_run_peak_bytes 2,621,440.
+
+The runtime gains the stage and the group bookkeeping, 1,792 bytes of text
+in each benchmark (runbench's text row 851,601, and the text rows sum to
+text 5,755,168). runbench itself falls to work_runbench 891,782,287. No
+other benchmark forks, so none runs the new code, and their work rows move
+by layout: work_deepbench rose to 199,830,851, work_widebench to
+28,766,254, work_encodebench to 2,335,341,102, work_pendbench to
+154,125,558, work_oneshot to 9,980,977, work_livebench to 938,655,609,
+work_jsonbench to 549,338,202, work_digestbench to 4,104,932,
+work_readbench to 4,584,342, work_escapebench to 40,309,377, work_basket to
+18,296,047, work_indexbench to 1,888,161 and work_scanbench to 268,197.
+clang compiles the larger runtime in codegen_instructions_dev 116,951,400
+and codegen_instructions_release 371,843,999, and entry_instructions reads
+86,797,006.

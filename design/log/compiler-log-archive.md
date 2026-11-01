@@ -111813,3 +111813,33 @@ checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
 entry_instructions 73,693,860 -> 73,701,590 and library_instructions
 73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
 banked.
+
+## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
+
+The release profile had no settings, so rustc split the crate into sixteen
+codegen units by module and optimized each without the others. Cargo.toml
+now asks for one unit and fat LTO. The optimizer sees the whole crate and
+its dependencies when it inlines, and a release build takes about a minute
+longer, 2m34s against 1m41s on this container.
+
+It came out of #2137. Moving call emission out of emit.rs had been declined
+because the browser row moved 52 units with no code changed, and the guess
+was the file path in panic strings. Neither a longer path nor a shifted line
+number moves the row. The units do: they are cut along module lines, so a
+move between modules changed what was inlined. With one unit that coupling
+is gone, and the split can be retried.
+
+The interpreter gate anchors its count on `run_interpreted_on_stack`, and the
+one-unit build inlined it into its thread's closure, so the gate read a drop
+glue carrying its name. It is now `#[inline(never)]`, as `emit_ir_for` is.
+
+CI's rows, on main after #2180. Every row the compiler's own build reaches
+falls: compile_instructions 24,874,251 -> 24,057,877 (-3.28%),
+entry_instructions 73,701,590 -> 71,165,551, library_instructions
+73,338,936 -> 70,852,827, emit_instructions 5,715,797 -> 5,597,787,
+startup_instructions 52,528 -> 50,254, interp_instructions 577,237,254 ->
+571,649,741 and, in the tab, browser_compile_instructions 353,555,358 ->
+343,131,848 (-2.95%). codegen_instructions_release moves 371,551,607 ->
+371,551,576; it counts clang and the linker, and nothing here isolates why
+they did 31 fewer. No allocation, memory or runtime row moved. Welfare rises
+95.55 -> 95.57 and is banked.

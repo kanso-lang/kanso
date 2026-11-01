@@ -266,6 +266,12 @@ string too long
 too many sockets open at once
 out of memory growing a parallel group
 #
+# A SCHEDULER INVARIANT. When a group is down to one member that will pass its
+# result up, k_schedule moves that member, a fiber or a nested group, to the
+# parent. A group with one member left always has one of the two, so this
+# fires only if the scheduler's own bookkeeping is wrong (#2263).
+a group's last member is neither a fiber nor a group
+#
 # `integer overflow (int64 native build; spec int is arbitrary precision)` was
 # the last entry here, excused as pinned somewhere the scan could not look. The
 # excuse named the extension and the barrier was the extension AND the

@@ -233,8 +233,13 @@ impl<'a> Interp<'a> {
         // member that finishes last.
         let mut fibers: Vec<Fiber> =
             members.into_iter().map(|work| Fiber { wake: 0, work, group: 0 }).collect();
-        let mut groups =
-            vec![Group { remaining: fibers.len(), failures: Vec::new(), rejoin: None }];
+        let mut groups = vec![Group {
+            remaining: fibers.len(),
+            failures: Vec::new(),
+            parent: None,
+            rejoin: None,
+        }];
+        let mut free: Vec<usize> = Vec::new();
         let mut now = 0u64;
         // wall-credit: real time spent computing counts against a pending
         // wait, so compute overlaps sleeps in wall-clock. the transcript
@@ -268,12 +273,22 @@ impl<'a> Interp<'a> {
                     fibers[pick].work = cont;
                 }
                 Step::Forked(spawned, rejoin) => {
-                    let group = groups.len();
-                    groups.push(Group {
+                    let made = Group {
                         remaining: spawned.len(),
                         failures: Vec::new(),
-                        rejoin: Some((rejoin, fibers[pick].group)),
-                    });
+                        parent: Some(fibers[pick].group),
+                        rejoin,
+                    };
+                    let group = match free.pop() {
+                        Some(slot) => {
+                            groups[slot] = made;
+                            slot
+                        }
+                        None => {
+                            groups.push(made);
+                            groups.len() - 1
+                        }
+                    };
                     let at = pick;
                     fibers.remove(at);
                     for (k, work) in spawned.into_iter().enumerate() {
@@ -287,20 +302,49 @@ impl<'a> Interp<'a> {
                         groups[group].failures.push(value);
                     }
                     groups[group].remaining -= 1;
+                    let Some(parent) = groups[group].parent else { continue };
                     // The member that finishes a group hands its place to the
                     // work after the join, in the group the fiber that
                     // reached the join belonged to; that fiber still counts
                     // there, so the parent's count is left alone.
                     if groups[group].remaining == 0 {
-                        if let Some((rejoin, parent)) = groups[group].rejoin.take() {
-                            let failures = std::mem::take(&mut groups[group].failures);
-                            let yielded = failures
-                                .into_iter()
-                                .reduce(accumulate_failures)
-                                .unwrap_or(Value::NoneV);
-                            let work = rejoin(Rc::new(Desc::Settled(yielded)));
-                            fibers.insert(pick, Fiber { wake: now, work, group: parent });
+                        let failures = std::mem::take(&mut groups[group].failures);
+                        let yielded = failures
+                            .into_iter()
+                            .reduce(accumulate_failures)
+                            .unwrap_or(Value::NoneV);
+                        let settled = Rc::new(Desc::Settled(yielded));
+                        let work = match groups[group].rejoin.take() {
+                            Some(rejoin) => rejoin(settled),
+                            None => settled,
+                        };
+                        fibers.insert(pick, Fiber { wake: now, work, group: parent });
+                        groups[group].parent = None;
+                        free.push(group);
+                    } else if groups[group].remaining == 1
+                        && groups[group].failures.is_empty()
+                        && groups[group].rejoin.is_none()
+                    {
+                        // One member left, nothing failed and nothing after
+                        // the join: what the group will yield is what that
+                        // member yields, so the member counts toward the
+                        // parent from here and the group goes. A server's
+                        // loop is this shape, each request a group the next
+                        // request is a member of, and keeping the groups kept
+                        // every request it had answered.
+                        match fibers.iter_mut().find(|f| f.group == group) {
+                            Some(last) => last.group = parent,
+                            None => {
+                                let nested = groups
+                                    .iter_mut()
+                                    .find(|g| g.remaining > 0 && g.parent == Some(group))
+                                    .expect("a group's last member is a fiber or a group");
+                                nested.parent = Some(parent);
+                            }
                         }
+                        groups[group].parent = None;
+                        groups[group].remaining = 0;
+                        free.push(group);
                     }
                 }
             }
@@ -323,7 +367,7 @@ impl<'a> Interp<'a> {
             Desc::Join(..) => {
                 let mut members = Vec::new();
                 flatten_join(desc, &mut members);
-                Ok(Step::Forked(members, Rc::new(|done| done)))
+                Ok(Step::Forked(members, None))
             }
             // A fiber waiting for a connection is a fiber with nothing to do:
             // it goes back in the queue and the group's other statements run,
@@ -368,7 +412,7 @@ impl<'a> Interp<'a> {
                     let callee = callee.clone();
                     Ok(Step::Forked(
                         members,
-                        Rc::new(move |done| Rc::new(Desc::Bind(rejoin(done), callee.clone()))),
+                        around(rejoin, move |done| Rc::new(Desc::Bind(done, callee.clone()))),
                     ))
                 }
                 Step::Done(yielded) => {
@@ -388,8 +432,8 @@ impl<'a> Interp<'a> {
                     let (at, hako) = (at.clone(), hako.clone());
                     Ok(Step::Forked(
                         members,
-                        Rc::new(move |done| {
-                            Rc::new(Desc::Insisted(rejoin(done), at.clone(), hako.clone()))
+                        around(rejoin, move |done| {
+                            Rc::new(Desc::Insisted(done, at.clone(), hako.clone()))
                         }),
                     ))
                 }
@@ -404,8 +448,8 @@ impl<'a> Interp<'a> {
                     let (callee, raised) = (callee.clone(), raised.clone());
                     Ok(Step::Forked(
                         members,
-                        Rc::new(move |done| {
-                            Rc::new(Desc::Rescue(rejoin(done), callee.clone(), raised.clone()))
+                        around(rejoin, move |done| {
+                            Rc::new(Desc::Rescue(done, callee.clone(), raised.clone()))
                         }),
                     ))
                 }
@@ -426,8 +470,8 @@ impl<'a> Interp<'a> {
                     let (callee, raised) = (callee.clone(), raised.clone());
                     Ok(Step::Forked(
                         members,
-                        Rc::new(move |done| {
-                            Rc::new(Desc::Annotate(rejoin(done), callee.clone(), raised.clone()))
+                        around(rejoin, move |done| {
+                            Rc::new(Desc::Annotate(done, callee.clone(), raised.clone()))
                         }),
                     ))
                 }
@@ -454,13 +498,28 @@ struct Fiber {
 }
 
 /// A parallel group: how many members are still running, the failures the
-/// finished ones yielded, and, for a join a fiber reached, the work after it
-/// with the group that fiber belonged to. The group a scheduler starts with
-/// has no work after it; its failures are what the scheduler answers.
+/// finished ones yielded, the group the fiber that reached its join counted
+/// toward, and the work after that join, if the join was not all the fiber
+/// had left. The group a scheduler starts with has no parent; its failures are
+/// what the scheduler answers. A slot whose group has finished has no parent
+/// and no members, and the next join takes it.
 struct Group {
     remaining: usize,
     failures: Vec<Value>,
-    rejoin: Option<(Rejoin, usize)>,
+    parent: Option<usize>,
+    rejoin: Option<Rejoin>,
+}
+
+/// A rejoin with one more layer around it. No rejoin is a join that was the
+/// whole of the fiber's work, which is what lets a group with nothing after
+/// it go early.
+fn around(rejoin: Option<Rejoin>, wrap: impl Fn(Rc<Desc>) -> Rc<Desc> + 'static) -> Option<Rejoin> {
+    Some(Rc::new(move |done| {
+        wrap(match &rejoin {
+            Some(inner) => inner(done),
+            None => done,
+        })
+    }))
 }
 
 /// Collect the members of a (possibly nested) parallel group left-to-right —

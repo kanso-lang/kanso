@@ -1,0 +1,21 @@
+# The shape of a server: each pass forks the request's handler beside the rest
+# of the loop, so every pass is a group the next pass is a member of. A group
+# whose other members have finished cleanly has nothing left to do but pass
+# its last member's outcome to its parent, and the scheduler hands that member
+# to the parent and lets the group go (#2263). Before that, both engines held
+# every pass's group until the loop ended: 13 arena blocks here, natively.
+import "std/text"
+import "std/time"
+
+fn handled n
+  page = text/join ["<p>" "request {n}" "</p>"] ""
+  time/sleep 0 .> (_ -> effect (length page))
+
+fn served 0
+  print "served them all"
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub play = served 16000
