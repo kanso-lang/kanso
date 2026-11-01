@@ -111857,3 +111857,40 @@ now differs only in the file names its panic messages carry, and on this
 container, which reads CI's rows exactly, compile_instructions, the entry,
 library, emit and interpreter rows and the browser row all read what main's
 goldens hold.
+
+## 2026-10-27 — the unbuilt-arm prune moves from codegen.rs into unbuilt.rs
+
+#2137. `without_unbuilt_arms`, `kept_arms`, `Given` and `UnreadPositions`
+move into src/codegen/unbuilt.rs, read with include! where they stood, so
+the items keep their order and their module. codegen.rs falls from 4,231
+lines to 3,987. One ratchet mutation patched the prune by its text and now
+names unbuilt.rs. As with calls.rs, the compile, entry, library, emit,
+interpreter and browser rows read what main's goldens hold on this
+container.
+
+## 2026-10-27 — FnEmit moves from codegen.rs into fn_emit.rs
+
+#2137. `FnEmit`, the impl that keeps it, and the helpers beside it
+(`release_cells`, `writes_state`, `is_a_stack_slot`) move into
+src/codegen/fn_emit.rs, read with include! where they stood. codegen.rs falls
+from 3,987 lines to 3,443. Three ratchet mutations patched FnEmit's methods
+by their text and now name fn_emit.rs. The compile, entry, library, emit,
+interpreter and browser rows read what main's goldens hold on this container.
+
+## 2026-10-28 — gavel: senro, with kata inside it, Postgres over the wire, and a guestbook first
+
+#2178. Clay ruled four things about the web framework:
+
+- It is named senro (線路, railway track).
+- kata, the Slim-style template compiler, lives inside senro as its view
+  layer.
+- The database is Postgres, reached by a client written in kanso that speaks
+  the wire protocol over a socket. Clay: "I just want to do postgres. I don't
+  know why any kind of sea binding is necessary." Development starts against
+  Docker, and TLS for hosted connections comes from the runtime, backed by
+  OpenSSL natively and a Rust TLS library in the interpreter.
+- The first application is a guestbook.
+
+The build order is cloud's: `net` dials out and reads bytes, then the
+Postgres client, then derivations (#2186), then routing with kata, then
+models.
