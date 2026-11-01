@@ -257,7 +257,9 @@ impl<'a> Interp<'a> {
             b"pool_make" => {
                 let [n] = arity(args, name, span)?;
                 match n {
-                    Value::Int(n) => Ok(Value::Desc(Rc::new(Desc::PoolMake(n.to_i64().unwrap_or(-1))))),
+                    Value::Int(n) => {
+                        Ok(Value::Desc(Rc::new(Desc::PoolMake(n.to_i64().unwrap_or(-1)))))
+                    }
                     other if is_failure(&other) => Ok(other),
                     _ => Err(RuntimeError {
                         at: None,
@@ -269,14 +271,22 @@ impl<'a> Interp<'a> {
             b"pool_take" => {
                 let [p] = arity(args, name, span)?;
                 let Value::Int(p) = &p else {
-                    return Err(RuntimeError { at: None, message: "take takes a pool".to_string(), span });
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "take takes a pool".to_string(),
+                        span,
+                    });
                 };
                 Ok(Value::Desc(Rc::new(Desc::PoolTake(p.to_i64().unwrap_or(-1)))))
             }
             b"pool_give" => {
                 let [p, v] = arity(args, name, span)?;
                 let Value::Int(p) = &p else {
-                    return Err(RuntimeError { at: None, message: "give takes a pool".to_string(), span });
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "give takes a pool".to_string(),
+                        span,
+                    });
                 };
                 Ok(Value::Desc(Rc::new(Desc::PoolGive(p.to_i64().unwrap_or(-1), v))))
             }

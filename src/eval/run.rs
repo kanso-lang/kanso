@@ -675,7 +675,10 @@ fn pool_stuck(reason: &str) -> Value {
 impl<'a> Interp<'a> {
     fn pool_make(&self, n: i64) -> Value {
         if n < 1 {
-            return err_value(Value::Str(Text::from("a pool holds at least one value")), Raised::default());
+            return err_value(
+                Value::Str(Text::from("a pool holds at least one value")),
+                Raised::default(),
+            );
         }
         let mut pools = self.pools.borrow_mut();
         pools.push(Pool { cap: n as usize, items: Vec::new() });
@@ -687,7 +690,10 @@ impl<'a> Interp<'a> {
     fn pool_take(&self, handle: i64) -> Option<Value> {
         let mut pools = self.pools.borrow_mut();
         let Some(pool) = usize::try_from(handle).ok().and_then(|h| pools.get_mut(h)) else {
-            return Some(err_value(Value::Str(Text::from("that is not a pool")), Raised::default()));
+            return Some(err_value(
+                Value::Str(Text::from("that is not a pool")),
+                Raised::default(),
+            ));
         };
         let taken = pool.items.pop()?;
         self.pool_moved.set(true);
@@ -698,7 +704,10 @@ impl<'a> Interp<'a> {
     fn pool_give(&self, handle: i64, v: &Value) -> Option<Value> {
         let mut pools = self.pools.borrow_mut();
         let Some(pool) = usize::try_from(handle).ok().and_then(|h| pools.get_mut(h)) else {
-            return Some(err_value(Value::Str(Text::from("that is not a pool")), Raised::default()));
+            return Some(err_value(
+                Value::Str(Text::from("that is not a pool")),
+                Raised::default(),
+            ));
         };
         if pool.items.len() >= pool.cap {
             return None;
