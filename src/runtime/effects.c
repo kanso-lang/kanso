@@ -789,7 +789,10 @@ static long long k_rng_below(long long n) {
    interpreter has no use for: blocked=3 is a chain that ran long within its
    step and stopped so the scheduler could reclaim what the links before left
    behind. `cont` is the rest of it, and the scheduler picks the same fiber
-   again at once, so nothing about the order of the program changes (#2276). */
+   again at once, so nothing about the order of the program changes (#2276).
+   blocked=4 is a fiber parked on a pool: a take found it empty, or a give
+   found it full. It waits with no deadline until a take or a give moves the
+   pool, and `cont` retries the operation (#2264). */
 typedef struct {
     int blocked;
     unsigned long long ms;
@@ -1823,7 +1826,7 @@ static KStep k_step(KDesc* d) {
                                      : k_pool_give(d->x, d->y, &waits);
             if (waits && k_pool_failing) v = k_pool_stuck(d->dtag == 39);
             else if (waits) {
-                KStep s = {1, K_PARKED, k_mkdesc(d->dtag, d->x, d->y), k_none()};
+                KStep s = {4, 0, k_mkdesc(d->dtag, d->x, d->y), k_none()};
                 return s;
             }
             KStep s = {0, 0, k_none(), v};
@@ -2038,18 +2041,21 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
             for (int i = 0; i < f.n; i++)
                 if (f.wake[i] == K_PARKED) f.wake[i] = now;
         }
+        resuming = 0;
         int pick = 0;
         for (int i = 1; i < f.n; i++) {
             if (f.wake[i] < f.wake[pick]) pick = i;
         }
-        /* Every fiber is parked on a pool: nothing can give or take, so each
-           parked operation is woken to answer that it never will. */
-        if (__builtin_expect(f.wake[pick] == K_PARKED, 0)) {
-            k_pool_failing = 1;
-            for (int i = 0; i < f.n; i++) f.wake[i] = now;
-            continue;
-        }
         if (f.wake[pick] > now) {
+            /* Every fiber is parked on a pool: nothing can give or take, so
+               each parked operation is woken to answer that it never will.
+               The parked mark is later than any clock, so this is only ever
+               asked on the way to a wait. */
+            if (f.wake[pick] == K_PARKED) {
+                k_pool_failing = 1;
+                for (int i = 0; i < f.n; i++) f.wake[i] = now;
+                continue;
+            }
             if (getenv("KANSO_SCHED_DEBUG")) {
                 fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%lld\n",
                         pick, f.wake[pick], k_ms_since(&sched_t0));
@@ -2072,15 +2078,18 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
             now = f.wake[pick];
         }
         KStep s = k_step(k_as_desc(f.work[pick]));
-        resuming = s.blocked == 3;
         /* A chain that stopped to be staged (3) keeps its wake time. The
            stage at the top of the loop reclaims, and the pick that follows
            falls on this fiber again, since nothing else moved. A loop here
            of its own did the same and cost runbench 2.5 million
            instructions in the scheduler's code around it. */
         if (s.blocked == 1 || s.blocked == 3) {
-            if (s.blocked == 1)
-                f.wake[pick] = __builtin_expect(s.ms == K_PARKED, 0) ? K_PARKED : now + s.ms;
+            if (s.blocked == 1) f.wake[pick] = now + s.ms;
+            else resuming = 1;
+            f.work[pick] = s.cont;
+        } else if (__builtin_expect(s.blocked == 4, 0)) {
+            /* parked on a pool: it waits for a take or give to move it */
+            f.wake[pick] = K_PARKED;
             f.work[pick] = s.cont;
         } else if (s.blocked == 2) {
             int g;
