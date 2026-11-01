@@ -23,47 +23,6 @@
 
 
 
-## 2026-10-28 — net dials out and reads bytes
-
-#2178, the first item owed on the Postgres ruling. `net/dial host at` opens
-a connection and answers the same `conn` record `accept` does, so `write`,
-`read` and `close_conn` work on it unchanged. `net/read_bytes c` is one read
-of what has arrived, handed back as bytes. A Postgres message is framed in
-binary, and `net/read`, which answers text, would mangle a byte such as 0xff.
-
-Both are effect builtins on both engines with sockets: `k_dial` resolves the
-host with getaddrinfo and tries each address it gets, and the interpreter
-uses `TcpStream::connect`. A refusal is worded "cannot connect to host:port"
-on both, with nothing from the operating system in it, so the differential
-law holds on the failure too. The browser has no sockets and refuses as it
-already did for `listen`.
-
-tests/a_program_dials_out.rs plays the server: it answers a greeting with
-nine bytes framed like a Postgres message, one of them 0xff, and both engines
-print the same nine values. Watched red with the native byte read decoding
-as text (the 0xff arrived as U+FFFD) and with the interpreter's refusal
-worded differently. tests/sockets_say_one_thing.rs gains `read_bytes` on a
-handle that is not a connection.
-
-Every binary links the runtime, so each benchmark's text grows by 752 bytes
-(text 5,635,099 summed), and its instructions by a few hundred, which is
-layout: no benchmark dials out. They land at work_basket 18,295,655,
-work_deepbench 198,243,012, work_digestbench 4,104,311, work_encodebench
-2,335,339,667, work_escapebench 40,308,822, work_indexbench 1,887,608,
-work_jsonbench 549,337,631, work_livebench 938,655,028, work_oneshot
-9,979,724, work_pendbench 154,124,432, work_readbench 4,583,812, work_runbench
-825,011,048, work_scanbench 266,891 and work_widebench 28,701,733.
-
-`lib/net` is embedded in the compiler, so the compile rows rise too:
-compile_instructions 24,061,034 (+3,157), entry_instructions 71,170,086
-(+4,535), library_instructions 70,857,236 (+4,409), emit_instructions
-5,599,525 (+1,738), codegen_instructions_dev 116,797,274 (+63,365),
-codegen_instructions_release 371,551,798 (+222), interp_instructions
-571,786,910 (+137,169), browser_compile_instructions 343,160,078 (+28,230)
-and browser_run_instructions 64,598,060 (+27). Welfare fell by less than
-0.01, and the floor moves to 95.568 under the rule for a feature a ruling
-requires.
-
 ## 2026-10-28 — derivations: a convention runs while the program compiles
 
 #2186, the first slice of the ruling. An entry may write `derive
@@ -1259,4 +1218,34 @@ longer in every benchmark, `text` 5,777,120, and the dev tier compiles it in
 `codegen_instructions_dev` 116,955,821 while the release tier falls to
 371,732,303. The tab runs the same runtime and gains the same loop: it runs the
 interpreted corpus 205,146 instructions cheaper, at 78,156,405. Welfare rises,
+and the floor is banked with it.
+
+## 2026-11-01 — the scheduler is kept out of line
+
+`k_schedule` is static and has one caller, `k_exec`, so clang inlined it. The
+scheduler's loop then sat inside `k_exec`, which is called once for every
+effect a program runs, and every one of those calls paid for its wider frame
+and prologue whether or not the program ever forked. Marking it `noinline`
+takes runbench from 891,097,386 to 890,386,161 instructions under callgrind in
+this container. Runbench calls `k_exec` about 122,000 times, so that is close
+to 6 instructions a call.
+
+I found it while pricing the pool (#2264), which adds to the scheduler loop
+and so to the inlined body. It lands first so the pool's floor drop counts
+only the pool.
+
+CI's rows, read on the recorded AMD silicon. `work_runbench` falls 711,225 to
+890,386,066, `work_deepbench` falls 1,971,289 to 197,859,562 and
+`work_widebench` falls 79,936 to 28,686,318. The runtime's machine code is 16
+bytes shorter in every benchmark, `text` 5,776,896.
+
+Five rows rose by small amounts: `work_jsonbench` to 549,338,235,
+`work_readbench` to 4,584,375, `work_digestbench` to 4,104,967,
+`work_livebench` to 938,655,546 and `work_encodebench` to 2,335,340,787. That
+is 33 to 581 instructions on runs of 4 million to 2.3 billion. Callgrind
+shows no `k_schedule` frame in readbench or livebench, so none of this is the
+scheduler's own work. I read it as code that moved when the function left
+`k_exec`, without having isolated it. Clang does a little more work compiling
+the runtime with the function kept apart: `codegen_instructions_dev` rises to
+116,962,031 and `codegen_instructions_release` to 371,787,670. Welfare rises,
 and the floor is banked with it.
