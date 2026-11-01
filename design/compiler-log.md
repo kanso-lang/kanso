@@ -1110,6 +1110,18 @@ browser_compile_instructions 349,229,303, browser_compile_peak_bytes
 emitted rows grew by the shape's 15 functions. The floor is re-based to what
 these rows score, since the change is only to what is measured.
 
+The run program's other counters move with the 16,000 groups and the
+handlers' pages: run_allocs 1,930,504, run_alloc_bytes 237,915,969,
+run_arena_blocks 15, run_arena_peak_bytes 14,680,064, run_perm_allocs 131,
+run_beat_iters 211,300, run_survive_slots 4,703, run_push_mut_fast
+1,195,311, run_push_mut_slow 1,645,465, run_bytes_malloc 7,868,
+run_str_scans 19,402, run_str_scan_bytes 18,667,266, run_buf_reuse 157,
+run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
+92,421,040 and run_spare_peak_bytes 14,155,792. runbench's 15 new functions
+take the emitted rows of the other benchmarks to emitted_other_defines
+2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
+emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
+
 ## 2026-11-01 — a server's loop holds what one request holds
 
 The second half of #2263. A server forks each request's handler beside the
@@ -1156,18 +1168,26 @@ interpreted peaks of 41,986 and 41,987 bytes.
 tests/a_server_loop_holds_no_more_the_longer_it_runs.rs compares the two
 sizes on both engines. #2263 is done.
 
-Rows, from CI. The runtime gains the stage and the group bookkeeping, 1,792
-bytes of text in each benchmark (runbench's text row 846,721). No benchmark
-forks, so none runs the new code, and the work rows move by layout:
-work_deepbench rose to 199,830,851, work_runbench to 846,681,718,
-work_widebench to 28,766,254, work_encodebench to 2,335,341,102,
-work_pendbench to 154,125,558, work_oneshot to 9,980,977, work_livebench to
-938,655,609, work_jsonbench to 549,338,202, work_digestbench to 4,104,932,
+Rows, from CI, against the corpus with the forking shape. runbench's arena
+falls from 15 blocks to run_arena_blocks 4, run_arena_peak_bytes 4,718,608
+and run_spare_peak_bytes 2,621,456. The stages that buy that copy a little:
+run_beat_iters 211,349, run_evac_allocs 2,156, run_evac_bytes 4,599,264,
+run_allocs 1,930,602, run_alloc_bytes 237,920,257 and run_sh_buf
+92,424,544. The interpreted corpus peaks at interp_peak_bytes 1,366,143
+against 1,953,942, with interp_instructions 621,869,223 and interp_allocs
+810,137, and the tab runs it in browser_run_instructions 78,361,551 with
+browser_run_peak_bytes 2,621,440.
+
+The runtime gains the stage and the group bookkeeping, 1,792 bytes of text
+in each benchmark (runbench's text row 851,601, and the text rows sum to
+text 5,755,168). runbench itself falls to work_runbench 891,782,287. No
+other benchmark forks, so none runs the new code, and their work rows move
+by layout: work_deepbench rose to 199,830,851, work_widebench to
+28,766,254, work_encodebench to 2,335,341,102, work_pendbench to
+154,125,558, work_oneshot to 9,980,977, work_livebench to 938,655,609,
+work_jsonbench to 549,338,202, work_digestbench to 4,104,932,
 work_readbench to 4,584,342, work_escapebench to 40,309,377, work_basket to
 18,296,047, work_indexbench to 1,888,161 and work_scanbench to 268,197.
 clang compiles the larger runtime in codegen_instructions_dev 116,951,400
-and codegen_instructions_release 371,843,999. The interpreter's corpus reads
-interp_instructions 571,780,675 and interp_peak_bytes 1,356,812, the cost of
-the name-to-slot entry, with interp_allocs down to 653,366;
-entry_instructions reads 86,797,006. The browser runs the corpus in
-browser_run_instructions 64,598,009, 8 fewer.
+and codegen_instructions_release 371,843,999, and entry_instructions reads
+86,797,006.
