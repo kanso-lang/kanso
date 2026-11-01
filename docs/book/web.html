@@ -117,16 +117,16 @@ extra_css: /book/book.css
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">bad_request</span> reason) t
   <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"not a request: <span class="i">{reason}</span>\n"</span>) (<span class="f">seen</span> t)
 
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/menu"</span> _) t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/menu"</span> _ _) t
   <span class="f">http/reply</span> (<span class="f">http/text_page</span> menu) (<span class="f">seen</span> t)
 
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/order"</span> body) t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/order"</span> body _) t
   <span class="f">sold</span> (<span class="f">order_of</span> body) (<span class="f">seen</span> t)
 
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/sales"</span> _) t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"GET"</span> <span class="s">"/sales"</span> _ _) t
   <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"<span class="i">{summary t}</span>\n"</span>) (<span class="f">seen</span> t)
 
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/close"</span> _) t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> (<span class="f">request</span> <span class="s">"POST"</span> <span class="s">"/close"</span> _ _) t
   <span class="f">http/reply</span> (<span class="f">http/text_page</span> <span class="s">"closed\n"</span>) (<span class="f">http/stop</span> (<span class="f">seen</span> t))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">handle</span> _ t
@@ -153,7 +153,7 @@ extra_css: /book/book.css
   <span class="f">http/reply</span> (<span class="f">http/text_page</span> said) (<span class="f">merge</span> t { <span class="s">"sales"</span>:(<span class="f">push</span> t<span class="o">.</span><span class="f">sales</span> s) })</code></pre>
 </div>
 
-<p>routing is dispatch. each arm of <code>handle</code> names a method and a path as literals in a <code>request</code> pattern. the arm that takes <code>bad_request</code> answers the bytes that did not parse as a request, which the library hands over as a value. the last arm catches everything else with <code>http/not_found</code>. adding an endpoint is adding an arm.</p>
+<p>routing is dispatch. each arm of <code>handle</code> names a method and a path as literals in a <code>request</code> pattern. the last two places are the body and the headers, and an arm that reads neither leaves them as <code>_</code>. the arm that takes <code>bad_request</code> answers the bytes that did not parse as a request, which the library hands over as a value. the last arm catches everything else with <code>http/not_found</code>. adding an endpoint is adding an arm.</p>
 
 <p><code>/close</code> carries <code>http/stop</code> wrapped around the till. that ends the server, and the till inside is what the server answers when it is done.</p>
 

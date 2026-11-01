@@ -7,10 +7,13 @@ import "std/text"
 # to hand it and no recorder to fake, so a test calls it and reads the value it
 # answers — and injecting a different handler is passing a different function,
 # because a function is already a value.
+# `headers` maps each header's name, lowercased, to its value with the
+# surrounding spaces trimmed; a name sent twice keeps the last value.
 pub type request
   method
   path
   body
+  headers
 
 pub type turn
   answer
@@ -148,10 +151,20 @@ pub fn parsed raw
   start = text/split lines[1] " "
   unstarted = "a request line without a method and a path"
   return bad_request unstarted if length start < 2
-  request start[1] start[2] (body_of head)
+  request start[1] start[2] (body_of head) (headers_of lines)
 
 fn body_of head
   if (length head > 1) head[2] ""
+
+fn headers_of lines
+  list/fold (list/drop lines 1) {} header
+
+fn header acc line
+  parts = text/split line ":"
+  return acc if length parts < 2
+  name = text/lowercase (text/trim parts[1])
+  value = text/trim (text/join (list/to_list (list/drop parts 1)) ":")
+  put acc name value
 
 pub fn rendered r
   "{preamble r}{r.body}"

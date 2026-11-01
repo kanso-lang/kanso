@@ -111765,3 +111765,20 @@ scope it uses, because kanso refuses an unused parameter, and a body that
 uses none becomes a constant. A misspelled field in the sample page is
 refused by `kanso check` at the generated line, and both engines print the
 same page.
+
+## 2026-10-27 — a dependency's diagnostic quotes its own line
+
+The merged check names the file a diagnostic is about, and a module compile
+rereads its files on the failing path so that each diagnostic quotes its
+line. The root compile in src/lib.rs handed the renderer only the entry's
+text, so a field misspelled in an imported module printed a header and a
+location with nothing under them. The template prototype found it, when its
+typo landed in a generated view. `render_merged` now rereads each file a
+diagnostic names, on the path that is about to fail. An embedded std file
+is named bare and is never read from disk, because a file of that name in
+the working directory belongs to somebody else.
+
+tests/golden/errors_module gains a_field_read_in_a_modules_second_file,
+which on main printed no line. field_read_in_a_deep_library and
+two_owners_tie_on_a_traveling_call gain the line their goldens had pinned
+as missing.

@@ -23,23 +23,6 @@
 
 
 
-## 2026-10-27 — a dependency's diagnostic quotes its own line
-
-The merged check names the file a diagnostic is about, and a module compile
-rereads its files on the failing path so that each diagnostic quotes its
-line. The root compile in src/lib.rs handed the renderer only the entry's
-text, so a field misspelled in an imported module printed a header and a
-location with nothing under them. The template prototype found it, when its
-typo landed in a generated view. `render_merged` now rereads each file a
-diagnostic names, on the path that is about to fail. An embedded std file
-is named bare and is never read from disk, because a file of that name in
-the working directory belongs to somebody else.
-
-tests/golden/errors_module gains a_field_read_in_a_modules_second_file,
-which on main printed no line. field_read_in_a_deep_library and
-two_owners_tie_on_a_traveling_call gain the line their goldens had pinned
-as missing.
-
 ## 2026-10-27 — an entry reads its key and value by name
 
 #2163. A field read becomes a call on the field's getter, and getters were
@@ -1146,3 +1129,18 @@ ends, and a server's group never ends. A native fork-per-accept server held
 2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
 1.7 KB a request. Reclaiming at the scheduler's idle points, with the
 fibers' work as the roots, is the second half of #2263.
+
+## 2026-11-01 — a request carries its headers
+
+`std/net/http`'s `request` gains a fourth field, `headers`: each header's
+name, lowercased, mapped to its value with the surrounding spaces trimmed. A
+colon inside a value stays part of it, and a name sent twice keeps the last
+value. The parser had already split the head into lines and discarded all
+but the first. A server could not read a cookie, so senro could not keep a
+session.
+
+A pattern on `request` takes four places now, so the teashop's `handle` arms
+in the web chapter end in `_`, and the chapter says what the last two places
+hold. Three tests in http_test.kso pin it: a name read in lowercase with its
+value trimmed and its inner colon kept, the host header, and a request with
+no headers answering none. Breaking the lowercasing turns two of them red.
