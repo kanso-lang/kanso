@@ -785,7 +785,11 @@ static long long k_rng_below(long long n) {
    the group, `cont` the work after it, and `hole` the settled node in that
    work the group's result goes into, #2263). Blocking threads the
    continuation up through Bind, so `sleep` may sit anywhere and suspension
-   needs no coroutine. Mirrors eval.rs's Step exactly. */
+   needs no coroutine. Mirrors eval.rs's Step exactly, with one addition the
+   interpreter has no use for: blocked=3 is a chain that ran long within its
+   step and stopped so the scheduler could reclaim what the links before left
+   behind. `cont` is the rest of it, and the scheduler picks the same fiber
+   again at once, so nothing about the order of the program changes (#2276). */
 typedef struct {
     int blocked;
     unsigned long long ms;
@@ -797,6 +801,7 @@ typedef struct {
 
 static KValue k_schedule(KDesc* join);
 static KStep k_step(KDesc* d);
+static int k_sched_due(void);
 
 static int k_argc_global = 0;
 static char** k_argv_global = NULL;
@@ -1651,8 +1656,17 @@ static KValue k_kill_kid(KValue handle) {
     return k_done();
 }
 
+/* Links walked inside steps, so the drift test below runs on one link in 256:
+   asked after every link it cost runbench 650,000 instructions, and a stage
+   that comes 255 links late still keeps the region inside its budget. */
+static unsigned k_step_links;
+
 static KStep k_step(KDesc* d) {
-    switch (d->dtag) {
+    /* A chain whose steps never block runs inside one step, and each link
+       that answers another description goes round this loop rather than into
+       a deeper call: the recursion it replaced held a C frame per link and ran
+       out of stack at a hundred thousand of them (#2276). */
+    for (;;) switch (d->dtag) {
         case 21: {
             /* A fiber waiting for a connection has nothing to do: it goes back
                in the queue and the group's other statements run, which is how
@@ -1778,7 +1792,14 @@ static KStep k_step(KDesc* d) {
                 return in;
             }
             KValue next = k_worded_step(d->dtag, in.value, d->y);
-            if (next.tag == K_DESC) return k_step(k_as_desc(next));
+            if (next.tag == K_DESC) {
+                if ((++k_step_links & 255) == 0 && k_sched_due()) {
+                    KStep s = {3, 0, next, k_none()};
+                    return s;
+                }
+                d = k_as_desc(next);
+                continue;
+            }
             KStep s = {0, 0, k_none(), next};
             return s;
         }
@@ -1922,14 +1943,23 @@ static KDesc* k_hole_of(KValue cont) {
    back. A continuation's settled node is found again by walking the copy
    rather than carried as a root of its own, so the copy cannot split it from
    the continuation it was written for. */
-static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
+/* Whether the region has drifted far enough since the last stage that the
+   next one would reclaim something. A chain inside one step asks too, so it
+   can stop and let the stage run. */
+static int k_sched_due(void) {
     long long d = k_beat_depth - 1;
-    if (d < 0 || d >= K_BEAT_MAX) return;
+    if (d < 0 || d >= K_BEAT_MAX) return 0;
     KCarry* kc = &k_carries[d];
     size_t wait = (size_t)1 << 18;
     if (2 * kc->last_copy > wait) wait = 2 * kc->last_copy;
-    if (kc->at_arena && kc->at_blocks == (const void*)k_blocks
-        && (size_t)(k_arena - kc->at_arena) < wait) return;
+    return !(kc->at_arena && kc->at_blocks == (const void*)k_blocks
+             && (size_t)(k_arena - kc->at_arena) < wait);
+}
+
+static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
+    if (!k_sched_due()) return;
+    long long d = k_beat_depth - 1;
+    KCarry* kc = &k_carries[d];
     long long n = f->n;
     for (int g = 0; g < ngroups; g++) {
         if (g > 0 && groups[g].parent < 0) continue;
@@ -1994,11 +2024,15 @@ static KValue k_schedule(KDesc* join) {
     k_beat_push();
     k_carries[k_beat_depth - 1].at_arena = k_arena;
     k_carries[k_beat_depth - 1].at_blocks = (const void*)k_blocks;
+    /* A fiber whose chain stopped to be staged (step kind 3) is still inside
+       its step, so the pool's waking waits until the chain has finished: the
+       interpreter runs the whole chain before any fiber a give woke. */
+    int resuming = 0;
     while (f.n > 0) {
         k_sched_stage(&f, groups, ngroups);
         /* A take or give went through: the fibers parked on a pool try
            again, in spawn order, and nothing is stuck any more. */
-        if (k_pool_moved) {
+        if (k_pool_moved && !resuming) {
             k_pool_moved = 0;
             k_pool_failing = 0;
             for (int i = 0; i < f.n; i++)
@@ -2038,8 +2072,14 @@ static KValue k_schedule(KDesc* join) {
             now = f.wake[pick];
         }
         KStep s = k_step(k_as_desc(f.work[pick]));
-        if (s.blocked == 1) {
-            f.wake[pick] = s.ms == K_PARKED ? K_PARKED : now + s.ms;
+        resuming = s.blocked == 3;
+        /* A chain that stopped to be staged (3) keeps its wake time. The
+           stage at the top of the loop reclaims, and the pick that follows
+           falls on this fiber again, since nothing else moved. A loop here
+           of its own did the same and cost runbench 2.5 million
+           instructions in the scheduler's code around it. */
+        if (s.blocked == 1 || s.blocked == 3) {
+            if (s.blocked == 1) f.wake[pick] = s.ms == K_PARKED ? K_PARKED : now + s.ms;
             f.work[pick] = s.cont;
         } else if (s.blocked == 2) {
             int g;

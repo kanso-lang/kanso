@@ -385,8 +385,50 @@ impl<'a> Interp<'a> {
     /// (`Blocked`, carrying the rest of its work). Blocking threads back up
     /// through `Bind`, so the continuation is always the remaining
     /// description — no saved stack, no coroutine.
+    ///
+    /// A chain whose links never block runs within one step. Each link that
+    /// answers another description goes round this loop rather than into a
+    /// deeper call: the recursion it replaced held a frame per link and
+    /// overflowed the stack at three million of them (#2276).
     fn step(&self, desc: &Rc<Desc>, executor: &mut dyn Executor) -> Result<Step, RuntimeError> {
         let origin = Span::at(0, 0);
+        let mut desc = desc.clone();
+        loop {
+            let (inner, callee, word, raised) = match &*desc {
+                Desc::Bind(inner, callee) => (inner, callee, Word::Bind, None),
+                Desc::Rescue(inner, callee, raised) => (inner, callee, Word::Rescue, Some(raised)),
+                Desc::Annotate(inner, callee, raised) => {
+                    (inner, callee, Word::Annotate, Some(raised))
+                }
+                _ => return self.step_leaf(&desc, executor),
+            };
+            match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => return Ok(Step::Blocked(ms, relinked(&desc, cont))),
+                Step::Forked(members, rejoin) => {
+                    let link = desc.clone();
+                    return Ok(Step::Forked(
+                        members,
+                        around(rejoin, move |done| relinked(&link, done)),
+                    ));
+                }
+                Step::Done(yielded) => {
+                    let unraised = Raised::default();
+                    let raised = raised.unwrap_or(&unraised);
+                    match self.worded_step(word, yielded, callee, raised, origin)? {
+                        Value::Desc(next) => desc = next,
+                        other => return Ok(Step::Done(other)),
+                    }
+                }
+            }
+        }
+    }
+
+    /// One step of anything but a chain word.
+    fn step_leaf(
+        &self,
+        desc: &Rc<Desc>,
+        executor: &mut dyn Executor,
+    ) -> Result<Step, RuntimeError> {
         match &**desc {
             Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
             // A join the fiber reaches is the scheduler's to run, beside the
@@ -447,26 +489,6 @@ impl<'a> Interp<'a> {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
                 }
             },
-            Desc::Bind(inner, callee) => match self.step(inner, executor)? {
-                Step::Blocked(ms, cont) => {
-                    Ok(Step::Blocked(ms, Rc::new(Desc::Bind(cont, callee.clone()))))
-                }
-                Step::Forked(members, rejoin) => {
-                    let callee = callee.clone();
-                    Ok(Step::Forked(
-                        members,
-                        around(rejoin, move |done| Rc::new(Desc::Bind(done, callee.clone()))),
-                    ))
-                }
-                Step::Done(yielded) => {
-                    let next =
-                        self.worded_step(Word::Bind, yielded, callee, &Raised::default(), origin)?;
-                    match next {
-                        Value::Desc(d) => self.step(&d, executor),
-                        other => Ok(Step::Done(other)),
-                    }
-                }
-            },
             Desc::Insisted(inner, at, hako) => match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
@@ -481,50 +503,6 @@ impl<'a> Interp<'a> {
                     ))
                 }
                 Step::Done(v) => Ok(Step::Done(restamped(v, at, hako))),
-            },
-            Desc::Rescue(inner, callee, raised) => match self.step(inner, executor)? {
-                Step::Blocked(ms, cont) => Ok(Step::Blocked(
-                    ms,
-                    Rc::new(Desc::Rescue(cont, callee.clone(), raised.clone())),
-                )),
-                Step::Forked(members, rejoin) => {
-                    let (callee, raised) = (callee.clone(), raised.clone());
-                    Ok(Step::Forked(
-                        members,
-                        around(rejoin, move |done| {
-                            Rc::new(Desc::Rescue(done, callee.clone(), raised.clone()))
-                        }),
-                    ))
-                }
-                Step::Done(yielded) => {
-                    let next = self.worded_step(Word::Rescue, yielded, callee, raised, origin)?;
-                    match next {
-                        Value::Desc(d) => self.step(&d, executor),
-                        other => Ok(Step::Done(other)),
-                    }
-                }
-            },
-            Desc::Annotate(inner, callee, raised) => match self.step(inner, executor)? {
-                Step::Blocked(ms, cont) => Ok(Step::Blocked(
-                    ms,
-                    Rc::new(Desc::Annotate(cont, callee.clone(), raised.clone())),
-                )),
-                Step::Forked(members, rejoin) => {
-                    let (callee, raised) = (callee.clone(), raised.clone());
-                    Ok(Step::Forked(
-                        members,
-                        around(rejoin, move |done| {
-                            Rc::new(Desc::Annotate(done, callee.clone(), raised.clone()))
-                        }),
-                    ))
-                }
-                Step::Done(yielded) => {
-                    let next = self.worded_step(Word::Annotate, yielded, callee, raised, origin)?;
-                    match next {
-                        Value::Desc(d) => self.step(&d, executor),
-                        other => Ok(Step::Done(other)),
-                    }
-                }
             },
             // leaf effects run to completion synchronously
             _ => Ok(Step::Done(self.execute(desc, executor)?)),
@@ -551,6 +529,19 @@ struct Group {
     failures: Vec<Value>,
     parent: Option<usize>,
     rejoin: Option<Rejoin>,
+}
+
+/// The same chain link with a different subject: the rest of the work once
+/// the subject blocked or forked part way through.
+fn relinked(link: &Desc, subject: Rc<Desc>) -> Rc<Desc> {
+    Rc::new(match link {
+        Desc::Bind(_, callee) => Desc::Bind(subject, callee.clone()),
+        Desc::Rescue(_, callee, raised) => Desc::Rescue(subject, callee.clone(), raised.clone()),
+        Desc::Annotate(_, callee, raised) => {
+            Desc::Annotate(subject, callee.clone(), raised.clone())
+        }
+        _ => unreachable!("only a chain word is relinked"),
+    })
 }
 
 /// A rejoin with one more layer around it. No rejoin is a join that was the

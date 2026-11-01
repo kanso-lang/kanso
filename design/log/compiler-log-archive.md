@@ -111920,3 +111920,44 @@ is a value built from a fixed set of changes, so it cannot break that way,
 and the ruling became: no schema file by default, the schema folded from the
 migrations at compile time, and `schema.sql` only for a migration that needs
 raw SQL.
+
+## 2026-10-28 — net dials out and reads bytes
+
+#2178, the first item owed on the Postgres ruling. `net/dial host at` opens
+a connection and answers the same `conn` record `accept` does, so `write`,
+`read` and `close_conn` work on it unchanged. `net/read_bytes c` is one read
+of what has arrived, handed back as bytes. A Postgres message is framed in
+binary, and `net/read`, which answers text, would mangle a byte such as 0xff.
+
+Both are effect builtins on both engines with sockets: `k_dial` resolves the
+host with getaddrinfo and tries each address it gets, and the interpreter
+uses `TcpStream::connect`. A refusal is worded "cannot connect to host:port"
+on both, with nothing from the operating system in it, so the differential
+law holds on the failure too. The browser has no sockets and refuses as it
+already did for `listen`.
+
+tests/a_program_dials_out.rs plays the server: it answers a greeting with
+nine bytes framed like a Postgres message, one of them 0xff, and both engines
+print the same nine values. Watched red with the native byte read decoding
+as text (the 0xff arrived as U+FFFD) and with the interpreter's refusal
+worded differently. tests/sockets_say_one_thing.rs gains `read_bytes` on a
+handle that is not a connection.
+
+Every binary links the runtime, so each benchmark's text grows by 752 bytes
+(text 5,635,099 summed), and its instructions by a few hundred, which is
+layout: no benchmark dials out. They land at work_basket 18,295,655,
+work_deepbench 198,243,012, work_digestbench 4,104,311, work_encodebench
+2,335,339,667, work_escapebench 40,308,822, work_indexbench 1,887,608,
+work_jsonbench 549,337,631, work_livebench 938,655,028, work_oneshot
+9,979,724, work_pendbench 154,124,432, work_readbench 4,583,812, work_runbench
+825,011,048, work_scanbench 266,891 and work_widebench 28,701,733.
+
+`lib/net` is embedded in the compiler, so the compile rows rise too:
+compile_instructions 24,061,034 (+3,157), entry_instructions 71,170,086
+(+4,535), library_instructions 70,857,236 (+4,409), emit_instructions
+5,599,525 (+1,738), codegen_instructions_dev 116,797,274 (+63,365),
+codegen_instructions_release 371,551,798 (+222), interp_instructions
+571,786,910 (+137,169), browser_compile_instructions 343,160,078 (+28,230)
+and browser_run_instructions 64,598,060 (+27). Welfare fell by less than
+0.01, and the floor moves to 95.568 under the rule for a feature a ruling
+requires.

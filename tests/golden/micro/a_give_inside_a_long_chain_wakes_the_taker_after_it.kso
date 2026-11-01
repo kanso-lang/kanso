@@ -1,0 +1,20 @@
+import "std/pool"
+
+# A give that is the first link of a long chain wakes the fiber parked on the
+# pool only once the chain has run, because the whole chain is one step of its
+# fiber. Natively the chain stops part way to be staged; the parked fiber,
+# woken by the give and spawned first, must not run in that gap.
+fn taker p
+  pool/take p .> (v -> print "taker got {v}")
+
+fn churned n
+  if (n == 0) (print "giver done") (effect n .> (_ -> churned (n - 1)))
+
+fn giver p
+  pool/give p "cup" .> (_ -> churned 20000)
+
+fn both p
+  taker p
+  giver p
+
+pub play = pool/make 1 .> both
