@@ -1139,3 +1139,15 @@ browser_compile_instructions 349,229,303, browser_compile_peak_bytes
 3,801,088, measured with the rustc 1.98.1 the golden names. runbench's
 emitted rows grew by the shape's 15 functions. The floor is re-based to what
 these rows score, since the change is only to what is measured.
+
+The run program's other counters move with the 16,000 groups and the
+handlers' pages: run_allocs 1,930,504, run_alloc_bytes 237,915,969,
+run_arena_blocks 15, run_arena_peak_bytes 14,680,064, run_perm_allocs 131,
+run_beat_iters 211,300, run_survive_slots 4,703, run_push_mut_fast
+1,195,311, run_push_mut_slow 1,645,465, run_bytes_malloc 7,868,
+run_str_scans 19,402, run_str_scan_bytes 18,667,266, run_buf_reuse 157,
+run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
+92,421,040 and run_spare_peak_bytes 14,155,792. runbench's 15 new functions
+take the emitted rows of the other benchmarks to emitted_other_defines
+2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
+emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
