@@ -11,7 +11,7 @@ extra_css: /book/book.css
 
 <h2>a promise</h2>
 
-<p>every program in this book was run before it was printed, and every output panel shows what actually came back—including the failures, especially the failures. half of kanso's value is its compile errors, so this book treats a red diagnostic as a feature demo, not an apology. the samples live in the repository under <code>docs/book/samples/</code>, one file per panel, with the captured output beside each; a check script re-runs the whole corpus, so a panel whose output drifts from the language fails a build before it can lie on a page.</p>
+<p>every program in this book was run before it was printed, and every output panel shows what actually came back, failures included. much of kanso's value is in its compile errors, so the book shows them as often as it shows working programs. the samples live in the repository under <code>docs/book/samples/</code>, one file per panel, with the captured output beside each; a check script re-runs the whole corpus, so a panel whose output drifts from the language fails the build.</p>
 
 <h2>who this is for</h2>
 
@@ -27,7 +27,7 @@ extra_css: /book/book.css
 
 <p><strong>part iv—under the hood</strong> is the performance story: how a pure language with no memory syntax decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture, and how cost goldens and structural specs hold those results in place.</p>
 
-<p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, the complete canonical-form law, and recipes for everyday jobs.</p>
+<p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, the complete canonical-form law, recipes for everyday jobs, and the idioms the compiler leaves to you.</p>
 
 <ul class="book-toc">
 {%- for section in site.data.book %}

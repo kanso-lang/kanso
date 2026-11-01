@@ -38,3 +38,4 @@
     - { num: "b", slug: "appb", title: "builtin reference", blurb: "the whole surface: the ambient names, the std modules and the list vocabulary" }
     - { num: "c", slug: "appc", title: "canonical form", blurb: "the formatting law: one rendering per program, enforced" }
     - { num: "d", slug: "appd", title: "recipes", blurb: "short programs for everyday jobs, each with its output" }
+    - { num: "e", slug: "appe", title: "idioms", blurb: "the decisions the compiler leaves to you, each with the chapter that argues for it" }

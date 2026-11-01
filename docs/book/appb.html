@@ -625,11 +625,11 @@ third</code></pre>
 
 <h3 id="b-random"><code>math/random</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>math/random int → io (yields int)</code></p>
-<p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.&gt;</code>.</p>
+<p>a description that yields an integer in the half-open range <code>[0, bound)</code>. a bare run seeds the generator from the clock, so each run draws different numbers. set <code>KANSO_SEED</code> to an integer and every draw replays exactly, on either engine; <a href="flow.html">the flow chapter</a> shows it. pipe the yielded value into a function with <code>.&gt;</code>.</p>
 
 <h3 id="b-sleep"><code>time/sleep</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>time/sleep int → io</code></p>
-<p>a description of pausing for a number of milliseconds. under the deterministic scheduler it advances virtual time rather than wall-clock time, so a program that "sleeps" is still instant to test. sequence it with <code>.&gt; (_ -&gt; ...)</code>.</p>
+<p>a description of pausing for a number of milliseconds. the pause is real: <code>time/sleep 1500</code> takes a second and a half on the clock, on either engine. other fibers run while one sleeps. sequence it with <code>.&gt; (_ -&gt; ...)</code>.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">timing.kso</div>
