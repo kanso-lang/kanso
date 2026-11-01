@@ -1122,7 +1122,8 @@ work_escapebench 40,309,374, work_indexbench 1,888,160, work_scanbench
 deepbench (197,807,203), runbench (846,331,178), jsonbench, encodebench,
 digestbench, pendbench, readbench and widebench fell. clang compiles the
 larger runtime at the dev tier in codegen_instructions_dev 116,928,442 and
-at the release tier in 371,713,655, fewer than before.
+at the release tier in 371,713,655, fewer than before. The browser runs the
+corpus in browser_run_instructions 64,598,017, 44 fewer.
 
 Open: natively a group still runs under one beat, grow-only until the group
 ends, and a server's group never ends. A native fork-per-accept server held

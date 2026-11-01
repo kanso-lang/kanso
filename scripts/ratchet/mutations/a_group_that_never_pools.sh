@@ -7,6 +7,6 @@ set -e
   echo "the group's pool call moved; this mutation needs rewriting" >&2
   exit 1
 }
-[ "$(grep -c 'k_ahead_pool(first);' src/runtime/effects.c)" -eq 2 ] || exit 1
-sed -i "/an idle point runs the work-ahead pool/,/^#endif/ s/k_ahead_pool(first);/(void)first;/" src/runtime/effects.c
-[ "$(grep -c 'k_ahead_pool(first);' src/runtime/effects.c)" -eq 1 ] || exit 1
+[ "$(grep -c 'k_ahead_pool(first_idle);' src/runtime/effects.c)" -eq 1 ] || exit 1
+sed -i "/an idle point runs the work-ahead pool/,/^#endif/ s/k_ahead_pool(first_idle);/(void)first_idle;/" src/runtime/effects.c
+[ "$(grep -c 'k_ahead_pool(first_idle);' src/runtime/effects.c)" -eq 0 ] || exit 1
