@@ -657,8 +657,8 @@ static long long k_rng_below(long long n) {
    needs no coroutine. Mirrors eval.rs's Step exactly, with one addition the
    interpreter has no use for: blocked=3 is a chain that ran long within its
    step and stopped so the scheduler could reclaim what the links before left
-   behind. `cont` is the rest of it, and the same fiber steps again at once,
-   so nothing about the order of the program changes (#2276). */
+   behind. `cont` is the rest of it, and the scheduler picks the same fiber
+   again at once, so nothing about the order of the program changes (#2276). */
 typedef struct {
     int blocked;
     unsigned long long ms;
@@ -1512,6 +1512,11 @@ static KValue k_kill_kid(KValue handle) {
     return k_done();
 }
 
+/* Links walked inside steps, so the drift test below runs on one link in 256:
+   asked after every link it cost runbench 650,000 instructions, and a stage
+   that comes 255 links late still keeps the region inside its budget. */
+static unsigned k_step_links;
+
 static KStep k_step(KDesc* d) {
     /* A chain whose steps never block runs inside one step, and each link
        that answers another description goes round this loop rather than into
@@ -1644,7 +1649,7 @@ static KStep k_step(KDesc* d) {
             }
             KValue next = k_worded_step(d->dtag, in.value, d->y);
             if (next.tag == K_DESC) {
-                if (k_sched_due()) {
+                if ((++k_step_links & 255) == 0 && k_sched_due()) {
                     KStep s = {3, 0, next, k_none()};
                     return s;
                 }
@@ -1887,13 +1892,13 @@ static KValue k_schedule(KDesc* join) {
             now = f.wake[pick];
         }
         KStep s = k_step(k_as_desc(f.work[pick]));
-        while (s.blocked == 3) {
-            f.work[pick] = s.cont;
-            k_sched_stage(&f, groups, ngroups);
-            s = k_step(k_as_desc(f.work[pick]));
-        }
-        if (s.blocked == 1) {
-            f.wake[pick] = now + s.ms;
+        /* A chain that stopped to be staged (3) keeps its wake time. The
+           stage at the top of the loop reclaims, and the pick that follows
+           falls on this fiber again, since nothing else moved. A loop here
+           of its own did the same and cost runbench 2.5 million
+           instructions in the scheduler's code around it. */
+        if (s.blocked == 1 || s.blocked == 3) {
+            if (s.blocked == 1) f.wake[pick] = now + s.ms;
             f.work[pick] = s.cont;
         } else if (s.blocked == 2) {
             int g;

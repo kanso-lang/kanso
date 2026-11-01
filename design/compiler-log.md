@@ -1218,12 +1218,22 @@ the whole chain still runs within the step it ran in.
 
 The loop exposed the native step's second problem. The scheduler reclaims
 only between steps, so a long chain kept every link's garbage until it ended:
-140 bytes a link, 425 MB at three million. The step now asks, after each
-link, whether the region has drifted as far as the scheduler lets it before
+140 bytes a link, 425 MB at three million. Every 256 links the step now
+asks whether the region has drifted as far as the scheduler lets it before
 staging. When it has, the step returns the rest of the chain as a new kind of
-step, the scheduler stages, and the same fiber steps again at once with
-nothing else run in between. Peak memory for the reproduction is 10 MB at a
-thousand links and at three million.
+step. The scheduler keeps the fiber's wake time, stages at the top of its
+loop, and picks the same fiber again, since nothing else moved. Peak memory
+for the reproduction is 10 MB at a thousand links and at three million.
+
+The first version cost runbench 2.1 million instructions (CI's reading,
+891,782,287 to 893,890,434). Measured under callgrind in this container, which
+read runbench within a hundred instructions of CI: the loop alone made it
+1.28 million cheaper than main. Asking about drift after every link cost
+650,000, and a separate loop in the scheduler for the new kind of step cost
+2.5 million in the scheduler code around it, which is inlined into `k_exec`.
+Asking every 256 links, and folding the new kind into the branch that already
+handles a blocked fiber, leaves runbench 685,000 instructions under main
+here.
 
 Specs, each watched red against main:
 
@@ -1237,9 +1247,6 @@ Specs, each watched red against main:
   `arena_blocks=1` and `arena_peak_bytes=1048576`. On main it reads 4 blocks
   and 4 MB.
 
-Two existing goldens moved, each by 1,152 staged bytes, because a stage that
-falls due inside a step now runs there.
-`a_server_loop_holds_what_one_request_holds` reads `evac_bytes` 16336 where it
-read 17488. The run program
-(`bench/cost_golden_run.txt`) falls the same 1,152 in `alloc_bytes`,
-`evac_bytes` and `sh_buf`; its peak rows, which welfare reads, do not move.
+No existing allocation golden moves. With the test after every link, the
+server loop and the run program each staged 1,152 bytes fewer; asked every 256
+links, both read what they read on main.
