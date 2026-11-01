@@ -1257,4 +1257,6 @@ instructions, `interp_instructions` 622,295,226, the price of one loop in
 place of three recursive arms. The runtime's machine code is 1,568 bytes
 longer in every benchmark, `text` 5,777,120, and the dev tier compiles it in
 `codegen_instructions_dev` 116,955,821 while the release tier falls to
-371,732,303. Welfare rises, and the floor is banked with it.
+371,732,303. The tab runs the same runtime and gains the same loop: it runs the
+interpreted corpus 205,146 instructions cheaper, at 78,156,405. Welfare rises,
+and the floor is banked with it.
