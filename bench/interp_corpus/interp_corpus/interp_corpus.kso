@@ -1,6 +1,7 @@
 import "std/json"
 import "std/list"
 import "std/text"
+import "std/time"
 
 # A list held in a record and pushed onto from one arm of an `if`, which
 # `branched` runs; the record is the list and its count.
@@ -22,7 +23,8 @@ pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
-  print "interp {rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
+  told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
+  served 2000 .> (_ -> print "interp {told}")
 
 fn rounds n
   source = document 220
@@ -236,3 +238,16 @@ fn tagging s
 
 fn relayed n
   length (tagged "ab" 1 "" n)
+
+# A server's loop without the network: each pass forks a small handler beside
+# the rest of the loop, so the groups nest as deep as the loop has run.
+fn handled n
+  page = text/join ["<p>" "request {n}" "</p>"] ""
+  time/sleep 0 .> (_ -> effect (length page))
+
+fn served 0
+  effect 0
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
