@@ -1832,7 +1832,10 @@ static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
     kc->at_blocks = (const void*)k_blocks;
 }
 
-static KValue k_schedule(KDesc* join) {
+/* Kept out of line: k_exec is the one caller, and inlining this loop there
+   widens every k_exec call's frame and prologue, which a program that never
+   forks pays on each effect it runs. */
+static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
     /* The live fibers in spawn order, which breaks ties between equal wake
        times. A join a fiber reaches puts its members where that fiber stood,
        so a nested group that never waits runs as it would inline, and the
