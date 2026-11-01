@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 15</span>
 <h1>fast by construction</h1>
 
-<p>nine chapters have asked you to give things up. no mutation. no loops—recursion is the only way to repeat yourself. seven small overloads where another language writes one <code>switch</code>. a reasonable person reads all that and waits for the bill: elegance this thorough must cost something once the program actually runs.</p>
+<p>the earlier chapters asked you to give things up. no mutation. no loops—recursion is the only way to repeat yourself. seven small overloads where another language writes one <code>switch</code>. a reasonable person reads all that and waits for the bill: elegance this thorough must cost something once the program actually runs.</p>
 
 <table class="bench-table">
   <caption>milliseconds per decode, min of an interleaved best-of-25 run, one 188kb json document, m-series mac. the recipe is in the repo—you can run it yourself.</caption>
@@ -22,13 +22,13 @@ extra_css: /book/book.css
   </tbody>
 </table>
 
-<p>the tax is negative. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. the rest of the chapter answers two questions: how, and how do we keep it true.</p>
+<p>none of it costs speed here. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. the rest of the chapter answers two questions: how, and how do we keep it true.</p>
 
-<p>the honest asterisks, up front. the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 5.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
+<p>the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 5.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
 
 <h2>two other people's harnesses</h2>
 
-<p>the table runs every decoder through one harness so nobody gets a hometown advantage. still, it's worth watching the two rivals that matter run on their own turf, so you trust that the bar is real and not something we drew ourselves.</p>
+<p>the table runs every decoder through one harness so nobody gets a hometown advantage. it also helps to see the two main rivals on their own benchmarks, so you can check the bar against numbers we did not produce.</p>
 
 <p>the easy bar is go's standard library—one of the most exercised json decoders in production anywhere. here it is on its own benchmark, same 188kb fixture:</p>
 
@@ -101,7 +101,7 @@ kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total<
 <p>the word for turning "one function that works for many types" into "a separate specialized copy for each concrete type actually used" is <strong>monomorphization</strong>. that's all it is—the compiler saw exactly which bytes flow through <code>_value_for</code> and stamped out the specialized switchboard, so dispatch, the "only switch" from chapter 03, costs nothing at runtime. you can watch it happen on a program small enough to hold in one hand.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">samples/ch10/classify.kso</div>
+  <div class="code-panel-title">samples/fast/classify.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">kind</span> <span class="n">43</span>
   <span class="s">"plus"</span>
 
@@ -165,10 +165,10 @@ kanso run bench/jsonbench --interp  0.26s user 0.00s system 99% cpu 0.267 total<
 
 <h2>a loop that isn't a loop</h2>
 
-<p>recursion is kanso's only way to repeat, so the compiler can't treat tail calls as a nicety it applies when it's in a good mood. a call in tail position—the last thing a function does before it returns—becomes a jump that reuses the current stack frame instead of stacking a new one on top. here is mutual recursion ten million frames deep:</p>
+<p>recursion is kanso's only way to repeat, so the compiler cannot treat tail calls as an optional optimization. a call in tail position—the last thing a function does before it returns—becomes a jump that reuses the current stack frame instead of stacking a new one on top. here is mutual recursion ten million frames deep:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">samples/ch10/pingpong.kso</div>
+  <div class="code-panel-title">samples/fast/pingpong.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">even?</span> <span class="n">0</span>
   <span class="t">true</span>
 
@@ -284,7 +284,7 @@ sum 500500</code></pre>
   </div>
 </div>
 
-<p>a thousand pushes cost seven allocations. not "about seven." not "seven on my laptop." seven—run it again, run it on a different chip, a loaded cpu, a cold cache, and every one of those integers comes back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
+<p>a thousand pushes cost seven allocations, exactly. run it again, on a different chip, on a loaded cpu or with a cold cache, and every one of those integers comes back the same. they have no error bars: they are as reproducible as the program's printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
 
 <p>the same instrument, pointed at the gauntlet, gives the first lines of the file ci keeps for it:</p>
 
@@ -344,7 +344,7 @@ beat_iters=<span data-golden="decode.beat_iters">150</span></code></pre>
 <h2>exercises</h2>
 
 <ol class="exercises">
-  <li>build <code>samples/ch10/counters.kso</code>, then change the loop count from <code>1000</code> to <code>2000</code> and rebuild. run it under <code>KANSO_COUNTERS=1</code> and write down the new <code>allocs</code> and <code>alloc_bytes</code>. from your two data points, work out the list's growth policy: does doubling the element count double the allocation count, or add a fixed few?</li>
+  <li>build <code>samples/fast/counters.kso</code>, then change the loop count from <code>1000</code> to <code>2000</code> and rebuild. run it under <code>KANSO_COUNTERS=1</code> and write down the new <code>allocs</code> and <code>alloc_bytes</code>. from your two data points, work out the list's growth policy: does doubling the element count double the allocation count, or add a fixed few?</li>
   <li>write your own two-overload tail-recursive function—say, a countdown that prints as it goes—build it, and grep the <code>.ll</code> for <code>musttail call</code>. now rewrite one arm so its recursive call is <em>not</em> the last thing it does—wrap the call in a bit of arithmetic—rebuild, and grep again. say what happened to the count, and what that predicts about the stack at ten million frames.</li>
   <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>47 &lt; c and c &lt; 58</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
   <li>the cost golden in <code>bench/cost_golden.txt</code> is committed. break it on purpose: edit one integer, run the counters, and diff the two. then describe what a real regression would have to change in the program to produce that same diff—and why a wall-clock benchmark would have waved it through.</li>
