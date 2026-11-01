@@ -1832,7 +1832,15 @@ static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
     kc->at_blocks = (const void*)k_blocks;
 }
 
+/* Kept out of line natively: k_exec is the one caller, and inlining this
+   loop there widens every k_exec call's frame and prologue, which a program
+   that never forks pays on each effect it runs. Under wasm the inlined loop
+   is the cheaper one, so the tab keeps it. */
+#ifdef __wasm__
 static KValue k_schedule(KDesc* join) {
+#else
+static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
+#endif
     /* The live fibers in spawn order, which breaks ties between equal wake
        times. A join a fiber reaches puts its members where that fiber stood,
        so a nested group that never waits runs as it would inline, and the
