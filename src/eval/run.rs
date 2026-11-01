@@ -224,22 +224,31 @@ impl<'a> Interp<'a> {
     /// Members' *values* are discarded (a group yields none); their failures
     /// accumulate, exactly as the sequential Join did.
     fn schedule(&self, join: &Desc, executor: &mut dyn Executor) -> EvalResult {
-        let mut fibers = Vec::new();
-        flatten_join(join, &mut fibers);
-        // (wake_time, spawn_index, remaining work)
-        let mut ready: Vec<(u64, usize, Rc<Desc>)> =
-            fibers.into_iter().enumerate().map(|(i, d)| (0u64, i, d)).collect();
+        let mut members = Vec::new();
+        flatten_join(join, &mut members);
+        // The live fibers in spawn order, which breaks ties between equal
+        // wake times. A join a fiber reaches puts its members where that
+        // fiber stood, so a nested group that never waits runs exactly as it
+        // would inline, and what follows the join takes the place of the
+        // member that finishes last.
+        let mut fibers: Vec<Fiber> =
+            members.into_iter().map(|work| Fiber { wake: 0, work, group: 0 }).collect();
+        let mut groups =
+            vec![Group { remaining: fibers.len(), failures: Vec::new(), rejoin: None }];
         let mut now = 0u64;
         // wall-credit: real time spent computing counts against a pending
         // wait, so compute overlaps sleeps in wall-clock. the transcript
         // stays purely logical — only the physical wait shrinks.
         #[cfg(not(target_arch = "wasm32"))]
         let wall_start = std::time::Instant::now();
-        let mut failures: Vec<Value> = Vec::new();
-        while !ready.is_empty() {
-            let pick =
-                (0..ready.len()).min_by_key(|&i| (ready[i].0, ready[i].1)).expect("non-empty");
-            let (wake, idx, desc) = ready.remove(pick);
+        while !fibers.is_empty() {
+            let mut pick = 0;
+            for (at, fiber) in fibers.iter().enumerate() {
+                if fiber.wake < fibers[pick].wake {
+                    pick = at;
+                }
+            }
+            let wake = fibers[pick].wake;
             if wake > now {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
@@ -252,15 +261,51 @@ impl<'a> Interp<'a> {
                 executor.sleep(wake - now);
                 now = wake;
             }
-            match self.step(&desc, executor)? {
-                Step::Done(value) => {
-                    if is_failure(&value) {
-                        failures.push(value);
+            let work = fibers[pick].work.clone();
+            match self.step(&work, executor)? {
+                Step::Blocked(ms, cont) => {
+                    fibers[pick].wake = now + ms;
+                    fibers[pick].work = cont;
+                }
+                Step::Forked(spawned, rejoin) => {
+                    let group = groups.len();
+                    groups.push(Group {
+                        remaining: spawned.len(),
+                        failures: Vec::new(),
+                        rejoin: Some((rejoin, fibers[pick].group)),
+                    });
+                    let at = pick;
+                    fibers.remove(at);
+                    for (k, work) in spawned.into_iter().enumerate() {
+                        fibers.insert(at + k, Fiber { wake: now, work, group });
                     }
                 }
-                Step::Blocked(ms, cont) => ready.push((now + ms, idx, cont)),
+                Step::Done(value) => {
+                    let group = fibers[pick].group;
+                    fibers.remove(pick);
+                    if is_failure(&value) {
+                        groups[group].failures.push(value);
+                    }
+                    groups[group].remaining -= 1;
+                    // The member that finishes a group hands its place to the
+                    // work after the join, in the group the fiber that
+                    // reached the join belonged to; that fiber still counts
+                    // there, so the parent's count is left alone.
+                    if groups[group].remaining == 0 {
+                        if let Some((rejoin, parent)) = groups[group].rejoin.take() {
+                            let failures = std::mem::take(&mut groups[group].failures);
+                            let yielded = failures
+                                .into_iter()
+                                .reduce(accumulate_failures)
+                                .unwrap_or(Value::NoneV);
+                            let work = rejoin(Rc::new(Desc::Settled(yielded)));
+                            fibers.insert(pick, Fiber { wake: now, work, group: parent });
+                        }
+                    }
+                }
             }
         }
+        let failures = std::mem::take(&mut groups[0].failures);
         Ok(failures.into_iter().reduce(accumulate_failures).unwrap_or(Value::NoneV))
     }
 
@@ -272,6 +317,14 @@ impl<'a> Interp<'a> {
         let origin = Span::at(0, 0);
         match &**desc {
             Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
+            // A join the fiber reaches is the scheduler's to run, beside the
+            // fibers already running, rather than a second scheduler inside
+            // this step that the others wait on (#2263).
+            Desc::Join(..) => {
+                let mut members = Vec::new();
+                flatten_join(desc, &mut members);
+                Ok(Step::Forked(members, Rc::new(|done| done)))
+            }
             // A fiber waiting for a connection is a fiber with nothing to do:
             // it goes back in the queue and the group's other statements run,
             // which is how anything ever connects to it.
@@ -311,6 +364,13 @@ impl<'a> Interp<'a> {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Bind(cont, callee.clone()))))
                 }
+                Step::Forked(members, rejoin) => {
+                    let callee = callee.clone();
+                    Ok(Step::Forked(
+                        members,
+                        Rc::new(move |done| Rc::new(Desc::Bind(rejoin(done), callee.clone()))),
+                    ))
+                }
                 Step::Done(yielded) => {
                     let next =
                         self.worded_step(Word::Bind, yielded, callee, &Raised::default(), origin)?;
@@ -324,6 +384,15 @@ impl<'a> Interp<'a> {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
                 }
+                Step::Forked(members, rejoin) => {
+                    let (at, hako) = (at.clone(), hako.clone());
+                    Ok(Step::Forked(
+                        members,
+                        Rc::new(move |done| {
+                            Rc::new(Desc::Insisted(rejoin(done), at.clone(), hako.clone()))
+                        }),
+                    ))
+                }
                 Step::Done(v) => Ok(Step::Done(restamped(v, at, hako))),
             },
             Desc::Rescue(inner, callee, raised) => match self.step(inner, executor)? {
@@ -331,6 +400,15 @@ impl<'a> Interp<'a> {
                     ms,
                     Rc::new(Desc::Rescue(cont, callee.clone(), raised.clone())),
                 )),
+                Step::Forked(members, rejoin) => {
+                    let (callee, raised) = (callee.clone(), raised.clone());
+                    Ok(Step::Forked(
+                        members,
+                        Rc::new(move |done| {
+                            Rc::new(Desc::Rescue(rejoin(done), callee.clone(), raised.clone()))
+                        }),
+                    ))
+                }
                 Step::Done(yielded) => {
                     let next = self.worded_step(Word::Rescue, yielded, callee, raised, origin)?;
                     match next {
@@ -344,6 +422,15 @@ impl<'a> Interp<'a> {
                     ms,
                     Rc::new(Desc::Annotate(cont, callee.clone(), raised.clone())),
                 )),
+                Step::Forked(members, rejoin) => {
+                    let (callee, raised) = (callee.clone(), raised.clone());
+                    Ok(Step::Forked(
+                        members,
+                        Rc::new(move |done| {
+                            Rc::new(Desc::Annotate(rejoin(done), callee.clone(), raised.clone()))
+                        }),
+                    ))
+                }
                 Step::Done(yielded) => {
                     let next = self.worded_step(Word::Annotate, yielded, callee, raised, origin)?;
                     match next {
@@ -352,10 +439,28 @@ impl<'a> Interp<'a> {
                     }
                 }
             },
-            // leaf effects and nested joins run to completion synchronously
+            // leaf effects run to completion synchronously
             _ => Ok(Step::Done(self.execute(desc, executor)?)),
         }
     }
+}
+
+/// A fiber the scheduler holds: when it may run next, what it has left, and
+/// the group it counts toward.
+struct Fiber {
+    wake: u64,
+    work: Rc<Desc>,
+    group: usize,
+}
+
+/// A parallel group: how many members are still running, the failures the
+/// finished ones yielded, and, for a join a fiber reached, the work after it
+/// with the group that fiber belonged to. The group a scheduler starts with
+/// has no work after it; its failures are what the scheduler answers.
+struct Group {
+    remaining: usize,
+    failures: Vec<Value>,
+    rejoin: Option<(Rejoin, usize)>,
 }
 
 /// Collect the members of a (possibly nested) parallel group left-to-right —

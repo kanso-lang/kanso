@@ -649,11 +649,20 @@ static long long k_rng_below(long long n) {
     return n <= 0 ? 0 : (long long)(k_rng_next() % (uint64_t)n);
 }
 
-/* One step of a fiber: it finished (blocked=0, value set) or blocked on a
-   `sleep` (blocked=1, ms + cont). Blocking threads the continuation up through
-   Bind, so `sleep` may sit anywhere and suspension needs no coroutine.
-   Mirrors eval.rs's Step exactly. */
-typedef struct { int blocked; unsigned long long ms; KValue cont; KValue value; } KStep;
+/* One step of a fiber: it finished (blocked=0, value set), blocked on a
+   `sleep` (blocked=1, ms + cont), or reached a join (blocked=2: `join` holds
+   the group, `cont` the work after it, and `hole` the settled node in that
+   work the group's result goes into, #2263). Blocking threads the
+   continuation up through Bind, so `sleep` may sit anywhere and suspension
+   needs no coroutine. Mirrors eval.rs's Step exactly. */
+typedef struct {
+    int blocked;
+    unsigned long long ms;
+    KValue cont;
+    KValue value;
+    KDesc* join;
+    KDesc* hole;
+} KStep;
 
 static KValue k_schedule(KDesc* join);
 static KStep k_step(KDesc* d);
@@ -1621,31 +1630,99 @@ static KStep k_step(KDesc* d) {
         case 29: {
             KStep in = k_step(k_as_desc(d->x));
             if (in.blocked) {
-                KStep s = {1, in.ms, k_mkdesc(d->dtag, in.cont, d->y), k_none()};
-                return s;
+                in.cont = k_mkdesc(d->dtag, in.cont, d->y);
+                return in;
             }
             KValue next = k_worded_step(d->dtag, in.value, d->y);
             if (next.tag == K_DESC) return k_step(k_as_desc(next));
             KStep s = {0, 0, k_none(), next};
             return s;
         }
+        case 7: {
+            /* A join the fiber reaches is the scheduler's to run beside the
+               fibers already running, rather than a second scheduler inside
+               this step that the others wait on (#2263). The work after it
+               starts as a settled node the group's result is written into. */
+            KValue hole = k_settled(k_none());
+            KStep s = {2, 0, hole, k_none(), d, k_as_desc(hole)};
+            return s;
+        }
         default: {
-            /* leaf effect or nested join: run to completion synchronously */
+            /* leaf effect: run to completion synchronously */
             KStep s = {0, 0, k_none(), k_exec(d)};
             return s;
         }
     }
 }
 
-static void k_flatten_join(KDesc* d, KValue* out, int* n, int cap) {
+/* The members of a (possibly nested) group left to right, appended to a
+   growable array: the spawn order ties are broken by. */
+static void k_flatten_join(KDesc* d, KValue** out, int* n, int* cap) {
     if (d->dtag == 7) {
         k_flatten_join(k_as_desc(d->x), out, n, cap);
         k_flatten_join(k_as_desc(d->y), out, n, cap);
     } else {
-        if (*n >= cap) k_die("parallel group exceeds the scheduler's fiber cap");
+        if (*n >= *cap) {
+            *cap = *cap ? *cap * 2 : 8;
+            *out = realloc(*out, sizeof(KValue) * (size_t)*cap);
+            if (!*out) k_die("out of memory growing a parallel group");
+        }
         KValue v; v.tag = K_DESC; v.payload = k_ptr(d);
-        out[(*n)++] = v;
+        (*out)[(*n)++] = v;
     }
+}
+
+/* The fibers a scheduler holds, in spawn order: when each may run next, what
+   it has left, and the group it counts toward. */
+typedef struct {
+    unsigned long long* wake;
+    KValue* work;
+    int* group;
+    int n;
+    int cap;
+} KFibers;
+
+static void k_fibers_insert(KFibers* f, int at, unsigned long long wake, KValue work, int group) {
+    if (f->n >= f->cap) {
+        f->cap = f->cap ? f->cap * 2 : 8;
+        f->wake = realloc(f->wake, sizeof(unsigned long long) * (size_t)f->cap);
+        f->work = realloc(f->work, sizeof(KValue) * (size_t)f->cap);
+        f->group = realloc(f->group, sizeof(int) * (size_t)f->cap);
+        if (!f->wake || !f->work || !f->group) k_die("out of memory growing a parallel group");
+    }
+    int tail = f->n - at;
+    memmove(f->wake + at + 1, f->wake + at, sizeof(unsigned long long) * (size_t)tail);
+    memmove(f->work + at + 1, f->work + at, sizeof(KValue) * (size_t)tail);
+    memmove(f->group + at + 1, f->group + at, sizeof(int) * (size_t)tail);
+    f->wake[at] = wake;
+    f->work[at] = work;
+    f->group[at] = group;
+    f->n++;
+}
+
+static void k_fibers_remove(KFibers* f, int at) {
+    int tail = f->n - at - 1;
+    memmove(f->wake + at, f->wake + at + 1, sizeof(unsigned long long) * (size_t)tail);
+    memmove(f->work + at, f->work + at + 1, sizeof(KValue) * (size_t)tail);
+    memmove(f->group + at, f->group + at + 1, sizeof(int) * (size_t)tail);
+    f->n--;
+}
+
+/* A parallel group: members still running, the failures the finished ones
+   yielded, and for a join a fiber reached, the work after it, the settled
+   node the result goes into, and the group that fiber counted toward. The
+   group a scheduler starts with has no parent (-1). */
+typedef struct {
+    int remaining;
+    KValue result;
+    KValue cont;
+    KDesc* hole;
+    int parent;
+} KGroup;
+
+static KValue k_failed_too(KValue so_far, KValue v) {
+    if (k_not_failure(v)) return so_far;
+    return so_far.tag == K_ERR ? k_accumulate_failures(so_far, v) : v;
 }
 
 /* Run a parallel group as cooperative green threads: each member a fiber,
@@ -1664,31 +1741,40 @@ static long long k_ms_since(const struct timespec* t0) {
 }
 
 static KValue k_schedule(KDesc* join) {
-    int n = 0;
-    KValue tmp[256];
-    k_flatten_join(join, tmp, &n, 256);
-    unsigned long long* wake = malloc(sizeof(unsigned long long) * n);
-    KValue* fiber = malloc(sizeof(KValue) * n);
-    int* done = malloc(sizeof(int) * n);
-    for (int i = 0; i < n; i++) { wake[i] = 0; fiber[i] = tmp[i]; done[i] = 0; }
+    /* The live fibers in spawn order, which breaks ties between equal wake
+       times. A join a fiber reaches puts its members where that fiber stood,
+       so a nested group that never waits runs as it would inline, and the
+       work after the join takes the place of the member that finishes last. */
+    KValue* first = NULL;
+    int n = 0, cap = 0;
+    k_flatten_join(join, &first, &n, &cap);
+    KFibers f = {NULL, NULL, NULL, 0, 0};
+    for (int i = 0; i < n; i++) k_fibers_insert(&f, i, 0, first[i], 0);
+    free(first);
+    int ngroups = 1, gcap = 8;
+    KGroup* groups = malloc(sizeof(KGroup) * (size_t)gcap);
+    if (!groups) k_die("out of memory growing a parallel group");
+    groups[0].remaining = n;
+    groups[0].result = k_none();
+    groups[0].cont = k_none();
+    groups[0].hole = NULL;
+    groups[0].parent = -1;
     unsigned long long now = 0;
     /* wall-credit: real time spent computing counts against a pending
        wait, so compute overlaps sleeps in wall-clock. the transcript
        stays purely logical — only the physical wait shrinks. */
     struct timespec sched_t0;
     clock_gettime(CLOCK_MONOTONIC, &sched_t0);
-    KValue result = k_none();
-    int remaining = n;
     k_beat_push();
-    while (remaining > 0) {
-        int pick = -1;
-        for (int i = 0; i < n; i++) {
-            if (!done[i] && (pick < 0 || wake[i] < wake[pick])) pick = i;
+    while (f.n > 0) {
+        int pick = 0;
+        for (int i = 1; i < f.n; i++) {
+            if (f.wake[i] < f.wake[pick]) pick = i;
         }
-        if (wake[pick] > now) {
+        if (f.wake[pick] > now) {
             if (getenv("KANSO_SCHED_DEBUG")) {
                 fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%lld\n",
-                        pick, wake[pick], k_ms_since(&sched_t0));
+                        pick, f.wake[pick], k_ms_since(&sched_t0));
             }
             /* loop to the deadline: usleep may return early on a signal */
             k_out_settle();
@@ -1696,32 +1782,55 @@ static KValue k_schedule(KDesc* join) {
             /* Every side is waiting: an idle point runs the work-ahead pool
                (#1856), as a bare sleep does. The wall-credit below counts the
                pool's time against the wait. */
-            int first = !k_ahead_ran;
+            int first_idle = !k_ahead_ran;
             k_ahead_ran = 1;
-            k_ahead_pool(first);
+            k_ahead_pool(first_idle);
 #endif
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
-                if ((long long)wake[pick] <= elapsed) break;
-                usleep((useconds_t)(((long long)wake[pick] - elapsed) * 1000));
+                if ((long long)f.wake[pick] <= elapsed) break;
+                usleep((useconds_t)(((long long)f.wake[pick] - elapsed) * 1000));
             }
-            now = wake[pick];
+            now = f.wake[pick];
         }
-        KStep s = k_step(k_as_desc(fiber[pick]));
-        if (s.blocked) {
-            wake[pick] = now + s.ms;
-            fiber[pick] = s.cont;
+        KStep s = k_step(k_as_desc(f.work[pick]));
+        if (s.blocked == 1) {
+            f.wake[pick] = now + s.ms;
+            f.work[pick] = s.cont;
+        } else if (s.blocked == 2) {
+            if (ngroups >= gcap) {
+                gcap *= 2;
+                groups = realloc(groups, sizeof(KGroup) * (size_t)gcap);
+                if (!groups) k_die("out of memory growing a parallel group");
+            }
+            int g = ngroups++;
+            KValue* members = NULL;
+            int m = 0, mcap = 0;
+            k_flatten_join(s.join, &members, &m, &mcap);
+            groups[g].remaining = m;
+            groups[g].result = k_none();
+            groups[g].cont = s.cont;
+            groups[g].hole = s.hole;
+            groups[g].parent = f.group[pick];
+            k_fibers_remove(&f, pick);
+            for (int i = 0; i < m; i++) k_fibers_insert(&f, pick + i, now, members[i], g);
+            free(members);
         } else {
-            done[pick] = 1;
-            remaining--;
-            if (!k_not_failure(s.value)) {
-                result = result.tag == K_ERR
-                    ? k_accumulate_failures(result, s.value)
-                    : s.value;
+            int g = f.group[pick];
+            k_fibers_remove(&f, pick);
+            groups[g].result = k_failed_too(groups[g].result, s.value);
+            groups[g].remaining--;
+            /* The member that finishes a group hands its place to the work
+               after the join, in the group the fiber that reached the join
+               counted toward; that fiber still counts there. */
+            if (groups[g].remaining == 0 && groups[g].parent >= 0) {
+                groups[g].hole->x = groups[g].result;
+                k_fibers_insert(&f, pick, now, groups[g].cont, groups[g].parent);
             }
         }
     }
-    free(wake); free(fiber); free(done);
+    KValue result = groups[0].result;
+    free(f.wake); free(f.work); free(f.group); free(groups);
     return k_beat_pop(result);
 }
 

@@ -1,0 +1,11 @@
+import "std/time"
+
+fn group _
+  time/sleep 50 .> (_ -> print "slow member")
+  print "quick member"
+
+fn outer _
+  group 0 .> (_ -> print "after the group")
+  time/sleep 20 .> (_ -> print "sibling")
+
+outer 0
