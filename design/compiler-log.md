@@ -23,36 +23,6 @@
 
 
 
-## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
-
-The release profile had no settings, so rustc split the crate into sixteen
-codegen units by module and optimized each without the others. Cargo.toml
-now asks for one unit and fat LTO. The optimizer sees the whole crate and
-its dependencies when it inlines, and a release build takes about a minute
-longer, 2m34s against 1m41s on this container.
-
-It came out of #2137. Moving call emission out of emit.rs had been declined
-because the browser row moved 52 units with no code changed, and the guess
-was the file path in panic strings. Neither a longer path nor a shifted line
-number moves the row. The units do: they are cut along module lines, so a
-move between modules changed what was inlined. With one unit that coupling
-is gone, and the split can be retried.
-
-The interpreter gate anchors its count on `run_interpreted_on_stack`, and the
-one-unit build inlined it into its thread's closure, so the gate read a drop
-glue carrying its name. It is now `#[inline(never)]`, as `emit_ir_for` is.
-
-CI's rows, on main after #2180. Every row the compiler's own build reaches
-falls: compile_instructions 24,874,251 -> 24,057,877 (-3.28%),
-entry_instructions 73,701,590 -> 71,165,551, library_instructions
-73,338,936 -> 70,852,827, emit_instructions 5,715,797 -> 5,597,787,
-startup_instructions 52,528 -> 50,254, interp_instructions 577,237,254 ->
-571,649,741 and, in the tab, browser_compile_instructions 353,555,358 ->
-343,131,848 (-2.95%). codegen_instructions_release moves 371,551,607 ->
-371,551,576; it counts clang and the linker, and nothing here isolates why
-they did 31 fewer. No allocation, memory or runtime row moved. Welfare rises
-95.55 -> 95.57 and is banked.
-
 ## 2026-10-27 — call emission moves from emit.rs into calls.rs
 
 #2137. The methods from `emit_call_full` to the end of emit.rs form a second
@@ -1114,6 +1084,43 @@ in the web chapter end in `_`, and the chapter says what the last two places
 hold. Three tests in http_test.kso pin it: a name read in lowercase with its
 value trimmed and its inner colon kept, the host header, and a request with
 no headers answering none. Breaking the lowercasing turns two of them red.
+
+## 2026-11-01 — the corpus forks
+
+Corpus first, before #2268. #2268 makes a server's loop hold what one
+request holds, and with CI's rows its welfare read just under the floor: no
+benchmark forked, so the objective saw the cost of the new runtime code and
+none of the memory the change saves. This adds that shape on main, so the
+fix is measured against it.
+
+`bench/runbench/runbench/forked` runs 16,000 passes of a loop that forks a
+small handler beside the rest of the loop, the way a server forks per
+accept. `bench/interp_corpus` runs the same loop for 2,000 passes before it
+prints. Neither printed line moves.
+
+Rows, from CI where they are instructions. runbench rose to work_runbench
+892,161,749, the shape's 45,830,571 instructions or 5.14% of the program,
+and its text row to 849,809. Its arena grew from 4 blocks to 15:
+arena_peak_bytes 14,680,064, and spare_peak_bytes 14,155,792. The
+interpreted corpus rose to interp_instructions 622,671,293, interp_allocs
+814,155 and interp_peak_bytes 1,953,942. In the tab, the corpus reads
+browser_compile_instructions 349,229,303, browser_compile_peak_bytes
+855,995, browser_run_instructions 79,318,152 and browser_run_peak_bytes
+3,801,088, measured with the rustc 1.98.1 the golden names. runbench's
+emitted rows grew by the shape's 15 functions. The floor is re-based to what
+these rows score, since the change is only to what is measured.
+
+The run program's other counters move with the 16,000 groups and the
+handlers' pages: run_allocs 1,930,504, run_alloc_bytes 237,915,969,
+run_arena_blocks 15, run_arena_peak_bytes 14,680,064, run_perm_allocs 131,
+run_beat_iters 211,300, run_survive_slots 4,703, run_push_mut_fast
+1,195,311, run_push_mut_slow 1,645,465, run_bytes_malloc 7,868,
+run_str_scans 19,402, run_str_scan_bytes 18,667,266, run_buf_reuse 157,
+run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
+92,421,040 and run_spare_peak_bytes 14,155,792. runbench's 15 new functions
+take the emitted rows of the other benchmarks to emitted_other_defines
+2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
+emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
 
 ## 2026-11-01 — a module may name a function a derivation writes into it
 
