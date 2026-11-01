@@ -23,32 +23,6 @@
 
 
 
-## 2026-10-28 — gavel: a framework's conventions are derivations
-
-#2186. Clay asked for "some language construct that can allow you to do
-compile time mapping", so that senro can map controller functions to routes
-and model names to tables the way Rails does, and the compiler can check the
-result. A derivation is a pure kanso function that a framework ships and the
-compiler runs on the interpreter during the build. It reads a description of
-the program and returns declarations built from constructors the compiler
-defines (a route, a record type, a table binding), each naming the source
-item it came from. The compiler adds them to the program and checks them like
-any other code, and `kanso derived` prints them.
-
-Inside a derivation any computation is allowed, including pluralizing a
-model's name. What comes out is a finite list that is checked against real
-functions and real tables, which is what makes an arbitrary convention safe
-to run.
-
-A pub function in `app/` that matches no route is a compile error. Clay
-first agreed to a schema file written in kanso, then asked why Rails keeps a
-schema file at all. Rails keeps `schema.rb` mainly because old Ruby
-migrations stop running when the models they call change. A kanso migration
-is a value built from a fixed set of changes, so it cannot break that way,
-and the ruling became: no schema file by default, the schema folded from the
-migrations at compile time, and `schema.sql` only for a migration that needs
-raw SQL.
-
 ## 2026-10-28 — net dials out and reads bytes
 
 #2178, the first item owed on the Postgres ruling. `net/dial host at` opens
@@ -1227,3 +1201,48 @@ needs one.
 The checks it asked for come back clean. std/net/http has no client yet, only
 the server, so nothing turns a status into an err. Chapter 04 and the rest of
 the site carry no prose built on the retired page's status-code example.
+
+## 2026-11-01 — std/pool: fibers share values through a pool
+
+The pool #2264 ruled for is built on the interpreter, natively and in the tab.
+It ships as `std/pool` with `pool/make n`, `pool/take p`, `pool/give p v` and
+`pool/with p work`, the names #2274 recommends. Clay has not answered that
+question yet, and the pull request merges with whatever names he chooses.
+
+A take from an empty pool or a give to a full one parks its fiber: the step
+answers blocked, with a wake time no clock reaches. A take or give that
+succeeds marks the pool as moved, and before the scheduler next picks a fiber
+it wakes every parked one at the current time. Each tries again in spawn
+order, and one that still cannot proceed parks again. That is a retry for
+every parked fiber each time any pool moves. For a few connections it costs
+nothing worth measuring, and a program holding thousands of parked fibers
+would want a wait list per pool.
+
+When the earliest wake left is the parked mark, every fiber is waiting on a
+pool and nothing can wake any of them. The scheduler then wakes them all once
+more with the pool marked as failing, and each stuck take or give answers an
+err that says which it was. The program ends with those reasons instead of
+hanging; `every_fiber_parked_on_a_pool_is_reported` pins the report on both
+engines.
+
+The ruling promises no order of hand-out, and the scheduler keeps one anyway:
+a take answers the value given last, on every engine.
+`a_pool_hands_out_in_one_order` runs four fibers over two values and pins the
+transcript.
+
+Natively a given value is deep-copied into storage the pool allocates for
+itself, and a take copies it back into the arena. The pool holds nothing in a
+region a beat can rewind, so a value given in one request survives the
+reclaiming that follows it.
+
+`pool/with` hands a taken value to the work and gives it back however the work
+ends. #2274 said it would use annotate (`.!`), and it cannot: a failure passed
+as an argument goes straight through the call, so `give` would never run. It
+rescues the work's failure with `.?` instead, which std/pool may do because
+the failure is foreign to it, gives the value back, and raises the failure
+again with `effect`, so the reason and birthplace are the ones the work gave
+it. The issue now says so.
+
+A stress test for the pool found #2276, a long chain inside a fiber that ran
+out of native stack. It is fixed on its own branch, since it needs no pool to
+show.
