@@ -1237,6 +1237,9 @@ Specs, each watched red against main:
   `arena_blocks=1` and `arena_peak_bytes=1048576`. On main it reads 4 blocks
   and 4 MB.
 
-One existing golden moved: `a_server_loop_holds_what_one_request_holds`
-stages 1,152 fewer bytes (`evac_bytes` 17488 to 16336), because a stage that
+Two existing goldens moved, each by 1,152 staged bytes, because a stage that
 falls due inside a step now runs there.
+`a_server_loop_holds_what_one_request_holds` reads `evac_bytes` 16336 where it
+read 17488. The run program
+(`bench/cost_golden_run.txt`) falls the same 1,152 in `alloc_bytes`,
+`evac_bytes` and `sh_buf`; its peak rows, which welfare reads, do not move.
