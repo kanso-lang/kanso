@@ -1205,10 +1205,11 @@ It ships as `std/pool` with `pool/make n`, `pool/take p`, `pool/give p v` and
 `pool/with p work`, the names #2274 recommends. Clay has not answered that
 question yet, and the pull request merges with whatever names he chooses.
 
-A take from an empty pool or a give to a full one parks its fiber: the step
-answers blocked, with a wake time no clock reaches. A take or give that
-succeeds marks the pool as moved, and before the scheduler next picks a fiber
-it wakes every parked one at the current time. Each tries again in spawn
+A take from an empty pool or a give to a full one parks its fiber. Natively
+the step answers a kind of its own, and the scheduler gives the fiber a wake
+time no clock reaches. A take or give that succeeds marks the pool as moved,
+and before the scheduler next picks a fiber it wakes every parked one at the
+current time. Each tries again in spawn
 order, and one that still cannot proceed parks again. That is a retry for
 every parked fiber each time any pool moves. For a few connections it costs
 nothing worth measuring, and a program holding thousands of parked fibers
@@ -1240,8 +1241,14 @@ again with `effect`, so the reason and birthplace are the ones the work gave
 it. The issue now says so.
 
 A stress test for the pool found #2276, a long chain inside a fiber that ran
-out of native stack. It is fixed on its own branch, since it needs no pool to
-show.
+out of native stack. It needed no pool to show, and #2278 fixed it first. That
+fix lets a long chain stop partway through its step so the scheduler can
+reclaim, and the pool has to respect it. A give made inside such a chain
+would otherwise wake the waiting taker at the stop, before the chain had
+finished, where the interpreter runs the whole chain first. The scheduler
+leaves parked fibers alone until the chain's step is done.
+`a_give_inside_a_long_chain_wakes_the_taker_after_it` pins the order: without
+the guard, the native run printed the taker's line first.
 
 The pool is a ruled feature, so the welfare floor drops by exactly what CI
 measured, 0.00056276, to 95.61214121. The runtime carries the pool's code, so
