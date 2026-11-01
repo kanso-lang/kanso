@@ -1202,7 +1202,10 @@ and a_module_calls_a_name_nothing_defines is refused at `post_form` with
 the message an unknown name always had. With the setting-aside turned off,
 the first goes red, refused as an unknown name at `post_from`.
 
-Rows, from CI. The tab compiles its corpus in browser_compile_instructions
-349,228,936, 367 fewer. The compiler's own rows rise by the set-aside check
-and the layout it moves: compile_instructions to 24,098,635,
-entry_instructions to 86,795,431 and library_instructions to 72,619,875.
+Rows, from CI on the tree merged with #2268. The tab compiles its corpus in
+browser_compile_instructions 349,228,936, 367 fewer. The compiler's own rows
+rise by the set-aside check and the layout it moves: compile_instructions
+1,098 to 24,098,635, library_instructions 1,097 to 72,619,875 and
+entry_instructions 1,961 to 86,798,967. Welfare falls 0.000004, and the
+floor is lowered by exactly that to 95.61270397: the feature is #2186's
+ruling that derived declarations join the program as if written.
