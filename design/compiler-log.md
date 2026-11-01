@@ -23,37 +23,6 @@
 
 
 
-## 2026-10-27 — an entry reads its key and value by name
-
-#2163. A field read becomes a call on the field's getter, and getters were
-made only for fields some type in the program declares. `entry` is built
-into the language, so `e.key` had no getter: the checker refused it, and
-`e.value` got past the checker only when std/list happened to declare a
-`value` of its own, then failed in the interpreter. The checker now counts
-`key` and `value` as declared, the way it counts an err's three readers.
-`prune_unused_getters` already gathers every getter a program names, and
-when `Get_key` or `Get_value` is among them it writes that group an `entry`
-arm, keeping one a dependency already wrote. A program that never reads the
-fields builds neither arm. The first version built both in every compile and
-pruned them after, which CI read as 63 more allocations in the interpreter's
-corpus and 502,143 more browser compile instructions.
-
-tests/golden/micro/an_entry_reads_its_key_and_value_by_name reads both
-fields beside a local type that declares a `key` of its own; on main it was
-refused at `e.key`. tests/golden/errors/an_entry_has_no_field_but_its_key_and_value
-pins the refusal of a field an entry does not have. Appendix B names the two
-fields.
-
-CI's rows, on main after #2179. The tab compiles the corpus in fewer
-instructions, browser_compile_instructions 353,638,408 -> 353,555,358, and
-the interpreter's run allocates less, interp_allocs 653,377 -> 653,375, as
-does the front end, compile_allocs 13,940 -> 13,939; nothing here isolates
-why any of the three fell. The compile rows rise with the new code in the
-checker and the prune: compile_instructions 24,871,095 -> 24,874,251,
-entry_instructions 73,693,860 -> 73,701,590 and library_instructions
-73,331,088 -> 73,338,936. Welfare rises within its second decimal and is
-banked.
-
 ## 2026-10-27 — the compiler is built as one codegen unit, with fat LTO
 
 The release profile had no settings, so rustc split the crate into sixteen
@@ -1145,3 +1114,49 @@ in the web chapter end in `_`, and the chapter says what the last two places
 hold. Three tests in http_test.kso pin it: a name read in lowercase with its
 value trimmed and its inner colon kept, the host header, and a request with
 no headers answering none. Breaking the lowercasing turns two of them red.
+
+## 2026-11-01 — a server's loop holds what one request holds
+
+The second half of #2263. A server forks each request's handler beside the
+rest of its loop, so every pass is a group the next pass is a member of, and
+the groups nest as deep as the server has run. Both engines kept every one.
+tests/golden/mem/a_server_loop_holds_what_one_request_holds.kso is that
+shape without the network: natively 4,000 passes held 4 arena blocks and
+16,000 held 13; interpreted, the peaks were 1,420,281 and 5,581,819 bytes.
+
+Three things held the memory, and each fix was watched red on its own
+before the spec passed.
+
+A group whose other members have finished cleanly, and whose join was all
+its fiber had left, will yield exactly what its last member yields. The
+scheduler now hands that member to the parent group and frees the group's
+slot; the next join takes it. Nothing observable moves. The settled node the
+group would have handed back ran next in any case, at the same position,
+because every fiber ahead of it waits until later, so a failure lands in
+the parent at the same point in the order it did before. The interpreter
+learns that the join was the fiber's whole work from a rejoin that is
+absent; the runtime learns it from a continuation that is its settled node.
+
+Natively, the scheduler ran under one beat, so everything its fibers
+allocated stayed in the arena until it returned. It now stages the way the
+bind chain does. Once the arena has drifted a quarter megabyte past the last
+stage (or twice what that stage copied), the fibers' work and the live
+groups' continuations and results go out through the carry pair as one list,
+and the beat is rewound. A continuation's settled node is found again by
+walking the copy, since binds and rescues keep what they wrap in `x`, rather
+than carried as a root of its own; two roots could be copied apart, and the
+group's result would then be written into a node its continuation no longer
+holds.
+
+In the interpreter, a global's resolution slot was keyed by the syntax node.
+The pipe builds its callback's body by cloning the head on every evaluation,
+so each pass's clone took a new slot until the table reached its cap of
+65,535, after which every new node resolved by name. A name now keeps the
+slot it first took. An effect chain of 16,000 links peaked at 1,134,478
+bytes and now at 21,608, one byte more than at 4,000.
+
+After: one arena block at either size natively, each stage copying about
+350 bytes (beat_iters 49 and evac_bytes 17,488 in the mem golden), and
+interpreted peaks of 41,986 and 41,987 bytes.
+tests/a_server_loop_holds_no_more_the_longer_it_runs.rs compares the two
+sizes on both engines. #2263 is done.
