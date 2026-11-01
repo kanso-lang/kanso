@@ -1145,3 +1145,8 @@ a_module_calls_a_name_its_derivation_defines prints `["hello" "again"]`,
 and a_module_calls_a_name_nothing_defines is refused at `post_form` with
 the message an unknown name always had. With the setting-aside turned off,
 the first goes red, refused as an unknown name at `post_from`.
+
+Rows, from CI. The tab compiles its corpus in browser_compile_instructions
+349,228,936, 367 fewer. The compiler's own rows rise by the set-aside check
+and the layout it moves: compile_instructions to 24,098,635,
+entry_instructions to 86,795,431 and library_instructions to 72,619,875.
