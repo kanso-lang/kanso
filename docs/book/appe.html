@@ -1,0 +1,42 @@
+---
+layout: book
+title: "appendix e—idioms"
+description: "the decisions kanso leaves to you, each stated once with the chapter that argues for it: if or an arm, none or a marker or err, where the i/o goes, what waits for what, a recipe or a list, what a module shows, how a project is laid out, and how to measure."
+extra_css: /book/book.css
+---
+<span class="eyebrow">appendix e</span>
+<h1>idioms</h1>
+
+<p>the compiler settles most questions of style. names are snake_case, a predicate's name ends in <code>?</code>, declarations go in one order, and whitespace has one rendering. <a href="appc.html">appendix c</a> lists those rules and <a href="appa.html">appendix a</a> the messages that enforce them. this appendix covers the decisions the compiler leaves to you. each entry states a rule and names the chapter that argues for it, where you can see it run.</p>
+
+<h2>ask about shape with an arm, and about content with if</h2>
+
+<p>when the question is which kind of value you have, write one arm per kind. a new kind is then a new arm beside its siblings, and no other code changes. when the question is about one value's content, such as whether a number is negative, use <code>if</code>. there is no <code>else if</code>. a third case is a nested <code>if</code>, or more often a sign that the question was about shape after all. <a href="types.html">chapter 03</a> makes the case in "if is for content, dispatch is for shape".</p>
+
+<h2>none for a question, a marker for a verdict, err for a refusal</h2>
+
+<p>a function that may not find what it was asked for answers <code>none</code>, and the caller handles it with an arm. a function that reaches an answer its caller will act on, such as "this is not a flag", returns a marker type named for that answer. a function that cannot do its job, and will not hand the problem to its caller, makes an <code>err</code> with a reason. use <code>err</code> last: only a caller in another module can rescue it, and the report a user reads names your function, so write the reason for them. <a href="failure.html">chapter 04</a> covers all three in "none is for asking" and "designing the sad path".</p>
+
+<h2>keep the decisions pure and the i/o at the edge</h2>
+
+<p>put the logic in functions that take values and return values. put reading files, arguments and standard input in one small file that hands those values in. the pure functions are tested by calling them, and nothing has to be faked. wordfreq keeps all of its i/o in <code>cli.kso</code>. the web service's handler takes a request and the current state and returns a response and the next state, so its tests call it like any function. <a href="effects.html">chapter 05</a> explains why in "testing without mocks", and <a href="cli.html">chapter 09</a> and <a href="web.html">chapter 10</a> build both programs.</p>
+
+<h2>let order come from data</h2>
+
+<p>a value reaches the next step only through a name or a <code>.&gt;</code>. lines that do not depend on each other go side by side as bare lines, and they run as green threads. write <code>.&gt; (_ -&gt; ...)</code> only where a step must wait until the steps before it have finished without failing. each one you add where nothing depends on it makes two pieces of work run one after the other when they could have overlapped. <a href="flow.html">chapter 06</a> sums up the model in "the whole model in five lines".</p>
+
+<h2>keep a chain a recipe until you need a list</h2>
+
+<p>adapters such as <code>map</code> and <code>select</code> return a recipe. a consumer at the end runs the whole chain as one loop, and no list is built between the steps. call <code>list/to_list</code> only when the result has to be a list, which is usually just before you print it. <code>find</code>, <code>all?</code> and <code>any?</code> stop at the answer, so they are also the cheap way to ask a question about a long sequence or an infinite one. <a href="sequences.html">chapter 08</a>.</p>
+
+<h2>show callers as little as you can</h2>
+
+<p>a top-level name is private until you mark it <code>pub</code>, so a module's surface is exactly the names you marked. mark what a caller needs and leave the helpers bare. tests live in <code>_test.kso</code> files beside the module and see only what an importer sees. when a test seems to need a private name, either the name belongs on the surface or the test belongs on a public function that uses it. split a module into files by job: its files share one namespace, so a split adds no imports. <a href="modules.html">chapter 07</a>.</p>
+
+<h2>a project is an entry and a module</h2>
+
+<p>put the entry, <code>main.kso</code>, at the top of the project directory and give it one job: handing the arguments to the module. name the module something other than the project, because <code>kanso build</code> names the binary after the project directory and will not write a file beside a directory with the same name. <a href="cli.html">chapter 09</a> lays one out in "the layout".</p>
+
+<h2>count before you time</h2>
+
+<p>to compare two versions of a program, run each with <code>KANSO_COUNTERS=1</code>. the counts it prints come out the same on every run, so a difference is the change and nothing else, and a cost golden that ci compares exactly will catch a regression of a few percent. time the program last, on a release build and a large input, several times, to see which way a change went and roughly how far. <a href="shipping.html">chapter 11</a>.</p>
