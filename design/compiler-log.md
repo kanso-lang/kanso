@@ -1160,3 +1160,19 @@ After: one arena block at either size natively, each stage copying about
 interpreted peaks of 41,986 and 41,987 bytes.
 tests/a_server_loop_holds_no_more_the_longer_it_runs.rs compares the two
 sizes on both engines. #2263 is done.
+
+Rows, from CI. The runtime gains the stage and the group bookkeeping, 1,792
+bytes of text in each benchmark (runbench's text row 846,721). No benchmark
+forks, so none runs the new code, and the work rows move by layout:
+work_deepbench rose to 199,830,851, work_runbench to 846,681,718,
+work_widebench to 28,766,254, work_encodebench to 2,335,341,102,
+work_pendbench to 154,125,558, work_oneshot to 9,980,977, work_livebench to
+938,655,609, work_jsonbench to 549,338,202, work_digestbench to 4,104,932,
+work_readbench to 4,584,342, work_escapebench to 40,309,377, work_basket to
+18,296,047, work_indexbench to 1,888,161 and work_scanbench to 268,197.
+clang compiles the larger runtime in codegen_instructions_dev 116,951,400
+and codegen_instructions_release 371,843,999. The interpreter's corpus reads
+interp_instructions 571,780,675 and interp_peak_bytes 1,356,812, the cost of
+the name-to-slot entry, with interp_allocs down to 653,366;
+entry_instructions reads 86,797,006. The browser runs the corpus in
+browser_run_instructions 64,598,009, 8 fewer.
