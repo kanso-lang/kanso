@@ -1246,3 +1246,13 @@ it. The issue now says so.
 A stress test for the pool found #2276, a long chain inside a fiber that ran
 out of native stack. It is fixed on its own branch, since it needs no pool to
 show.
+
+The pool is a ruled feature, so the welfare floor drops by exactly what CI
+measured, 0.00055928, to 95.61214469. Every benchmark's machine code is 3,488
+bytes longer, because the runtime carries the pool's code. runbench's work
+rises 143,819 to 891,926,106, because the scheduler asks whether a pool moved
+before each pick. The tab runs the interpreted corpus 185,998 instructions
+dearer and compiles it 42,305 dearer. `compile_instructions` rises 3,674,
+`library_instructions` 7,973, `entry_instructions` 10,728 and
+`interp_instructions` 74,282, with the bigger builtin tables and library. No
+peak and no allocation counter moves.
