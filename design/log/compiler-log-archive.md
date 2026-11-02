@@ -112013,3 +112013,37 @@ the fall is past what `--set` takes, so the floor was edited by hand and
 
 Still owed on #2186: the browser compile's derivation golden, a record type
 or table binding as a declaration, and the senro derivations themselves.
+
+## 2026-10-28 — a derivation reads constants, declares types, and runs in the page
+
+#2186's second slice. A module in a derivation's description now carries
+`constants`, mapping each pub constant's name to its value, and constants
+leave `functions`. senro/models needs this: an app keeps its migrations as a
+pub constant, and a constant's function reference could not be called, so
+the fold had nothing to read. A routing convention also stops seeing a
+constant as an action.
+
+`derive/declare_type origin name fields` adds a record type to the entry,
+with getters for its fields, and `kanso derived` prints it as `type name
+fields`. A name or field a program could not write, or fields that are not a
+list, is refused. With it the ruling's three declarations are all here: a
+route and a table binding are constants holding a map, and a record type is
+its own declaration.
+
+The page runs a derivation. tests/wasm_engine.rs hands the route-table case's
+convention and posts module to the compiler in the tab and compiles the
+entry, which derives on the interpreter there, and the program prints the
+native golden's output. It was watched red with derivations switched off:
+"unknown name `routes`".
+
+Chapter 11 of the book gains a section on `derive`, with the route table as
+an executed sample, and the book's highlighter and the editor grammar paint
+`derive` as a keyword.
+
+Every compile that derives loads the larger std/derive, so the entry row
+rises to entry_instructions 83,914,234 (+185,394); on one binary here
+load_dependencies took 129K of a 188K rise and the merged check 37K. The
+other compile rows move by layout: compile_instructions 24,063,854 (-324),
+library_instructions 70,862,041 (-1,244) and browser_compile_instructions
+343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
+under the rule for a feature a ruling requires.
