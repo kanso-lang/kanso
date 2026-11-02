@@ -1,0 +1,22 @@
+import "std/pool"
+import "std/time"
+
+# Four fibers share two values. Which fiber gets which value, and when, is
+# decided by the scheduler's own order, so the transcript is the same on every
+# run and every engine.
+fn used tag c
+  print "{tag} has {c}" .> (_ -> time/sleep 5) .> (_ -> print "{tag} done")
+
+fn served p tag
+  pool/with p (c -> used tag c)
+
+fn four p
+  served p "w1"
+  served p "w2"
+  served p "w3"
+  served p "w4"
+
+fn filled p
+  pool/give p "x" .> (_ -> pool/give p "y") .> (_ -> four p)
+
+pub play = pool/make 2 .> filled

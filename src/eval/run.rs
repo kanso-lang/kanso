@@ -126,6 +126,17 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            // Outside a group no other fiber can take or give, so a pool that
+            // cannot answer now never will.
+            Desc::PoolMake(n) => Ok(self.pool_make(*n)),
+            Desc::PoolTake(handle) => Ok(match self.pool_take(*handle) {
+                Some(v) => v,
+                None => pool_stuck(TAKE_STUCK),
+            }),
+            Desc::PoolGive(handle, v) => Ok(match self.pool_give(*handle, v) {
+                Some(v) => v,
+                None => pool_stuck(GIVE_STUCK),
+            }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
                 Ok(handle) => Value::int(handle),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
@@ -247,11 +258,28 @@ impl<'a> Interp<'a> {
         #[cfg(not(target_arch = "wasm32"))]
         let wall_start = std::time::Instant::now();
         while !fibers.is_empty() {
+            // A take or give went through: the fibers parked on a pool try
+            // again, in spawn order, and nothing is stuck any more.
+            if self.pool_moved.replace(false) {
+                self.pool_failing.set(false);
+                for fiber in fibers.iter_mut().filter(|f| f.wake == PARKED) {
+                    fiber.wake = now;
+                }
+            }
             let mut pick = 0;
             for (at, fiber) in fibers.iter().enumerate() {
                 if fiber.wake < fibers[pick].wake {
                     pick = at;
                 }
+            }
+            // Every fiber is parked on a pool: nothing can give or take, so
+            // each parked operation is woken to answer that it never will.
+            if fibers[pick].wake == PARKED {
+                self.pool_failing.set(true);
+                for fiber in fibers.iter_mut() {
+                    fiber.wake = now;
+                }
+                continue;
             }
             let wake = fibers[pick].wake;
             if wake > now {
@@ -269,7 +297,7 @@ impl<'a> Interp<'a> {
             let work = fibers[pick].work.clone();
             match self.step(&work, executor)? {
                 Step::Blocked(ms, cont) => {
-                    fibers[pick].wake = now + ms;
+                    fibers[pick].wake = if ms == PARKED { PARKED } else { now + ms };
                     fibers[pick].work = cont;
                 }
                 Step::Forked(spawned, rejoin) => {
@@ -414,6 +442,21 @@ impl<'a> Interp<'a> {
             // A fiber waiting for a connection is a fiber with nothing to do:
             // it goes back in the queue and the group's other statements run,
             // which is how anything ever connects to it.
+            // A take from an empty pool, or a give to a full one, parks the
+            // fiber until another fiber gives or takes (#2264). When every
+            // fiber is parked nothing can move, and the scheduler sets
+            // `pool_failing`: each parked operation then answers a failure
+            // that names it, rather than the program waiting forever.
+            Desc::PoolTake(handle) => match self.pool_take(*handle) {
+                Some(v) => Ok(Step::Done(v)),
+                None if self.pool_failing.get() => Ok(Step::Done(pool_stuck(TAKE_STUCK))),
+                None => Ok(Step::Blocked(PARKED, desc.clone())),
+            },
+            Desc::PoolGive(handle, v) => match self.pool_give(*handle, v) {
+                Some(v) => Ok(Step::Done(v)),
+                None if self.pool_failing.get() => Ok(Step::Done(pool_stuck(GIVE_STUCK))),
+                None => Ok(Step::Blocked(PARKED, desc.clone())),
+            },
             Desc::Accept(listener) => match executor.accept(*listener) {
                 Ok(Some(handle)) => Ok(Step::Done(Value::int(handle))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
@@ -586,6 +629,9 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
             render_plan(inner, out, step);
             out.push_str("  annotate <continuation>\n");
         }
+        Desc::PoolMake(n) => out.push_str(&format!("  pool_make {n}\n")),
+        Desc::PoolTake(handle) => out.push_str(&format!("  pool_take {handle}\n")),
+        Desc::PoolGive(handle, _) => out.push_str(&format!("  pool_give {handle}\n")),
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
         Desc::Random(n) => out.push_str(&format!("  random {n}\n")),
         Desc::Nil => {}
@@ -602,5 +648,63 @@ fn lazy_hint(v: &Value) -> &'static str {
             " — a lazy sequence becomes a list with list/to_list"
         }
         _ => "",
+    }
+}
+
+/// The wake time of a fiber parked on a pool: no clock reaches it, so only a
+/// take or give by another fiber, or the scheduler finding every fiber
+/// parked, moves it.
+const PARKED: u64 = u64::MAX;
+
+const TAKE_STUCK: &str = "a take from an empty pool that no fiber is left to give to";
+const GIVE_STUCK: &str = "a give to a full pool that no fiber is left to take from";
+
+fn pool_stuck(reason: &str) -> Value {
+    err_value(Value::Str(Text::from(reason)), Raised::default())
+}
+
+impl<'a> Interp<'a> {
+    fn pool_make(&self, n: i64) -> Value {
+        if n < 1 {
+            return err_value(
+                Value::Str(Text::from("a pool holds at least one value")),
+                Raised::default(),
+            );
+        }
+        let mut pools = self.pools.borrow_mut();
+        pools.push(Pool { cap: n as usize, items: Vec::new() });
+        Value::int((pools.len() - 1) as i64)
+    }
+
+    /// The value a take answers, or `None` while the pool is empty. The last
+    /// value given is the one taken.
+    fn pool_take(&self, handle: i64) -> Option<Value> {
+        let mut pools = self.pools.borrow_mut();
+        let Some(pool) = usize::try_from(handle).ok().and_then(|h| pools.get_mut(h)) else {
+            return Some(err_value(
+                Value::Str(Text::from("that is not a pool")),
+                Raised::default(),
+            ));
+        };
+        let taken = pool.items.pop()?;
+        self.pool_moved.set(true);
+        Some(taken)
+    }
+
+    /// `done` once the value is in the pool, or `None` while it is full.
+    fn pool_give(&self, handle: i64, v: &Value) -> Option<Value> {
+        let mut pools = self.pools.borrow_mut();
+        let Some(pool) = usize::try_from(handle).ok().and_then(|h| pools.get_mut(h)) else {
+            return Some(err_value(
+                Value::Str(Text::from("that is not a pool")),
+                Raised::default(),
+            ));
+        };
+        if pool.items.len() >= pool.cap {
+            return None;
+        }
+        pool.items.push(v.clone());
+        self.pool_moved.set(true);
+        Some(Value::Done)
     }
 }

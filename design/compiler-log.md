@@ -23,93 +23,6 @@
 
 
 
-## 2026-10-28 — derivations: a convention runs while the program compiles
-
-#2186, the first slice of the ruling. An entry may write `derive
-conventions/routing` after its imports. The compiler builds a
-`derive/program` describing the app's own modules, which are the ones the
-entry imports by a `./` path. Each module is listed with its pub functions,
-their parameters and annotations, and the function itself, and with each
-record type and its fields. The compiler calls the named function on the
-interpreter and reads back a list of declarations. `derive/declare` makes a
-constant in the entry, written out as the literal its value spells, with a
-function written as its name, so a route table names real handlers and the
-checker resolves each one. `derive/refuse` makes a compile error at the item
-it names, in that item's own file.
-
-The derivation's module is compiled as an ordinary dependency. No executor
-is supplied, so a derivation that answers an effect is refused. A name in
-the deriving module that reaches a module it describes is refused where it
-is written, because the description is the whole of what a derivation may
-know about the app; what it declares then follows from what `kanso derived`
-shows. The modules it describes count as used imports, because the
-convention reads them. `kanso derived` prints each declared constant with
-functions spelled by name.
-
-The derivation runs on an interpreter that copies at every container write.
-The first build asked the linearity analysis which writes could go in place,
-and that analysis covers every function the program holds: on
-bench/entry_corpus it was 24M of the derivation's 25.8M instructions. Without
-it the derivation costs 1.8M.
-
-tests/golden/derive holds nine programs, each run on both engines: a route
-table that dispatches to real functions, a misspelled action refused on its
-own line, a library beside the app left out of the description, and six ways
-a derivation can be wrong. It was watched red with function references
-written as none, with `../` libraries described, and with a derivation that
-imported the module it described. bench/entry_corpus now derives a small
-route table, so the entry row, and with it welfare's compile term, prices
-what a derivation costs.
-
-The entry row rises to entry_instructions 83,728,840 (+12,558,754): the
-corpus gained two modules and a derivation. `lib/derive` is embedded in the
-compiler, so the other compile rows move by layout: compile_instructions
-24,064,178 (+3,144), library_instructions 70,863,285 (+6,049),
-codegen_instructions_release 371,551,844 (+46), emit_instructions 5,598,851
-(-674), interp_instructions 571,786,909 (-1), compile_peak_bytes 598,588 (+96)
-and browser_compile_instructions 343,190,365 (+30,287). Welfare fell by 0.018
-and the floor moves to 95.550 under the rule for a feature a ruling requires;
-the fall is past what `--set` takes, so the floor was edited by hand and
-`--set` recorded the reason.
-
-Still owed on #2186: the browser compile's derivation golden, a record type
-or table binding as a declaration, and the senro derivations themselves.
-
-## 2026-10-28 — a derivation reads constants, declares types, and runs in the page
-
-#2186's second slice. A module in a derivation's description now carries
-`constants`, mapping each pub constant's name to its value, and constants
-leave `functions`. senro/models needs this: an app keeps its migrations as a
-pub constant, and a constant's function reference could not be called, so
-the fold had nothing to read. A routing convention also stops seeing a
-constant as an action.
-
-`derive/declare_type origin name fields` adds a record type to the entry,
-with getters for its fields, and `kanso derived` prints it as `type name
-fields`. A name or field a program could not write, or fields that are not a
-list, is refused. With it the ruling's three declarations are all here: a
-route and a table binding are constants holding a map, and a record type is
-its own declaration.
-
-The page runs a derivation. tests/wasm_engine.rs hands the route-table case's
-convention and posts module to the compiler in the tab and compiles the
-entry, which derives on the interpreter there, and the program prints the
-native golden's output. It was watched red with derivations switched off:
-"unknown name `routes`".
-
-Chapter 11 of the book gains a section on `derive`, with the route table as
-an executed sample, and the book's highlighter and the editor grammar paint
-`derive` as a keyword.
-
-Every compile that derives loads the larger std/derive, so the entry row
-rises to entry_instructions 83,914,234 (+185,394); on one binary here
-load_dependencies took 129K of a 188K rise and the merged check 37K. The
-other compile rows move by layout: compile_instructions 24,063,854 (-324),
-library_instructions 70,862,041 (-1,244) and browser_compile_instructions
-343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
-under the rule for a feature a ruling requires.
-
-
 ## 2026-10-29 — sha256 gains HMAC and PBKDF2, and base64 joins the library
 
 Postgres logs a client in with SCRAM-SHA-256 (#2178), which needs HMAC,
@@ -1254,3 +1167,103 @@ scheduler's own work. I read it as code that moved when the function left
 the runtime with the function kept apart: `codegen_instructions_dev` rises to
 116,962,084 and `codegen_instructions_release` to 371,787,654. Welfare rises,
 and the floor is banked with it.
+
+## 2026-11-01 — std/pool: fibers share values through a pool
+
+The pool #2264 ruled for is built on the interpreter, natively and in the tab.
+It ships as `std/pool` with `pool/make n`, `pool/take p`, `pool/give p v` and
+`pool/with p work`, the names #2274 recommended and Clay chose.
+
+A take from an empty pool or a give to a full one parks its fiber. Natively
+the step answers a kind of its own, and the scheduler gives the fiber a wake
+time no clock reaches. A take or give that succeeds marks the pool as moved,
+and before the scheduler next picks a fiber it wakes every parked one at the
+current time. Each tries again in spawn
+order, and one that still cannot proceed parks again. That is a retry for
+every parked fiber each time any pool moves. For a few connections it costs
+nothing worth measuring, and a program holding thousands of parked fibers
+would want a wait list per pool.
+
+When the earliest wake left is the parked mark, every fiber is waiting on a
+pool and nothing can wake any of them. The scheduler then wakes them all once
+more with the pool marked as failing, and each stuck take or give answers an
+err that says which it was. The program ends with those reasons instead of
+hanging; `every_fiber_parked_on_a_pool_is_reported` pins the report on both
+engines.
+
+The ruling promises no order of hand-out, and the scheduler keeps one anyway:
+a take answers the value given last, on every engine.
+`a_pool_hands_out_in_one_order` runs four fibers over two values and pins the
+transcript.
+
+Natively a given value is deep-copied into storage the pool allocates for
+itself, and a take copies it back into the arena. The pool holds nothing in a
+region a beat can rewind, so a value given in one request survives the
+reclaiming that follows it.
+
+`pool/with` hands a taken value to the work and gives it back however the work
+ends. #2274 said it would use annotate (`.!`), and it cannot: a failure passed
+as an argument goes straight through the call, so `give` would never run. It
+rescues the work's failure with `.?` instead, which std/pool may do because
+the failure is foreign to it, gives the value back, and raises the failure
+again with `effect`, so the reason and birthplace are the ones the work gave
+it. The issue now says so.
+
+A stress test for the pool found #2276, a long chain inside a fiber that ran
+out of native stack. It needed no pool to show, and #2278 fixed it first. That
+fix lets a long chain stop partway through its step so the scheduler can
+reclaim, and the pool has to respect it. A give made inside such a chain
+would otherwise wake the waiting taker at the stop, before the chain had
+finished, where the interpreter runs the whole chain first. The scheduler
+leaves parked fibers alone until the chain's step is done.
+`a_give_inside_a_long_chain_wakes_the_taker_after_it` pins the order: without
+the guard, the native run printed the taker's line first.
+
+The pool is a ruled feature, so the welfare floor drops by exactly what CI
+measured, 0.00159831, to 95.61462007. The figures below are against main with
+the scheduler kept out of line (#2279).
+
+`work_runbench` rises 527,874 to 890,913,940, because the scheduler asks
+whether a pool moved before each pick and tells a parked step from the others
+after it. The first version cost more. Inlined into `k_exec`, the bigger
+scheduler made every effect dearer, which is what #2279 fixed. Giving a
+parked fiber its own step kind, in place of a blocked step with an
+unreachable wake time, took about 320,000 more off runbench under callgrind
+here.
+
+The runtime carries the pool's code, so every benchmark's machine code is
+3,712 bytes longer, and `text` sums to 5,828,864. The other work rows move by
+layout: `work_oneshot` rises 325 to 9,979,993, `work_encodebench` 262 to
+2,335,341,049, and `work_jsonbench` 549,338,238, `work_widebench` 28,686,321,
+`work_digestbench` 4,104,970, `work_readbench` 4,584,378 and `work_livebench`
+938,655,549 rise by 3. Clang compiles the bigger runtime in
+`codegen_instructions_dev` 117,030,226 and `codegen_instructions_release`
+371,871,683. The tab runs the interpreted corpus dearer, at
+`browser_run_instructions` 78,338,381, and compiles it dearer, at
+`browser_compile_instructions` 349,271,241. The compiler's rows move with the
+bigger builtin tables and library: `compile_instructions` 24,102,309,
+`entry_instructions` 86,809,695, `library_instructions` 72,627,848,
+`emit_instructions` 5,599,665 and `interp_instructions` 622,391,507. No peak
+and no allocation counter moves.
+
+One CI run landed on an Intel runner (family 6), where every work row reads
+130 instructions lower and the codegen rows differ too, because glibc picks
+its string routines by CPU. Those rows went into the goldens for one push and
+the next AMD run refused them. The rows above are the AMD readings, the
+silicon `bench/dispatch.txt` records; a run whose `interp_sample` line names
+another CPU family is not a source of rows.
+
+## 2026-11-02 — gavel: the pool's names are make, take, give and with
+
+#2264's ruling asked for the pool's public names as one question before they
+shipped, and #2274 asked it. Clay chose the recommended option: `std/pool`
+with `pool/make n`, `pool/take p`, `pool/give p v` and
+`pool/with p (v -> work)`.
+
+- `give` is the word for putting a value back, which keeps it apart from
+  `put`, the map insertion.
+- `with` takes a value, runs the work with it, and gives the value back
+  whether the work succeeds or fails. A failure still rises with the reason
+  and birthplace the work gave it.
+
+Owed: nothing beyond #2264's list. The pool (#2277) already uses these names.

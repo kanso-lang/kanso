@@ -2280,7 +2280,13 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _, _)
                     if matches!(
                         base(n),
-                        "start" | "listen" | "accept" | "net_port" | "dial" | "net_secure"
+                        "start"
+                            | "listen"
+                            | "accept"
+                            | "net_port"
+                            | "dial"
+                            | "net_secure"
+                            | "pool_make"
                     ) =>
                 {
                     INT
@@ -2300,6 +2306,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _, _) if base(n) == "modified" => INT | NONE,
                 Expr::Ident(n, _, _) if base(n) == "list_dir" => LIST,
                 Expr::Ident(n, _, _) if base(n) == "now" => INT,
+                // whatever some fiber gave the pool, which may be anything
+                Expr::Ident(n, _, _) if base(n) == "pool_take" => TOP & !FAIL,
                 // an unset variable yields none, which is a value the consumer
                 // dispatches on rather than a failure it has to trap; an
                 // effect with nothing to answer yields `done` when it finished
@@ -2315,6 +2323,7 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                             | "kill"
                             | "net_write"
                             | "net_close"
+                            | "pool_give"
                     ) =>
                 {
                     DONE
@@ -2501,6 +2510,9 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "net_secure"
             | "net_write"
             | "net_close"
+            | "pool_make"
+            | "pool_take"
+            | "pool_give"
             | "args"
             | "stdin"
             | "read_line"

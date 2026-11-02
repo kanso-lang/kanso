@@ -1,0 +1,18 @@
+import "std/pool"
+import "std/time"
+
+# A give to a full pool parks its fiber until another fiber takes.
+fn filler p
+  pool/give p 1
+    .> (_ -> print "one in")
+    .> (_ -> pool/give p 2)
+    .> (_ -> print "two in")
+
+fn drainer p
+  time/sleep 10 .> (_ -> pool/take p) .> (v -> print "took {v}")
+
+fn both p
+  filler p
+  drainer p
+
+pub play = pool/make 1 .> both

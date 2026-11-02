@@ -1,0 +1,15 @@
+import "std/pool"
+import "std/time"
+
+# A take from an empty pool parks its fiber until another fiber gives.
+fn taker p
+  print "taker waits" .> (_ -> pool/take p) .> (v -> print "taker got {v}")
+
+fn giver p
+  time/sleep 10 .> (_ -> print "giver gives") .> (_ -> pool/give p "cup")
+
+fn both p
+  taker p
+  giver p
+
+pub play = pool/make 1 .> both

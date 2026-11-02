@@ -179,6 +179,137 @@ KValue k_b_net_close(KValue handle) {
     return k_mkdesc(24, handle, k_none());
 }
 
+/* Pools (#2264): up to `cap` values that fibers share, taken out and given
+   back. A value given is copied into storage the pool owns, malloc'd and
+   outside every arena, so no rewind of the giver's beat reaches it; a take
+   copies it back into the taker's arena and frees the pool's copy. Nothing
+   in an arena ever points into a pool, so no carry walk meets its storage.
+   A take answers the value given last, the order the interpreter keeps. */
+typedef struct {
+    long long cap;
+    long long n;
+    KValue* items;
+    KCarryBuf** bufs;
+} KPool;
+static KPool* k_pools = NULL;
+static long long k_npools = 0;
+static long long k_pools_cap = 0;
+/* Set by a take or give that went through, so the scheduler tries again the
+   fibers parked on a pool; and set by the scheduler when every fiber is
+   parked, so each parked operation answers that it never will. */
+static int k_pool_moved = 0;
+static int k_pool_failing = 0;
+#define K_PARKED (~0ULL)
+
+static KValue k_pool_stuck(int giving) {
+    return k_err(k_str(giving ? "a give to a full pool that no fiber is left to take from"
+                              : "a take from an empty pool that no fiber is left to give to"),
+                 NULL);
+}
+
+static KPool* k_pool_at(KValue handle) {
+    if (handle.tag != K_INT || handle.payload < 0 || handle.payload >= k_npools) return NULL;
+    return &k_pools[handle.payload];
+}
+
+static KValue k_pool_make(KValue n) {
+    if (n.payload < 1) return k_err(k_str("a pool holds at least one value"), NULL);
+    if (k_npools == k_pools_cap) {
+        k_pools_cap = k_pools_cap ? 2 * k_pools_cap : 4;
+        k_pools = realloc(k_pools, sizeof(KPool) * (size_t)k_pools_cap);
+        if (!k_pools) k_die("out of memory making a pool");
+    }
+    KPool* pool = &k_pools[k_npools];
+    pool->cap = n.payload;
+    pool->n = 0;
+    pool->items = malloc(sizeof(KValue) * (size_t)n.payload);
+    pool->bufs = malloc(sizeof(KCarryBuf*) * (size_t)n.payload);
+    if (!pool->items || !pool->bufs) k_die("out of memory making a pool");
+    return k_int(k_npools++);
+}
+
+/* The value, or a scalar with no storage, as the pool will hold it. */
+static KValue k_pool_kept(KValue v, KCarryBuf** held) {
+    *held = NULL;
+    if (!k_is_heap(v.tag)) return v;
+    KMark none = { NULL, NULL, 0 };
+    k_ptrmap_begin(&k_copy_seen);
+    k_copy_seen_live = 0;
+    size_t need = k_copy_size(v, &none);
+    KCarryBuf* buf = malloc(sizeof(KCarryBuf));
+    if (!buf) k_die("out of memory giving to a pool");
+    buf->data = malloc(need ? need : 16);
+    if (!buf->data) k_die("out of memory giving to a pool");
+    buf->cap = need ? need : 16;
+    buf->used = 0;
+    KCopy cp = { buf, &none, 0, 0, 0 };
+    k_ptrmap_begin(&k_copy_map);
+    k_copy_map_live = 0;
+    *held = buf;
+    return k_deep_copy(v, &cp);
+}
+
+/* The pool's copy, copied into the taker's arena; the pool's storage goes. */
+static KValue k_pool_handed(KValue v, KCarryBuf* held) {
+    if (!held) return v;
+    KMark none = { NULL, NULL, 0 };
+    KCopy cp = { NULL, &none, 1, 0, 0 };
+    k_ptrmap_begin(&k_copy_map);
+    k_copy_map_live = 0;
+    KValue out = k_deep_copy(v, &cp);
+    free(held->data);
+    free(held);
+    return out;
+}
+
+/* The value a take answers, or K_NOTHING's stand-in: `*waits` set while the
+   pool is empty. */
+static KValue k_pool_take(KValue handle, int* waits) {
+    *waits = 0;
+    KPool* pool = k_pool_at(handle);
+    if (!pool) return k_err(k_str("that is not a pool"), NULL);
+    if (pool->n == 0) {
+        *waits = 1;
+        return k_none();
+    }
+    pool->n--;
+    k_pool_moved = 1;
+    return k_pool_handed(pool->items[pool->n], pool->bufs[pool->n]);
+}
+
+static KValue k_pool_give(KValue handle, KValue v, int* waits) {
+    *waits = 0;
+    KPool* pool = k_pool_at(handle);
+    if (!pool) return k_err(k_str("that is not a pool"), NULL);
+    if (pool->n >= pool->cap) {
+        *waits = 1;
+        return k_none();
+    }
+    pool->items[pool->n] = k_pool_kept(v, &pool->bufs[pool->n]);
+    pool->n++;
+    k_pool_moved = 1;
+    return k_done();
+}
+
+KValue k_b_pool_make(KValue n) {
+    if (!k_not_failure(n)) return n;
+    if (n.tag != K_INT) k_die("a pool's size is a number");
+    return k_mkdesc(37, n, k_none());
+}
+
+KValue k_b_pool_take(KValue handle) {
+    if (!k_not_failure(handle)) return handle;
+    if (handle.tag != K_INT) k_die("take takes a pool");
+    return k_mkdesc(38, handle, k_none());
+}
+
+KValue k_b_pool_give(KValue handle, KValue v) {
+    if (!k_not_failure(handle)) return handle;
+    if (!k_not_failure(v)) return v;
+    if (handle.tag != K_INT) k_die("give takes a pool");
+    return k_mkdesc(39, handle, v);
+}
+
 KValue k_b_run(KValue cmd, KValue argv) {
     if (__builtin_expect(!k_not_failure(cmd) || !k_not_failure(argv), 0)) return k_failed2(cmd, argv);
     if (cmd.tag != K_STR) k_die("run takes a command string");
@@ -658,7 +789,10 @@ static long long k_rng_below(long long n) {
    interpreter has no use for: blocked=3 is a chain that ran long within its
    step and stopped so the scheduler could reclaim what the links before left
    behind. `cont` is the rest of it, and the scheduler picks the same fiber
-   again at once, so nothing about the order of the program changes (#2276). */
+   again at once, so nothing about the order of the program changes (#2276).
+   blocked=4 is a fiber parked on a pool: a take found it empty, or a give
+   found it full. It waits with no deadline until a take or a give moves the
+   pool, and `cont` retries the operation (#2264). */
 typedef struct {
     int blocked;
     unsigned long long ms;
@@ -1326,6 +1460,19 @@ static KValue k_exec(KDesc* d) {
             free(items);
             return out;
         }
+        /* Outside a group no other fiber can take or give, so a pool that
+           cannot answer now never will. */
+        case 37: return k_pool_make(d->x);
+        case 38: {
+            int waits;
+            KValue v = k_pool_take(d->x, &waits);
+            return waits ? k_pool_stuck(0) : v;
+        }
+        case 39: {
+            int waits;
+            KValue v = k_pool_give(d->x, d->y, &waits);
+            return waits ? k_pool_stuck(1) : v;
+        }
         default: {
             /* a bind chain is the program's outer pulse, so it runs as one
                bracketed loop: each step executes, hands its yield to the
@@ -1668,6 +1815,23 @@ static KStep k_step(KDesc* d) {
             KStep s = {2, 0, hole, k_none(), d, k_as_desc(hole)};
             return s;
         }
+        /* A take from an empty pool, or a give to a full one, parks the
+           fiber until another fiber gives or takes. When every fiber is
+           parked the scheduler sets k_pool_failing, and each parked
+           operation answers a failure that names it. */
+        case 38:
+        case 39: {
+            int waits;
+            KValue v = d->dtag == 38 ? k_pool_take(d->x, &waits)
+                                     : k_pool_give(d->x, d->y, &waits);
+            if (waits && k_pool_failing) v = k_pool_stuck(d->dtag == 39);
+            else if (waits) {
+                KStep s = {4, 0, k_mkdesc(d->dtag, d->x, d->y), k_none()};
+                return s;
+            }
+            KStep s = {0, 0, k_none(), v};
+            return s;
+        }
         default: {
             /* leaf effect: run to completion synchronously */
             KStep s = {0, 0, k_none(), k_exec(d)};
@@ -1871,13 +2035,35 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
     k_beat_push();
     k_carries[k_beat_depth - 1].at_arena = k_arena;
     k_carries[k_beat_depth - 1].at_blocks = (const void*)k_blocks;
+    /* A fiber whose chain stopped to be staged (step kind 3) is still inside
+       its step, so the pool's waking waits until the chain has finished: the
+       interpreter runs the whole chain before any fiber a give woke. */
+    int resuming = 0;
     while (f.n > 0) {
         k_sched_stage(&f, groups, ngroups);
+        /* A take or give went through: the fibers parked on a pool try
+           again, in spawn order, and nothing is stuck any more. */
+        if (__builtin_expect(k_pool_moved, 0) && !resuming) {
+            k_pool_moved = 0;
+            k_pool_failing = 0;
+            for (int i = 0; i < f.n; i++)
+                if (f.wake[i] == K_PARKED) f.wake[i] = now;
+        }
+        resuming = 0;
         int pick = 0;
         for (int i = 1; i < f.n; i++) {
             if (f.wake[i] < f.wake[pick]) pick = i;
         }
         if (f.wake[pick] > now) {
+            /* Every fiber is parked on a pool: nothing can give or take, so
+               each parked operation is woken to answer that it never will.
+               The parked mark is later than any clock, so this is only ever
+               asked on the way to a wait. */
+            if (f.wake[pick] == K_PARKED) {
+                k_pool_failing = 1;
+                for (int i = 0; i < f.n; i++) f.wake[i] = now;
+                continue;
+            }
             if (getenv("KANSO_SCHED_DEBUG")) {
                 fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%lld\n",
                         pick, f.wake[pick], k_ms_since(&sched_t0));
@@ -1907,6 +2093,11 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
            instructions in the scheduler's code around it. */
         if (s.blocked == 1 || s.blocked == 3) {
             if (s.blocked == 1) f.wake[pick] = now + s.ms;
+            else resuming = 1;
+            f.work[pick] = s.cont;
+        } else if (__builtin_expect(s.blocked == 4, 0)) {
+            /* parked on a pool: it waits for a take or give to move it */
+            f.wake[pick] = K_PARKED;
             f.work[pick] = s.cont;
         } else if (s.blocked == 2) {
             int g;
