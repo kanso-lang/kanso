@@ -112127,3 +112127,28 @@ codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
 0.001, and the floor follows under the rule for a change the language needs:
 a server written as its specification shows it, one statement, has to wait
 for its client.
+
+## 2026-10-29 — a sibling module's diagnostic quotes its line
+
+#2188. `render_merged` took a bare file name for an embedded file and never
+read it from disk, on the reasoning that a shipped module's files are the
+bare ones. They are named under `std/`, and a bare name is a file beside an
+entry run from its own directory, so a refusal in a sibling module printed
+its location and no source line there. It now reads a bare name when the
+entry's own name is bare too.
+
+tests/golden/errors_module gains a sibling-file case, which a spec runs from
+inside its directory; it was watched red with the line missing. One error
+golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
+as a library beside a generated entry, both bare, and it now quotes the line
+it points at.
+
+The browser has no disk to read the line from, so the page answered the same
+refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
+the page to every error golden, went red on the other host. A file the
+compiler was handed as source is now read from what it was handed before the
+disk is tried. The spec was watched red without that, on
+a_field_read_of_a_list, and passes with it.
+
+The browser compile moves by two instructions, browser_compile_instructions
+343,196,938 (-2), and no other row moves.

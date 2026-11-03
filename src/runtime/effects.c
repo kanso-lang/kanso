@@ -919,15 +919,22 @@ static ssize_t k_conn_take(long long h, int fd, char* buf, size_t n) {
     return read(fd, buf, n);
 }
 
-/* Bytes to a connection, through its TLS session when it has one. */
+/* Bytes to a connection, through its TLS session when it has one. A peer
+   that has gone makes the write raise SIGPIPE, which ends the program
+   without a word, so the signal is ignored for the write: it fails with
+   EPIPE instead, and the program gets an err it can rescue. The runtime runs
+   one thread, so the handler it sets around the write is its own. */
 static ssize_t k_conn_give(long long h, int fd, const char* buf, size_t n) {
 #ifndef __wasm__
     void* ssl = k_sockets[h % K_SOCKETS].tls;
-    if (ssl) return k_ssl.write(ssl, buf, (int)n);
+    void (*was)(int) = signal(SIGPIPE, SIG_IGN);
+    ssize_t r = ssl ? k_ssl.write(ssl, buf, (int)n) : write(fd, buf, n);
+    signal(SIGPIPE, was);
+    return r;
 #else
     (void)h;
-#endif
     return write(fd, buf, n);
+#endif
 }
 
 /* A read from a connection, out of line for its 64 KiB buffer. Inside k_exec

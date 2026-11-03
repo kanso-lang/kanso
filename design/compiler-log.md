@@ -20,34 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-
-
-
-## 2026-10-29 — a sibling module's diagnostic quotes its line
-
-#2188. `render_merged` took a bare file name for an embedded file and never
-read it from disk, on the reasoning that a shipped module's files are the
-bare ones. They are named under `std/`, and a bare name is a file beside an
-entry run from its own directory, so a refusal in a sibling module printed
-its location and no source line there. It now reads a bare name when the
-entry's own name is bare too.
-
-tests/golden/errors_module gains a sibling-file case, which a spec runs from
-inside its directory; it was watched red with the line missing. One error
-golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
-as a library beside a generated entry, both bare, and it now quotes the line
-it points at.
-
-The browser has no disk to read the line from, so the page answered the same
-refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
-the page to every error golden, went red on the other host. A file the
-compiler was handed as source is now read from what it was handed before the
-disk is tried. The spec was watched red without that, on
-a_field_read_of_a_list, and passes with it.
-
-The browser compile moves by two instructions, browser_compile_instructions
-343,196,938 (-2), and no other row moves.
-
 ## 2026-10-29 — a derivation sees the calls a module makes, and can refuse one
 
 #2186's routing convention owes a compile error at a `path_to` that names a
@@ -1211,7 +1183,6 @@ canonical path, so each resource keeps one URL.
 Owed: senro's principles written down for Clay to correct, then
 `legacy_route_aliases` and singular resources with specs.
 
-
 ## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
 
 senro's views were Slim files, each with the kanso file kata generated from it
@@ -1253,6 +1224,33 @@ library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
 The ruling is a part of the language, so the welfare floor drops by exactly
 that cost, to 95.61456.
 
+## 2026-11-03 — a write to a peer that has gone is an err on both engines
+
+A senro server died without a word when a page that had been listening for
+changes closed. Native code wrote to the socket with `write()`, so the closed
+peer raised SIGPIPE, which the driver leaves at its default so that a program
+behind `head` ends quietly. The interpreter writes through Rust's std, which
+suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
+a wording the host supplies. The engines disagreed, and the interpreter is the
+oracle.
+
+The native write now ignores SIGPIPE for its duration and fails with EPIPE.
+The runtime runs one thread, so the handler it sets around the write is its
+own. Both engines say `cannot write`. The micro corpus's
+`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
+end and writes; before the fix the native run exited 141 with no output. The
+tab has no sockets, so the program is listed in the native route's known gaps.
+
+The two calls around the write cost code, by CI's measure. Every benchmark's
+machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
+fourteen. Clang does more work on the runtime: codegen_instructions_dev to
+117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
+moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
+890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
+to 938,655,381. Welfare falls by a sliver.
+Engines that agree are part of the language's specification, so the floor
+drops by exactly that cost.
+
 ## 2026-11-03 — kanso build writes a module a browser can run
 
 `kanso build page.kso --wasm` writes `page.wasm`: the emitted module
@@ -1266,4 +1264,12 @@ compiled for the browser are built this way (#2280).
 `tests/build_wasm.rs` builds a two-module program with the flag, reads the
 section back, links the module against the runtime under wasmi and checks
 that it prints. It failed on the unknown flag before the change.
+
+The flag is a branch in the driver, and the binary's layout moved with it, by
+CI's measure. Four front-end rows rose by a handful of instructions:
+compile_instructions to 24,102,382, entry_instructions to 86,840,310,
+library_instructions to 72,628,277 and startup_instructions to 50,267.
+emit_instructions fell to 5,599,243. Welfare falls by a sliver, and the
+browser build is part of the senro mandate, so the floor drops by exactly
+that cost.
 

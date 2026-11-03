@@ -1,0 +1,23 @@
+import "std/net"
+import "std/time"
+
+# A peer that has gone: the far end closes, and writing to it fails with an
+# err the program can rescue, instead of ending the process. The first write
+# after the close is accepted, and the peer answers it with a reset; only a
+# write after the reset has arrived fails. Each pause lets the close and the
+# reset cross the loopback, which a release build otherwise outruns.
+fn ended l
+  net/port l .> (p -> net/dial "127.0.0.1" p) .> (far -> spoken l far)
+
+fn spoken l far
+  net/accept l .> (near -> net/close_conn far .> (_ -> kept near))
+
+fn kept near
+  time/sleep 100
+    .> (_ -> net/write near "one")
+    .> (_ -> time/sleep 100)
+    .> (_ -> net/write near "two")
+    .> (_ -> net/write near "three")
+
+pub play = net/listen 0 .> ended .? (u -> "the write failed: {u.reason}")
+  .> print
