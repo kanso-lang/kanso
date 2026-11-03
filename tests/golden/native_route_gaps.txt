@@ -5,8 +5,8 @@
 # with native: a closed gap left on the list is a lie about the route.
 #
 # The route runs runtime.c built for wasm32 under a WASI host with no
-# processes, no filesystem and no sockets, so each of these is the runtime's own refusal of a call the
-# host could not serve.
+# processes, no filesystem and no sockets, so each of these is the runtime's
+# own refusal of a call the host could not serve.
 
 tests/golden/micro/a_command_that_answers_127.kso	cannot start sh
 tests/golden/micro/process_run.kso	cannot start printf
