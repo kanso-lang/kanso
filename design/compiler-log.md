@@ -1271,9 +1271,10 @@ and `#` starts a comment. That work lands in senro.
 
 Describing a program now costs a little more, because each module's record
 carries its files and the loader asks one more question of an empty
-directory. The rows rose, by CI's measure: entry_instructions=86840306
-(+30,611), browser_compile_instructions=349289583 (+18,342),
-library_instructions=72628273 (+425), emit_instructions=5599909 (+244),
-compile_instructions=24102378 (+69) and interp_instructions=622391510 (+3).
+directory. The rows rose, by CI's measure: entry_instructions to 86,840,306
+(+30,611), browser_compile_instructions to 349,289,583 (+18,342),
+library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
+(+244), compile_instructions to 24,102,378 (+69) and interp_instructions to
+622,391,510 (+3).
 The ruling is a part of the language, so the welfare floor drops by exactly
 that cost, to 95.61456.
