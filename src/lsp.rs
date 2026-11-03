@@ -136,7 +136,8 @@ impl Server {
 }
 
 /// A compile that panics is the compiler's bug, and it should not take the
-/// editor's server down with it: the buffer gets one diagnostic saying so.
+/// editor's server down with it: the buffer gets one diagnostic, on its first
+/// line, carrying what the panic said.
 fn analyze_guarded(file: &str, text: &str) -> Analysis {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -144,16 +145,23 @@ fn analyze_guarded(file: &str, text: &str) -> Analysis {
         std::panic::set_hook(Box::new(|_| {}));
         let caught = std::panic::catch_unwind(|| analysis::analyze(file, text));
         std::panic::set_hook(hook);
-        caught.unwrap_or_else(|_| Analysis {
-            problems: vec![analysis::Problem {
-                line: 0,
-                col: 0,
-                width: 0,
-                kind: "internal".to_string(),
-                message: "the compiler stopped on this file; `kanso check` shows where".to_string(),
-                error: true,
-            }],
-            spots: Vec::new(),
+        caught.unwrap_or_else(|payload| {
+            let said = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                .unwrap_or_default();
+            Analysis {
+                problems: vec![analysis::Problem {
+                    line: 0,
+                    col: 0,
+                    width: 0,
+                    kind: "internal".to_string(),
+                    message: said,
+                    error: true,
+                }],
+                spots: Vec::new(),
+            }
         })
     }
     #[cfg(target_arch = "wasm32")]
