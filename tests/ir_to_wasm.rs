@@ -15,24 +15,11 @@ use std::process::Command;
 
 #[path = "support/wasm32.rs"]
 mod wasm32;
-use wasm32::{execute, runtime, toolchain};
+use wasm32::{execute, host_bound, runtime, toolchain};
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
-
-/// Programs whose answer is a fact about the host they run on.
-const HOST: [(&str, &str); 9] = [
-    ("process_run", "runs a command"),
-    ("a_command_that_answers_127", "runs a command"),
-    ("make_dir_is_idempotent", "makes a directory"),
-    ("dir_listing_is_sorted", "lists a directory"),
-    ("a_file_that_is_not_text", "reads a file"),
-    ("is_dir", "asks the filesystem"),
-    ("modified_reads_when_a_file_changed", "asks the filesystem"),
-    ("write_err_stream", "orders two streams the host interleaves"),
-    ("a_write_to_a_peer_that_left_is_an_err", "opens a socket"),
-];
 
 fn run(cmd: &mut Command, what: &str) {
     let out = cmd.output().unwrap_or_else(|e| panic!("{what}: {e}"));
@@ -78,6 +65,7 @@ fn the_micro_corpus_answers_the_same_through_the_translator() {
     let rt = runtime(&work);
     let micro = root().join("tests/golden/micro");
     let only = std::env::var("KANSO_IRWASM_ONLY").ok();
+    let host = host_bound();
     let mut programs: Vec<PathBuf> = std::fs::read_dir(&micro)
         .expect("the corpus lists")
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -85,8 +73,7 @@ fn the_micro_corpus_answers_the_same_through_the_translator() {
         .filter(|p| std::fs::read_to_string(p).is_ok_and(|s| s.contains("\npub play")))
         .filter(|p| {
             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            !HOST.iter().any(|(h, _)| *h == stem)
-                && only.as_deref().is_none_or(|o| stem.contains(o))
+            !host.iter().any(|h| h == stem) && only.as_deref().is_none_or(|o| stem.contains(o))
         })
         .collect();
     programs.sort();
