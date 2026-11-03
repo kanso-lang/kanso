@@ -1293,6 +1293,9 @@ compile_instructions to 24,099,441 (-2,937), entry_instructions to 86,832,568
 (-7,738), library_instructions to 72,621,849 (-6,424), emit_instructions to
 5,599,747 (-162) and interp_instructions to 622,499,949 (+108,439).
 codegen_instructions_release rose to 371,872,995 (+226), which this diff does
-not explain: the emitted IR and the runtime are unchanged. Welfare fell by
+not explain: the emitted IR and the runtime are unchanged. The tab's compile
+rose too, browser_compile_instructions to 349,339,330 (+49,747); the wasm
+engine now carries a second caller of `compile_source`, which is a likely
+reason, though nothing here isolates it. Welfare fell by
 less than 0.01. Editor support for the language is part of making it usable,
 so the floor drops by exactly that cost.
