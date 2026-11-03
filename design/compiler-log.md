@@ -20,35 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-
-
-
-## 2026-10-29 — a server written as one statement waits for its client
-
-Outside a parallel group, `net/accept` answered "nothing connected" at once
-on both engines, on the reasoning that no other fiber could connect. A
-client outside the program can, and a server is usually written as one
-statement, so the guestbook prototype exited before a browser reached it.
-`accept` there now waits the way accept(2) does. Natively, `k_accept_waiting`
-clears the non-blocking flag a group's polling may have left and blocks; the
-interpreter's executor gains `accept_waiting`, which does the same with
-std::net. Inside a group `accept` is still a scheduling point.
-
-tests/sockets_serve.rs runs a one-statement server on both engines and has
-the harness say hello to it. It was watched red with the old behaviour: the
-program exited before the harness could connect.
-
-Every binary links the runtime, so each benchmark's text grows by 448 bytes
-(text 5,641,403 summed), and its instructions move by layout: no benchmark
-accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
-work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
-work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
-codegen_instructions_dev 116,812,856 (+15,582) and
-codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
-0.001, and the floor follows under the rule for a change the language needs:
-a server written as its specification shows it, one statement, has to wait
-for its client.
-
 ## 2026-10-29 — a sibling module's diagnostic quotes its line
 
 #2188. `render_merged` took a bare file name for an embedded file and never
@@ -1237,7 +1208,6 @@ canonical path, so each resource keeps one URL.
 Owed: senro's principles written down for Clay to correct, then
 `legacy_route_aliases` and singular resources with specs.
 
-
 ## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
 
 senro's views were Slim files, each with the kanso file kata generated from it
@@ -1278,3 +1248,31 @@ library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
 622,391,510 (+3).
 The ruling is a part of the language, so the welfare floor drops by exactly
 that cost, to 95.61456.
+
+## 2026-11-03 — a write to a peer that has gone is an err on both engines
+
+A senro server died without a word when a page that had been listening for
+changes closed. Native code wrote to the socket with `write()`, so the closed
+peer raised SIGPIPE, which the driver leaves at its default so that a program
+behind `head` ends quietly. The interpreter writes through Rust's std, which
+suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
+a wording the host supplies. The engines disagreed, and the interpreter is the
+oracle.
+
+The native write now ignores SIGPIPE for its duration and fails with EPIPE.
+The runtime runs one thread, so the handler it sets around the write is its
+own. Both engines say `cannot write`. The micro corpus's
+`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
+end and writes; before the fix the native run exited 141 with no output. The
+tab has no sockets, so the program is listed in the native route's known gaps.
+
+The two calls around the write cost code, by CI's measure. Every benchmark's
+machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
+fourteen. Clang does more work on the runtime: codegen_instructions_dev to
+117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
+moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
+890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
+to 938,655,381. Welfare falls by a sliver.
+Engines that agree are part of the language's specification, so the floor
+drops by exactly that cost.
+

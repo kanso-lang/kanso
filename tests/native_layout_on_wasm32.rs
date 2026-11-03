@@ -76,7 +76,7 @@ const DEPTH: [(&str, &str); 1] = [(
 )];
 
 /// Programs whose answer is a fact about the host they run on.
-const HOST: [(&str, &str); 8] = [
+const HOST: [(&str, &str); 9] = [
     ("process_run", "runs a command"),
     ("a_command_that_answers_127", "runs a command"),
     ("make_dir_is_idempotent", "makes a directory"),
@@ -85,6 +85,7 @@ const HOST: [(&str, &str); 8] = [
     ("is_dir", "asks the filesystem"),
     ("modified_reads_when_a_file_changed", "asks the filesystem"),
     ("write_err_stream", "orders two streams the host interleaves"),
+    ("a_write_to_a_peer_that_left_is_an_err", "opens a socket"),
 ];
 
 const SYSROOT: &str = "/usr";
