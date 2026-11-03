@@ -23,35 +23,6 @@
 
 
 
-## 2026-10-29 — sha256 gains HMAC and PBKDF2, and base64 joins the library
-
-Postgres logs a client in with SCRAM-SHA-256 (#2178), which needs HMAC,
-PBKDF2 and base64. `std/sha256` gains `digest`, the hash as bytes, `hmac key
-message` and `pbkdf2 password salt times size`, and the new `std/base64` has
-`encode`, `decode` (none on input that is not base64) and `decode!`. HMAC
-hashes each of its two key blocks once and keeps the state it leaves, so
-every HMAC under one key starts from there, which is most of what PBKDF2
-does: each of its rounds compresses two blocks instead of four.
-
-The tests are the published vectors: FIPS 180-4 and the two lengths either
-side of the padding boundary, RFC 4231's HMAC cases 1, 2 and 6 (6 has a key
-longer than a block), PBKDF2 at one, two and 4096 rounds and RFC 7914's
-two-block vector, and RFC 4648's base64 cases both ways. The guestbook
-prototype logs in to Postgres 16 with these.
-
-std/sha256 is imported by the entry and library corpora and by digestbench,
-so their rows move. The compile rows rise with the module: entry_instructions
-84,707,709 (+793,475) and library_instructions 71,324,471 (+462,430).
-digestbench compiles four more functions (emitted defines=118 calls=871
-branches=923 lines=7998) and its run rises to work_digestbench 4,104,363
-(+52), text 341,377 (+16); runbench carries the same module and reads
-work_runbench 825,011,765 (+717), text 819,297 (+16), with emitted defines=856
-calls=8793 branches=7545 lines=67140. Summed over
-the benchmarks the emitted counters read emitted_other_defines 2,278 (+2),
-emitted_other_calls 20,709 (+9), emitted_other_branches 17,933 (+8) and
-emitted_other_lines 171,268 (+133), and text 5,635,131 (+32). Welfare fell by about
-0.001 and the floor follows under the rule for a feature a ruling requires.
-
 ## 2026-10-29 — a field read in an import no longer makes the importer's name private
 
 #2189. A module that declares a name one of its imports also exports keeps
@@ -1267,3 +1238,27 @@ with `pool/make n`, `pool/take p`, `pool/give p v` and
   and birthplace the work gave it.
 
 Owed: nothing beyond #2264's list. The pool (#2277) already uses these names.
+
+## 2026-11-03 — gavel: senro is built out under a mandate, and keeps old paths only as aliases
+
+#2280 asked how a senro app keeps an old URL working once every route is
+RESTful. Clay ruled on that and widened it.
+
+- The declaration is `legacy_route_aliases`, a name that marks it as a
+  compatibility measure. Every resource still gets its RESTful route, and an
+  alias can only point at one. A wrong alias is refused while the app
+  compiles.
+- senro gets singular resources, as Rails has them: a resource with no
+  `:id`, such as `/profile`.
+- senro's design is delegated. Clay: "go to town and spend weeks expanding
+  the framework with a clear idea of what my underlying philosophy and
+  principles are, adding authentication a la devise, and basically making
+  this kanso alternative to ruby on rails." Cloud makes senro's design calls
+  and brings the whole to him for review. CLAUDE.md states the rule.
+
+Under the mandate, an alias answers with a permanent 308 redirect to its
+canonical path, so each resource keeps one URL.
+
+Owed: senro's principles written down for Clay to correct, then
+`legacy_route_aliases` and singular resources with specs.
+

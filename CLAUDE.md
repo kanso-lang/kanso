@@ -503,3 +503,9 @@ in one.
   relabelled or closed in the same change; implementation starts after the
   gavel is recorded.
 - Docs present the settled design; chronology lives only in the log.
+- **senro's design is cloud's to make (#2280).** Its names, API and
+  conventions are decided by cloud from the principles in senro's
+  `PRINCIPLES.md`, with no question per decision, until Clay reviews the
+  whole. Clay: "when you think it's gorgeous, only then do i step in and take
+  the 5000 ft view and dictate any major rewrites." A question about kanso
+  the language still goes to him as a `needs-clay` issue.
