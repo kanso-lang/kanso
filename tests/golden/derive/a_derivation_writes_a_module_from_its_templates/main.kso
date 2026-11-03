@@ -1,0 +1,6 @@
+import "./templates"
+import "./views"
+
+derive templates/views
+
+print (views/greeting "Ada")

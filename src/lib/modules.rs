@@ -112,6 +112,9 @@ thread_local! {
     /// derivations' arms in place, refuses whatever is still unknown.
     static DESCRIBING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static DEFERRED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Set when that first load stood an empty file in for a directory with
+    /// no kanso source, which the second load must find a derivation filled.
+    static STOOD_IN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Loads an entry's dependencies to describe them to its derivations, setting
@@ -123,10 +126,12 @@ fn load_to_describe(
 ) -> (Result<Loaded, String>, bool) {
     DESCRIBING.with(|d| d.set(true));
     DEFERRED.with(|d| d.set(false));
+    STOOD_IN.with(|d| d.set(false));
     let mut visited = crate::hash::Set::default();
     let loaded = load_dependencies(base, imports, &mut visited);
     DESCRIBING.with(|d| d.set(false));
-    (loaded, DEFERRED.with(|d| d.replace(false)))
+    let again = DEFERRED.with(|d| d.replace(false)) | STOOD_IN.with(|d| d.replace(false));
+    (loaded, again)
 }
 
 /// A module's path as the derived files are keyed: the canonical path when
@@ -643,9 +648,21 @@ fn module_sources(
     if let Some(text) = derived {
         sources.push((derived_name(dir), text));
     }
+    // A directory of templates alone is a module whose functions a derivation
+    // writes from them (#2280). While the entry's dependencies load to be
+    // described nothing has written them yet, so it loads empty; the second
+    // load compiles what was written, and refuses it if nothing was.
+    if sources.is_empty() && embedded.is_none() && dir.is_dir() && DESCRIBING.with(|d| d.get()) {
+        STOOD_IN.with(|d| d.set(true));
+        sources.push((derived_name(dir), String::new()));
+    }
     sources.sort_by(|a, b| a.0.cmp(&b.0));
     if sources.is_empty() {
-        return Err(format!("error: no .kso files in {}\n", dir.display()));
+        return Err(format!(
+            "error: no .kso files in {} — a directory without kanso source is a \
+             module only when a derivation writes its functions\n",
+            dir.display()
+        ));
     }
     // An entry file is a program, not a package member (the module-shape
     // gavel): main.kso never joins the merge, whether this directory is the
