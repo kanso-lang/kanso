@@ -617,7 +617,7 @@ impl Executor for RealExecutor {
 fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     use std::io::Write;
     if let Some(sent) = through_tls(conn, |tls| tls.write_all(raw).and_then(|()| tls.flush())) {
-        return sent?.map_err(|e| format!("cannot write: {e}"));
+        return sent?.map_err(|_| cannot_write());
     }
     let mut stream = SOCKETS.with(|s| {
         let s = s.borrow();
@@ -627,8 +627,15 @@ fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     let Some(stream) = stream.as_mut() else {
         return Err("that is not a connection".to_string());
     };
-    stream.write_all(raw).map_err(|e| format!("cannot write: {e}"))?;
-    stream.flush().map_err(|e| format!("cannot write: {e}"))
+    stream.write_all(raw).map_err(|_| cannot_write())?;
+    stream.flush().map_err(|_| cannot_write())
+}
+
+/// What a failed write to a socket says, on both engines. The host's own
+/// text (`Broken pipe (os error 32)`) changes with the platform, and native
+/// code says this.
+fn cannot_write() -> String {
+    "cannot write".to_string()
 }
 
 /// Runs `io` on a connection's TLS stream when `net/secured` upgraded it, and

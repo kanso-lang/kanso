@@ -1,0 +1,16 @@
+import "std/net"
+
+# A peer that has gone: the far end closes, and writing to it fails with an
+# err the program can rescue, instead of ending the process.
+fn ended l
+  net/port l .> (p -> net/dial "127.0.0.1" p) .> (far -> spoken l far)
+
+fn spoken l far
+  net/accept l .> (near -> net/close_conn far .> (_ -> kept near))
+
+fn kept near
+  net/write near "one"
+    .> (_ -> net/write near "two")
+    .> (_ -> net/write near "three")
+
+net/listen 0 .> ended .? (u -> "the write failed: {u.reason}") .> print
