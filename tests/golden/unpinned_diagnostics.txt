@@ -156,6 +156,13 @@ cannot write {}: {}
 #   cannot open the terminal: the repl with no tty
 #   cannot write             the .ll cannot be written
 #
+# ONE FIRES ONLY IF THE TRANSLATOR MEETS IR THE EMITTER NEVER WRITES.
+# `kanso build --wasm` hands the emitted module to ir_wasm, which lowers every
+# program the emitter writes: the whole micro corpus goes through it in
+# tests/ir_to_wasm.rs and in the tab. A program that reached this would be a
+# translator bug, and the fix would be the translator.
+cannot lower {} to wasm: {}
+#
 # FOUR ARE PINNED BY A RUST TEST, and stay listed because the driver family's
 # corpus search deliberately excludes Rust tests, so a message pinned only
 # there still reads as unpinned and its line has to say where the pin lives.
