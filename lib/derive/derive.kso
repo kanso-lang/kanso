@@ -37,12 +37,18 @@ pub type program
 # argument's name, or "" for an argument that is not a name; and each
 # argument's text, or "" for an argument that is not a string written whole.
 # `refuse_call` makes a compile error at one of them.
+# `files` maps the name of each file in the module's directory that is not
+# kanso source and reads as text to that text, such as a template a
+# convention writes one of the module's functions from. A directory of such
+# files alone is a module, and every function in it is one a derivation
+# defines. A module that is a single file has none, and so does the entry.
 pub type module
   name
   functions
   constants
   records
   calls
+  files
 
 pub type call
   module

@@ -1,0 +1,1 @@
+error: no .kso files in tests/golden/derive/a_module_of_templates_nothing_writes/views — a directory without kanso source is a module only when a derivation writes its functions

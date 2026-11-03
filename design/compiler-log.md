@@ -23,31 +23,6 @@
 
 
 
-## 2026-10-29 — a field read in an import no longer makes the importer's name private
-
-#2189. A module that declares a name one of its imports also exports keeps
-its own arms under the qualified spelling and moves the import's twin into
-the bare overload space. `qualify` told the two apart by file: a twin is
-cloned from the import's declaration and carries the import's file, while
-everything the module writes carries one of its own. The getter for a field
-counted as one of the module's own declarations, and its arms carry the file
-of each type that has the field, an import's among them. So when `entries`
-declared a record with a `name` field, `entries.kso` counted as one of
-`home`'s files, `entries/index`'s twin read as `home`'s own `index`, took
-`home/index` first, and was not pub: "`index` is private to module `home`".
-Getters are now left out of the module's files.
-
-The reduced program is three files in tests/golden/field_reads, run on both
-engines by `a_field_read_in_an_import_leaves_the_importers_names_its_own`.
-It was watched red with the old filter.
-
-The change moves the compile rows by layout: compile_instructions 24,064,926
-(+1,072), entry_instructions 84,709,988 (+2,279), library_instructions
-71,325,972 (+1,501) and browser_compile_instructions 343,196,940 (+8,965).
-The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
-Welfare fell by less than 0.0001, and the floor follows under the rule for a
-change that makes the language do what its specification says.
-
 ## 2026-10-29 — a server written as one statement waits for its client
 
 Outside a parallel group, `net/accept` answered "nothing connected" at once
@@ -1262,3 +1237,44 @@ canonical path, so each resource keeps one URL.
 Owed: senro's principles written down for Clay to correct, then
 `legacy_route_aliases` and singular resources with specs.
 
+
+## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
+
+senro's views were Slim files, each with the kanso file kata generated from it
+checked in beside it. Clay: "i don't want to see actual slim files in here, i
+just want a special kanso-specific format... designed from first principles,
+and not paired with a kso file. it should stand on its own and work and have a
+conversion/compilation step." On how: "probably this means kanso provides
+some kind of templating layer where you can create an arbitrary format that
+parses into normal kanso. i dunno. whatever you think best."
+
+The layer is the derivation, which already runs a library's kanso while the
+program compiles and can write source into a module (`derive/define`). Two
+things were missing, and this change adds them:
+
+- `derive/module` gains `files`: the text of each file in the module's
+  directory that is not kanso source, by name. A convention reads its
+  templates there.
+- A directory that holds no kanso source is still a module when a derivation
+  writes its functions. While the entry's dependencies load to be described,
+  it loads empty; the second load compiles what was written, and refuses the
+  directory if nothing was.
+
+Specs: `a_derivation_writes_a_module_from_its_templates` and
+`a_module_of_templates_nothing_writes` in the derive corpus, on both engines.
+The first failed with `no .kso files in …/views` before the loader change.
+
+The format is senro's to design under #2280's mandate. kata's templates
+become `.kata` files and its syntax follows kanso: `takes` names the
+parameters, holes are `{expr}`, control lines are bare `if`, `else` and `for`,
+and `#` starts a comment. That work lands in senro.
+
+Describing a program now costs a little more, because each module's record
+carries its files and the loader asks one more question of an empty
+directory. The rows rose, by CI's measure: entry_instructions to 86,840,306
+(+30,611), browser_compile_instructions to 349,289,583 (+18,342),
+library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
+(+244), compile_instructions to 24,102,378 (+69) and interp_instructions to
+622,391,510 (+3).
+The ruling is a part of the language, so the welfare floor drops by exactly
+that cost, to 95.61456.
