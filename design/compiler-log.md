@@ -1282,14 +1282,15 @@ overloads transcript went red when a call contributed only its first arm, and
 green with the union.
 
 The server is outside the compile path, and main.rs gains only the verb, so
-the compile rows moved with the binary's layout, by CI's measure:
-compile_instructions to 24,099,441 (-2,937), entry_instructions to 86,832,568
-(-7,738), library_instructions to 72,621,849 (-6,424), emit_instructions to
-5,599,747 (-162) and interp_instructions to 622,499,949 (+108,439).
-codegen_instructions_release rose to 371,872,995 (+226), which this diff does
+the compile rows moved with the binary's layout, by CI's measure on the tree
+merged with `kanso build --wasm`: compile_instructions to 24,099,445 (-2,937),
+entry_instructions to 86,832,572 (-7,738), library_instructions to 72,621,853
+(-6,424), startup_instructions to 50,264 (-3), emit_instructions to 5,600,882
+(+1,639) and interp_instructions to 622,499,949 (+108,439).
+codegen_instructions_release rose to 371,873,010 (+167), which this diff does
 not explain: the emitted IR and the runtime are unchanged. The tab's compile
 rose too, browser_compile_instructions to 349,339,330 (+49,747); the wasm
 engine now carries a second caller of `compile_source`, which is a likely
-reason, though nothing here isolates it. Welfare fell by
-less than 0.01. Editor support for the language is part of making it usable,
-so the floor drops by exactly that cost.
+reason, though nothing here isolates it. Welfare fell by less than 0.01.
+Editor support for the language is part of making it usable, so the floor
+drops by exactly that cost.
