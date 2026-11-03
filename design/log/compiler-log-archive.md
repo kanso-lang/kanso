@@ -112047,3 +112047,32 @@ other compile rows move by layout: compile_instructions 24,063,854 (-324),
 library_instructions 70,862,041 (-1,244) and browser_compile_instructions
 343,187,975 (-2,390). Welfare fell by less than 0.001 and the floor follows
 under the rule for a feature a ruling requires.
+
+## 2026-10-29 — sha256 gains HMAC and PBKDF2, and base64 joins the library
+
+Postgres logs a client in with SCRAM-SHA-256 (#2178), which needs HMAC,
+PBKDF2 and base64. `std/sha256` gains `digest`, the hash as bytes, `hmac key
+message` and `pbkdf2 password salt times size`, and the new `std/base64` has
+`encode`, `decode` (none on input that is not base64) and `decode!`. HMAC
+hashes each of its two key blocks once and keeps the state it leaves, so
+every HMAC under one key starts from there, which is most of what PBKDF2
+does: each of its rounds compresses two blocks instead of four.
+
+The tests are the published vectors: FIPS 180-4 and the two lengths either
+side of the padding boundary, RFC 4231's HMAC cases 1, 2 and 6 (6 has a key
+longer than a block), PBKDF2 at one, two and 4096 rounds and RFC 7914's
+two-block vector, and RFC 4648's base64 cases both ways. The guestbook
+prototype logs in to Postgres 16 with these.
+
+std/sha256 is imported by the entry and library corpora and by digestbench,
+so their rows move. The compile rows rise with the module: entry_instructions
+84,707,709 (+793,475) and library_instructions 71,324,471 (+462,430).
+digestbench compiles four more functions (emitted defines=118 calls=871
+branches=923 lines=7998) and its run rises to work_digestbench 4,104,363
+(+52), text 341,377 (+16); runbench carries the same module and reads
+work_runbench 825,011,765 (+717), text 819,297 (+16), with emitted defines=856
+calls=8793 branches=7545 lines=67140. Summed over
+the benchmarks the emitted counters read emitted_other_defines 2,278 (+2),
+emitted_other_calls 20,709 (+9), emitted_other_branches 17,933 (+8) and
+emitted_other_lines 171,268 (+133), and text 5,635,131 (+32). Welfare fell by about
+0.001 and the floor follows under the rule for a feature a ruling requires.
