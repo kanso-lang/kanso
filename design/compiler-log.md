@@ -1269,7 +1269,8 @@ The flag is a branch in the driver, and the binary's layout moved with it, by
 CI's measure. Four front-end rows rose by a handful of instructions:
 compile_instructions to 24,102,382, entry_instructions to 86,840,310,
 library_instructions to 72,628,277 and startup_instructions to 50,267.
-emit_instructions fell to 5,599,243. Welfare falls by a sliver, and the
+codegen_instructions_release rose to 371,872,843. emit_instructions fell to
+5,599,243. Welfare falls by a sliver, and the
 browser build is part of the senro mandate, so the floor drops by exactly
 that cost.
 
