@@ -4344,6 +4344,16 @@ welfare                      77.37         82.09</code></pre>
 
 <p><code>std/net/http</code> parsed a request&#39;s first line and dropped the rest of its head, so a server could not read a cookie. A request now carries a fourth field, <code>headers</code>, which maps each name, lowercased, to its value with the surrounding spaces trimmed. A pattern on <code>request</code> takes four places, and the web chapter&#39;s teashop says what the last two hold.</p>
 
+<h2 id="pools"><span class="sec-num">279</span>fibers that share and wait</h2>
+
+<p>A chain of <code>.&gt;</code> steps that never waits runs within one step of its fiber. Both engines used to walk it by recursion, one frame per link, so a long chain beside a second fiber ran native code out of stack at about a hundred thousand links. Each step now goes round a loop: a link that answers another description becomes the next thing to step.</p>
+
+<p><code>std/pool</code> lets fibers share values: <code>pool/make n</code>, <code>pool/take p</code>, <code>pool/give p v</code>, and <code>pool/with p work</code>, which gives the value back however the work ends. A take from an empty pool parks its fiber, and so does a give to a full one. The scheduler wakes parked fibers when a pool moves. When every fiber is parked and nothing can wake them, each stuck take or give answers an err saying which it was, so the program ends with reasons instead of hanging. Natively a given value is copied into storage the pool owns, so a value given during one request survives the reclaiming that follows it. senro keeps its database sessions in one.</p>
+
+<p>The scheduler is kept out of line natively. Inlined into <code>k_exec</code>, it widened the frame of every effect a program ran, forked or not. In the tab the inlined loop is the cheaper one, so the attribute stops at wasm.</p>
+
+<p>A write to a socket whose peer has gone is an err on both engines and says <code>cannot write</code>. Native code used to receive SIGPIPE from the write and end without a word, while the interpreter got an error worded by the host. The native write now ignores the signal for its duration. A server can rescue the err and keep serving the connections that are still there.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

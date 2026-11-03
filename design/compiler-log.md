@@ -23,31 +23,6 @@
 
 
 
-## 2026-10-29 — a field read in an import no longer makes the importer's name private
-
-#2189. A module that declares a name one of its imports also exports keeps
-its own arms under the qualified spelling and moves the import's twin into
-the bare overload space. `qualify` told the two apart by file: a twin is
-cloned from the import's declaration and carries the import's file, while
-everything the module writes carries one of its own. The getter for a field
-counted as one of the module's own declarations, and its arms carry the file
-of each type that has the field, an import's among them. So when `entries`
-declared a record with a `name` field, `entries.kso` counted as one of
-`home`'s files, `entries/index`'s twin read as `home`'s own `index`, took
-`home/index` first, and was not pub: "`index` is private to module `home`".
-Getters are now left out of the module's files.
-
-The reduced program is three files in tests/golden/field_reads, run on both
-engines by `a_field_read_in_an_import_leaves_the_importers_names_its_own`.
-It was watched red with the old filter.
-
-The change moves the compile rows by layout: compile_instructions 24,064,926
-(+1,072), entry_instructions 84,709,988 (+2,279), library_instructions
-71,325,972 (+1,501) and browser_compile_instructions 343,196,940 (+8,965).
-The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
-Welfare fell by less than 0.0001, and the floor follows under the rule for a
-change that makes the language do what its specification says.
-
 ## 2026-10-29 — a server written as one statement waits for its client
 
 Outside a parallel group, `net/accept` answered "nothing connected" at once
@@ -1261,4 +1236,31 @@ canonical path, so each resource keeps one URL.
 
 Owed: senro's principles written down for Clay to correct, then
 `legacy_route_aliases` and singular resources with specs.
+
+## 2026-11-03 — a write to a peer that has gone is an err on both engines
+
+A senro server died without a word when a page that had been listening for
+changes closed. Native code wrote to the socket with `write()`, so the closed
+peer raised SIGPIPE, which the driver leaves at its default so that a program
+behind `head` ends quietly. The interpreter writes through Rust's std, which
+suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
+a wording the host supplies. The engines disagreed, and the interpreter is the
+oracle.
+
+The native write now ignores SIGPIPE for its duration and fails with EPIPE.
+The runtime runs one thread, so the handler it sets around the write is its
+own. Both engines say `cannot write`. The micro corpus's
+`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
+end and writes; before the fix the native run exited 141 with no output. The
+tab has no sockets, so the program is listed in the native route's known gaps.
+
+The two calls around the write cost code, by CI's measure. Every benchmark's
+machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
+fourteen. Clang does more work on the runtime: codegen_instructions_dev to
+117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
+moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
+890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
+to 938,655,381. Welfare falls by a sliver.
+Engines that agree are part of the language's specification, so the floor
+drops by exactly that cost.
 
