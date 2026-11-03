@@ -346,10 +346,11 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
                                      declared, then stop
   test <file|dir>                    run the `test_*` constants in each
                                      `*_test.kso` file, which sees only pub names
-  build <file|dir> [--release|--counters]
+  build <file|dir> [--release|--counters|--wasm]
                                      write a native binary here, named for
                                      the program; --counters builds one that
-                                     reports its counters under KANSO_COUNTERS=1
+                                     reports its counters under KANSO_COUNTERS=1;
+                                     --wasm writes a module a page can run
   repl                               evaluate expressions as you type them
 
   install <dir> [--from owner/repo@branch]
