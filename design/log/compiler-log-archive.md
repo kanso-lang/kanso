@@ -112101,3 +112101,29 @@ The change moves the compile rows by layout: compile_instructions 24,064,926
 The interpreted run allocates one value fewer, interp_allocs 653,374 (-1).
 Welfare fell by less than 0.0001, and the floor follows under the rule for a
 change that makes the language do what its specification says.
+
+## 2026-10-29 — a server written as one statement waits for its client
+
+Outside a parallel group, `net/accept` answered "nothing connected" at once
+on both engines, on the reasoning that no other fiber could connect. A
+client outside the program can, and a server is usually written as one
+statement, so the guestbook prototype exited before a browser reached it.
+`accept` there now waits the way accept(2) does. Natively, `k_accept_waiting`
+clears the non-blocking flag a group's polling may have left and blocks; the
+interpreter's executor gains `accept_waiting`, which does the same with
+std::net. Inside a group `accept` is still a scheduling point.
+
+tests/sockets_serve.rs runs a one-statement server on both engines and has
+the harness say hello to it. It was watched red with the old behaviour: the
+program exited before the harness could connect.
+
+Every binary links the runtime, so each benchmark's text grows by 448 bytes
+(text 5,641,403 summed), and its instructions move by layout: no benchmark
+accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
+work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
+work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
+codegen_instructions_dev 116,812,856 (+15,582) and
+codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
+0.001, and the floor follows under the rule for a change the language needs:
+a server written as its specification shows it, one statement, has to wait
+for its client.

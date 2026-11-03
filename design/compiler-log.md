@@ -20,35 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-
-
-
-## 2026-10-29 — a server written as one statement waits for its client
-
-Outside a parallel group, `net/accept` answered "nothing connected" at once
-on both engines, on the reasoning that no other fiber could connect. A
-client outside the program can, and a server is usually written as one
-statement, so the guestbook prototype exited before a browser reached it.
-`accept` there now waits the way accept(2) does. Natively, `k_accept_waiting`
-clears the non-blocking flag a group's polling may have left and blocks; the
-interpreter's executor gains `accept_waiting`, which does the same with
-std::net. Inside a group `accept` is still a scheduling point.
-
-tests/sockets_serve.rs runs a one-statement server on both engines and has
-the harness say hello to it. It was watched red with the old behaviour: the
-program exited before the harness could connect.
-
-Every binary links the runtime, so each benchmark's text grows by 448 bytes
-(text 5,641,403 summed), and its instructions move by layout: no benchmark
-accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
-work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
-work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
-codegen_instructions_dev 116,812,856 (+15,582) and
-codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
-0.001, and the floor follows under the rule for a change the language needs:
-a server written as its specification shows it, one statement, has to wait
-for its client.
-
 ## 2026-10-29 — a sibling module's diagnostic quotes its line
 
 #2188. `render_merged` took a bare file name for an embedded file and never
@@ -1236,6 +1207,47 @@ canonical path, so each resource keeps one URL.
 
 Owed: senro's principles written down for Clay to correct, then
 `legacy_route_aliases` and singular resources with specs.
+
+## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
+
+senro's views were Slim files, each with the kanso file kata generated from it
+checked in beside it. Clay: "i don't want to see actual slim files in here, i
+just want a special kanso-specific format... designed from first principles,
+and not paired with a kso file. it should stand on its own and work and have a
+conversion/compilation step." On how: "probably this means kanso provides
+some kind of templating layer where you can create an arbitrary format that
+parses into normal kanso. i dunno. whatever you think best."
+
+The layer is the derivation, which already runs a library's kanso while the
+program compiles and can write source into a module (`derive/define`). Two
+things were missing, and this change adds them:
+
+- `derive/module` gains `files`: the text of each file in the module's
+  directory that is not kanso source, by name. A convention reads its
+  templates there.
+- A directory that holds no kanso source is still a module when a derivation
+  writes its functions. While the entry's dependencies load to be described,
+  it loads empty; the second load compiles what was written, and refuses the
+  directory if nothing was.
+
+Specs: `a_derivation_writes_a_module_from_its_templates` and
+`a_module_of_templates_nothing_writes` in the derive corpus, on both engines.
+The first failed with `no .kso files in …/views` before the loader change.
+
+The format is senro's to design under #2280's mandate. kata's templates
+become `.kata` files and its syntax follows kanso: `takes` names the
+parameters, holes are `{expr}`, control lines are bare `if`, `else` and `for`,
+and `#` starts a comment. That work lands in senro.
+
+Describing a program now costs a little more, because each module's record
+carries its files and the loader asks one more question of an empty
+directory. The rows rose, by CI's measure: entry_instructions to 86,840,306
+(+30,611), browser_compile_instructions to 349,289,583 (+18,342),
+library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
+(+244), compile_instructions to 24,102,378 (+69) and interp_instructions to
+622,391,510 (+3).
+The ruling is a part of the language, so the welfare floor drops by exactly
+that cost, to 95.61456.
 
 ## 2026-11-03 — a write to a peer that has gone is an err on both engines
 

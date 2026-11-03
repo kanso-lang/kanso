@@ -69,7 +69,7 @@ enum Made {
 pub fn derive(
     entry: &Program,
     root: &str,
-    files: &[(String, String)],
+    base: &std::path::Path,
     deps: &Program,
     exports: &Exports,
 ) -> Result<Derived, Vec<Diagnostic>> {
@@ -78,7 +78,7 @@ pub fn derive(
         return Err(diags);
     }
     let interp = Interp::copying(deps);
-    let description = describe(entry, root, files, deps, exports, &interp)?;
+    let description = describe(entry, root, base, deps, exports, &interp)?;
     let mut made = Derived::default();
     for d in &entry.derives {
         match run(&interp, deps, d, &description) {
@@ -105,35 +105,44 @@ pub fn derive(
 }
 
 /// The entry, then the app's own modules it imports, each with its pub
-/// functions, its pub constants and its record types, and the files beside
-/// the entry. The modules a derivation lives in are left out: they hold the
-/// convention, not the program it describes.
+/// functions, its pub constants, its record types and the files in its
+/// directory that are not kanso source, and the files beside the entry. The
+/// modules a derivation lives in are left out: they hold the convention, not
+/// the program it describes.
 fn describe(
     entry: &Program,
     root: &str,
-    files: &[(String, String)],
+    base: &std::path::Path,
     deps: &Program,
     exports: &Exports,
     interp: &Interp,
 ) -> Result<Value, Vec<Diagnostic>> {
     let mut modules = vec![entry_module(entry, root)];
-    for name in described(entry) {
-        modules.push(module(deps, &name, exports, interp).map_err(|d| vec![d])?);
+    for (name, path) in described_at(entry) {
+        let files = texts(&beside(&base.join(path.trim_start_matches("./"))));
+        modules.push(module(deps, &name, files, exports, interp).map_err(|d| vec![d])?);
     }
+    Ok(record("derive/program", vec![list(modules), texts(&beside(base))]))
+}
+
+/// Files by name, as the map a derivation reads.
+fn texts(files: &[(String, String)]) -> Value {
     let mut texts = Entries::new();
     for (name, body) in files {
         texts.insert(MapKey::Str(name.clone().into()), text(body));
     }
-    Ok(record("derive/program", vec![list(modules), Value::Map(Rc::new(texts))]))
+    Value::Map(Rc::new(texts))
 }
 
-/// The files directly beside the entry that a derivation is handed by name:
+/// The files directly in a directory that a derivation is handed by name:
 /// every one that is not kanso source and reads as text, such as the
-/// `schema.sql` a models convention reads in place of its migrations (#2186).
-/// They are inputs like the source, so the same tree derives the same
-/// declarations. A compile with no directory under it, as in the tab, hands
-/// none.
-pub fn beside(dir: &std::path::Path) -> Vec<(String, String)> {
+/// `schema.sql` beside an entry that a models convention reads in place of its
+/// migrations (#2186), or the templates in a module's directory that a
+/// convention writes the module's functions from (#2280). They are inputs
+/// like the source, so the same tree derives the same declarations. A module
+/// that is one file has none, and so does a compile with no directory under
+/// it, as in the tab.
+fn beside(dir: &std::path::Path) -> Vec<(String, String)> {
     let dir = if dir.as_os_str().is_empty() { std::path::Path::new(".") } else { dir };
     let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
     let mut files: Vec<(String, String)> = entries
@@ -162,6 +171,7 @@ fn entry_module(entry: &Program, root: &str) -> Value {
         Value::Map(Rc::new(Entries::new())),
         list(Vec::new()),
         list(calls),
+        Value::Map(Rc::new(Entries::new())),
     ];
     record("derive/module", fields)
 }
@@ -172,6 +182,11 @@ fn entry_module(entry: &Program, root: &str) -> Value {
 /// reads these through its derivations, so their imports are in use whether
 /// or not a statement names them.
 pub fn described(entry: &Program) -> Vec<String> {
+    described_at(entry).into_iter().map(|(name, _)| name).collect()
+}
+
+/// Each module a derivation is shown, with the path the entry imports it by.
+fn described_at(entry: &Program) -> Vec<(String, &str)> {
     let deriving: Vec<&str> =
         entry.derives.iter().filter_map(|d| d.name.split_once('/').map(|(m, _)| m)).collect();
     entry
@@ -179,10 +194,10 @@ pub fn described(entry: &Program) -> Vec<String> {
         .iter()
         .filter(|i| i.path.starts_with("./"))
         .map(|i| match &i.alias {
-            Some(alias) => alias.to_string(),
-            None => i.path.rsplit('/').next().unwrap_or_default().to_string(),
+            Some(alias) => (alias.to_string(), i.path.as_str()),
+            None => (i.path.rsplit('/').next().unwrap_or_default().to_string(), i.path.as_str()),
         })
-        .filter(|name| !deriving.contains(&name.as_str()))
+        .filter(|(name, _)| !deriving.contains(&name.as_str()))
         .collect()
 }
 
@@ -239,6 +254,7 @@ fn names_in(e: &Expr, named: &mut Vec<(String, Span)>) {
 fn module(
     deps: &Program,
     name: &str,
+    files: Value,
     exports: &Exports,
     interp: &Interp,
 ) -> Result<Value, Diagnostic> {
@@ -290,7 +306,7 @@ fn module(
         .collect();
     let constants = Value::Map(Rc::new(constants));
     let calls = calls_in(deps, name);
-    let fields = vec![text(name), list(functions), constants, list(records), list(calls)];
+    let fields = vec![text(name), list(functions), constants, list(records), list(calls), files];
     Ok(record("derive/module", fields))
 }
 
