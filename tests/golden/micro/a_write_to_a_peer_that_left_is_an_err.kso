@@ -13,4 +13,5 @@ fn kept near
     .> (_ -> net/write near "two")
     .> (_ -> net/write near "three")
 
-net/listen 0 .> ended .? (u -> "the write failed: {u.reason}") .> print
+pub play = net/listen 0 .> ended .? (u -> "the write failed: {u.reason}")
+  .> print
