@@ -49,9 +49,9 @@
 //!   the data segment, and a twenty-step `.>` chain overran it and wrote over
 //!   libc's `stdout`; native runs with 8 MB.
 //!
-//! Programs that need a process or a filesystem are listed in `HOST` with the
-//! reason. The page has neither, and a WASI host that pretended to would be
-//! testing the host.
+//! Programs that need a process or a filesystem are left out, as
+//! `wasm32::host_bound` lists them. The page has neither, and a WASI host that
+//! pretended to would be testing the host.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -74,19 +74,6 @@ const DEPTH: [(&str, &str); 1] = [(
     "a_lambda_called_in_tail_position_costs_no_stack",
     "jumps through a closure pointer 100,000 times",
 )];
-
-/// Programs whose answer is a fact about the host they run on.
-const HOST: [(&str, &str); 9] = [
-    ("process_run", "runs a command"),
-    ("a_command_that_answers_127", "runs a command"),
-    ("make_dir_is_idempotent", "makes a directory"),
-    ("dir_listing_is_sorted", "lists a directory"),
-    ("a_file_that_is_not_text", "reads a file"),
-    ("is_dir", "asks the filesystem"),
-    ("modified_reads_when_a_file_changed", "asks the filesystem"),
-    ("write_err_stream", "orders two streams the host interleaves"),
-    ("a_write_to_a_peer_that_left_is_an_err", "opens a socket"),
-];
 
 const SYSROOT: &str = "/usr";
 const WASI_LIB: &str = "/usr/lib/wasm32-wasi";
@@ -202,6 +189,7 @@ fn the_micro_corpus_answers_the_same_on_native_layout_in_wasm32() {
     std::fs::create_dir_all(&work).expect("the work dir makes");
     let rt = runtime(&work);
     let micro = root().join("tests/golden/micro");
+    let host = wasm32::host_bound();
     let mut programs: Vec<PathBuf> = std::fs::read_dir(&micro)
         .expect("the corpus lists")
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -209,7 +197,7 @@ fn the_micro_corpus_answers_the_same_on_native_layout_in_wasm32() {
         .filter(|p| std::fs::read_to_string(p).expect("the program reads").contains("\npub play"))
         .filter(|p| {
             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-            !HOST.iter().chain(&DEPTH).any(|(name, _)| *name == stem)
+            !host.iter().any(|h| h == stem) && !DEPTH.iter().any(|(name, _)| *name == stem)
         })
         .collect();
     programs.sort();

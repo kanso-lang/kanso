@@ -22,6 +22,24 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// The micro programs a harness running the corpus on wasm32 leaves out,
+/// because their answer is a fact about the host: the native route's gaps,
+/// which tests/golden/native_route_gaps.txt lists with what the page answers
+/// instead, and `write_err_stream`, which writes to both streams. A terminal
+/// interleaves the two, and these harnesses read them apart; the page and
+/// native agree on it.
+pub fn host_bound() -> Vec<String> {
+    let gaps = std::fs::read_to_string(root().join("tests/golden/native_route_gaps.txt"))
+        .expect("the route's gap list");
+    gaps.lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once('\t'))
+        .filter_map(|(path, _)| Path::new(path).file_stem().and_then(|s| s.to_str()))
+        .map(str::to_string)
+        .chain(["write_err_stream".to_string()])
+        .collect()
+}
+
 /// Whether this host can build the runtime at all. The Linux specs job sets
 /// `KANSO_WASM32_REQUIRED` after installing the toolchain, and there a missing
 /// piece is a failure rather than a skip.
