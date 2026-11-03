@@ -20,31 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a sibling module's diagnostic quotes its line
-
-#2188. `render_merged` took a bare file name for an embedded file and never
-read it from disk, on the reasoning that a shipped module's files are the
-bare ones. They are named under `std/`, and a bare name is a file beside an
-entry run from its own directory, so a refusal in a sibling module printed
-its location and no source line there. It now reads a bare name when the
-entry's own name is bare too.
-
-tests/golden/errors_module gains a sibling-file case, which a spec runs from
-inside its directory; it was watched red with the line missing. One error
-golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
-as a library beside a generated entry, both bare, and it now quotes the line
-it points at.
-
-The browser has no disk to read the line from, so the page answered the same
-refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
-the page to every error golden, went red on the other host. A file the
-compiler was handed as source is now read from what it was handed before the
-disk is tried. The spec was watched red without that, on
-a_field_read_of_a_list, and passes with it.
-
-The browser compile moves by two instructions, browser_compile_instructions
-343,196,938 (-2), and no other row moves.
-
 ## 2026-10-29 — a derivation sees the calls a module makes, and can refuse one
 
 #2186's routing convention owes a compile error at a `path_to` that names a
@@ -1275,4 +1250,27 @@ moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
 to 938,655,381. Welfare falls by a sliver.
 Engines that agree are part of the language's specification, so the floor
 drops by exactly that cost.
+
+## 2026-11-03 — kanso build writes a module a browser can run
+
+`kanso build page.kso --wasm` writes `page.wasm`: the emitted module
+lowered by `ir_wasm` to a wasm side module, the one the playground links
+against `runtime.c` built for wasm32. A page needs two numbers before it can
+link the module, the data bytes and the table slots it asks for, and they
+ride in the module as a custom section named `kanso.link`, two
+little-endian u32s, so the file is all a page has to fetch. senro's views
+compiled for the browser are built this way (#2280).
+
+`tests/build_wasm.rs` builds a two-module program with the flag, reads the
+section back, links the module against the runtime under wasmi and checks
+that it prints. It failed on the unknown flag before the change.
+
+The flag is a branch in the driver, and the binary's layout moved with it, by
+CI's measure. Four front-end rows rose by a handful of instructions:
+compile_instructions to 24,102,382, entry_instructions to 86,840,310,
+library_instructions to 72,628,277 and startup_instructions to 50,267.
+codegen_instructions_release rose to 371,872,843. emit_instructions fell to
+5,599,243. Welfare falls by a sliver, and the
+browser build is part of the senro mandate, so the floor drops by exactly
+that cost.
 
