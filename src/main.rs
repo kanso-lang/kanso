@@ -332,8 +332,9 @@ fn interpreter_counters() -> String {
     )
 }
 
-const VERBS: [&str; 10] =
-    ["run", "play", "check", "derived", "test", "build", "install", "list", "update", "repl"];
+const VERBS: [&str; 11] = [
+    "run", "play", "check", "derived", "test", "build", "install", "list", "update", "repl", "lsp",
+];
 
 const USAGE: &str = "usage: kanso <verb> [arguments]
 
@@ -351,6 +352,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
                                      the program; --counters builds one that
                                      reports its counters under KANSO_COUNTERS=1
   repl                               evaluate expressions as you type them
+  lsp                                serve an editor the language server
+                                     protocol on stdin and stdout
 
   install <dir> [--from owner/repo@branch]
                                      resolve the imports, fetch them, write
@@ -381,6 +384,11 @@ fn driven() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("repl") {
         return repl();
+    }
+    // The language server speaks to an editor over stdin and stdout, and
+    // takes no file: the editor names each buffer as it opens it.
+    if args.first().map(String::as_str) == Some("lsp") {
+        return ExitCode::from(kanso::lsp::serve_stdio() as u8);
     }
     // Asking for help is not a mistake, so it answers on stdout and exits
     // clean — `kanso --help | less` showed nothing when it did neither.

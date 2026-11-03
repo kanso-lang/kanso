@@ -20,31 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a sibling module's diagnostic quotes its line
-
-#2188. `render_merged` took a bare file name for an embedded file and never
-read it from disk, on the reasoning that a shipped module's files are the
-bare ones. They are named under `std/`, and a bare name is a file beside an
-entry run from its own directory, so a refusal in a sibling module printed
-its location and no source line there. It now reads a bare name when the
-entry's own name is bare too.
-
-tests/golden/errors_module gains a sibling-file case, which a spec runs from
-inside its directory; it was watched red with the line missing. One error
-golden, a_field_read_of_a_list, had pinned the missing line: its fixture runs
-as a library beside a generated entry, both bare, and it now quotes the line
-it points at.
-
-The browser has no disk to read the line from, so the page answered the same
-refusal without it, and tests/wasm_engine.rs's error-corpus spec, which holds
-the page to every error golden, went red on the other host. A file the
-compiler was handed as source is now read from what it was handed before the
-disk is tried. The spec was watched red without that, on
-a_field_read_of_a_list, and passes with it.
-
-The browser compile moves by two instructions, browser_compile_instructions
-343,196,938 (-2), and no other row moves.
-
 ## 2026-10-29 — a derivation sees the calls a module makes, and can refuse one
 
 #2186's routing convention owes a compile error at a `path_to` that names a
@@ -1276,3 +1251,41 @@ to 938,655,381. Welfare falls by a sliver.
 Engines that agree are part of the language's specification, so the floor
 drops by exactly that cost.
 
+
+## 2026-11-03 — an editor asks the compiler what a name is
+
+Clay asked for a language server that works in RubyMine and in the
+playground, whose hover shows the type the compiler worked with. `kanso lsp`
+speaks the Language Server Protocol over stdin and stdout. It publishes the
+diagnostics `kanso check` prints, answers a hover and jumps to a definition.
+The playground runs the same `Server` through a wasm export, `kanso_lsp`,
+which takes one message and returns the replies as a JSON array.
+
+The diagnostics are read out of the check's own rendering, so an editor shows
+the words the command line does, from every compile route, with no second list
+to keep in step. A hover reads the program the check compiled. A parameter's
+type is what it accepts: each call the parameter is handed to contributes the
+union of what the arms it can reach take at that position, and the
+parameter's uses are intersected. An arm that binds the position by name passes
+on what that name accepts, so the answer follows a value through every call it
+passes, as a greatest fixpoint over the whole program. With `fn bar s:string`
+and `fn bar n:int`, `fn foo x` whose body is `bar x` shows `x: int | string`.
+When the program's own calls hand the parameter something narrower, the
+inference's `param` set, which the engines dispatch on, appears on a second
+line. Unions are spelled the way typesets and appendix B spell them.
+
+A use the walk does not read constrains nothing: an operator's operand, a
+builtin's argument, a capture in a lambda. The answer can be wider than the
+truth and never narrower. Builtins are the gap most readers will meet, since
+`text/split s sep` hands both to `builtin_split` and so reads as accepting
+anything; the interpreter knows each builtin's argument types only by refusing
+the wrong ones at run time, and the table that would close the gap is a
+follow-up. A buffer that does not compile has diagnostics and no hovers.
+
+`tests/the_language_server_answers_an_editor.rs` replays three recorded
+sessions from `tests/golden/lsp` and compares every reply byte for byte. The
+overloads transcript went red when a call contributed only its first arm, and
+green with the union.
+
+Editor support for the language is part of making it usable, so the floor
+moves by exactly what this costs.

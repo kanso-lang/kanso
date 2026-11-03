@@ -10,6 +10,7 @@ thread_local! {
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static FILE: RefCell<String> = RefCell::new("playground".to_string());
     static RNG: RefCell<crate::eval::Rng> = RefCell::new(crate::eval::Rng::seeded());
+    static SERVER: RefCell<crate::lsp::Server> = RefCell::new(crate::lsp::Server::new());
 }
 
 fn current_file() -> String {
@@ -326,6 +327,19 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
             1
         }
     }
+}
+
+/// The language server `kanso lsp` runs, handed one JSON-RPC message at a
+/// time with no framing. The output buffer holds a JSON array of whatever the
+/// server would have written back: a response, diagnostics, both or neither.
+/// Returns how many there are.
+#[no_mangle]
+pub extern "C" fn kanso_lsp(ptr: *const u8, len: usize) -> i32 {
+    let message = take_input(ptr, len);
+    let replies = SERVER.with(|s| s.borrow_mut().handle(&message));
+    let count = replies.len() as i32;
+    set_out(&crate::lsp::json::Json::Arr(replies).text());
+    count
 }
 
 /// Compile and run a play file — the relaxed form the playground buffer

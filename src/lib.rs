@@ -22,6 +22,7 @@ pub mod int;
 pub mod ir_wasm;
 pub mod lexer;
 pub mod linear;
+pub mod lsp;
 pub mod name;
 pub mod parser;
 pub mod provenance;

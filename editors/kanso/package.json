@@ -1,20 +1,33 @@
 {
   "name": "kanso-syntax",
   "displayName": "kanso",
-  "description": "Syntax highlighting for the kanso language",
+  "description": "Syntax highlighting and the language server for kanso",
   "version": "0.1.0",
   "publisher": "kanso-lang",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.82.0"
   },
-  "categories": ["Programming Languages"],
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguage:kanso"
+  ],
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
   "contributes": {
     "languages": [
       {
         "id": "kanso",
-        "aliases": ["kanso"],
-        "extensions": [".kso"],
+        "aliases": [
+          "kanso"
+        ],
+        "extensions": [
+          ".kso"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -24,6 +37,16 @@
         "scopeName": "source.kanso",
         "path": "./syntaxes/kanso.tmLanguage.json"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "kanso",
+      "properties": {
+        "kanso.server.path": {
+          "type": "string",
+          "default": "kanso",
+          "description": "The kanso binary whose `kanso lsp` serves this editor."
+        }
+      }
+    }
   }
 }

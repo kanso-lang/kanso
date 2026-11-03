@@ -1,0 +1,8 @@
+fn area w h
+  w * h
+
+fn describe w h
+  size = area w h
+  "{w} by {h} is {size}"
+
+print (describe 3 4)

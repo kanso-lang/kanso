@@ -2,7 +2,7 @@
    and the tokenizer live in kanso-engine.js, shared with the landing page. */
 'use strict';
 
-const { ready, playSource, highlight, callKanso } = window.KansoEngine;
+const { ready, playSource, highlight, callKanso, lsp } = window.KansoEngine;
 /* ---------- editor: transparent textarea over a highlighted mirror ---------- */
 
 const editor = document.getElementById('editor');
@@ -324,7 +324,119 @@ fn update balance (withdraw n)
 examples.addEventListener('change', () => {
   editor.value = EXAMPLES[examples.value];
   syncMirror();
+  changed();
   run();
+});
+
+/* ---------- the language server: diagnostics and hover ----------
+
+   The buffer is a document the tab's language server holds, the same server
+   `kanso lsp` gives an editor. Each edit sends the whole text after a pause;
+   the server answers with the diagnostics `kanso check` would print, and a
+   hover asks it what the compiler inferred for the name under the pointer. */
+
+const URI = 'playground.kso';
+const problems = document.getElementById('problems');
+const tip = document.getElementById('hover');
+let serving = false;
+let version = 0;
+let typing = null;
+let pointing = null;
+let diagnostics = [];
+
+function publish(messages) {
+  for (const m of messages) {
+    if (m.method === 'textDocument/publishDiagnostics') {
+      diagnostics = m.params.diagnostics;
+      problems.textContent = diagnostics
+        .map((d) => `line ${d.range.start.line + 1}: ${d.message}`)
+        .join('\n');
+      problems.hidden = diagnostics.length === 0;
+    }
+  }
+  return messages.find((m) => m.id !== undefined);
+}
+
+function serve() {
+  lsp({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { capabilities: {} } });
+  publish(lsp({ jsonrpc: '2.0', method: 'textDocument/didOpen', params: {
+    textDocument: { uri: URI, languageId: 'kanso', version, text: editor.value },
+  } }));
+  serving = true;
+}
+
+function changed() {
+  hideTip();
+  if (!serving) return;
+  clearTimeout(typing);
+  typing = setTimeout(() => {
+    version += 1;
+    publish(lsp({ jsonrpc: '2.0', method: 'textDocument/didChange', params: {
+      textDocument: { uri: URI, version },
+      contentChanges: [{ text: editor.value }],
+    } }));
+  }, 300);
+}
+
+/* The line and column under the pointer. The textarea is monospace, so a
+   column is a fixed width, measured once from the font it renders in. */
+let cell = null;
+function measure() {
+  const style = getComputedStyle(editor);
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `${style.fontSize} ${style.fontFamily}`;
+  cell = {
+    width: probe.measureText('m'.repeat(64)).width / 64,
+    height: parseFloat(style.lineHeight),
+    left: parseFloat(style.paddingLeft),
+    top: parseFloat(style.paddingTop),
+  };
+}
+
+function pointAt(event) {
+  if (!cell) measure();
+  const box = editor.getBoundingClientRect();
+  const x = event.clientX - box.left - cell.left + editor.scrollLeft;
+  const y = event.clientY - box.top - cell.top + editor.scrollTop;
+  if (x < 0 || y < 0) return null;
+  return { line: Math.floor(y / cell.height), character: Math.floor(x / cell.width) };
+}
+
+function hideTip() {
+  clearTimeout(pointing);
+  tip.hidden = true;
+}
+
+function within(range, at) {
+  return range.start.line === at.line && range.start.character <= at.character
+    && at.character < Math.max(range.end.character, range.start.character + 1);
+}
+
+function showTip(at) {
+  const reply = publish(lsp({ jsonrpc: '2.0', id: 1, method: 'textDocument/hover', params: {
+    textDocument: { uri: URI }, position: at,
+  } }));
+  const lines = [];
+  for (const d of diagnostics) if (within(d.range, at)) lines.push(`<span class="play-error">${d.message.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</span>`);
+  if (reply && reply.result) {
+    const body = reply.result.contents.value.replace(/^```kanso\n/, '').replace(/\n```$/, '');
+    lines.push(highlight(body));
+  }
+  if (lines.length === 0) return;
+  tip.innerHTML = lines.join('\n');
+  tip.style.left = `${cell.left + at.character * cell.width - editor.scrollLeft}px`;
+  tip.style.top = `${cell.top + (at.line + 1) * cell.height - editor.scrollTop + 4}px`;
+  tip.hidden = false;
+}
+
+editor.addEventListener('input', changed);
+editor.addEventListener('scroll', hideTip);
+editor.addEventListener('mouseleave', hideTip);
+editor.addEventListener('mousemove', (event) => {
+  if (!serving) return;
+  const at = pointAt(event);
+  hideTip();
+  if (at) pointing = setTimeout(() => showTip(at), 350);
 });
 
 // a reload restores the browser's remembered dropdown choice while the
@@ -333,6 +445,7 @@ examples.value = 'hello';
 
 ready().then(() => {
   output.textContent = 'ready — ⌘⏎ runs';
+  serve();
   run();
 });
 syncMirror();

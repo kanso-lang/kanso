@@ -1,0 +1,5 @@
+fn greet name:string
+  "hello, {name}"
+
+print (greet "kanso" 2)
+print plum

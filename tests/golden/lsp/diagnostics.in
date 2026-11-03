@@ -1,0 +1,10 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso","languageId":"kanso","version":1,"text":{{TEXT:diagnostics.kso}}}}}
+{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso"},"position":{"line":0,"character":3}}}
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso","version":2},"contentChanges":[{"text":{{TEXT:diagnostics_fixed.kso}}}]}}
+{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso"},"position":{"line":0,"character":3}}}
+{"jsonrpc":"2.0","id":4,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso"},"options":{"tabSize":2,"insertSpaces":true}}}
+{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file://{{ROOT}}/diagnostics.kso"}}}
+{"jsonrpc":"2.0","id":5,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}
