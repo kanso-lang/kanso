@@ -23,32 +23,6 @@
 
 
 
-## 2026-10-29 — a server written as one statement waits for its client
-
-Outside a parallel group, `net/accept` answered "nothing connected" at once
-on both engines, on the reasoning that no other fiber could connect. A
-client outside the program can, and a server is usually written as one
-statement, so the guestbook prototype exited before a browser reached it.
-`accept` there now waits the way accept(2) does. Natively, `k_accept_waiting`
-clears the non-blocking flag a group's polling may have left and blocks; the
-interpreter's executor gains `accept_waiting`, which does the same with
-std::net. Inside a group `accept` is still a scheduling point.
-
-tests/sockets_serve.rs runs a one-statement server on both engines and has
-the harness say hello to it. It was watched red with the old behaviour: the
-program exited before the harness could connect.
-
-Every binary links the runtime, so each benchmark's text grows by 448 bytes
-(text 5,641,403 summed), and its instructions move by layout: no benchmark
-accepts a connection. They land at work_encodebench 2,335,339,772 (+105),
-work_runbench 825,011,247 (-518), work_livebench 938,654,671 (-357) and
-work_oneshot 9,979,360 (-364). Building costs more for the larger runtime:
-codegen_instructions_dev 116,812,856 (+15,582) and
-codegen_instructions_release 371,561,078 (+9,234). Welfare fell by less than
-0.001, and the floor follows under the rule for a change the language needs:
-a server written as its specification shows it, one statement, has to wait
-for its client.
-
 ## 2026-10-29 — a sibling module's diagnostic quotes its line
 
 #2188. `render_merged` took a bare file name for an embedded file and never
@@ -1278,3 +1252,18 @@ library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
 622,391,510 (+3).
 The ruling is a part of the language, so the welfare floor drops by exactly
 that cost, to 95.61456.
+
+## 2026-11-03 — kanso build writes a module a browser can run
+
+`kanso build page.kso --wasm` writes `page.wasm`: the emitted module
+lowered by `ir_wasm` to a wasm side module, the one the playground links
+against `runtime.c` built for wasm32. A page needs two numbers before it can
+link the module, the data bytes and the table slots it asks for, and they
+ride in the module as a custom section named `kanso.link`, two
+little-endian u32s, so the file is all a page has to fetch. senro's views
+compiled for the browser are built this way (#2280).
+
+`tests/build_wasm.rs` builds a two-module program with the flag, reads the
+section back, links the module against the runtime under wasmi and checks
+that it prints. It failed on the unknown flag before the change.
+

@@ -635,6 +635,11 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             // A binary nobody is going to count is built without them, and
             // the counter gates ask for them by name.
             "--counters" => counters = true,
+            // The program as a wasm side module for a page to link against
+            // the runtime built for wasm32, as the playground links one. It
+            // reaches `build` the way `--strict` reaches the stages it
+            // changes, so the tuple stays as it is.
+            "--wasm" if command == "build" => std::env::set_var("KANSO_BUILD_WASM", "1"),
             "--" => break,
             _ => return None,
         }
@@ -896,6 +901,9 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
         return ExitCode::from(2);
     }
     let ll_path = format!("{stem}.ll");
+    if std::env::var_os("KANSO_BUILD_WASM").is_some() {
+        return built_for_the_browser(&stem, &ll_path, ir);
+    }
     // x86-64 alone: this convention has not been measured on arm64. On both
     // every `musttail` the emitter wrote reaches clang as written, so a tail
     // call consumes no stack. An arm64 release build also guards each arm
@@ -936,6 +944,62 @@ fn build(program: ast::Program, file: &str, release: bool, built_as: Option<Stri
             eprintln!("error: cannot invoke clang: {io}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// `kanso build --wasm`: the emitted module translated to a wasm side
+/// module (`ir_wasm`), written as `<stem>.wasm` with the IR beside it. A
+/// host links it as the playground does: against the runtime built for
+/// wasm32, after setting aside the data bytes and table slots it asks for.
+/// Those two numbers ride in the module itself, in a custom section named
+/// `kanso.link`, as little-endian u32s, so the file is all a page needs.
+fn built_for_the_browser(stem: &str, ll_path: &str, ir: String) -> ExitCode {
+    if let Err(io) = std::fs::write(ll_path, &ir) {
+        eprintln!("error: cannot write {ll_path}: {io}");
+        return ExitCode::from(2);
+    }
+    let side = match kanso::ir_wasm::translate_owned(kanso::codegen::retarget_wasm32(&ir)) {
+        Ok(side) => side,
+        Err(why) => {
+            eprintln!("error: cannot lower {ll_path} to wasm: {why}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut module = side.wasm;
+    let mut payload = Vec::new();
+    payload.extend_from_slice(&side.data.to_le_bytes());
+    payload.extend_from_slice(&side.table.to_le_bytes());
+    custom_section(&mut module, "kanso.link", &payload);
+    let path = format!("{stem}.wasm");
+    if let Err(io) = std::fs::write(&path, module) {
+        eprintln!("error: cannot write {path}: {io}");
+        return ExitCode::from(2);
+    }
+    println!("built ./{path} (llvm ir at {ll_path})");
+    ExitCode::SUCCESS
+}
+
+/// Appends a custom section to a wasm module: id 0, its size, then the name
+/// and the payload, each length as unsigned LEB128.
+fn custom_section(module: &mut Vec<u8>, name: &str, payload: &[u8]) {
+    let mut body = Vec::new();
+    leb128(&mut body, name.len());
+    body.extend_from_slice(name.as_bytes());
+    body.extend_from_slice(payload);
+    module.push(0);
+    leb128(module, body.len());
+    module.extend_from_slice(&body);
+}
+
+fn leb128(out: &mut Vec<u8>, mut n: usize) {
+    loop {
+        let byte = (n & 0x7f) as u8;
+        n >>= 7;
+        if n == 0 {
+            out.push(byte);
+            return;
+        }
+        out.push(byte | 0x80);
     }
 }
 
