@@ -1489,20 +1489,19 @@ static inline int k_tail_window(const unsigned char* p) {
    bytes 99.99% of the time, so the setup was half the call. The scalar tail
    and the loop are small enough that eight copies cost the .text vein less
    than the calls cost the work vein. */
-/* The byte a scan looks for, read as the interpreter's `low_byte` reads it:
-   the low byte of the int's magnitude, so -98 is 98 (#2313). Every emitted
-   site hands a literal, so the test folds away. */
-static inline unsigned char k_scan_byte(long long n) {
-    unsigned long long m = n < 0 ? 0ULL - (unsigned long long)n : (unsigned long long)n;
-    return (unsigned char)(m & 0xff);
-}
-
 __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
     if (K_COUNTING) k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
-    unsigned char ca = k_scan_byte(a);
-    unsigned char cb = k_scan_byte(b);
+    unsigned char ca = (unsigned char)(a & 0xff);
+    unsigned char cb = (unsigned char)(b & 0xff);
+    /* A byte is the low byte of the int's magnitude, as the interpreter's
+       `low_byte` reads it, so -98 is 98 (#2313). One test covers both, and
+       at an emitted site's literals it folds away. */
+    if (__builtin_expect((a | b) < 0, 0)) {
+        ca = (unsigned char)((a < 0 ? 0ULL - (unsigned long long)a : (unsigned long long)a) & 0xff);
+        cb = (unsigned char)((b < 0 ? 0ULL - (unsigned long long)b : (unsigned long long)b) & 0xff);
+    }
     long long i = p;
 #if defined(__aarch64__)
     /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
@@ -2165,8 +2164,15 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
     }
     if (K_COUNTING) k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
-    unsigned char ca = k_scan_byte(a);
-    unsigned char cb = k_scan_byte(b);
+    unsigned char ca = (unsigned char)(a & 0xff);
+    unsigned char cb = (unsigned char)(b & 0xff);
+    /* A byte is the low byte of the int's magnitude, as the interpreter's
+       `low_byte` reads it, so -98 is 98 (#2313). One test covers both, and
+       at an emitted site's literals it folds away. */
+    if (__builtin_expect((a | b) < 0, 0)) {
+        ca = (unsigned char)((a < 0 ? 0ULL - (unsigned long long)a : (unsigned long long)a) & 0xff);
+        cb = (unsigned char)((b < 0 ? 0ULL - (unsigned long long)b : (unsigned long long)b) & 0xff);
+    }
     long long i = p;
     if (floor_v > 0 && floor_v <= 256) {
         unsigned char cl = (unsigned char)(floor_v - 1);

@@ -2092,7 +2092,6 @@ fn hot_source_of(runtime: &str) -> String {
     out.push_str(hot_text(runtime, "static const unsigned char k_number_bytes[256] = {", "};\n"));
     for start in [
         "static inline int k_tail_window(",
-        "static inline unsigned char k_scan_byte(long long n) {",
         "static inline void k_beat_rewind(KMark* m) {",
         "__attribute__((always_inline)) void k_beat_iter(void) {",
         "__attribute__((always_inline)) void k_beat_push(void) {",
@@ -2797,7 +2796,6 @@ mod the_hot_unit_is_taken_from_the_runtime {
         let unit = hot_source();
         for name in [
             "k_tail_window",
-            "k_scan_byte",
             "k_beat_rewind",
             "k_beat_iter",
             "k_beat_push",
