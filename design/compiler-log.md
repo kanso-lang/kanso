@@ -1463,12 +1463,22 @@ iteration's work.
 
 A call to the shipped fold now answers the group's answer intersected with
 what that call passes: its init, the answer of the lambda it hands as `f`,
-a failure, or a thunk. The Lambda arm of `eval_expr` already walked the body;
-it now leaves the body's answer in `ctx.lambda_answer`, and the call reads it
-straight after its arguments, so nothing is walked twice. A callback that is
-not a lambda literal keeps the group's answer. The rule rests on a promise
-the fold arms keep (each answers its init, an answer of `f`, or a failure),
-and lib/list/list.kso states it above them.
+a failure, or a thunk. A callback that is not a lambda literal keeps the
+group's answer. The rule rests on a promise the fold arms keep (each answers
+its init, an answer of `f`, or a failure), and lib/list/list.kso states it
+above them.
+
+The lambda is walked at the call, with its accumulator holding the init and
+then whatever the walk answers, until that stops growing (`eval_fold_step`).
+The first version used the Lambda arm's walk, which seeds every parameter as
+any value. That read `list/group_by`'s `put acc k v` as a put into a list,
+which can answer none, and the runtime golden
+`a_library_failure_after_a_callback_names_the_outer_line` was refused at
+compile time for printing a value that might be none. Its accumulator is only
+ever the map it started with, and with the accumulator walked as that map the
+golden reports its runtime failure again. A fold whose lambda really can
+answer none now reads as possibly none where it read as anything, so the
+checker asks for that none to be handled; before, it was let through.
 
 The new mem fixture `a_fold_answer_carried_round_a_loop` carries a fold's
 answer round twelve thousand iterations. It held 4 arena blocks before and

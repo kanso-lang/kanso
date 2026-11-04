@@ -2054,12 +2054,14 @@ fn eval_call<'a>(
     // let the err into its body while the interpreter refused it.
     let hands_err = matches!(head, Expr::Ident(n, _, _)
         if (n == "rescue" || n == "annotate") && !env.contains_key(n.as_str()));
+    let folds = calls_shipped_fold(ctx, head, args, env);
     let arg_sets: &mut [Set] = match args.len() <= inline.len() {
         true => {
-            for (i, (slot, a)) in inline.iter_mut().zip(args).enumerate() {
-                *slot = match hands_err && i == 1 {
-                    true => eval_callback(ctx, a, env),
-                    false => eval_expr(ctx, a, env),
+            for (i, a) in args.iter().enumerate() {
+                inline[i] = match (hands_err && i == 1, folds && i == 2) {
+                    (true, _) => eval_callback(ctx, a, env),
+                    (_, true) => eval_fold_step(ctx, a, inline[1], env),
+                    _ => eval_expr(ctx, a, env),
                 };
             }
             &mut inline[..args.len()]
@@ -2375,6 +2377,48 @@ fn per_call_builtin(decl: &FnDecl) -> Option<&str> {
         .zip(&decl.params)
         .all(|(a, p)| matches!((a, p), (Expr::Ident(n, _, _), Pattern::Var(v, _)) if n == v));
     passed.then_some(builtin)
+}
+
+/// Whether this call reaches the shipped `list/fold` with a lambda of two
+/// parameters as its `f`, the one shape `eval_fold_step` walks.
+fn calls_shipped_fold(ctx: &Ctx<'_>, head: &Expr, args: &[Expr], env: &Env<'_>) -> bool {
+    let Expr::Ident(name, _, _) = head else { return false };
+    if env.contains_key(name.as_str()) {
+        return false;
+    }
+    if !matches!(args, [_, _, Expr::Lambda { params, .. }] if params.len() == 2) {
+        return false;
+    }
+    let Some(&(start, end, _)) = ctx.groups.get(&(name.as_str(), 3)) else { return false };
+    (start as usize..end as usize).any(|k| is_shipped_fold(&ctx.program.fns[ctx.group_members[k]]))
+}
+
+/// The lambda a call hands the shipped fold, walked with its accumulator
+/// holding what the fold can hand it: the init, or an earlier answer of the
+/// lambda itself, walked again until that stops growing. The Lambda arm of
+/// `eval_expr` seeds every parameter as any value, which here read
+/// `put acc k v` as a put into a list that can answer `none`, though the
+/// accumulator was only ever the map the call started with. The element
+/// stays any value. `ctx.lambda_answer` is left holding the answer, as the
+/// Lambda arm leaves it.
+fn eval_fold_step<'a>(ctx: &mut Ctx<'a>, f: &'a Expr, init: Set, env: &mut Env<'a>) -> Set {
+    let Expr::Lambda { params, body, .. } = f else { return eval_expr(ctx, f, env) };
+    let outer = std::mem::take(&mut ctx.facts);
+    let mut acc = (init & !FAIL) | THUNK;
+    loop {
+        let mut inner = env.child(params.len());
+        inner.insert(&params[0].0, acc);
+        inner.insert(&params[1].0, TOP & !FAIL);
+        let answer = eval_expr(ctx, body, &mut inner);
+        ctx.lambda_answer = answer;
+        let next = acc | (answer & !FAIL);
+        if next == acc {
+            break;
+        }
+        acc = next;
+    }
+    ctx.facts = outer;
+    FN
 }
 
 /// An arm of the shipped `list/fold`. Every one answers its `init`, an
