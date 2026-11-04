@@ -1443,13 +1443,18 @@ gain a negative byte in the scalar walk and one in the vector step. Before
 the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
 2 and 3.
 
-The rows are CI's, on the recorded host. Every binary's `.text` grew by 128
-bytes. work_runbench rose to 942,094,162 (+372,029 over main), and the other
-work rows moved by a few hundred instructions or not at all. An earlier run
-on the first version read encodebench 3.8M lower, and this one reads it
-within 238 of main, so neither reading is the change. The browser run row
-rose to 78,397,193 (+52,800), codegen_instructions_dev to 117,058,158
-(+7,723) and codegen_instructions_release fell to 371,954,589 (-46,231). The
-front end, the emitter and the interpreter did not move. Welfare fell by
-less than 0.01. The differential law requires the fix, so the floor was
-lowered by exactly that, with the reason in bench/welfare_floor.json.
+The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
+128 bytes, and scanbench's and runbench's, which inline the raw scans most,
+by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
+(+4,048). work_runbench rose to 942,094,162 (+372,029
+over main). Four other work rows moved by a few hundred instructions:
+work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
+(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
+(+141). An earlier run on the first version read encodebench 3.8M lower,
+and this one reads it within 238 of main, so neither reading is the change.
+browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
+wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
+and codegen_instructions_release fell to 371,954,589 (-46,231). The front
+end, the emitter and the interpreter did not move. Welfare fell by less than
+0.01. The differential law requires the fix, so the floor was lowered by
+exactly that, with the reason in bench/welfare_floor.json.
