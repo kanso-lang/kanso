@@ -29,7 +29,7 @@ write=0
 [ "$1" = "--write" ] && write=1
 
 # A page gate is a program under scripts/ that reads the published HTML. These
-# three do. Five other programs hold a literal docs path and are NOT page
+# three do. Six other programs hold a literal docs path and are NOT page
 # gates, and tests/every_page_gate_is_in_the_sweep.rs walks the tree for that
 # literal and requires every one of them to appear in one list or the other --
 # so a page gate added later cannot go unswept the way golden_prose did.
@@ -37,19 +37,22 @@ write=0
 # gate:what it reads:takes --write
 gates="golden_prose:the data-golden spans against the goldens they name:yes
 page_drift:docs/compiler.html against the log's budget of unpublished entries:no
-prose_check:docs and docs/book for the three mechanical slop families and stray divs:no"
+prose_check:docs, docs/book and docs/senro for the three mechanical slop families and stray divs:no"
 
 # elsewhere:swept by
 #
 # The book pair reads docs/book and is swept by scripts/book_check.sh, which
 # runs both before it replays the sample outputs; the spec checks that claim
-# against that file rather than trusting this line. The other three read a docs
-# path for something that is not the prose.
+# against that file rather than trusting this line. senro_quotes reads the
+# senro pages against a checkout of senro, which the site job clones; a sweep
+# run here has none. The other three read a docs path for something that is
+# not the prose.
 elsewhere="book_panels:scripts/book_check.sh
 book_quotes:scripts/book_check.sh
 browser_differential_run:serves the wasm blob and the samples to a browser
 diagnostic_coverage:reads docs/book/samples as kanso source, not as pages
-site_smoke:loads a built site in headless chrome"
+site_smoke:loads a built site in headless chrome
+senro_quotes:the site job in .github/workflows/ci.yml, which clones senro at the commit docs/senro/senro-version names"
 
 cargo build --release >/dev/null 2>&1
 

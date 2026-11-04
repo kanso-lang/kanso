@@ -1,0 +1,128 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The senro pages under docs/senro quote senro, which lives in its own
+# repository. A panel titled with a path that ends in .kso, .kata or .sql
+# quotes that file, and every block of the panel, as blank lines divide it,
+# must be text the file holds in the senro commit docs/senro/senro-version
+# names. A panel may leave declarations out; it may not change one.
+#
+# SENRO names the checkout to read. CI clones senro at the pinned commit
+# first, so a page and the code it shows move together: a senro change that
+# alters a quoted declaration fails here until the page and the pin follow.
+type finding
+  page
+  title
+  block
+
+pages = "docs/senro"
+
+pub play = os/env "SENRO" .> checked
+
+fn checked none
+  io/write "senro_quotes: set SENRO to a checkout of kanso-lang/senro\n"
+    .> (_ -> os/exit 2)
+
+fn checked root
+  html_under pages .> (files -> read_all files [] root)
+
+fn html_under dir
+  os/list_dir dir .> (names -> walked dir (list/sort names) [])
+
+fn walked dir names found
+  return effect found if length names == 0
+  path = "{dir}/{names[1]}"
+  rest = list/to_list (list/drop names 1)
+  os/is_dir path .> (d -> entered dir rest found path d)
+
+fn entered dir rest found path true
+  html_under path .> (inner -> walked dir rest (list/concat found inner))
+
+fn entered dir rest found path false
+  return walked dir rest found if not text/ends_with? path ".html"
+  walked dir rest (push found path)
+
+fn read_all files quoted root
+  return judged quoted if length files == 0
+  rest = list/to_list (list/drop files 1)
+  os/read_file! files[1]
+    .> (html -> panels_in files[1] html root)
+    .> (found -> read_all rest (list/concat quoted found) root)
+
+# Each panel that quotes senro, with the blocks its file does not hold.
+fn panels_in page html root
+  opened = text/split html "<div class=\"code-panel-title\">"
+  parts = list/to_list (list/drop opened 1)
+  quoting = list/to_list (list/select parts quotes?)
+  checked_panels page quoting root []
+
+fn quotes? part
+  title = or_empty (text/split part "</div>")[1]
+  kinds = [".kso" ".kata" ".sql"]
+  has? title "/" and list/any? kinds (k -> text/ends_with? title k)
+
+fn checked_panels page parts root found
+  return effect found if length parts == 0
+  part = or_empty parts[1]
+  rest = list/to_list (list/drop parts 1)
+  title = or_empty (text/split part "</div>")[1]
+  code = plain (between part "<code>" "</code>")
+  os/read_file! "{root}/{title}"
+    .> (file -> missing page title code (or_empty file))
+    .> (more -> checked_panels page rest root (list/concat found more))
+
+fn missing page title code file
+  split = text/split code "\n\n"
+  blocks = list/to_list (list/select split (b -> text/trim b != ""))
+  held = (b -> has? file (text/trim b))
+  absent = list/to_list (list/reject blocks held)
+  effect (list/to_list (list/map absent (b -> finding page title b)))
+
+fn has? s part
+  length (text/split s part) > 1
+
+fn between s open shut
+  after = text/split s open
+  return "" if length after < 2
+  (text/split after[2] shut)[1]
+
+# The panel's text as the file writes it: tags dropped, entities read back.
+fn plain html
+  pieces = text/split html "<"
+  kept = list/map (list/drop pieces 1) (p -> after_tag p)
+  whole = list/concat [pieces[1]] (list/to_list kept)
+  bare = text/join (list/to_list whole) ""
+  entities bare
+
+fn after_tag p
+  ends = text/split p ">"
+  text/join (list/to_list (list/drop ends 1)) ">"
+
+fn entities s
+  lt = swapped s "&lt;" "<"
+  gt = swapped lt "&gt;" ">"
+  quot = swapped gt "&quot;" "\""
+  apos = swapped quot "&#39;" "'"
+  swapped apos "&amp;" "&"
+
+fn swapped s from to
+  text/join (text/split s from) to
+
+fn or_empty none
+  ""
+
+fn or_empty x
+  x
+
+fn judged found
+  return io/write all_held if length found == 0
+  io/write (text/join (list/to_list (list/map found told)) "")
+    .> (_ -> os/exit 1)
+
+all_held = "senro_quotes: every panel is text senro holds\n"
+
+fn told f
+  said = "{f.page}: the panel titled {f.title} holds a block senro does not"
+  "{said}:\n{f.block}\n\n"
