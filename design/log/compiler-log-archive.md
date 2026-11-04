@@ -112323,3 +112323,22 @@ page without the list fails the run rather than covering every sample.
 Read the same way, the page's list selects the same 717 programs the old copy
 did. With `read_file` taken out of the page's regex the run selected 725, so
 the differential follows the page.
+
+## 2026-10-29 — gavel: `path_to` takes a record or a route's name
+
+#2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
+reverse, and the gavel on equality refuses to compare two functions, which
+the lookup needs at run time. Clay, ruling: "it could either take path_to
+post, or the string form that specifies the path followed by the id... both
+are available to the user. I'm not sure how you do that but you can be
+clever."
+
+So `path_to` has two forms. `path_to post` takes a record, and the record's
+type picks its show route, with its `id` for `:id`. `path_to "posts/show"
+post.id` names the route by a string. The form that takes a function is
+dropped. The string form runs as a lookup in a map the routing derivation
+declares, and the derivation refuses a string that names no route at the
+call that writes it. The record form runs by dispatch on the record's type:
+the derivation declares one `path_to` arm per model with a show route, which
+needs a derivation that can declare a function arm (`derive/define`, planned
+on #2198).

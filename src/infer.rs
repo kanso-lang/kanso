@@ -2479,6 +2479,108 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
     }
 }
 
+/// What each builtin takes at each position, by bare name: the tags the
+/// interpreter runs it on. `builtin_set` above says what a builtin answers;
+/// this says what it is handed, and the two are the compiler's whole account
+/// of a builtin's type. At the positions a row counts as checked, the literal
+/// check refuses a literal the row leaves out and the none check refuses a
+/// none. At every position, the language server narrows a parameter handed
+/// straight to a builtin.
+///
+/// The number after a row is how many of its leading positions the
+/// compile-time checks enforce; the language server reads every position.
+///
+/// A row is a claim about the interpreter, the oracle, and
+/// `tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every one by
+/// running each tag a row leaves out and reading the refusal. Its fillers
+/// for the other positions are fixed, so a row says what a position refuses
+/// when the others hold ordinary values: `put` takes a list at 0 when the
+/// key is an int. A position past a row's end, a position holding `TOP`,
+/// and a builtin with no row are unconstrained.
+///
+/// Builtins without a row: the ones whose positions take anything (`print`
+/// renders what it is handed, `push` stores it), the chain words and
+/// `effect`, which read the box itself, and the ones only std reaches, with
+/// a value the program cannot supply. `net/read` and `pool/take` hand their
+/// builtin a record's `handle`, and only their own module builds the record.
+pub const BUILTIN_TAKES: &[(&str, &[Set], usize)] = &[
+    ("append", &[BYTES, ANY_INT | STR | BYTES], 0),
+    ("bytes", &[STR], 1),
+    ("to_bytes", &[LIST], 1),
+    ("char_code", &[STR], 1),
+    ("chars", &[STR], 1),
+    ("concat", &[LIST | BYTES, LIST | BYTES], 2),
+    ("entries", &[MAP], 1),
+    ("keys", &[MAP], 1),
+    ("values", &[MAP], 1),
+    ("find2", &[BYTES, ANY_INT, ANY_INT, ANY_INT], 0),
+    ("find2_below", &[BYTES, ANY_INT, ANY_INT, ANY_INT, ANY_INT], 0),
+    ("number_span", &[BYTES, ANY_INT], 0),
+    ("from_code", &[ANY_INT], 1),
+    ("join", &[LIST, STR], 2),
+    ("length", &[STR | BYTES | LIST | MAP], 1),
+    ("push", &[LIST | BYTES], 1),
+    ("put", &[MAP | LIST, ANY_INT | STR], 1),
+    ("delete", &[MAP, ANY_INT | STR], 1),
+    ("slice", &[STR | BYTES | LIST, ANY_INT, ANY_INT], 0),
+    ("split", &[STR, STR], 2),
+    ("to_float", &[ANY_INT | FLOAT | STR | BYTES], 0),
+    ("to_int", &[ANY_INT | STR | BYTES], 0),
+    ("utf8", &[BYTES | LIST], 0),
+    ("sqrt", &[ANY_INT | FLOAT], 1),
+    ("round", &[ANY_INT | FLOAT], 1),
+    ("bit_and", &[INT, INT], 2),
+    ("bit_or", &[INT, INT], 2),
+    ("bit_xor", &[INT, INT], 2),
+    ("bit_not", &[INT], 1),
+    ("bit_shl", &[INT, INT], 2),
+    ("bit_shr", &[INT, INT], 2),
+    ("random", &[ANY_INT], 1),
+    ("random_bytes", &[INT], 1),
+    ("sleep", &[ANY_INT], 1),
+    ("write", &[STR], 1),
+    ("write_err", &[STR], 1),
+    ("env", &[STR], 1),
+    ("exists", &[STR], 1),
+    ("is_dir", &[STR], 1),
+    ("modified", &[STR], 1),
+    ("list_dir", &[STR], 1),
+    ("read_bytes", &[STR], 1),
+    ("read_file", &[STR], 1),
+    ("make_dir", &[STR], 1),
+    ("write_file", &[STR, STR | BYTES], 2),
+    ("run", &[STR, LIST], 2),
+    ("start", &[STR, LIST], 2),
+    ("kill", &[ANY_INT], 1),
+    ("listen", &[ANY_INT], 1),
+    ("dial", &[STR, ANY_INT], 2),
+    ("net_write", &[TOP, STR | BYTES], 2),
+    ("net_secure", &[TOP, STR], 2),
+    ("pool_make", &[ANY_INT], 1),
+];
+
+/// What a builtin takes at a position, by its bare name or its `builtin_`
+/// spelling, when its row constrains it.
+pub fn builtin_takes(name: &str, at: usize) -> Option<Set> {
+    let name = name.strip_prefix("builtin_").unwrap_or(name);
+    let (_, row, _) = BUILTIN_TAKES.iter().find(|(n, _, _)| *n == name)?;
+    row.get(at).copied().filter(|&s| s != TOP)
+}
+
+/// What a builtin takes at a position the compile-time checks enforce: the
+/// first `checked` positions of its row. The rest are refused at run time
+/// alone, because refusing a value that may be none there would refuse
+/// programs that run, which is a change to the language rather than to its
+/// account of a builtin.
+pub fn builtin_checked(name: &str, at: usize) -> Option<Set> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    let (_, _, checked) = BUILTIN_TAKES.iter().find(|(n, _, _)| *n == bare)?;
+    match at < *checked {
+        true => builtin_takes(bare, at),
+        false => None,
+    }
+}
+
 /// The builtins that answer a description: the effects, by their bare name
 /// or with the `builtin_` prefix the standard library calls them by. The
 /// four nullary ones — `args`, `stdin`, `read_line`, `now` — are read as
