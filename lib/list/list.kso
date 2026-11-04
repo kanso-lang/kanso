@@ -143,10 +143,10 @@ fn first_of done
 fn first_of (step e _)
   e
 
-# A window over an array is walked by index, the way a bare list is. Pulling
-# it through `next` builds a step and a fresh window every element, and both
-# are read once and dropped — the same two records the window already saved by
-# not being a cap around a cursor.
+# Every arm of `fold` answers its `init`, an answer of `f`, or a failure, and
+# the compiler reads a call's answer from what it passes on that promise
+# (`folded` in src/infer.rs).
+#
 # A cap around a cursor is a window over an array, and a window is walked by
 # index the way a bare list is. Pulling it through `next` builds a step and a
 # fresh window every element, both read once and dropped.

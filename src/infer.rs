@@ -90,6 +90,10 @@ struct Ctx<'a> {
     /// an err gets inside a container and every element read has to admit
     /// what one holds. A program whose literals never fail keeps this empty.
     stored_fails: Set,
+    /// What the body of the lambda walked last can answer. A call reads it
+    /// straight after its arguments, so for a lambda written as the last
+    /// argument it is that lambda's answer; see `folded`.
+    lambda_answer: Set,
     program: &'a Program,
     demand: crate::demand::DemandInfo<'a>,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
@@ -442,6 +446,7 @@ pub fn infer(program: &Program) -> Inference {
         consts: literal_consts(program),
         defers_into_containers,
         stored_fails: 0,
+        lambda_answer: TOP,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
@@ -1614,8 +1619,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             }
             // a parameter may shadow a name a fact is about
             let outer = std::mem::take(&mut ctx.facts);
-            let _ = eval_expr(ctx, body, &mut inner);
+            let answer = eval_expr(ctx, body, &mut inner);
             ctx.facts = outer;
+            ctx.lambda_answer = answer;
             FN
         }
         Expr::BinOp { op, lhs, rhs, .. } => {
@@ -2144,6 +2150,7 @@ fn eval_call<'a>(
         for (pos, arg) in arg_sets.iter().enumerate() {
             out |= (arg & FAIL) & !ctx.caught[caught_at + pos];
         }
+        let folded = folded(args, arg_sets, ctx.lambda_answer);
         for k in start..end {
             let i = ctx.group_members[k];
             // An arm a literal argument cannot reach neither sees the call
@@ -2162,6 +2169,7 @@ fn eval_call<'a>(
                     *ctx.per_call_none.entry(*name_span).or_insert(false) |= here & NONE != 0;
                     here
                 }
+                None if is_shipped_fold(&ctx.program.fns[i]) => ctx.returns[i] & folded,
                 None => ctx.returns[i],
             };
         }
@@ -2367,6 +2375,32 @@ fn per_call_builtin(decl: &FnDecl) -> Option<&str> {
         .zip(&decl.params)
         .all(|(a, p)| matches!((a, p), (Expr::Ident(n, _, _), Pattern::Var(v, _)) if n == v));
     passed.then_some(builtin)
+}
+
+/// An arm of the shipped `list/fold`. Every one answers its `init`, an
+/// answer of its `f`, or a failure (lib/list/list.kso says so above them),
+/// which is what lets a call read its own answer from what it passes.
+fn is_shipped_fold(decl: &FnDecl) -> bool {
+    decl.params.len() == 3
+        && &*decl.file == "std/list/list.kso"
+        && decl.name.rsplit('/').next() == Some("fold")
+}
+
+/// What a call to the shipped `list/fold` can answer, given the sets it
+/// passes and the answer of the lambda it hands as `f`: the init, the
+/// lambda's answer, or a failure. The arms answer by calling `f`, a value
+/// they were handed, and such a call reads as any value at all, so without
+/// this every fold answered anything, and a loop that carried a fold's
+/// answer kept every iteration (#2302). A `THUNK` stays, because the
+/// accumulator rides into the helpers as an argument that may be deferred.
+/// A callback that is not a lambda literal keeps the group's own answer.
+fn folded(args: &[Expr], arg_sets: &[Set], lambda_answer: Set) -> Set {
+    match args {
+        [_, _, Expr::Lambda { params, .. }] if params.len() == 2 => {
+            arg_sets[1] | lambda_answer | FAIL | THUNK
+        }
+        _ => TOP,
+    }
 }
 
 /// A divisor the source spells as a number other than zero.

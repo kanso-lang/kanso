@@ -1,0 +1,30 @@
+# What a loop that carries a fold's answer holds, watched (kanso#2302).
+#
+# `doubled` answers through `list/fold`, and `looped` hands that answer to its
+# next iteration. Each answer is a list of eight ints, and everything the fold
+# built to make one is dead when the next iteration starts, so the arena
+# should hold one iteration's work however many there are.
+#
+# The fold's arms answer by calling `f`, a value they were handed, and the
+# compiler reads such a call as answering any value at all. A slot that may
+# hold any value is never carried across a rewind, and this loop kept four
+# blocks at twelve thousand iterations. A call to the shipped fold now answers
+# what its own init and lambda can answer, which here is a list.
+#
+# Watched, not frozen: regenerate deliberately and say which way it went.
+import "std/list"
+
+fn doubled xs
+  list/fold xs [] (acc x -> push acc (x * 2 % 251))
+
+pub fn carried u left
+  looped [1 2 3] u left (left == 0)
+
+fn looped _ u _ true
+  u
+
+fn looped p u left false
+  next = doubled u
+  looped p next (left - 1) (left - 1 == 0)
+
+pub play = print (carried [1 2 3 4 5 6 7 8] 12000)
