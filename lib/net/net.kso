@@ -31,12 +31,6 @@ fn taken h
 pub fn dial host at
   builtin_dial host at .> taken
 
-# The address of the machine at the other end, as text: "127.0.0.1", or an
-# IPv6 address in its short form. A server reads it to tell one client from
-# another, as a sign-in that counts attempts does.
-pub fn peer c
-  builtin_net_peer c.handle
-
 pub fn read c
   builtin_net_read c.handle
 
@@ -65,3 +59,9 @@ pub fn secured c host
 # A connection out that speaks TLS from its first byte, as HTTPS does.
 pub fn dial_tls host at
   dial host at .> (c -> secured c host)
+
+# The address of the machine at the other end, as text: "127.0.0.1", or an
+# IPv6 address in its short form. A server reads it to tell one client from
+# another, as a sign-in that counts attempts does.
+pub fn peer c
+  builtin_net_peer c.handle

@@ -501,8 +501,13 @@ net/listen 0 .> (l -> net/port l .> (p -> listening l p))
 #[test]
 fn a_server_reads_the_address_it_was_called_from_on_both_engines() {
     for (slot, engine) in [(10u16, &[][..]), (11, &["--interp"][..])] {
-        let said =
-            printed("sockets-peer", A_SERVER_THAT_ASKS_WHO_CALLED, engine, slot, a_client_says_hello);
+        let said = printed(
+            "sockets-peer",
+            A_SERVER_THAT_ASKS_WHO_CALLED,
+            engine,
+            slot,
+            a_client_says_hello,
+        );
         assert_eq!(said, "a call from 127.0.0.1\n", "engine {engine:?}");
     }
 }
