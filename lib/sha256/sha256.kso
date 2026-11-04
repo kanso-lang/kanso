@@ -270,7 +270,59 @@ fn mac p message
   bytes_of (mac_words p message)
 
 fn mac_words p message
-  words_from p.outer (bytes_of (words_from p.inner message))
+  i = words_from p.inner message
+  return [] if length i < 8
+  outer_of p (i[1] & whole) (i[2] & whole) (i[3] & whole) (i[4] & whole)
+    (i[5] & whole)
+    (i[6] & whole)
+    (i[7] & whole)
+    (i[8] & whole)
+
+# HMAC of a thirty-two byte message given as its eight words, which is what
+# every link of PBKDF2's chain hashes.
+fn mac_eight p a b c d e f g h
+  i = after_eight p.inner a b c d e f g h
+  return [] if length i < 8
+  outer_of p (i[1] & whole) (i[2] & whole) (i[3] & whole) (i[4] & whole)
+    (i[5] & whole)
+    (i[6] & whole)
+    (i[7] & whole)
+    (i[8] & whole)
+
+fn outer_of p a b c d e f g h
+  after_eight p.outer a b c d e f g h
+
+# Thirty-two bytes hashed on from a state that one whole block left. The
+# message is eight words, so its one padded block is known word by word: the
+# eight, the terminator bit, six zeros and the length, which counts the block
+# before it too, 768 bits. Building it from bytes cost a list of the words'
+# bytes, the padding pushed onto a copy, and a gather back into words, every
+# time round the chain.
+fn after_eight s a b c d e f g h
+  return [] if length s < 8
+  w = schedule [a b c d e f g h 2147483648 0 0 0 0 0 0 768] 17 false
+  added (s[1] & whole) (s[2] & whole) (s[3] & whole) (s[4] & whole)
+    (s[5] & whole)
+    (s[6] & whole)
+    (s[7] & whole)
+    (s[8] & whole)
+    w
+
+fn added a b c d e f g h w
+  r = compress a b c d e f g h w rounds 1
+  return [] if length r < 8
+  eight (a + r[1] & whole) (b + r[2] & whole) (c + r[3] & whole)
+    (d + r[4] & whole)
+    (e + r[5] & whole)
+    (f + r[6] & whole)
+    (g + r[7] & whole)
+    (h + r[8] & whole)
+
+# Eight words as a list. A call rather than a literal, because an argument
+# never holds a failure and a literal's items might, as far as the compiler
+# can tell, which would widen every list read in the program.
+fn eight a b c d e f g h
+  [a b c d e f g h]
 
 # The eight words a message leaves, hashed on from the state `s` that whole
 # blocks already left. Each word read out of `s` is masked, though it is
@@ -347,7 +399,7 @@ fn chained _ _ _ _ _ _ _ _ _ s t u v w x y z 0
   [s t u v w x y z]
 
 fn chained p a b c d e f g h s t u v w x y z left
-  n = mac_words p (bytes_of [a b c d e f g h])
+  n = mac_eight p a b c d e f g h
   return [s t u v w x y z] if length n < 8
   chained p
     n[1] & whole
