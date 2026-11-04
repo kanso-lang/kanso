@@ -1,0 +1,164 @@
+---
+layout: default
+title: "sessions and sign-in in senro"
+description: "senro keeps a session in a signed cookie, stretches passwords with PBKDF2-SHA-256 under a random salt, and signs a visitor in for a fixed number of days."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>sessions and sign-in</h1>
+
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, and what senro does to keep a password safe.</p>
+
+<h2>the session</h2>
+
+<p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. an action reads it with <code>web/session req secret</code> and keeps a changed one by answering <code>web/kept response secret session</code>. the guestbook carries its notices this way: an action puts a <code>flash</code> in the session before it redirects, and the page that shows the notice clears it.</p>
+
+<p><code>web/signed_in req response secret session id</code> keeps the session with <code>id</code> as its viewer, and <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
+
+<h2>making an account</h2>
+
+<p>an account is a model like any other. its <code>create</code> action checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/accounts.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../passwords"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># An account, as the `accounts` table stores it: the name its holder signs</span>
+<span class="c"># with, and a digest of the password. The password itself is never stored.</span>
+<span class="k">pub</span> <span class="k">type</span> account
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">digest</span>
+
+<span class="c"># Anyone may make an account.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+  <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> {} <span class="n">200</span>)
+
+<span class="c"># An account needs a name nobody holds and a password of eight characters or</span>
+<span class="c"># more. The name is looked up before the password is stretched, so a sign-up</span>
+<span class="c"># that cannot succeed costs no hashing.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
+  password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
+  <span class="f">pg/query</span> db held [name] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">joined</span> req db name password r<span class="o">.</span>rows)
+
+held <span class="o">=</span> <span class="s">"select id from accounts where name = $1"</span>
+
+<span class="k">fn</span> <span class="f">joined</span> req db name password rows
+  short <span class="o">=</span> <span class="s">"Use eight characters or more."</span>
+  found <span class="o">=</span> <span class="f">models/problems</span> [
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Choose a name."</span>)
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">length</span> rows <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"That name is taken."</span>)
+    (<span class="f">models/rule</span> <span class="s">"password"</span> (<span class="f">length</span> password <span class="o">&lt;</span> <span class="n">8</span>) short)
+  ]
+  <span class="f">return</span> effect (<span class="f">opened</span> req name found <span class="n">422</span>) if models/problems? found
+  <span class="f">passwords/digested</span> password
+    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">models/created</span> <span class="s">""</span> db account_model { <span class="s">"digest"</span>:d <span class="s">"name"</span>:name })
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">made</span> req w)
+
+<span class="k">fn</span> <span class="f">made</span> req kept:account
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Welcome, <span class="i">{kept.name}</span>. Your account is made."</span>
+  home <span class="o">=</span> <span class="f">web/redirect</span> <span class="s">"/"</span>
+  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret welcomed kept<span class="o">.</span>name)
+
+<span class="k">fn</span> <span class="f">made</span> _ _
+  <span class="f">effect</span> web/denied
+
+<span class="c"># The sign-up form shows the name as typed and the problem with each field,</span>
+<span class="c"># if any. A password is never sent back.</span>
+<span class="k">fn</span> <span class="f">opened</span> req name problems code
+  heading <span class="o">=</span> <span class="s">"Make an account"</span>
+  page <span class="o">=</span> <span class="f">views/door_view</span> heading <span class="s">"/accounts"</span> <span class="s">"Make it"</span> name problems
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Make an account · Guestbook"</span> page
+  <span class="f">views/answer_as</span> req code framed</code></pre>
+</div>
+
+<p>the password is never stored. <code>passwords/digested</code> stretches it with PBKDF2-SHA-256 under a sixteen-byte salt from the operating system's secure source and answers text that names everything a later check needs:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the stored digest</div>
+  <pre><code>pbkdf2-sha256$&lt;rounds&gt;$&lt;salt, base64&gt;$&lt;digest, base64&gt;</code></pre>
+</div>
+
+<p>because each digest names its own rounds, the default can rise without breaking the digests already kept. it is 100,000 rounds, a sixth of what OWASP asks, because a release build of kanso stretches 100,000 in about a fifth of a second and the full count would hold a sign-in for more than a second. <code>SENRO_PASSWORD_ROUNDS</code> lowers it for development, where the development tier is fourteen times slower.</p>
+
+<h2>signing in</h2>
+
+<p>the session is a singular resource: <code>session/new</code> is the form, <code>session/create</code> signs in, and <code>session/destroy</code> signs out.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/session.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../passwords"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># Signing in and out. The session is the signed cookie `web` keeps, and</span>
+<span class="c"># signing in writes the account's name into it as the viewer.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+  <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> {} <span class="n">200</span>)
+
+<span class="c"># A name with no account is checked against nothing at the same cost, so a</span>
+<span class="c"># refusal takes as long whether or not the name exists, and the answer is</span>
+<span class="c"># the same: a name and a password that do not match.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
+  password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
+  <span class="f">pg/query</span> db digest_of [name]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">kept_digest</span> r<span class="o">.</span>rows)
+    <span class="o">.&gt;</span> (kept <span class="o">-&gt;</span> <span class="f">entered</span> req name kept password)
+
+digest_of <span class="o">=</span> <span class="s">"select digest from accounts where name = $1"</span>
+
+<span class="k">fn</span> <span class="f">kept_digest</span> rows
+  <span class="f">return</span> passwords/stand_in if length rows <span class="o">==</span> <span class="n">0</span>
+  <span class="f">effect</span> (<span class="f">models/cell</span> rows[<span class="n">1</span>] <span class="s">"digest"</span>)
+
+<span class="k">fn</span> <span class="f">entered</span> req name kept password
+  <span class="f">return</span> refused req name if not passwords/matches? password kept
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
+  <span class="f">effect</span> (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret welcomed name)
+
+<span class="k">fn</span> <span class="f">refused</span> req name
+  wrong <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"That name and password do not match."</span> }
+  <span class="f">effect</span> (<span class="f">opened</span> req name wrong <span class="n">422</span>)
+
+<span class="c"># Signing out keeps the rest of the session and forgets the viewer.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
+  s <span class="o">=</span> <span class="f">delete</span> (<span class="f">web/session</span> req entries/secret) <span class="s">"viewer"</span>
+  r <span class="o">=</span> <span class="f">web/redirect</span> <span class="s">"/"</span>
+  <span class="f">effect</span> (<span class="f">web/kept</span> r entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed out."</span>))
+
+<span class="k">fn</span> <span class="f">opened</span> req name problems code
+  page <span class="o">=</span> <span class="f">views/door_view</span> <span class="s">"Sign in"</span> <span class="s">"/session"</span> <span class="s">"Sign in"</span> name problems
+  <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Sign in · Guestbook"</span> page)</code></pre>
+</div>
+
+<p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match.</p>
+</article>

@@ -1055,6 +1055,13 @@ jobs:
       # was previously only building for the browser
       - run: cargo build --release
       - run: ./target/release/kanso run scripts/prose_check
+      # docs/senro quotes senro's own files; each quoted block must be text
+      # senro holds at the commit docs/senro/senro-version names
+      - name: the senro pages quote senro as it is
+        run: |
+          git clone --quiet https://github.com/kanso-lang/senro /tmp/senro
+          git -C /tmp/senro checkout --quiet "$(cat docs/senro/senro-version)"
+          SENRO=/tmp/senro ./target/release/kanso run scripts/senro_quotes
 
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)
