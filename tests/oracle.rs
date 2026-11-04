@@ -396,3 +396,24 @@ fn interpreter_runs_the_trace_demo_module_with_default_and_explicit_args() {
         assert_eq!(run.status, 0, "status for args {args:?}");
     }
 }
+
+// broken.txt holds no dot, so the err born four calls deep in `dot_check`
+// reaches the executor with the place it was born, across the module's two
+// files.
+#[test]
+fn interpreter_traces_the_trace_demo_err_to_where_it_was_born() {
+    let entry = manifest_dir().join("examples/trace_demo/main.kso");
+    let source = std::fs::read_to_string(&entry).expect("the entry reads");
+    let program =
+        kanso::compile_entry(&entry.to_string_lossy(), &source).expect("trace_demo compiles");
+    let run = evaluate(&program, vec!["examples/trace_demo/broken.txt".to_string()]);
+    let said = run.stderr.replace(&format!("{}/", manifest_dir().display()), "");
+
+    assert_eq!(run.stdout, "");
+    assert_eq!(
+        said,
+        "error[endpoint]: unhandled err reached the executor: \"no dot in version text\"\n  \
+         born in version/dot_check at examples/trace_demo/version.kso:20\n"
+    );
+    assert_eq!(run.status, 1);
+}
