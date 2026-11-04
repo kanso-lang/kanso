@@ -20,48 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — http answers any status, and its suite runs
-
-#2209, filed by the docs worker. `std/net/http` could answer only 200 and
-404, and `response` cannot be built outside the module, so an order service
-answered a refused order with 200 and a sentence. `http/respond code headers
-body` answers any status, with the reason phrase its code is registered with,
-and an empty phrase for a code without one, which HTTP allows.
-
-The suite beside it had never run. tests/std_suites.rs walked one level below
-lib/, and lib/net/http is two, so `http_test.kso` passed or failed unread. The
-walk now goes all the way down and pins the count at seven suites. With the
-422 phrase misspelled, both of its specs went red on lib/net/http, which
-neither could see before.
-
-## 2026-10-29 — a reader lets the others run
-
-#2208, filed by the docs worker. A program that is both ends of a connection,
-dialling in one statement of a group and accepting in the next, never
-finished on either engine: the client's `net/read` blocked the whole runtime
-before the server's accept and write could run. `accept` already went back
-in the queue when nothing was waiting. A read now does the same when nothing
-has arrived: natively `k_step` peeks the socket without blocking and yields,
-and the interpreter asks its executor whether the connection is readable
-before it reads. A peer that has closed reads as ready, and the read answers
-what it always did. Outside a group a read still blocks, as `accept` does,
-because a server is often one statement and its client is outside the
-program. `net/read_bytes` takes the same path; `net/write` does not yet.
-
-tests/a_reader_lets_the_others_run.rs runs the issue's program with `read`
-and with `read_bytes` on both engines under a ten-second deadline, in a
-process group of its own so a hang is killed whole rather than leaving the
-built program holding the test's streams. With the change reverted it failed
-for the right reason, a native run that never finished.
-
-The peek makes the runtime larger, so CI's rows move: codegen_instructions_dev
-116,812,856 -> 116,821,778, codegen_instructions_release 371,560,989 ->
-371,573,437, and each benchmark's text grows by 288 bytes, so text
-5,641,403 -> 5,645,435. Run instructions
-fall by a few hundred to two thousand a benchmark, runbench 825,011,247 ->
-825,009,321. Welfare falls by less than 0.01, and the floor follows under the
-rule for a change that makes the language do what its specification says.
-
 ## 2026-10-29 — the tab's list of machine calls has one home
 
 #2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
@@ -1220,6 +1178,147 @@ with the language server, codegen_instructions_release fell to 371,872,995
 (-15) and no other row moved. The emitted IR is unchanged; the binary's
 layout is the likely cause, though nothing here isolates it.
 
+## 2026-11-04 — a password stretched and a digest carried join the run program
+
+`sha256/pbkdf2` peaked at 1,525,448 kB resident for 100,000 iterations
+(#2299). The issue reduced it to a tail loop that hands `sha256/digest`'s
+answer to its next iteration and carries a list it never reads, and that
+loop keeps every digest's garbage too. Under the 2026-09-05 corpus-first
+gavel both shapes join the run program here, measured on main before the
+fix.
+
+`stretched` runs `sha256/pbkdf2` for 200 iterations and `carried` runs the
+postcard for 600 digests. On this container the release-tier run program
+reads 1,045,660,009 with both. Without `stretched` (one iteration) it reads
+1,023,809,139, a column of 21,850,870 (2.09%); without `carried` (none) it
+reads 1,013,906,580, a column of 31,753,429 (3.04%). Each phase keeps its
+loop's work: `stretched` about ten kilobytes an iteration and `carried`
+about five. The counts are sized so the program's peak sees it: with both,
+arena_peak_bytes reads 6,815,760 where it read 4,718,608, and at 250
+digests `carried` stayed under the old peak and the objective could not see
+it.
+
+The mem vein takes the two fixtures, each at today's growth:
+`a_digest_hashed_again_round_a_loop` (600 digests, three arena blocks) and
+`a_password_stretched_three_hundred_times` (five). Their outputs agree with
+Python's `hashlib`.
+
+The issue's control row, the same loop without `p` at 2,296 kB, does not
+reproduce on this tree. `chain u left`, a public loop with no wrapper, and
+the wrapper with its unread list removed both keep every digest: five arena
+blocks at a thousand digests, like the postcard. The extra parameter is not
+the cause. `sha256/digest` answers through `list/fold`, and inference gives
+a library function one answer for every caller in the program, so the
+digest reads as any value. A loop slot that may hold any value is never
+carried across a rewind.
+
+CI's rows for the two phases: work_runbench 890,914,087 -> 947,406,395
+(+56,492,308, 6.0% of the new whole), run_allocs 1,930,602 -> 2,040,700,
+run_alloc_bytes 237,920,257 -> 245,492,129, run_arena_blocks 4 -> 7,
+run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
+-> 4,718,608, run_cohort_frees 11 -> 13, run_perm_allocs 131 -> 133,
+run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
+1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
+run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
+runbench's emitted lines 69,443 -> 71,622 and its text 856,929 -> 889,681,
+which take the totals emitted_other_branches 18,260 -> 18,498,
+emitted_other_calls 21,198 -> 21,507, emitted_other_defines 2,327 -> 2,359,
+emitted_other_lines 174,304 -> 176,483 and text 5,829,760 -> 5,862,512.
+run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
+container reads 195,099 with the phases present as well. Inference is
+whole-program, so new callers of the shared library functions can change
+another phase's beat verdicts; that is a likely cause, and nothing here
+isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
+-> 8,939,665), each keeping its ratio to its baseline, and the floor moves
+only by the rounding of the two baselines.
+
+## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
+
+#2299. Both shapes joined the run program in #2301, measured before this.
+
+**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
+and the running XOR. A list built in one iteration and read in the next is
+a value that crosses a rewind, and the carry tier that could copy it out is
+closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
+loop kept everything every HMAC built. It now carries the sixteen words as
+arguments, as `compress` has carried its eight since 2026-09-23, and the
+beat report reads "rewinds every iteration". Each word read out of a list
+is masked with `whole`: an item of a list could be anything to inference,
+and the mask, a no-op on a word, makes the argument a number. Without the
+mask the loop kept its grow-only verdict, "argument 2 may carry heap".
+`paired_xor` had no other caller and is gone.
+
+**The postcard.** The issue's shape is a loop that hands
+`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
+bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
+is the digest's answer. It spelled its words as bytes through `list/fold`,
+and inference gives a library function one return set for every caller in
+the program, so the fold answers anything and so does the digest. `bytes_of`
+is now a push loop of its own, the slot reads `0x220` (a list or an err),
+and the loop carries it. The general case, any function answering through a
+shared driver, is #2302.
+
+A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
+hand the slot. It changed nothing, because the handed set was the digest's
+TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
+could not have told a builtin from a library function anyway. It was
+reverted before commit.
+
+**Measured on this container**, the same box before and after:
+
+| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
+|---|---:|---:|
+| wall | 4.24 s | 0.68 s |
+| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
+| peak resident | 1,523,724 kB | 2,300 kB |
+
+Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
+vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
+interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
+after. The mem fixtures read one arena block each, where they read three
+and five.
+
+Their other rows move with the loop that now rewinds:
+a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
+a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
+a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
+a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
+a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
+a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
+a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
+a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
+A loop that gives its arena back each iteration copies what it carries out
+first, which fits the evacuations, and has no buffer of the last
+iteration's left to reuse; the byte loop's pushes replace the fold's. That
+reading fits the rows, and nothing here isolates each counter.
+
+**What an iteration costs now.** Callgrind on 2,000 iterations reads
+202,252,987 instructions, about 101,000 an iteration for two compressions.
+`digested`, with the rounds and the schedule inlined into it, is 50%;
+`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
+called rather than inlined; list pushes and the fold that spells the first
+HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
+compression, so this is roughly ten times that. **OPEN:** inlining the four
+mixing functions is the next lead.
+
+CI's rows, on the run program with both phases: work_runbench 947,406,395
+-> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
+5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
+2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
+run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
+run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
+run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
+1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
+96,452,880. The sixteen-argument loop and the byte loop are more code:
+runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
+which take the totals emitted_other_branches 18,498 -> 18,759,
+emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
+emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
+Compiling the longer library costs entry_instructions 86,832,572 ->
+87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
+(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
+-> 95.63 and is banked.
+
 ## 2026-11-04 — bytes nobody can predict
 
 senro's sign-in needs random salts and tokens, and std had only
@@ -1270,4 +1369,4 @@ that cost.
 
 The page's sections for `kanso build --wasm` and the language server were
 owed, and this change was the fourth entry since the page last moved, so
-docs/compiler.html gains all three as sections 280 to 282.
+docs/compiler.html gains all three as sections 281 to 283.

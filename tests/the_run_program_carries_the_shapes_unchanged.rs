@@ -35,8 +35,9 @@ const CARRIED: &[(&str, &str)] = &[
 /// kanso#2089, measured on main before their fixes, and `branched` and
 /// `padded` later that day, measured on main before theirs. `relayed` joined
 /// on 2026-10-26, measured on main before its fix, `worded` on
-/// 2026-10-29, measured on main before kanso#2214's, and `forked` on
-/// 2026-11-01, measured on main before kanso#2268's.
+/// 2026-10-29, measured on main before kanso#2214's, `forked` on
+/// 2026-11-01, measured on main before kanso#2268's, and `carried` and
+/// `stretched` on 2026-11-04, measured on main before kanso#2299's.
 const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/admitted/admitted.kso",
     "bench/runbench/runbench/appended/appended.kso",
@@ -44,6 +45,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/branched/branched.kso",
     "bench/runbench/runbench/bucketed/bucketed.kso",
     "bench/runbench/runbench/bump/bump.kso",
+    "bench/runbench/runbench/carried/carried.kso",
     "bench/runbench/runbench/counted/counted.kso",
     "bench/runbench/runbench/deduped/deduped.kso",
     "bench/runbench/runbench/drained/drained.kso",
@@ -64,6 +66,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/rewind/rewind.kso",
     "bench/runbench/runbench/scatter/scatter.kso",
     "bench/runbench/runbench/stack/stack.kso",
+    "bench/runbench/runbench/stretched/stretched.kso",
     "bench/runbench/runbench/worded/worded.kso",
 ];
 

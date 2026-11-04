@@ -1,0 +1,10 @@
+# A password stretched the way a sign-in checks one: `sha256/pbkdf2` with `n`
+# iterations for thirty-two bytes. Each iteration is two HMAC compressions of
+# one block, and the loop that chains them hands two fresh lists to its next
+# iteration, so the arena kept everything every iteration built.
+import "std/sha256"
+import "std/text"
+
+pub fn total n
+  password = text/bytes "hunter2"
+  length (sha256/pbkdf2 password (text/bytes "app:ada") n 32)
