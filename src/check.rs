@@ -163,6 +163,12 @@ const fn names<const N: usize>(flag: u8) -> [&'static str; N] {
 /// at.
 pub const BUILTINS: [&str; flagged(BUILTIN)] = names(BUILTIN);
 
+/// Whether the interpreter dispatches `name` as its own. `BUILTINS` comes off
+/// the table in alphabetical order, so this halves it rather than walking it.
+pub fn is_builtin(name: &str) -> bool {
+    BUILTINS.binary_search(&name).is_ok()
+}
+
 /// The bare words, read off the table the same way.
 pub const AMBIENT: [&str; flagged(BARE)] = names(BARE);
 
