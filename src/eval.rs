@@ -1985,10 +1985,8 @@ impl<'a> Interp<'a> {
             _ if self.fns.contains_key(name)
                 || self.types.contains_key(name)
                 || name == "err"
-                || crate::check::BUILTINS.contains(&name)
-                || name
-                    .strip_prefix("builtin_")
-                    .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
+                || crate::check::is_builtin(name)
+                || name.strip_prefix("builtin_").is_some_and(crate::check::is_builtin) =>
             {
                 Ok(Named::FnRef(Rc::from(name)))
             }

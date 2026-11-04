@@ -3,215 +3,155 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 86] = [
-    "annotate",
-    "built_text",
-    "append",
-    "args",
-    "bytes",
-    "to_bytes",
-    "char_code",
-    "chars",
-    "concat",
-    "entries",
-    "keys",
-    "values",
-    "find2",
-    "find2_below",
-    "number_span",
-    "plain_string",
-    "unescape",
-    "append_escaped",
-    "append_key",
-    "append_string",
-    "entry_count",
-    "key_at",
-    "value_at",
-    "from_code",
-    "list_dir",
-    "now",
-    "if",
-    "is_desc",
-    "effect",
-    "join",
-    "length",
-    "print",
-    "push",
-    "put",
-    "delete",
-    "random",
-    "random_bytes",
-    "read_bytes",
-    "read_file",
-    "read_line",
-    "render_value",
-    "rescue",
-    "run",
-    "start",
-    "kill",
-    "round",
-    "sleep",
-    "slice",
-    "rest_from",
-    "slice_in",
-    "split",
-    "sqrt",
-    "bit_and",
-    "bit_or",
-    "bit_xor",
-    "bit_not",
-    "bit_shl",
-    "bind",
-    "bit_shr",
-    "env",
-    "exists",
-    "is_dir",
-    "modified",
-    "stdin",
-    "to_float",
-    "to_int",
-    "utf8",
-    "wrap_err",
-    "write",
-    "write_err",
-    "make_dir",
-    "write_file",
-    "listen",
-    "net_port",
-    "accept",
-    "net_read",
-    "net_read_bytes",
-    "dial",
-    "net_secure",
-    "net_write",
-    "net_close",
-    "pool_make",
-    "pool_take",
-    "pool_give",
-    "tie",
-    "tie_ref",
-];
-
-/// The bare-name subset: what resolves without an import. Everything else
-/// in BUILTINS is internal, reached only through std wrapper modules. The
-/// three chain words are here because a chain step is written wherever an
-/// effect is, and importing a module to spell one would be a tax on the
-/// failure channel.
-pub const AMBIENT: [&str; 14] = [
-    "annotate", "bind", "delete", "effect", "entries", "if", "keys", "length", "merge", "print",
-    "push", "put", "rescue", "values",
-];
-
-/// What each builtin takes. `if` is absent: its count is checked where its
-/// branches are, because a guard form spells the same word with a different
-/// shape.
+/// Every word the language answers itself, once, in alphabetical order, with
+/// what it takes and two flags.
 ///
-/// The native backend carried these counts beside its emit list and tested
-/// them in the backend, which is late and is one engine. A count the front
-/// door does not read is a count three engines answer three ways: the
+/// The count: the native backend carried these beside its emit list and
+/// tested them in the backend, which is late and is one engine. A count the
+/// front door does not read is a count three engines answer three ways: the
 /// interpreter ran `length x x` in an unreached function and printed the
 /// program's output, the native backend refused the whole program with
-/// `native backend: `length` takes 1 argument(s)` and no span, the page
-/// died at the call, and `kanso check` said ok. So the counts live here,
-/// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 91] = [
-    ("accept", 1),
-    ("annotate", 2),
-    ("append", 2),
-    ("append_escaped", 2),
-    ("append_key", 2),
-    ("append_string", 2),
-    ("args", 0),
-    ("at", 2),
-    ("bind", 2),
-    ("bit_and", 2),
-    ("bit_not", 1),
-    ("bit_or", 2),
-    ("bit_shl", 2),
-    ("bit_shr", 2),
-    ("bit_xor", 2),
-    ("built_text", 1),
-    ("bytes", 1),
-    ("char_code", 1),
-    ("chars", 1),
-    ("concat", 2),
-    ("delete", 2),
-    ("dial", 2),
-    ("effect", 1),
-    ("entries", 1),
-    ("entry_count", 1),
-    ("env", 1),
-    ("exists", 1),
-    ("filter", 2),
-    ("find2", 4),
-    ("find2_below", 5),
-    ("from_code", 1),
-    ("is_desc", 1),
-    ("is_dir", 1),
-    ("join", 2),
-    ("key_at", 2),
-    ("keys", 1),
-    ("kill", 1),
-    ("length", 1),
-    ("list_dir", 1),
-    ("listen", 1),
-    ("make_dir", 1),
-    ("map", 2),
-    ("merge", 2),
-    ("modified", 1),
-    ("net_close", 1),
-    ("net_port", 1),
-    ("net_read", 1),
-    ("net_read_bytes", 1),
-    ("net_secure", 2),
-    ("net_write", 2),
-    ("now", 0),
-    ("number_span", 2),
-    ("plain_string", 2),
-    ("pool_give", 2),
-    ("pool_make", 1),
-    ("pool_take", 1),
-    ("print", 1),
-    ("push", 2),
-    ("put", 3),
-    ("random", 1),
-    ("random_bytes", 1),
-    ("read_bytes", 1),
-    ("read_file", 1),
-    ("read_line", 0),
-    ("render_value", 1),
-    ("rescue", 2),
-    ("rest_from", 2),
-    ("round", 1),
-    ("run", 2),
-    ("sleep", 1),
-    ("slice", 3),
-    ("slice_in", 3),
-    ("sort", 1),
-    ("split", 2),
-    ("sqrt", 1),
-    ("start", 2),
-    ("stdin", 0),
-    ("sum", 1),
-    ("tie", 3),
-    ("tie_ref", 3),
-    ("to_bytes", 1),
-    ("to_float", 1),
-    ("to_int", 1),
-    ("unescape", 3),
-    ("utf8", 1),
-    ("value_at", 2),
-    ("values", 1),
-    ("wrap_err", 2),
-    ("write", 1),
-    ("write_err", 1),
-    ("write_file", 2),
+/// `native backend: `length` takes 1 argument(s)` and no span, the page died
+/// at the call, and `kanso check` said ok. So the counts live here, and every
+/// reader takes them from one place. `if` has none: its count is checked
+/// where its branches are, because a guard form spells the same word with a
+/// different shape.
+///
+/// `BUILTIN` marks a word the interpreter dispatches as its own. The six
+/// words with a count and no flag (`at`, `filter`, `map`, `merge`, `sort`,
+/// `sum`) are checked by count and answered elsewhere.
+///
+/// `BARE` marks the subset that resolves without an import. Everything else
+/// is internal, reached only through std wrapper modules. The three chain
+/// words are bare because a chain step is written wherever an effect is, and
+/// importing a module to spell one would be a tax on the failure channel.
+///
+/// The three were once three lists (`BUILTINS`, `AMBIENT` and
+/// `BUILTIN_ARITY`) kept in step by a test (kanso#2294).
+pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 92] = [
+    ("accept", Some(1), BUILTIN),
+    ("annotate", Some(2), BUILTIN | BARE),
+    ("append", Some(2), BUILTIN),
+    ("append_escaped", Some(2), BUILTIN),
+    ("append_key", Some(2), BUILTIN),
+    ("append_string", Some(2), BUILTIN),
+    ("args", Some(0), BUILTIN),
+    ("at", Some(2), 0),
+    ("bind", Some(2), BUILTIN | BARE),
+    ("bit_and", Some(2), BUILTIN),
+    ("bit_not", Some(1), BUILTIN),
+    ("bit_or", Some(2), BUILTIN),
+    ("bit_shl", Some(2), BUILTIN),
+    ("bit_shr", Some(2), BUILTIN),
+    ("bit_xor", Some(2), BUILTIN),
+    ("built_text", Some(1), BUILTIN),
+    ("bytes", Some(1), BUILTIN),
+    ("char_code", Some(1), BUILTIN),
+    ("chars", Some(1), BUILTIN),
+    ("concat", Some(2), BUILTIN),
+    ("delete", Some(2), BUILTIN | BARE),
+    ("dial", Some(2), BUILTIN),
+    ("effect", Some(1), BUILTIN | BARE),
+    ("entries", Some(1), BUILTIN | BARE),
+    ("entry_count", Some(1), BUILTIN),
+    ("env", Some(1), BUILTIN),
+    ("exists", Some(1), BUILTIN),
+    ("filter", Some(2), 0),
+    ("find2", Some(4), BUILTIN),
+    ("find2_below", Some(5), BUILTIN),
+    ("from_code", Some(1), BUILTIN),
+    ("if", None, BUILTIN | BARE),
+    ("is_desc", Some(1), BUILTIN),
+    ("is_dir", Some(1), BUILTIN),
+    ("join", Some(2), BUILTIN),
+    ("key_at", Some(2), BUILTIN),
+    ("keys", Some(1), BUILTIN | BARE),
+    ("kill", Some(1), BUILTIN),
+    ("length", Some(1), BUILTIN | BARE),
+    ("list_dir", Some(1), BUILTIN),
+    ("listen", Some(1), BUILTIN),
+    ("make_dir", Some(1), BUILTIN),
+    ("map", Some(2), 0),
+    ("merge", Some(2), BARE),
+    ("modified", Some(1), BUILTIN),
+    ("net_close", Some(1), BUILTIN),
+    ("net_port", Some(1), BUILTIN),
+    ("net_read", Some(1), BUILTIN),
+    ("net_read_bytes", Some(1), BUILTIN),
+    ("net_secure", Some(2), BUILTIN),
+    ("net_write", Some(2), BUILTIN),
+    ("now", Some(0), BUILTIN),
+    ("number_span", Some(2), BUILTIN),
+    ("plain_string", Some(2), BUILTIN),
+    ("pool_give", Some(2), BUILTIN),
+    ("pool_make", Some(1), BUILTIN),
+    ("pool_take", Some(1), BUILTIN),
+    ("print", Some(1), BUILTIN | BARE),
+    ("push", Some(2), BUILTIN | BARE),
+    ("put", Some(3), BUILTIN | BARE),
+    ("random", Some(1), BUILTIN),
+    ("random_bytes", Some(1), BUILTIN),
+    ("read_bytes", Some(1), BUILTIN),
+    ("read_file", Some(1), BUILTIN),
+    ("read_line", Some(0), BUILTIN),
+    ("render_value", Some(1), BUILTIN),
+    ("rescue", Some(2), BUILTIN | BARE),
+    ("rest_from", Some(2), BUILTIN),
+    ("round", Some(1), BUILTIN),
+    ("run", Some(2), BUILTIN),
+    ("sleep", Some(1), BUILTIN),
+    ("slice", Some(3), BUILTIN),
+    ("slice_in", Some(3), BUILTIN),
+    ("sort", Some(1), 0),
+    ("split", Some(2), BUILTIN),
+    ("sqrt", Some(1), BUILTIN),
+    ("start", Some(2), BUILTIN),
+    ("stdin", Some(0), BUILTIN),
+    ("sum", Some(1), 0),
+    ("tie", Some(3), BUILTIN),
+    ("tie_ref", Some(3), BUILTIN),
+    ("to_bytes", Some(1), BUILTIN),
+    ("to_float", Some(1), BUILTIN),
+    ("to_int", Some(1), BUILTIN),
+    ("unescape", Some(3), BUILTIN),
+    ("utf8", Some(1), BUILTIN),
+    ("value_at", Some(2), BUILTIN),
+    ("values", Some(1), BUILTIN | BARE),
+    ("wrap_err", Some(2), BUILTIN),
+    ("write", Some(1), BUILTIN),
+    ("write_err", Some(1), BUILTIN),
+    ("write_file", Some(2), BUILTIN),
 ];
+
+/// A word the interpreter dispatches as its own.
+pub const BUILTIN: u8 = 1;
+
+/// A word that resolves without an import.
+pub const BARE: u8 = 2;
+
+fn builtin_row(name: &str) -> Option<&'static (&'static str, Option<usize>, u8)> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    BUILTIN_TABLE.binary_search_by(|(b, _, _)| (*b).cmp(bare)).ok().map(|at| &BUILTIN_TABLE[at])
+}
+
+/// Whether `name` is a word the interpreter dispatches as its own.
+pub fn is_builtin(name: &str) -> bool {
+    BUILTIN_TABLE
+        .binary_search_by(|(b, _, _)| (*b).cmp(name))
+        .is_ok_and(|at| BUILTIN_TABLE[at].2 & BUILTIN != 0)
+}
+
+/// Whether `name` resolves without an import.
+pub fn is_ambient(name: &str) -> bool {
+    BUILTIN_TABLE
+        .binary_search_by(|(b, _, _)| (*b).cmp(name))
+        .is_ok_and(|at| BUILTIN_TABLE[at].2 & BARE != 0)
+}
 
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.
 ///
-/// `BUILTIN_ARITY` is in alphabetical order so this can binary-search it:
+/// `BUILTIN_TABLE` is in alphabetical order so this can binary-search it:
 /// six comparisons where a scan does thirty-one, allocating nothing and
 /// holding nothing. `a_builtin_table_a_binary_search_can_read` keeps the
 /// order honest — an unsorted table would make this miss in silence.
@@ -231,8 +171,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 91] = [
 /// floor and this one leaves it where it was. design/compiler-log.md,
 /// 2026-08-29, carries the readings.
 pub fn builtin_arity(name: &str) -> Option<usize> {
-    let bare = name.strip_prefix("builtin_").unwrap_or(name);
-    BUILTIN_ARITY.binary_search_by(|(b, _)| (*b).cmp(bare)).ok().map(|at| BUILTIN_ARITY[at].1)
+    builtin_row(name).and_then(|row| row.1)
 }
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -815,7 +754,7 @@ fn call_shaped_at(
             let takes =
                 arities.get(name.as_str()).copied().unwrap_or_else(|| match name.as_str() {
                     "if" => 3,
-                    n if AMBIENT.contains(&n) => builtin_arity(n).unwrap_or(0),
+                    n if is_ambient(n) => builtin_arity(n).unwrap_or(0),
                     _ => 0,
                 });
             if takes > 0 && following > 0 {
@@ -2222,7 +2161,8 @@ include!("check/literals.rs");
 /// set with a clone of every extern global on top — a `String` per declared
 /// name and per imported name, for a set that is read and dropped.
 fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> HashSet<&'a str> {
-    let mut globals: HashSet<&str> = AMBIENT.iter().copied().collect();
+    let mut globals: HashSet<&str> =
+        BUILTIN_TABLE.iter().filter(|row| row.2 & BARE != 0).map(|row| row.0).collect();
     globals.insert("entry");
     globals.insert("err");
     globals.insert("wrap_err");
@@ -2239,9 +2179,7 @@ fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> Has
         }
     }
     for decl in &program.fns {
-        if AMBIENT.contains(&decl.name.as_str())
-            || program.types.iter().any(|t| t.name == decl.name)
-        {
+        if is_ambient(decl.name.as_str()) || program.types.iter().any(|t| t.name == decl.name) {
             diags.push(Diagnostic::new(
                 "name",
                 format!("the name `{}` is already taken", decl.name),
@@ -2687,34 +2625,26 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
 
 #[cfg(test)]
 mod tests {
-    use super::{builtin_arity, BUILTINS, BUILTIN_ARITY};
+    use super::{builtin_arity, BUILTIN_TABLE};
 
-    /// `builtin_arity` binary-searches the table, so an entry out of order is
-    /// a builtin the front end stops knowing the count of — no error, no
-    /// diagnostic, just a check that quietly stops covering one name.
+    /// `builtin_arity`, `is_builtin` and `is_ambient` binary-search the
+    /// table, so an entry out of order is a word the front end stops knowing,
+    /// with no error and no diagnostic, just a check that quietly stops
+    /// covering one name.
     #[test]
     fn a_builtin_table_a_binary_search_can_read() {
-        let mut sorted: Vec<&str> = BUILTIN_ARITY.iter().map(|(b, _)| *b).collect();
+        let mut sorted: Vec<&str> = BUILTIN_TABLE.iter().map(|row| row.0).collect();
         let written = sorted.clone();
         sorted.sort_unstable();
-        assert_eq!(written, sorted, "BUILTIN_ARITY is out of alphabetical order");
-        for (name, takes) in BUILTIN_ARITY {
-            assert_eq!(builtin_arity(name), Some(takes), "the search missed `{name}`");
+        sorted.dedup();
+        assert_eq!(written, sorted, "BUILTIN_TABLE is out of alphabetical order");
+        for (name, takes, _) in BUILTIN_TABLE {
+            assert_eq!(builtin_arity(name), takes, "the search missed `{name}`");
             assert_eq!(
                 builtin_arity(&format!("builtin_{name}")),
-                Some(takes),
+                takes,
                 "the search missed `builtin_{name}`"
             );
         }
-    }
-
-    /// A name a program can write bare and no count to check it against. `if`
-    /// is the one deliberate absence: its count is checked where its branches
-    /// are, because the guard form spells the word with a different shape.
-    #[test]
-    fn every_bare_builtin_has_a_count() {
-        let missing: Vec<&str> =
-            BUILTINS.iter().copied().filter(|n| *n != "if" && builtin_arity(n).is_none()).collect();
-        assert!(missing.is_empty(), "no count for {missing:?}");
     }
 }
