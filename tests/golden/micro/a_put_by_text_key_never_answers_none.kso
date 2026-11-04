@@ -14,4 +14,4 @@ fn picked _
 fn stamped row
   put row "seen" true
 
-print (stamped (picked 1))
+pub play = print (stamped (picked 1))
