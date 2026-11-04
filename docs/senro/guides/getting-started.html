@@ -29,37 +29,37 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
-  <pre><code>import "../../kata"
-import "../../models"
-import "../../pg"
-import "../../routes"
-import "../../web"
-import "./accounts"
-import "./entries"
-import "./home"
-import "./migrations"
-import "./removal"
-import "./session"
-import "./signatures"
-import "./views"
+  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./accounts"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./home"</span>
+<span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
 
-derive kata/views
-derive models/tables
-derive routes/rest
+<span class="k">derive</span> kata/views
+<span class="k">derive</span> models/tables
+<span class="k">derive</span> routes/rest
 
-made = models/made schema
+made <span class="o">=</span> <span class="f">models/made</span> schema
 
-# The components whose actions run on the server.
-served = { "removal":(web/component removal/act removal/view) }
+<span class="c"># The components whose actions run on the server.</span>
+served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
 
-served_routes = web/components routes entries/secret served
+served_routes <span class="o">=</span> <span class="f">web/components</span> routes entries/secret served
 
-connected = pg/connect "127.0.0.1" 54329 "postgres" "postgres" ""
+connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
-connected
-  .&gt; (db -&gt; pg/run db made .&gt; (_ -&gt; models/compared db schema))
-  .&gt; (db -&gt; pg/close db)
-  .&gt; (_ -&gt; web/serve 3000 served_routes connected)</code></pre>
+<span class="f">connected</span>
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/run</span> db made <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema))
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected)</code></pre>
 </div>
 
 <p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's reader, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
@@ -72,23 +72,23 @@ connected
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/migrations.kso</div>
-  <pre><code>import "../../models"
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 
-# The guestbook's schema, as the changes that built it, oldest first. The
-# models derivation folds these into the schema the app is compiled against.
-pub all = [signed joined]
+<span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
+<span class="c"># models derivation folds these into the schema the app is compiled against.</span>
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined]
 
-signed = models/create_table "signatures" [id name message]
+signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
-id = models/column "id" "serial"
+id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
 
-joined = models/create_table "accounts" [id name digest]
+joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
 
-name = models/column "name" "text"
+name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
-message = models/column "message" "text"
+message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
 
-digest = models/column "digest" "text"</code></pre>
+digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
 </div>
 
 <h2>a model</h2>
@@ -97,34 +97,34 @@ digest = models/column "digest" "text"</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/signatures.kso</div>
-  <pre><code>import "../../models"
-import "std/text"
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
-# A signature as the `signatures` table stores it. senro/models checks each
-# field against the table's columns and writes `signature_from`, which builds
-# one from a row.
-pub type signature
-  id
-  name
-  message
+<span class="c"># A signature as the `signatures` table stores it. senro/models checks each</span>
+<span class="c"># field against the table's columns and writes `signature_from`, which builds</span>
+<span class="c"># one from a row.</span>
+<span class="k">pub</span> <span class="k">type</span> signature
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">message</span>
 
-# Only the person who signed an entry may remove it. The models derivation
-# reads this policy and writes `signature_destroyed`, which asks it before it
-# deletes anything, so there is no other way to remove a signature.
-pub fn destroy? viewer s
-  s.name == viewer
+<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
+<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
+<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
+  <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
-# Anyone may sign the book.
-pub fn create? _ _
-  true
+<span class="c"># Anyone may sign the book.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span>
 
-# A signature needs a name and a message, and a message short enough to
-# read at a glance.
-pub fn problems s
-  models/problems [
-    (models/rule "name" (text/trim s.name == "") "Say who you are.")
-    (models/rule "message" (text/trim s.message == "") "Say something.")
-    (models/rule "message" (length s.message &gt; 280) "Keep it under 280.")
+<span class="c"># A signature needs a name and a message, and a message short enough to</span>
+<span class="c"># read at a glance.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> s
+  <span class="f">models/problems</span> [
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">text/trim</span> s<span class="o">.</span>name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say who you are."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">text/trim</span> s<span class="o">.</span>message <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say something."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">length</span> s<span class="o">.</span>message <span class="o">&gt;</span> <span class="n">280</span>) <span class="s">"Keep it under 280."</span>)
   ]</code></pre>
 </div>
 
@@ -136,35 +136,35 @@ pub fn problems s
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
-  <pre><code>import "../../models"
-import "../../pg"
-import "../../web"
-import "./removal"
-import "./signatures"
-import "./views"
-import "std/list"
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
 
-# The session says who is signed in, and carries a notice across the
-# redirect that follows a signature or a sign-in; the page that shows the
-# notice clears it.
-pub fn index req db
-  s = web/session req secret
-  pg/query db newest [] .&gt; (r -&gt; shown req r.rows s (filled "" {}) 200)
+<span class="c"># The session says who is signed in, and carries a notice across the</span>
+<span class="c"># redirect that follows a signature or a sign-in; the page that shows the</span>
+<span class="c"># notice clears it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  s <span class="o">=</span> <span class="f">web/session</span> req secret
+  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
 
-# A development secret. A deployed guestbook signs its sessions with its own.
-pub secret = "the guestbook's development secret"
+<span class="c"># A development secret. A deployed guestbook signs its sessions with its own.</span>
+<span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
 
-# A signature is made through its model, whose rules decide whether it is
-# fit to keep. It is signed with the name of the account signed in, and a
-# visitor who is not signed in is sent to sign in. The fields go to Postgres
-# as parameters, so what a visitor types is stored as text and never read as
-# SQL.
-pub fn create req db
-  viewer = web/viewer req secret
-  return effect (web/redirect "/session/new") if viewer == ""
-  f = put (web/form req.body) "name" viewer
-  models/created viewer db signatures/signature_model f
-    .&gt; (w -&gt; signed req db w)</code></pre>
+<span class="c"># A signature is made through its model, whose rules decide whether it is</span>
+<span class="c"># fit to keep. It is signed with the name of the account signed in, and a</span>
+<span class="c"># visitor who is not signed in is sent to sign in. The fields go to Postgres</span>
+<span class="c"># as parameters, so what a visitor types is stored as text and never read as</span>
+<span class="c"># SQL.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
+  <span class="f">return</span> effect (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) if viewer <span class="o">==</span> <span class="s">""</span>
+  f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
+  <span class="f">models/created</span> viewer db signatures/signature_model f
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
 </div>
 
 <p><code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret. a visitor who is not signed in is redirected to the sign-in page. otherwise the form goes through the model: <code>models/created</code> checks the policy and the rules and answers either the new row or the problems to show.</p>
