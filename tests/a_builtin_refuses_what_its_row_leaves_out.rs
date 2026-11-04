@@ -214,7 +214,7 @@ struct Probe {
 
 fn probes() -> Vec<Probe> {
     let mut out = Vec::new();
-    for (name, row) in infer::BUILTIN_TAKES {
+    for (name, row, _) in infer::BUILTIN_TAKES {
         let (_, fillers, _) =
             route(name).unwrap_or_else(|| panic!("`{name}` has a row and no route in this spec"));
         assert!(fillers.len() >= row.len(), "`{name}`: a filler for every position its row names");

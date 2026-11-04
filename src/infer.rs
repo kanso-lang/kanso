@@ -2486,6 +2486,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
 /// the none check refuses a none, and the language server narrows a
 /// parameter handed straight to a builtin.
 ///
+/// The number after a row is how many of its leading positions the
+/// compile-time checks enforce; the language server reads every position.
+///
 /// A row is a claim about the interpreter, the oracle, and
 /// `tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every one by
 /// running each tag a row leaves out and reading the refusal. Its fillers
@@ -2499,68 +2502,82 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
 /// `effect`, which read the box itself, and the ones only std reaches, with
 /// a value the program cannot supply. `net/read` and `pool/take` hand their
 /// builtin a record's `handle`, and only their own module builds the record.
-pub const BUILTIN_TAKES: &[(&str, &[Set])] = &[
-    ("append", &[BYTES, ANY_INT | STR | BYTES]),
-    ("bytes", &[STR]),
-    ("to_bytes", &[LIST]),
-    ("char_code", &[STR]),
-    ("chars", &[STR]),
-    ("concat", &[LIST | BYTES, LIST | BYTES]),
-    ("entries", &[MAP]),
-    ("keys", &[MAP]),
-    ("values", &[MAP]),
-    ("find2", &[BYTES, ANY_INT, ANY_INT, ANY_INT]),
-    ("find2_below", &[BYTES, ANY_INT, ANY_INT, ANY_INT, ANY_INT]),
-    ("number_span", &[BYTES, ANY_INT]),
-    ("from_code", &[ANY_INT]),
-    ("join", &[LIST, STR]),
-    ("length", &[STR | BYTES | LIST | MAP]),
-    ("push", &[LIST | BYTES]),
-    ("put", &[MAP | LIST, ANY_INT | STR]),
-    ("delete", &[MAP, ANY_INT | STR]),
-    ("slice", &[STR | BYTES | LIST, ANY_INT, ANY_INT]),
-    ("split", &[STR, STR]),
-    ("to_float", &[ANY_INT | FLOAT | STR | BYTES]),
-    ("to_int", &[ANY_INT | STR | BYTES]),
-    ("utf8", &[BYTES | LIST]),
-    ("sqrt", &[ANY_INT | FLOAT]),
-    ("round", &[ANY_INT | FLOAT]),
-    ("bit_and", &[INT, INT]),
-    ("bit_or", &[INT, INT]),
-    ("bit_xor", &[INT, INT]),
-    ("bit_not", &[INT]),
-    ("bit_shl", &[INT, INT]),
-    ("bit_shr", &[INT, INT]),
-    ("random", &[ANY_INT]),
-    ("random_bytes", &[INT]),
-    ("sleep", &[ANY_INT]),
-    ("write", &[STR]),
-    ("write_err", &[STR]),
-    ("env", &[STR]),
-    ("exists", &[STR]),
-    ("is_dir", &[STR]),
-    ("modified", &[STR]),
-    ("list_dir", &[STR]),
-    ("read_bytes", &[STR]),
-    ("read_file", &[STR]),
-    ("make_dir", &[STR]),
-    ("write_file", &[STR, STR | BYTES]),
-    ("run", &[STR, LIST]),
-    ("start", &[STR, LIST]),
-    ("kill", &[ANY_INT]),
-    ("listen", &[ANY_INT]),
-    ("dial", &[STR, ANY_INT]),
-    ("net_write", &[TOP, STR | BYTES]),
-    ("net_secure", &[TOP, STR]),
-    ("pool_make", &[ANY_INT]),
+pub const BUILTIN_TAKES: &[(&str, &[Set], usize)] = &[
+    ("append", &[BYTES, ANY_INT | STR | BYTES], 0),
+    ("bytes", &[STR], 1),
+    ("to_bytes", &[LIST], 1),
+    ("char_code", &[STR], 1),
+    ("chars", &[STR], 1),
+    ("concat", &[LIST | BYTES, LIST | BYTES], 2),
+    ("entries", &[MAP], 1),
+    ("keys", &[MAP], 1),
+    ("values", &[MAP], 1),
+    ("find2", &[BYTES, ANY_INT, ANY_INT, ANY_INT], 0),
+    ("find2_below", &[BYTES, ANY_INT, ANY_INT, ANY_INT, ANY_INT], 0),
+    ("number_span", &[BYTES, ANY_INT], 0),
+    ("from_code", &[ANY_INT], 1),
+    ("join", &[LIST, STR], 2),
+    ("length", &[STR | BYTES | LIST | MAP], 1),
+    ("push", &[LIST | BYTES], 1),
+    ("put", &[MAP | LIST, ANY_INT | STR], 1),
+    ("delete", &[MAP, ANY_INT | STR], 1),
+    ("slice", &[STR | BYTES | LIST, ANY_INT, ANY_INT], 0),
+    ("split", &[STR, STR], 2),
+    ("to_float", &[ANY_INT | FLOAT | STR | BYTES], 0),
+    ("to_int", &[ANY_INT | STR | BYTES], 0),
+    ("utf8", &[BYTES | LIST], 0),
+    ("sqrt", &[ANY_INT | FLOAT], 1),
+    ("round", &[ANY_INT | FLOAT], 1),
+    ("bit_and", &[INT, INT], 2),
+    ("bit_or", &[INT, INT], 2),
+    ("bit_xor", &[INT, INT], 2),
+    ("bit_not", &[INT], 1),
+    ("bit_shl", &[INT, INT], 2),
+    ("bit_shr", &[INT, INT], 2),
+    ("random", &[ANY_INT], 1),
+    ("random_bytes", &[INT], 1),
+    ("sleep", &[ANY_INT], 1),
+    ("write", &[STR], 1),
+    ("write_err", &[STR], 1),
+    ("env", &[STR], 1),
+    ("exists", &[STR], 1),
+    ("is_dir", &[STR], 1),
+    ("modified", &[STR], 1),
+    ("list_dir", &[STR], 1),
+    ("read_bytes", &[STR], 1),
+    ("read_file", &[STR], 1),
+    ("make_dir", &[STR], 1),
+    ("write_file", &[STR, STR | BYTES], 2),
+    ("run", &[STR, LIST], 2),
+    ("start", &[STR, LIST], 2),
+    ("kill", &[ANY_INT], 1),
+    ("listen", &[ANY_INT], 1),
+    ("dial", &[STR, ANY_INT], 2),
+    ("net_write", &[TOP, STR | BYTES], 2),
+    ("net_secure", &[TOP, STR], 2),
+    ("pool_make", &[ANY_INT], 1),
 ];
 
 /// What a builtin takes at a position, by its bare name or its `builtin_`
 /// spelling, when its row constrains it.
 pub fn builtin_takes(name: &str, at: usize) -> Option<Set> {
     let name = name.strip_prefix("builtin_").unwrap_or(name);
-    let (_, row) = BUILTIN_TAKES.iter().find(|(n, _)| *n == name)?;
+    let (_, row, _) = BUILTIN_TAKES.iter().find(|(n, _, _)| *n == name)?;
     row.get(at).copied().filter(|&s| s != TOP)
+}
+
+/// What a builtin takes at a position the compile-time checks enforce: the
+/// first `checked` positions of its row. The rest are refused at run time
+/// alone, because refusing a value that may be none there would refuse
+/// programs that run, which is a change to the language rather than to its
+/// account of a builtin.
+pub fn builtin_checked(name: &str, at: usize) -> Option<Set> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    let (_, _, checked) = BUILTIN_TAKES.iter().find(|(n, _, _)| *n == bare)?;
+    match at < *checked {
+        true => builtin_takes(bare, at),
+        false => None,
+    }
 }
 
 /// The builtins that answer a description: the effects, by their bare name

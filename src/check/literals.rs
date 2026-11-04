@@ -60,15 +60,15 @@ impl<'a> LiteralGroups<'a> {
     }
 }
 
-/// What a builtin takes at a position: its row in `infer::BUILTIN_TAKES`,
-/// which a spec checks against the interpreter, and one rule of the
+/// What the checks hold a builtin to at a position: the positions of its row
+/// in `infer::BUILTIN_TAKES` that the checks enforce, and one rule of the
 /// language's own. Every engine renders whatever `print` is handed, so a
 /// value a program computes prints as it is; a literal handed to `print` is
 /// refused unless it is a string, which sends a number through a template.
 fn builtin_demand(name: &str, index: usize) -> Option<crate::infer::Set> {
     match (name, index) {
         ("print", 0) => Some(crate::infer::STR),
-        _ => crate::infer::builtin_takes(name, index),
+        _ => crate::infer::builtin_checked(name, index),
     }
 }
 
