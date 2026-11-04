@@ -1461,8 +1461,20 @@ than the 48 pushes it saves.
 
 The digest is the same on every engine, a 50-round digest matches Python's
 `hashlib.pbkdf2_hmac`, and `kanso test lib/sha256` passes. Allocations fell
-in the digest and run counters (runbench 2,022,734 -> 2,007,972), and the
-password fixture in the mem vein went from 53,428 beat iterations to 15,028.
+in the digest and run counters (runbench 2,022,734 -> 2,007,972). In the
+mem vein, the password fixture went from 14,126 beat iterations to 349 and
+from 3,290,352 allocated bytes to 1,526,976, and the rehashed-digest fixture
+from 53,428 beat iterations to 15,028.
+
+Some counters read worse by their direction and are less work. A link no
+longer builds a list of bytes, so it pushes and reuses buffers less:
+run_buf_reuse fell to 3,390, run_push_mut_fast to 1,238,867,
+a_password_stretched_three_hundred_times_buf_reuse to 19 and
+a_password_stretched_three_hundred_times_push_mut_fast to 478, while every
+allocation and byte counter beside them fell too. The emitter writes the new
+functions: across the other benchmarks emitted_other_defines rose to 2,365,
+emitted_other_calls to 21,933, emitted_other_branches to 18,972 and
+emitted_other_lines to 180,154, all of it in runbench and digestbench.
 
 The rows are CI's. work_runbench fell to 916,548,004 (-25,174,129, -2.7%)
 and work_digestbench to 3,288,791 (-815,411); no other work row moved.
