@@ -18,7 +18,7 @@ use num_traits::Zero;
 /// different shape.
 ///
 /// `BUILTIN` marks a word the interpreter dispatches as its own. The six
-/// words with a count and no flag (`at`, `filter`, `map`, `merge`, `sort`,
+/// words with a count and without it (`at`, `filter`, `map`, `merge`, `sort`,
 /// `sum`) are checked by count and answered elsewhere.
 ///
 /// `BARE` marks the subset that resolves without an import. Everything else
@@ -26,8 +26,8 @@ use num_traits::Zero;
 /// words are bare because a chain step is written wherever an effect is, and
 /// importing a module to spell one would be a tax on the failure channel.
 ///
-/// The three were once three lists (`BUILTINS`, `AMBIENT` and
-/// `BUILTIN_ARITY`) kept in step by a test (kanso#2294).
+/// These were three lists kept in step by a test (kanso#2294). `BUILTINS` and
+/// `AMBIENT` below are now read off this table when the compiler is built.
 pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 92] = [
     ("accept", Some(1), BUILTIN),
     ("annotate", Some(2), BUILTIN | BARE),
@@ -129,24 +129,42 @@ pub const BUILTIN: u8 = 1;
 /// A word that resolves without an import.
 pub const BARE: u8 = 2;
 
-fn builtin_row(name: &str) -> Option<&'static (&'static str, Option<usize>, u8)> {
-    let bare = name.strip_prefix("builtin_").unwrap_or(name);
-    BUILTIN_TABLE.binary_search_by(|(b, _, _)| (*b).cmp(bare)).ok().map(|at| &BUILTIN_TABLE[at])
+/// How many rows of the table carry `flag`.
+const fn flagged(flag: u8) -> usize {
+    let mut n = 0;
+    let mut i = 0;
+    while i < BUILTIN_TABLE.len() {
+        if BUILTIN_TABLE[i].2 & flag != 0 {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
 }
 
-/// Whether `name` is a word the interpreter dispatches as its own.
-pub fn is_builtin(name: &str) -> bool {
-    BUILTIN_TABLE
-        .binary_search_by(|(b, _, _)| (*b).cmp(name))
-        .is_ok_and(|at| BUILTIN_TABLE[at].2 & BUILTIN != 0)
+/// The names of the rows that carry `flag`, in the table's order.
+const fn names<const N: usize>(flag: u8) -> [&'static str; N] {
+    let mut out = [""; N];
+    let (mut i, mut j) = (0, 0);
+    while i < BUILTIN_TABLE.len() {
+        if BUILTIN_TABLE[i].2 & flag != 0 {
+            out[j] = BUILTIN_TABLE[i].0;
+            j += 1;
+        }
+        i += 1;
+    }
+    out
 }
 
-/// Whether `name` resolves without an import.
-pub fn is_ambient(name: &str) -> bool {
-    BUILTIN_TABLE
-        .binary_search_by(|(b, _, _)| (*b).cmp(name))
-        .is_ok_and(|at| BUILTIN_TABLE[at].2 & BARE != 0)
-}
+/// The words the interpreter dispatches as its own, read off the table when
+/// the compiler is built. A short list scanned in place is what every reader
+/// asks of it; a search of the whole table cost the front end more, and
+/// collecting the bare words through a filter lost the size a set is built
+/// at.
+pub const BUILTINS: [&str; flagged(BUILTIN)] = names(BUILTIN);
+
+/// The bare words, read off the table the same way.
+pub const AMBIENT: [&str; flagged(BARE)] = names(BARE);
 
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.
@@ -171,7 +189,11 @@ pub fn is_ambient(name: &str) -> bool {
 /// floor and this one leaves it where it was. design/compiler-log.md,
 /// 2026-08-29, carries the readings.
 pub fn builtin_arity(name: &str) -> Option<usize> {
-    builtin_row(name).and_then(|row| row.1)
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    BUILTIN_TABLE
+        .binary_search_by(|(b, _, _)| (*b).cmp(bare))
+        .ok()
+        .and_then(|at| BUILTIN_TABLE[at].1)
 }
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -754,7 +776,7 @@ fn call_shaped_at(
             let takes =
                 arities.get(name.as_str()).copied().unwrap_or_else(|| match name.as_str() {
                     "if" => 3,
-                    n if is_ambient(n) => builtin_arity(n).unwrap_or(0),
+                    n if AMBIENT.contains(&n) => builtin_arity(n).unwrap_or(0),
                     _ => 0,
                 });
             if takes > 0 && following > 0 {
@@ -2161,8 +2183,7 @@ include!("check/literals.rs");
 /// set with a clone of every extern global on top — a `String` per declared
 /// name and per imported name, for a set that is read and dropped.
 fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> HashSet<&'a str> {
-    let mut globals: HashSet<&str> =
-        BUILTIN_TABLE.iter().filter(|row| row.2 & BARE != 0).map(|row| row.0).collect();
+    let mut globals: HashSet<&str> = AMBIENT.iter().copied().collect();
     globals.insert("entry");
     globals.insert("err");
     globals.insert("wrap_err");
@@ -2179,7 +2200,9 @@ fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> Has
         }
     }
     for decl in &program.fns {
-        if is_ambient(decl.name.as_str()) || program.types.iter().any(|t| t.name == decl.name) {
+        if AMBIENT.contains(&decl.name.as_str())
+            || program.types.iter().any(|t| t.name == decl.name)
+        {
             diags.push(Diagnostic::new(
                 "name",
                 format!("the name `{}` is already taken", decl.name),
@@ -2627,10 +2650,9 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
 mod tests {
     use super::{builtin_arity, BUILTIN_TABLE};
 
-    /// `builtin_arity`, `is_builtin` and `is_ambient` binary-search the
-    /// table, so an entry out of order is a word the front end stops knowing,
-    /// with no error and no diagnostic, just a check that quietly stops
-    /// covering one name.
+    /// `builtin_arity` binary-searches the table, so an entry out of order is
+    /// a count the front end stops knowing, with no error and no diagnostic,
+    /// just a check that quietly stops covering one name.
     #[test]
     fn a_builtin_table_a_binary_search_can_read() {
         let mut sorted: Vec<&str> = BUILTIN_TABLE.iter().map(|row| row.0).collect();

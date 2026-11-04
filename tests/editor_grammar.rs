@@ -32,11 +32,8 @@ fn lexed(line: &str) -> Vec<Tok> {
 
 #[test]
 fn the_grammar_colours_every_name_in_scope_without_an_import() {
-    let mut want: Vec<String> = kanso::check::BUILTIN_TABLE
-        .iter()
-        .filter(|row| row.2 & kanso::check::BARE != 0 && row.0 != "if")
-        .map(|row| row.0.to_string())
-        .collect();
+    let mut want: Vec<String> =
+        kanso::check::AMBIENT.iter().filter(|w| **w != "if").map(|w| w.to_string()).collect();
     want.push("err".to_string());
     want.sort();
     assert_eq!(words(&grammar(), "support.function.builtin.kanso"), want);

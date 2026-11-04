@@ -525,9 +525,9 @@ impl<'a> Resolver<'a> {
             // reaches. Asked in front it scanned every builtin reference the
             // standard library makes, and the compile corpus read 6,347
             // instructions more for an answer only the refusal needs.
-            match self.std_origin && is_builtin(stripped) {
+            match self.std_origin && BUILTINS.contains(&stripped) {
                 true => return,
-                false if is_builtin(stripped) && in_shipped_library(self.file) => return,
+                false if BUILTINS.contains(&stripped) && in_shipped_library(self.file) => return,
                 false if !name.contains('/') => {
                     self.diags.push(Diagnostic::new(
                         "name",

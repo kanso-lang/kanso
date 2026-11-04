@@ -496,7 +496,7 @@ fn none_exhaustive_at(
     // a group's would be. sat's `push` and kv's `length` of a slice past the
     // end passed check and stopped at run time.
     let group = tables.nones.get(&(name.as_str(), args.len())).map(|&(_, named)| named);
-    let builtin = group.is_none() && crate::check::is_builtin(name.as_str());
+    let builtin = group.is_none() && crate::check::BUILTINS.contains(&name.as_str());
     if group.is_none() && !builtin {
         return;
     }
@@ -858,7 +858,7 @@ fn check_after_infer<'p>(
     // program hands the wrapper reaches the builtin under that spelling.
     let reads_value = |name: &str| {
         let name = name.strip_prefix("builtin_").unwrap_or(name);
-        is_builtin(name)
+        BUILTINS.contains(&name)
             && !matches!(
                 name,
                 "annotate"
