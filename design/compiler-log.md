@@ -20,41 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
-
-#2198's record form runs `path_to post` by dispatch on the record's type, so
-the routing convention has to write a `path_to` arm for each model. A
-derivation can now answer `derive/define origin source`: an arm written out as
-source, for the module `origin` names. A module may already add an arm to a
-library's function for a type it declares, so the arm goes there and not in
-the entry, which declares no models.
-
-When any derivation defines an arm, the entry's dependencies load a second
-time, and each module that was given arms reads them as one more of its own
-files, `posts.derived.kso` beside `posts.kso`. The arm is qualified, formatted
-and checked as code someone wrote in that module, and an error in it quotes
-the line the convention wrote. An arm for a module the derivation was not
-shown is refused at the `derive` line. `kanso derived` prints each arm under
-the module it went to. In the tab the modules arrive as text and the arms join
-them the same way.
-
-tests/golden/derive gains three cases, each run on both engines: a `path_to`
-arm defined for each record type in a module with a `show` action, an arm that
-reads a missing field and is refused in the derived file, and an arm for
-std/list, refused. With the second load switched off the first case printed
-"no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
-first case in the page; it was watched red with the derived files keyed so
-the module could not find them.
-
-The rows: bench/entry_corpus derives, so it pays for each call's strings and
-for the larger `lib/derive`: entry_instructions 85,282,135 (+134,173),
-compile_instructions 24,096,578 (+1,025), library_instructions 71,383,015
-(+2,479), and browser_compile_instructions 343,289,572 (-2). The first build
-keyed the derived files on every module load, which cost compile_allocs 14
-and interp_allocs 12 on programs that derive nothing; the key is asked for
-only while arms load, and neither row moves. Welfare falls by less than
-0.001, and the floor follows under the rule for a feature a ruling requires.
-
 ## 2026-10-29 — a page split into words joins the run program
 
 `regexp/split "[^a-z']+"` allocated about thirty times per field it answered
@@ -1458,3 +1423,70 @@ and codegen_instructions_release fell to 371,954,589 (-46,231). The front
 end, the emitter and the interpreter did not move. Welfare fell by less than
 0.01. The differential law requires the fix, so the floor was lowered by
 exactly that, with the reason in bench/welfare_floor.json.
+
+## 2026-11-04 — sha256's rounds carry raw words, and pbkdf2's chain skips its bytes
+
+`sha256/pbkdf2` was about nineteen times slower than OpenSSL at the release
+tier (#2304). A 5,000-round run retired 440M instructions, 82% of them in the
+inlined `digested` loop: about 36,000 a 64-byte block, where a C round is
+some thirty instructions and ours was 355.
+
+The eight working words crossed from round to round as boxed KValues, and
+every bit operation re-tested its operands' tags. Three reads in
+`lib/sha256` kept inference from proving them ints. `words_from` handed the
+state's eight words to `blocked` as bare list reads, and the schedule handed
+two of its words to the sigma functions the same way; both are masked with
+`whole` now. The third was the round constant, read from `rounds`, which is
+built by `list/to_list (list/concat ...)`. Inference gives a library function
+one return set for every caller (#2302), so a read of `rounds` may be a
+failure, and the failure reached `compress`'s first and fifth parameters as
+`INT | ERR`. The constants now arrive as an argument. An argument never holds
+a failure: a bare name refuses one when the arm is chosen, on both engines,
+so the body's parameters are typed without it. With all three gone the eight
+words travel as raw i64, a round is 162 instructions, and the run fell to
+270M.
+
+The second change is in the chain. Each link is an HMAC of thirty-two bytes,
+and both of its hashes continue from a state one block in, so the one padded
+block is known word by word: the eight words, `0x80000000`, six zeros, and
+768 for the length in bits. `after_eight` builds the schedule from those
+words. The chain used to make a list of the words' bytes, push the padding
+onto a copy and gather the bytes back into words, twice a link. The run fell
+to 190M, 57% under main. The eight results go back through a call, `eight`,
+rather than a list literal, because a literal whose items might fail widens
+every list read in the program (`store_fails` in infer.rs).
+
+Tried and dropped: the schedule fused into the rounds as a sixteen-word
+window of arguments, so no list is built. The digest was right and the run
+rose to 205M. A loop of twenty-six arguments goes through the arena's carry
+(`k_beat_lap_carry` and `k_carry_stage`, 15% of that run), which costs more
+than the 48 pushes it saves.
+
+The digest is the same on every engine, a 50-round digest matches Python's
+`hashlib.pbkdf2_hmac`, and `kanso test lib/sha256` passes. Allocations fell
+in the digest and run counters (runbench 2,022,734 -> 2,007,972). In the
+mem vein, the password fixture went from 14,126 beat iterations to 349 and
+from 3,290,352 allocated bytes to 1,526,976, and the rehashed-digest fixture
+from 53,428 beat iterations to 15,028.
+
+Some counters read worse by their direction and are less work. A link no
+longer builds a list of bytes, so it pushes and reuses buffers less:
+run_buf_reuse fell to 3,390, run_push_mut_fast to 1,238,867,
+a_password_stretched_three_hundred_times_buf_reuse to 19 and
+a_password_stretched_three_hundred_times_push_mut_fast to 478, while every
+allocation and byte counter beside them fell too. The emitter writes the new
+functions: across the other benchmarks emitted_other_defines rose to 2,365,
+emitted_other_calls to 21,933, emitted_other_branches to 18,972 and
+emitted_other_lines to 180,154, all of it in runbench and digestbench.
+
+The rows are CI's, on the tree merged with the find2 fix above.
+work_runbench fell to 916,918,990 (-25,175,172, -2.7%) and
+work_digestbench to 3,288,791 (-815,411); no other work row moved.
+runbench's and digestbench's binaries are smaller (text 891,873, -2,800,
+and 349,633, -4,224), and the emitter writes 201 more calls into runbench
+for the new functions. The library is part of every compile, so
+entry_instructions rose to 87,745,536 (+556,994) and library_instructions to
+73,432,676 (+471,339). The browser rows did not move. Welfare rose by 0.06
+and the floor is banked. At the release tier 100,000 rounds take 0.22 s in
+this container, where they took 0.45 s; the dev tier, which `kanso run`
+uses, barely moved, from 3.1 s to 3.0 s.
