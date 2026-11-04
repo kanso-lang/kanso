@@ -3,210 +3,215 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 86] = [
-    "annotate",
-    "built_text",
-    "append",
-    "args",
-    "bytes",
-    "to_bytes",
-    "char_code",
-    "chars",
-    "concat",
-    "entries",
-    "keys",
-    "values",
-    "find2",
-    "find2_below",
-    "number_span",
-    "plain_string",
-    "unescape",
-    "append_escaped",
-    "append_key",
-    "append_string",
-    "entry_count",
-    "key_at",
-    "value_at",
-    "from_code",
-    "list_dir",
-    "now",
-    "if",
-    "is_desc",
-    "effect",
-    "join",
-    "length",
-    "print",
-    "push",
-    "put",
-    "delete",
-    "random",
-    "random_bytes",
-    "read_bytes",
-    "read_file",
-    "read_line",
-    "render_value",
-    "rescue",
-    "run",
-    "start",
-    "kill",
-    "round",
-    "sleep",
-    "slice",
-    "rest_from",
-    "slice_in",
-    "split",
-    "sqrt",
-    "bit_and",
-    "bit_or",
-    "bit_xor",
-    "bit_not",
-    "bit_shl",
-    "bind",
-    "bit_shr",
-    "env",
-    "exists",
-    "is_dir",
-    "modified",
-    "stdin",
-    "to_float",
-    "to_int",
-    "utf8",
-    "wrap_err",
-    "write",
-    "write_err",
-    "make_dir",
-    "write_file",
-    "listen",
-    "net_port",
-    "accept",
-    "net_read",
-    "net_read_bytes",
-    "dial",
-    "net_secure",
-    "net_write",
-    "net_close",
-    "pool_make",
-    "pool_take",
-    "pool_give",
-    "tie",
-    "tie_ref",
+/// Every word the language answers itself, once, with what it takes and two
+/// flags. `BUILTINS`, `AMBIENT` and `BUILTIN_ARITY` below are read off it
+/// when the compiler is built; they were three lists kept in step by a test
+/// (kanso#2294).
+///
+/// The count: the native backend carried these beside its emit list and
+/// tested them in the backend, which is late and is one engine. A count the
+/// front door does not read is a count three engines answer three ways: the
+/// interpreter ran `length x x` in an unreached function and printed the
+/// program's output, the native backend refused the whole program with
+/// `native backend: `length` takes 1 argument(s)` and no span, the page died
+/// at the call, and `kanso check` said ok. So the counts live here, and every
+/// reader takes them from one place. `if` has none: its count is checked
+/// where its branches are, because a guard form spells the same word with a
+/// different shape.
+///
+/// `BUILTIN` marks a word the interpreter dispatches as its own. The six
+/// words with a count and without it (`at`, `filter`, `map`, `merge`, `sort`,
+/// `sum`) come last, and are checked by count and answered elsewhere. `BARE`
+/// marks the words that resolve without an import.
+///
+/// THE ORDER IS A COST. `BUILTINS` keeps the table's order, and its readers
+/// scan it, so the words a program writes most (`if`, `length`, `print`,
+/// `push`) sit near the front. Sorted, the scans reached them later and every
+/// compile row rose by a few thousand instructions; a binary search instead
+/// cost the tab's compiler and the interpreter more than the scan it
+/// replaced. `AMBIENT` and `BUILTIN_ARITY` come off it sorted, as they were
+/// written.
+pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 92] = [
+    ("annotate", Some(2), BUILTIN | BARE),
+    ("built_text", Some(1), BUILTIN),
+    ("append", Some(2), BUILTIN),
+    ("args", Some(0), BUILTIN),
+    ("bytes", Some(1), BUILTIN),
+    ("to_bytes", Some(1), BUILTIN),
+    ("char_code", Some(1), BUILTIN),
+    ("chars", Some(1), BUILTIN),
+    ("concat", Some(2), BUILTIN),
+    ("entries", Some(1), BUILTIN | BARE),
+    ("keys", Some(1), BUILTIN | BARE),
+    ("values", Some(1), BUILTIN | BARE),
+    ("find2", Some(4), BUILTIN),
+    ("find2_below", Some(5), BUILTIN),
+    ("number_span", Some(2), BUILTIN),
+    ("plain_string", Some(2), BUILTIN),
+    ("unescape", Some(3), BUILTIN),
+    ("append_escaped", Some(2), BUILTIN),
+    ("append_key", Some(2), BUILTIN),
+    ("append_string", Some(2), BUILTIN),
+    ("entry_count", Some(1), BUILTIN),
+    ("key_at", Some(2), BUILTIN),
+    ("value_at", Some(2), BUILTIN),
+    ("from_code", Some(1), BUILTIN),
+    ("list_dir", Some(1), BUILTIN),
+    ("now", Some(0), BUILTIN),
+    ("if", None, BUILTIN | BARE),
+    ("is_desc", Some(1), BUILTIN),
+    ("effect", Some(1), BUILTIN | BARE),
+    ("join", Some(2), BUILTIN),
+    ("length", Some(1), BUILTIN | BARE),
+    ("print", Some(1), BUILTIN | BARE),
+    ("push", Some(2), BUILTIN | BARE),
+    ("put", Some(3), BUILTIN | BARE),
+    ("delete", Some(2), BUILTIN | BARE),
+    ("random", Some(1), BUILTIN),
+    ("random_bytes", Some(1), BUILTIN),
+    ("read_bytes", Some(1), BUILTIN),
+    ("read_file", Some(1), BUILTIN),
+    ("read_line", Some(0), BUILTIN),
+    ("render_value", Some(1), BUILTIN),
+    ("rescue", Some(2), BUILTIN | BARE),
+    ("run", Some(2), BUILTIN),
+    ("start", Some(2), BUILTIN),
+    ("kill", Some(1), BUILTIN),
+    ("round", Some(1), BUILTIN),
+    ("sleep", Some(1), BUILTIN),
+    ("slice", Some(3), BUILTIN),
+    ("rest_from", Some(2), BUILTIN),
+    ("slice_in", Some(3), BUILTIN),
+    ("split", Some(2), BUILTIN),
+    ("sqrt", Some(1), BUILTIN),
+    ("bit_and", Some(2), BUILTIN),
+    ("bit_or", Some(2), BUILTIN),
+    ("bit_xor", Some(2), BUILTIN),
+    ("bit_not", Some(1), BUILTIN),
+    ("bit_shl", Some(2), BUILTIN),
+    ("bind", Some(2), BUILTIN | BARE),
+    ("bit_shr", Some(2), BUILTIN),
+    ("env", Some(1), BUILTIN),
+    ("exists", Some(1), BUILTIN),
+    ("is_dir", Some(1), BUILTIN),
+    ("modified", Some(1), BUILTIN),
+    ("stdin", Some(0), BUILTIN),
+    ("to_float", Some(1), BUILTIN),
+    ("to_int", Some(1), BUILTIN),
+    ("utf8", Some(1), BUILTIN),
+    ("wrap_err", Some(2), BUILTIN),
+    ("write", Some(1), BUILTIN),
+    ("write_err", Some(1), BUILTIN),
+    ("make_dir", Some(1), BUILTIN),
+    ("write_file", Some(2), BUILTIN),
+    ("listen", Some(1), BUILTIN),
+    ("net_port", Some(1), BUILTIN),
+    ("accept", Some(1), BUILTIN),
+    ("net_read", Some(1), BUILTIN),
+    ("net_read_bytes", Some(1), BUILTIN),
+    ("dial", Some(2), BUILTIN),
+    ("net_secure", Some(2), BUILTIN),
+    ("net_write", Some(2), BUILTIN),
+    ("net_close", Some(1), BUILTIN),
+    ("pool_make", Some(1), BUILTIN),
+    ("pool_take", Some(1), BUILTIN),
+    ("pool_give", Some(2), BUILTIN),
+    ("tie", Some(3), BUILTIN),
+    ("tie_ref", Some(3), BUILTIN),
+    ("at", Some(2), 0),
+    ("filter", Some(2), 0),
+    ("map", Some(2), 0),
+    ("merge", Some(2), BARE),
+    ("sort", Some(1), 0),
+    ("sum", Some(1), 0),
 ];
+
+/// A word the interpreter dispatches as its own.
+pub const BUILTIN: u8 = 1;
+
+/// A word that resolves without an import.
+pub const BARE: u8 = 2;
+
+/// Whether `a` sorts before `b`, byte by byte, as `str::cmp` orders them.
+const fn sorts_before(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    let mut i = 0;
+    while i < a.len() && i < b.len() {
+        if a[i] != b[i] {
+            return a[i] < b[i];
+        }
+        i += 1;
+    }
+    a.len() < b.len()
+}
+
+/// The names of the rows that carry `flag`, in the table's order.
+const fn names<const N: usize>(flag: u8) -> [&'static str; N] {
+    let mut out = [""; N];
+    let (mut i, mut j) = (0, 0);
+    while i < BUILTIN_TABLE.len() {
+        if BUILTIN_TABLE[i].2 & flag != 0 {
+            out[j] = BUILTIN_TABLE[i].0;
+            j += 1;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The same names, sorted.
+const fn sorted_names<const N: usize>(flag: u8) -> [&'static str; N] {
+    let mut out = names::<N>(flag);
+    let mut i = 1;
+    while i < N {
+        let mut j = i;
+        while j > 0 && sorts_before(out[j], out[j - 1]) {
+            let t = out[j];
+            out[j] = out[j - 1];
+            out[j - 1] = t;
+            j -= 1;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Every row with a count, as `(name, count)`, sorted by name.
+const fn counts<const N: usize>() -> [(&'static str, usize); N] {
+    let mut out = [("", 0); N];
+    let (mut i, mut j) = (0, 0);
+    while i < BUILTIN_TABLE.len() {
+        if let Some(n) = BUILTIN_TABLE[i].1 {
+            out[j] = (BUILTIN_TABLE[i].0, n);
+            j += 1;
+        }
+        i += 1;
+    }
+    let mut i = 1;
+    while i < N {
+        let mut j = i;
+        while j > 0 && sorts_before(out[j].0, out[j - 1].0) {
+            let t = out[j];
+            out[j] = out[j - 1];
+            out[j - 1] = t;
+            j -= 1;
+        }
+        i += 1;
+    }
+    out
+}
+
+pub const BUILTINS: [&str; 86] = names(BUILTIN);
 
 /// The bare-name subset: what resolves without an import. Everything else
 /// in BUILTINS is internal, reached only through std wrapper modules. The
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 14] = [
-    "annotate", "bind", "delete", "effect", "entries", "if", "keys", "length", "merge", "print",
-    "push", "put", "rescue", "values",
-];
+pub const AMBIENT: [&str; 14] = sorted_names(BARE);
 
-/// What each builtin takes. `if` is absent: its count is checked where its
-/// branches are, because a guard form spells the same word with a different
-/// shape.
-///
-/// The native backend carried these counts beside its emit list and tested
-/// them in the backend, which is late and is one engine. A count the front
-/// door does not read is a count three engines answer three ways: the
-/// interpreter ran `length x x` in an unreached function and printed the
-/// program's output, the native backend refused the whole program with
-/// `native backend: `length` takes 1 argument(s)` and no span, the page
-/// died at the call, and `kanso check` said ok. So the counts live here,
-/// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 91] = [
-    ("accept", 1),
-    ("annotate", 2),
-    ("append", 2),
-    ("append_escaped", 2),
-    ("append_key", 2),
-    ("append_string", 2),
-    ("args", 0),
-    ("at", 2),
-    ("bind", 2),
-    ("bit_and", 2),
-    ("bit_not", 1),
-    ("bit_or", 2),
-    ("bit_shl", 2),
-    ("bit_shr", 2),
-    ("bit_xor", 2),
-    ("built_text", 1),
-    ("bytes", 1),
-    ("char_code", 1),
-    ("chars", 1),
-    ("concat", 2),
-    ("delete", 2),
-    ("dial", 2),
-    ("effect", 1),
-    ("entries", 1),
-    ("entry_count", 1),
-    ("env", 1),
-    ("exists", 1),
-    ("filter", 2),
-    ("find2", 4),
-    ("find2_below", 5),
-    ("from_code", 1),
-    ("is_desc", 1),
-    ("is_dir", 1),
-    ("join", 2),
-    ("key_at", 2),
-    ("keys", 1),
-    ("kill", 1),
-    ("length", 1),
-    ("list_dir", 1),
-    ("listen", 1),
-    ("make_dir", 1),
-    ("map", 2),
-    ("merge", 2),
-    ("modified", 1),
-    ("net_close", 1),
-    ("net_port", 1),
-    ("net_read", 1),
-    ("net_read_bytes", 1),
-    ("net_secure", 2),
-    ("net_write", 2),
-    ("now", 0),
-    ("number_span", 2),
-    ("plain_string", 2),
-    ("pool_give", 2),
-    ("pool_make", 1),
-    ("pool_take", 1),
-    ("print", 1),
-    ("push", 2),
-    ("put", 3),
-    ("random", 1),
-    ("random_bytes", 1),
-    ("read_bytes", 1),
-    ("read_file", 1),
-    ("read_line", 0),
-    ("render_value", 1),
-    ("rescue", 2),
-    ("rest_from", 2),
-    ("round", 1),
-    ("run", 2),
-    ("sleep", 1),
-    ("slice", 3),
-    ("slice_in", 3),
-    ("sort", 1),
-    ("split", 2),
-    ("sqrt", 1),
-    ("start", 2),
-    ("stdin", 0),
-    ("sum", 1),
-    ("tie", 3),
-    ("tie_ref", 3),
-    ("to_bytes", 1),
-    ("to_float", 1),
-    ("to_int", 1),
-    ("unescape", 3),
-    ("utf8", 1),
-    ("value_at", 2),
-    ("values", 1),
-    ("wrap_err", 2),
-    ("write", 1),
-    ("write_err", 1),
-    ("write_file", 2),
-];
+/// What each builtin takes, read off the table and sorted by name.
+pub const BUILTIN_ARITY: [(&str, usize); 91] = counts();
 
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.
