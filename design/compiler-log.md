@@ -20,66 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — six messages that named the wrong cause
-
-Two messages a newcomer meets in the first hour named the wrong cause
-(#2217). With no clang on `PATH`, `kanso run` and `kanso play` said
-`cannot build: No such file or directory (os error 2)`, which reads as a
-missing source file, and `kanso build` said it could not invoke clang
-without saying where it had looked. All three now say clang is not on
-`PATH`. `run` and `play` also name the way out that needs no clang:
-`kanso run h.kso --interp`. The check runs only when the spawn reports
-not-found and no `clang` resolves on `PATH`. Any other build failure
-keeps the host's io text. `run` on a directory quotes the path as typed,
-not the entry it was taken to.
-
-`kanso test` on a file of bare statements was refused as a library with a
-statement in it. The file declares nothing, so the message described its
-shape and not the problem. It now says the file holds statements and no
-tests, where tests live, and that `kanso run` runs it.
-
-`kanso --help` now lists `--counters` beside `--release` on `build` (#2215).
-Before this, the only place a user learned the flag was the refusal a
-release binary prints when asked for counters it was built without.
-
-The clang messages are asserted whole in
-`tests/a_toolchain_the_path_cannot_reach.rs`, now three cases with `play`
-added. They stay listed in `tests/golden/unpinned_diagnostics.txt`, which
-says where their pin lives. The test message has a golden in
-`tests/golden/test_verb/statements.stderr`, and `front_door` checks the
-help line. Each spec was watched red on the compiler before the change.
-
-Two more came from the hako commands (#2234). `kanso install` printed
-`installed 0 hako(s):` above a list of the one it had pinned, because the
-count it printed was the names left to walk, which is none by the time it
-prints. It now counts the lines of its own report. And an import of a module
-an installed hako does not have, such as `kanso-lang/vse/methods`, said the
-hako was not in the cache and to run `kanso install`, which changed nothing.
-The resolver now checks whether the locked tree is there before blaming the
-cache, and when it is, names the modules the tree does have:
-``error: cannot resolve import "acme/widgets/gadgets" — `acme/widgets` is
-installed, and has no module `gadgets` (its modules: `acme/widgets`)``.
-tests/hako.rs asserts both, and both were watched red.
-
-The sixth is #2205's last item. A test run from inside its module imports
-the module as `../<name>`, so a refusal in a sibling pointed at
-`../t/p.kso` where the reader sees `p.kso`. A module file whose path climbs
-out of the working directory and back in is now shown from the working
-directory. The check is made only for a path that starts with `..`. The
-refusal itself stands: `p.kso` holds a `pub fn` and a statement, which is
-neither a library nor a play file. tests/test_verb.rs pins the message,
-watched red with the old path.
-
-With #2209's http change these move the compile rows by layout:
-compile_instructions 24,096,605 -> 24,096,621, library_instructions
-71,383,017 -> 71,383,019, startup_instructions 50,258 -> 50,260 and
-codegen_instructions_release 371,573,437 -> 371,573,350. A first version
-kept the path as typed for every verb, which cost the front end one
-allocation; it is now kept only when a directory is taken to its entry,
-and compile_allocs and interp_allocs are unchanged. Welfare falls by less
-than 0.0001, and the floor follows under the rule for a change that makes
-the tools do what the documentation says.
-
 ## 2026-10-29 — http answers any status, and its suite runs
 
 #2209, filed by the docs worker. `std/net/http` could answer only 200 and
@@ -1279,3 +1219,34 @@ Only a string in the driver changed. By CI's measure, on the tree merged
 with the language server, codegen_instructions_release fell to 371,872,995
 (-15) and no other row moved. The emitted IR is unchanged; the binary's
 layout is the likely cause, though nothing here isolates it.
+
+## 2026-11-04 — a password stretched and a digest carried join the run program
+
+`sha256/pbkdf2` peaked at 1,525,448 kB resident for 100,000 iterations
+(#2299). The issue reduced it to a tail loop that hands `sha256/digest`'s
+answer to its next iteration and carries a list it never reads, and that
+loop keeps every digest's garbage too. Under the 2026-09-05 corpus-first
+gavel both shapes join the run program here, measured on main before the
+fix.
+
+`stretched` runs `sha256/pbkdf2` for 200 iterations and `carried` runs the
+postcard for 600 digests. On this container the release-tier run program
+reads 1,045,660,009 with both. Without `stretched` (one iteration) it reads
+1,023,809,139, a column of 21,850,870 (2.09%); without `carried` (none) it
+reads 1,013,906,580, a column of 31,753,429 (3.04%). Each phase keeps its
+loop's work: `stretched` about ten kilobytes an iteration and `carried`
+about five. The counts are sized so the program's peak sees it: with both,
+arena_peak_bytes reads 6,815,760 where it read 4,718,608, and at 250
+digests `carried` stayed under the old peak and the objective could not see
+it.
+
+The mem vein takes the two fixtures, each at today's growth:
+`a_digest_hashed_again_round_a_loop` (600 digests, three arena blocks) and
+`a_password_stretched_three_hundred_times` (five). Their outputs agree with
+Python's `hashlib`.
+
+The issue's control row, the same loop without `p` at 2,296 kB, does not
+reproduce on this tree. `chain u left`, a public loop with no wrapper, and
+the wrapper with its unread list removed both keep every digest: five arena
+blocks at a thousand digests, like the postcard. So the extra parameter is
+not the cause, and the fix's entry says what is.

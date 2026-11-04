@@ -1,0 +1,17 @@
+# A tail loop that hashes its own answer `n` times and carries a list it
+# never reads. The loop's entry is public, so the slot the digest travels in
+# reads as any value at all, and the loop kept every digest's garbage.
+import "std/sha256"
+
+pub fn total n
+  length (carried [1 2 3 4] n)
+
+pub fn carried u left
+  looped [1 2 3] u left (left == 0)
+
+fn looped _ u _ true
+  u
+
+fn looped p u left false
+  next = sha256/digest u
+  looped p next (left - 1) (left - 1 == 0)
