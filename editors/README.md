@@ -29,7 +29,7 @@ Symlink the bundle into your extensions directory and reload:
 ln -s ~/dev/kanso/editors/kanso ~/.vscode/extensions/kanso-lang.kanso-syntax-0.1.0
 ```
 
-The bundle doubles as a VS Code extension (`package.json` declares the language and grammar), so this also brings `//` comment toggling and bracket/quote autoclosing from `language-configuration.json`.
+The bundle doubles as a VS Code extension (`package.json` declares the language and grammar), so this also brings `#` comment toggling and bracket/quote autoclosing from `language-configuration.json`.
 
 The extension starts the language server too, once its one dependency is installed: run `npm install` in `editors/kanso`. The `kanso.server.path` setting names the binary when `kanso` is not on the `PATH`.
 
@@ -47,4 +47,4 @@ vim.lsp.enable('kanso')
 
 ## what highlights
 
-Declarations (`fn`/`type` plus their names), fields, builtins (`print`, `map`, `err`, ...), primitive types, `true`/`false`/`none`, `_`, integers, strings with `{interpolation}` highlighted as embedded kanso, comments, and the operators — including ` . ` pipes and the `.>`, `.!` and `.?` chain words.
+Declarations (`fn`/`type` plus their names), fields, the names in scope without an import (`print`, `put`, `err`, ...), primitive types, `true`/`false`/`none`, `_`, `if`, `else` and `return`, integers, strings with `{interpolation}` highlighted as embedded kanso, comments, and the operators, including `and`, `or` and `not`, ` . ` pipes, and the `.>`, `.!` and `.?` chain words. `tests/editor_grammar.rs` holds the word lists to what the compiler reads.
