@@ -43,6 +43,18 @@ pub fn host_bound() -> Vec<String> {
 /// Whether this host can build the runtime at all. The Linux specs job sets
 /// `KANSO_WASM32_REQUIRED` after installing the toolchain, and there a missing
 /// piece is a failure rather than a skip.
+/// A linker for `docs/kanso.wasm`, holding the one call the page answers for
+/// it: `kanso_host.random_fill`, which the page fills from
+/// `crypto.getRandomValues` for `os/random_bytes`. Here it leaves the zeros the
+/// module allocated, so a run is a function of its program.
+pub fn page_linker<T>(engine: &Engine) -> Linker<T> {
+    let mut linker = Linker::new(engine);
+    linker
+        .func_wrap("kanso_host", "random_fill", |_: Caller<'_, T>, _at: i32, _len: i32| {})
+        .expect("the page's import is defined once");
+    linker
+}
+
 pub fn toolchain() -> bool {
     let clang = Command::new("clang").arg("--version").output().is_ok();
     let ld = Command::new("wasm-ld").arg("--version").output().is_ok();

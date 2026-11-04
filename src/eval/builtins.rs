@@ -152,6 +152,25 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::ReadBytes(path.to_string()))))
             }
+            b"random_bytes" => {
+                let [n] = arity(args, name, span)?;
+                match n {
+                    // a count past a word is refused, as native refuses one
+                    Value::Int(count) if count.to_i64().is_some_and(|c| c >= 0) => {
+                        let count = count.to_i64().unwrap_or(0) as usize;
+                        Ok(Value::Desc(Rc::new(Desc::RandomBytes(count))))
+                    }
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        at: None,
+                        message: format!(
+                            "random_bytes takes a count (an int), got {}",
+                            render(self, &other, false)
+                        ),
+                        span,
+                    }),
+                }
+            }
             b"write" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {

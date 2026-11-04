@@ -93,6 +93,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("modified", &[&[Str]]),
         ("list_dir", &[&[Str]]),
         ("read_bytes", &[&[Str]]),
+        ("random_bytes", &[&[Int]]),
         ("read_file", &[&[Str]]),
         ("run", &[&[Str], &[List]]),
         ("start", &[&[Str], &[List]]),

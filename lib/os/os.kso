@@ -156,3 +156,10 @@ pub fn write_file path content
 # is for `read_file`.
 pub fn modified path
   builtin_modified path .> (r -> found path r)
+
+# n bytes from the operating system's secure source: getrandom(2) or
+# arc4random_buf natively, and crypto.getRandomValues in the browser. They are
+# for salts, keys and tokens, so KANSO_SEED, which replays `math/random`, does
+# not reach them (#2298).
+pub fn random_bytes n
+  builtin_random_bytes n

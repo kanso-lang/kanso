@@ -150,6 +150,41 @@ pub trait Executor {
     fn random(&mut self, _n: u64) -> u64 {
         0
     }
+    /// n bytes from the operating system's secure source, never from the
+    /// seeded generator: KANSO_SEED replays `random`, and a salt or a token
+    /// must not be replayable (#2298).
+    fn random_bytes(&mut self, _n: usize) -> Result<Vec<u8>, String> {
+        Err("this engine has no secure random source".to_string())
+    }
+}
+
+/// The call the native runtime makes, through the same libc: getentropy(3)
+/// hands out at most 256 bytes a call on glibc and the BSDs.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn os_entropy(n: usize) -> Result<Vec<u8>, String> {
+    extern "C" {
+        fn getentropy(buf: *mut u8, len: usize) -> i32;
+    }
+    let mut out = vec![0u8; n];
+    for chunk in out.chunks_mut(256) {
+        // SAFETY: the pointer and length name one live, writable chunk.
+        if unsafe { getentropy(chunk.as_mut_ptr(), chunk.len()) } != 0 {
+            return Err("cannot read the system's random source".to_string());
+        }
+    }
+    Ok(out)
+}
+
+/// macOS has arc4random_buf, as the native runtime uses there.
+#[cfg(target_os = "macos")]
+pub fn os_entropy(n: usize) -> Result<Vec<u8>, String> {
+    extern "C" {
+        fn arc4random_buf(buf: *mut u8, len: usize);
+    }
+    let mut out = vec![0u8; n];
+    // SAFETY: the pointer and length name one live, writable buffer.
+    unsafe { arc4random_buf(out.as_mut_ptr(), out.len()) };
+    Ok(out)
 }
 
 impl Default for Rng {
@@ -540,6 +575,11 @@ impl Executor for RealExecutor {
         self.rng.below(n)
     }
 
+    #[cfg(unix)]
+    fn random_bytes(&mut self, n: usize) -> Result<Vec<u8>, String> {
+        os_entropy(n)
+    }
+
     fn args(&mut self) -> Vec<String> {
         self.program_args.clone()
     }
@@ -795,6 +835,12 @@ impl Executor for ScriptedExecutor {
 
     fn random(&mut self, n: u64) -> u64 {
         self.rng.below(n)
+    }
+
+    /// Zeros, so a transcript is a function of its script.
+    fn random_bytes(&mut self, n: usize) -> Result<Vec<u8>, String> {
+        self.transcript.push(format!("random_bytes {n}"));
+        Ok(vec![0; n])
     }
 
     fn args(&mut self) -> Vec<String> {

@@ -1,0 +1,7 @@
+# `os/random_bytes` forwards to a builtin that wants an int: how many bytes.
+import "std/os"
+
+pub fn opaque v
+  v
+
+pub play = os/random_bytes (opaque "x") .> (b -> print "{b}")
