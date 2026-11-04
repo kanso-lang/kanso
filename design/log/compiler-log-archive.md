@@ -112207,3 +112207,63 @@ browser_compile_instructions 343,289,574 (+70,464), entry_instructions
 85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
 falls by less than 0.001, and the floor follows under the rule for a change
 that makes the language do what its specification says.
+
+## 2026-10-29 — six messages that named the wrong cause
+
+Two messages a newcomer meets in the first hour named the wrong cause
+(#2217). With no clang on `PATH`, `kanso run` and `kanso play` said
+`cannot build: No such file or directory (os error 2)`, which reads as a
+missing source file, and `kanso build` said it could not invoke clang
+without saying where it had looked. All three now say clang is not on
+`PATH`. `run` and `play` also name the way out that needs no clang:
+`kanso run h.kso --interp`. The check runs only when the spawn reports
+not-found and no `clang` resolves on `PATH`. Any other build failure
+keeps the host's io text. `run` on a directory quotes the path as typed,
+not the entry it was taken to.
+
+`kanso test` on a file of bare statements was refused as a library with a
+statement in it. The file declares nothing, so the message described its
+shape and not the problem. It now says the file holds statements and no
+tests, where tests live, and that `kanso run` runs it.
+
+`kanso --help` now lists `--counters` beside `--release` on `build` (#2215).
+Before this, the only place a user learned the flag was the refusal a
+release binary prints when asked for counters it was built without.
+
+The clang messages are asserted whole in
+`tests/a_toolchain_the_path_cannot_reach.rs`, now three cases with `play`
+added. They stay listed in `tests/golden/unpinned_diagnostics.txt`, which
+says where their pin lives. The test message has a golden in
+`tests/golden/test_verb/statements.stderr`, and `front_door` checks the
+help line. Each spec was watched red on the compiler before the change.
+
+Two more came from the hako commands (#2234). `kanso install` printed
+`installed 0 hako(s):` above a list of the one it had pinned, because the
+count it printed was the names left to walk, which is none by the time it
+prints. It now counts the lines of its own report. And an import of a module
+an installed hako does not have, such as `kanso-lang/vse/methods`, said the
+hako was not in the cache and to run `kanso install`, which changed nothing.
+The resolver now checks whether the locked tree is there before blaming the
+cache, and when it is, names the modules the tree does have:
+``error: cannot resolve import "acme/widgets/gadgets" — `acme/widgets` is
+installed, and has no module `gadgets` (its modules: `acme/widgets`)``.
+tests/hako.rs asserts both, and both were watched red.
+
+The sixth is #2205's last item. A test run from inside its module imports
+the module as `../<name>`, so a refusal in a sibling pointed at
+`../t/p.kso` where the reader sees `p.kso`. A module file whose path climbs
+out of the working directory and back in is now shown from the working
+directory. The check is made only for a path that starts with `..`. The
+refusal itself stands: `p.kso` holds a `pub fn` and a statement, which is
+neither a library nor a play file. tests/test_verb.rs pins the message,
+watched red with the old path.
+
+With #2209's http change these move the compile rows by layout:
+compile_instructions 24,096,605 -> 24,096,621, library_instructions
+71,383,017 -> 71,383,019, startup_instructions 50,258 -> 50,260 and
+codegen_instructions_release 371,573,437 -> 371,573,350. A first version
+kept the path as typed for every verb, which cost the front end one
+allocation; it is now kept only when a directory is taken to its entry,
+and compile_allocs and interp_allocs are unchanged. Welfare falls by less
+than 0.0001, and the floor follows under the rule for a change that makes
+the tools do what the documentation says.
