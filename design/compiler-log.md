@@ -20,32 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a parameter is not the function it shares a name with
-
-The none check asks, at each call whose argument can be a none, whether the
-callee's group has an arm for one. It found the group by name and arity
-alone. std/list's merge sort takes its key as a parameter named `key` and
-calls it on an element it reads by index, so a program with a one-argument
-function named `key` had that parameter read as its own function, and the
-read was refused twice inside std/list, at a line the program's author
-cannot change. The proof that the index is in bounds usually kept the
-question from being asked. A dispatch tie elsewhere in the program took that
-proof away, so the tie arrived with two errors nobody wrote. The senro
-routing prototype found it.
-
-The check now asks first whether the declaration binds the name, the
-question the box check already asks through the same per-declaration set.
-
-tests/golden/errors gains the program: a function named `key`, a tie, and a
-call into std/list. It was watched red through the corpus runner with the
-test switched off, reporting the two refusals in list.kso, and passes with it.
-
-The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
-browser_compile_instructions 343,289,574 (+70,464), entry_instructions
-85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
-falls by less than 0.001, and the floor follows under the rule for a change
-that makes the language do what its specification says.
-
 ## 2026-10-29 — six messages that named the wrong cause
 
 Two messages a newcomer meets in the first hour named the wrong cause
@@ -1294,3 +1268,14 @@ engine now carries a second caller of `compile_source`, which is a likely
 reason, though nothing here isolates it. Welfare fell by less than 0.01.
 Editor support for the language is part of making it usable, so the floor
 drops by exactly that cost.
+
+## 2026-11-03 — the usage text names build --wasm
+
+`kanso --help` listed `build <file|dir> [--release|--counters]` after #2286
+added `--wasm`. The usage line now names the flag and says what it writes,
+and `tests/front_door.rs` holds the line; it failed on the old text.
+
+Only a string in the driver changed. By CI's measure, on the tree merged
+with the language server, codegen_instructions_release fell to 371,872,995
+(-15) and no other row moved. The emitted IR is unchanged; the binary's
+layout is the likely cause, though nothing here isolates it.

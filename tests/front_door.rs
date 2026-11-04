@@ -34,9 +34,10 @@ fn help_is_an_answer_rather_than_a_failure() {
 /// `--counters` was learned only from the refusal a release binary prints when
 /// asked for counters it was built without (#2215).
 #[test]
-fn help_names_the_counting_build() {
+fn help_names_the_counting_build_and_the_browser_build() {
     let (out, _, _) = kanso(&["--help"]);
-    assert!(out.contains("build <file|dir> [--release|--counters]"), "help said: {out}");
+    assert!(out.contains("build <file|dir> [--release|--counters|--wasm]"), "help said: {out}");
+    assert!(out.contains("--wasm writes a module a page can run"), "help said: {out}");
 }
 
 #[test]
