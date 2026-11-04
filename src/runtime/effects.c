@@ -164,6 +164,14 @@ KValue k_b_net_port(KValue listener) {
     return k_mkdesc(28, listener, k_none());
 }
 
+/* The address of the machine at the other end of a connection, which a
+   server reads to tell one client from another. */
+KValue k_b_net_peer(KValue conn) {
+    if (!k_not_failure(conn)) return conn;
+    if (conn.tag != K_INT) k_die("peer takes a connection");
+    return k_mkdesc(41, conn, k_none());
+}
+
 KValue k_b_accept(KValue listener) {
     if (!k_not_failure(listener)) return listener;
     if (listener.tag != K_INT) k_die("accept takes a listener");
@@ -1327,6 +1335,25 @@ static KValue k_exec(KDesc* d) {
             if (getsockname(fd, (struct sockaddr*)&addr, &len) < 0)
                 return k_err(k_str("cannot read the port of that socket"), NULL);
             return k_int(ntohs(addr.sin_port));
+        }
+        case 41: {
+            /* The address at the other end, as text. Either family prints the
+               way inet_ntop writes it, which is how the interpreter's
+               IpAddr prints it too. */
+            int fd = k_socket_of(d->x.payload);
+            if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
+#ifndef __wasm__
+            struct sockaddr_storage addr;
+            socklen_t len = sizeof addr;
+            char text[INET6_ADDRSTRLEN];
+            if (getpeername(fd, (struct sockaddr*)&addr, &len) == 0) {
+                const void* at = addr.ss_family == AF_INET6
+                    ? (const void*)&((struct sockaddr_in6*)&addr)->sin6_addr
+                    : (const void*)&((struct sockaddr_in*)&addr)->sin_addr;
+                if (inet_ntop(addr.ss_family, at, text, sizeof text)) return k_str(text);
+            }
+#endif
+            return k_err(k_str("cannot read the address at the other end"), NULL);
         }
         case 27: return k_kill_kid(d->x);
         case 17: {

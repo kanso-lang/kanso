@@ -20,25 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a play file shows its plan
-
-#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
-`run` refuses a file that holds definitions, so a program small enough for
-one file, which is how the book and the playground teach, had no plan to
-show. Three of the book's panels are about what a plan shows and were getting
-theirs through a stub entry no reader could type. `kanso play <file> --plan`
-now prints the plan `run --plan` would, from the play file, and skips the
-cached build.
-
-Asking for it before had answered "`play` is not a verb". `play` was missing
-from the list of verbs the usage message checks, and a known verb refused for
-a flag fell to "wants a file or directory". The message now names the flag:
-"`check` does not take `--plan`".
-
-tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
-plan with a golden; tests/front_door.rs gains `play` with no file and `check`
-with `--plan`. Both were watched red on the compiler before the change.
-
 ## 2026-10-29 — check reads a play file as play
 
 #2205's first item, filed by the docs worker. `kanso check` sent any file
@@ -1450,6 +1431,53 @@ entry_instructions rose to 87,745,536 (+556,994) and library_instructions to
 and the floor is banked. At the release tier 100,000 rounds take 0.22 s in
 this container, where they took 0.45 s; the dev tier, which `kanso run`
 uses, barely moved, from 3.1 s to 3.0 s.
+
+## 2026-11-04 — net/peer reads the address at the other end of a connection
+
+A server that counts sign-in attempts per client needs to know which client
+it is talking to, and nothing in `std/net` said. `net/peer c` answers the
+address at the other end of a connection as text: `127.0.0.1`, or an IPv6
+address in its short form. senro's sign-in rate limit is the first reader;
+senro's accept loop already adds a `senro-at` header to each request, and the
+peer goes in beside it, so `std/net/http`'s request record is unchanged.
+
+It is description tag 41 natively, read with `getpeername` and written with
+`inet_ntop`, and `Desc::Peer` in the interpreter, read from the stream's
+`peer_addr`. A handle that is not an open connection answers "that is not an
+open socket" on both engines, the native runtime's words for the same fault
+in `net/port`. The tab and the scripted executor have no sockets and refuse,
+as they refuse every other net word. The row goes last among the builtins
+the interpreter dispatches, so no existing word's scan position moves.
+
+The spec is in `tests/sockets_serve.rs`: a one-statement server accepts the
+harness's connection and prints who called. Watched red on each engine in
+turn, with the address replaced by `0.0.0.0`.
+
+The rows are CI's. The runtime's new case adds 288 bytes of `.text` to every
+binary: jsonbench 442,145, encodebench 368,056, oneshot 448,337, basket
+366,024, widebench 382,142, deepbench 333,303, escapebench 323,335,
+pendbench 342,395, indexbench 322,233, scanbench 528,076, digestbench
+349,921, readbench 323,537, livebench 452,911 and runbench 892,161, so text across the fourteen rose to
+5,874,576 (+4,032). Clang
+compiles the larger runtime: codegen_instructions_dev 117,101,715 (+43,557)
+and codegen_instructions_release 371,967,035 (+12,446). The table and the
+library grew by one word each, so the front end and the engines read a
+little more: compile_instructions 24,090,400 (+65), entry_instructions
+87,746,589 (+1,053), library_instructions 73,433,509 (+833),
+emit_instructions 5,602,736 (+1,043), interp_instructions 622,466,237
+(+2,078), browser_compile_instructions 349,304,764 (+9,566) and
+browser_run_instructions 78,403,189 (+5,996). No benchmark calls `net/peer`,
+so the work rows move by layout: work_jsonbench 549,338,422, work_encodebench
+2,335,340,285, work_oneshot 9,980,090, work_basket 18,296,275,
+work_widebench 28,686,523, work_escapebench 40,309,541, work_pendbench
+154,124,923, work_indexbench 1,888,327, work_scanbench 268,526,
+work_digestbench 3,289,743, work_readbench 4,584,584, work_livebench
+938,655,611 and work_runbench 916,954,250 (+35,260), while work_deepbench
+fell to 197,755,729 (-103,256). Nothing here isolates a cause for those.
+Welfare fell by less than 0.005; `net/peer` is the prerequisite for senro's
+sign-in rate limit under #2280, as `os/random_bytes` was for its sign-in, so
+the floor drops by exactly what CI measured, with the reason in
+bench/welfare_floor.json.
 
 ## 2026-11-04 — a call to list/fold answers what its init and lambda can answer
 

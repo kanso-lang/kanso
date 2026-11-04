@@ -479,3 +479,35 @@ fn a_server_that_is_one_statement_waits_for_its_client_on_both_engines() {
         assert_eq!(said, "heard hello\n", "engine {engine:?}");
     }
 }
+
+/// A server that reads who is at the other end, which is what a sign-in that
+/// counts attempts by address needs (senro's rate limit). The harness connects
+/// from the loopback address, so both engines print the same line.
+const A_SERVER_THAT_ASKS_WHO_CALLED: &str = r#"import "std/net"
+import "std/os"
+
+fn listening l p
+  os/write_file "port.txt" "{p}" .> (_ -> net/accept l) .> (c -> served l c)
+
+fn served l c
+  net/peer c
+    .> (from -> print "a call from {from}")
+    .> (_ -> net/close_conn c)
+    .> (_ -> net/close_listener l)
+
+net/listen 0 .> (l -> net/port l .> (p -> listening l p))
+"#;
+
+#[test]
+fn a_server_reads_the_address_it_was_called_from_on_both_engines() {
+    for (slot, engine) in [(10u16, &[][..]), (11, &["--interp"][..])] {
+        let said = printed(
+            "sockets-peer",
+            A_SERVER_THAT_ASKS_WHO_CALLED,
+            engine,
+            slot,
+            a_client_says_hello,
+        );
+        assert_eq!(said, "a call from 127.0.0.1\n", "engine {engine:?}");
+    }
+}

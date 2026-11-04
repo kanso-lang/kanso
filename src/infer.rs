@@ -2305,6 +2305,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 }
                 Expr::Ident(n, _, _) if base(n) == "args" => LIST,
                 Expr::Ident(n, _, _) if base(n) == "random" => INT,
+                // the address at the other end of a connection
+                Expr::Ident(n, _, _) if base(n) == "net_peer" => STR,
                 // the bytes a connection had waiting, as text
                 Expr::Ident(n, _, _) if base(n) == "net_read" => STR,
                 // the same read, as the bytes they are
@@ -2694,6 +2696,7 @@ pub fn is_effect_builtin(name: &str) -> bool {
             | "kill"
             | "listen"
             | "net_port"
+            | "net_peer"
             | "accept"
             | "net_read"
             | "net_read_bytes"

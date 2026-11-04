@@ -589,7 +589,7 @@ struct KDesc { long long dtag; KValue x; KValue y; };
    30 read_bytes,
    31 settled (a box already holding its answer: what `effect v` was handed),
    32 read_line, 33 modified, 34 dial, 35 net_read_bytes, 36 net_secure,
-   37 pool_make, 38 pool_take, 39 pool_give, 40 random_bytes */
+   37 pool_make, 38 pool_take, 39 pool_give, 40 random_bytes, 41 net_peer */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for

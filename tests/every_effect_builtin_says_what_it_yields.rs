@@ -107,6 +107,7 @@ fn the_reading_finds_every_effect_builtin() {
             "make_dir",
             "modified",
             "net_close",
+            "net_peer",
             "net_port",
             "net_read",
             "net_read_bytes",
