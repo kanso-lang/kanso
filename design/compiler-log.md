@@ -1248,5 +1248,8 @@ Python's `hashlib`.
 The issue's control row, the same loop without `p` at 2,296 kB, does not
 reproduce on this tree. `chain u left`, a public loop with no wrapper, and
 the wrapper with its unread list removed both keep every digest: five arena
-blocks at a thousand digests, like the postcard. So the extra parameter is
-not the cause, and the fix's entry says what is.
+blocks at a thousand digests, like the postcard. The extra parameter is not
+the cause. `sha256/digest` answers through `list/fold`, and inference gives
+a library function one answer for every caller in the program, so the
+digest reads as any value. A loop slot that may hold any value is never
+carried across a rewind.

@@ -5,9 +5,9 @@
 # built to make one is dead when the next iteration starts, so the arena
 # should hold one iteration's work however many there are.
 #
-# The loop is entered by a tail call from a public function, so the slot the
-# digest travels in reads as any value at all, and a slot of any value was
-# never carried across a rewind.
+# `sha256/digest` answered through `list/fold`, which every caller in a
+# program shares, so the compiler read its answer as any value at all, and a
+# slot that may hold any value is never carried across a rewind.
 #
 # Watched, not frozen: regenerate deliberately and say which way it went.
 import "std/sha256"

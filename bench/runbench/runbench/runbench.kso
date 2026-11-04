@@ -328,8 +328,8 @@
 #   carried    600 digests round a tail loop              31,753,429  3.04%
 #
 # `stretched` is `sha256/pbkdf2` as a sign-in calls it. `carried` hands each
-# digest to its next iteration through a slot that reads as any value, since
-# its loop is entered from a public function. Both loops kept everything they
+# digest to its next iteration, and the digest reads as any value because it
+# answers through the shared `list/fold`. Both loops kept everything they
 # built, about ten kilobytes an iteration for `stretched` and five for
 # `carried`, so their counts are sized to lift the program's peak.
 import "./admitted"

@@ -1,6 +1,7 @@
 # A tail loop that hashes its own answer `n` times and carries a list it
-# never reads. The loop's entry is public, so the slot the digest travels in
-# reads as any value at all, and the loop kept every digest's garbage.
+# never reads. `sha256/digest` answered through the shared `list/fold`, so the
+# compiler read the digest as any value at all, and the loop kept every
+# digest's garbage.
 import "std/sha256"
 
 pub fn total n
