@@ -96,6 +96,10 @@ pub trait Executor {
     fn socket_port(&mut self, _listener: i64) -> Result<i64, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// The address of the machine at the other end of a connection, as text.
+    fn peer(&mut self, _conn: i64) -> Result<String, String> {
+        Err("this engine has no sockets".to_string())
+    }
     /// Asks whether a connection is waiting. `None` means not yet, and the
     /// scheduler puts the fiber back — a server is one statement of a
     /// parallel group and must not hold the runtime while it waits.
@@ -348,6 +352,20 @@ impl Executor for RealExecutor {
                 .local_addr()
                 .map_err(|e| format!("cannot read the port of that listener: {e}"))?;
             Ok(i64::from(addr.port()))
+        })
+    }
+
+    /// The reasons are the native runtime's words, so both engines answer a
+    /// closed handle alike.
+    fn peer(&mut self, conn: i64) -> Result<String, String> {
+        SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found =
+                s.conns.get(&conn).ok_or_else(|| "that is not an open socket".to_string())?;
+            let addr = found
+                .peer_addr()
+                .map_err(|_| "cannot read the address at the other end".to_string())?;
+            Ok(addr.ip().to_string())
         })
     }
 

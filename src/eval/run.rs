@@ -149,6 +149,10 @@ impl<'a> Interp<'a> {
                 Ok(port) => Value::int(port),
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            Desc::Peer(conn) => Ok(match executor.peer(*conn) {
+                Ok(address) => Value::Str(Text::from(address)),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
             // Reached only outside a parallel group; step() yields instead of
             // arriving here. No other fiber can connect then, but a client
             // outside the program can, so this waits for one.
@@ -610,6 +614,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::WriteBytes(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Listen(port) => out.push_str(&format!("  listen {port}\n")),
         Desc::SocketPort(l) => out.push_str(&format!("  port {l}\n")),
+        Desc::Peer(c) => out.push_str(&format!("  peer {c}\n")),
         Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
         Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
         Desc::ReceiveBytes(conn) => out.push_str(&format!("  receive_bytes {conn}\n")),

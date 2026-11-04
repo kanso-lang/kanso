@@ -273,6 +273,17 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::SocketPort(listener.to_i64().unwrap_or(-1)))))
             }
+            b"net_peer" => {
+                let [conn] = arity(args, name, span)?;
+                let Value::Int(conn) = &conn else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "peer takes a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Peer(conn.to_i64().unwrap_or(-1)))))
+            }
             b"pool_make" => {
                 let [n] = arity(args, name, span)?;
                 match n {

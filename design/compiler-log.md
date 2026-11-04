@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a page split into words joins the run program
-
-`regexp/split "[^a-z']+"` allocated about thirty times per field it answered
-(#2214), and the run program never saw it: its one regexp phase, the scan
-from scanbench, looks for a literal the subject lacks and stops early. Under
-the 2026-09-05 corpus-first gavel the shape joins the run program here,
-measured on main before its fix.
-
-`worded` builds a page of 4,000 words from a fixed list, separated by
-spaces, commas, full stops and newlines, and splits it with the pattern a
-word count uses. On this container the release-tier run program reads
-851,480,954 with the phase and 825,132,205 with it reading nothing, a column
-of 26,348,749 (3.09%).
-
-The interpreted corpus does not take the phase. Importing `std/regexp` there
-made the tab compile the whole library on every run: CI read
-browser_compile_instructions 343,289,560 -> 816,029,965 and
-interp_instructions 571,786,909 -> 817,162,078, so the tab's compile term
-would have measured one library's front end and swung with every edit to
-it. The shape is the matcher's work at run time, which the run program
-measures.
-
-CI's rows for the phase: run_alloc_bytes 224,043,124 -> 231,013,169,
-run_allocs 1,582,921 -> 1,700,863, run_arena_blocks 4 -> 5,
-run_arena_peak_bytes 4,718,608 -> 5,767,184, run_beat_iters 193,074 ->
-211,299, run_bytes_malloc 7,850 -> 7,867, run_evac_allocs 1,732 -> 1,736,
-run_evac_bytes 4,602,208 -> 4,602,496, run_find2_calls 1,037,031 ->
-1,060,857, run_perm_allocs 106 -> 127, run_push_mut_fast 1,191,311 ->
-1,195,309, run_push_mut_slow 1,645,457 -> 1,645,463, run_sh_buf 91,336,800
--> 93,914,368, run_sh_bytes 4,872 -> 1,148,520, run_sh_rec 4,098,336 ->
-4,675,424, run_sh_str 16,816,384 -> 16,930,368, run_spare_peak_bytes
-2,621,456 -> 3,670,032, run_str_scan_bytes 18,358,325 -> 18,358,372,
-run_str_scans 3,387 -> 3,402, work_runbench 825,009,321 -> 851,374,952,
-emitted_other_branches 17,933 -> 18,066, emitted_other_calls 20,709 ->
-20,888, emitted_other_defines 2,278 -> 2,292, emitted_other_lines 171,268 ->
-172,430 and text 5,645,435 -> 5,658,091.
-Welfare re-bases run_instructions and
-run_peak_bytes, each keeping its ratio to its baseline, and the floor moves
-only by the rounding of the two baselines.
-
 ## 2026-10-29 — a play file shows its plan
 
 #2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
@@ -1490,3 +1450,24 @@ entry_instructions rose to 87,745,536 (+556,994) and library_instructions to
 and the floor is banked. At the release tier 100,000 rounds take 0.22 s in
 this container, where they took 0.45 s; the dev tier, which `kanso run`
 uses, barely moved, from 3.1 s to 3.0 s.
+
+## 2026-11-04 — net/peer reads the address at the other end of a connection
+
+A server that counts sign-in attempts per client needs to know which client
+it is talking to, and nothing in `std/net` said. `net/peer c` answers the
+address at the other end of a connection as text: `127.0.0.1`, or an IPv6
+address in its short form. senro's sign-in rate limit is the first reader;
+senro's accept loop already adds a `senro-at` header to each request, and the
+peer goes in beside it, so `std/net/http`'s request record is unchanged.
+
+It is description tag 41 natively, read with `getpeername` and written with
+`inet_ntop`, and `Desc::Peer` in the interpreter, read from the stream's
+`peer_addr`. A handle that is not an open connection answers "that is not an
+open socket" on both engines, the native runtime's words for the same fault
+in `net/port`. The tab and the scripted executor have no sockets and refuse,
+as they refuse every other net word. The row goes last among the builtins
+the interpreter dispatches, so no existing word's scan position moves.
+
+The spec is in `tests/sockets_serve.rs`: a one-statement server accepts the
+harness's connection and prints who called. Watched red on each engine in
+turn, with the address replaced by `0.0.0.0`.
