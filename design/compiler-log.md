@@ -1528,3 +1528,16 @@ print the same on every engine.
 
 `list/map` and the other shared drivers answer through handed values the same
 way; this entry covers fold alone.
+
+The rows are CI's, taken on the tree merged with net/peer, on the recorded
+silicon. runbench's work fell to 915,613,360 (-1,340,890) and its text to
+871,297 bytes (-20,864); basket's text fell 96 bytes and both programs emit a
+few fewer calls and branches. Some counters rose. runbench's emitted lines
+rose to 75,463 (+128) while its machine code shrank, and basket's work rose to
+18,296,297 (+22). The library and the infer edits are part of every compile:
+compile_instructions rose to 24,300,629, emit_instructions to 5,620,106,
+entry_instructions to 88,668,787 and library_instructions to 74,010,643.
+interp_allocs rose to 810,150 (+13). The module compile row fell on every
+count, to 1,163 lines, 109 calls, 80 branches, 29 defines and 1,449 visits.
+The browser rows did not move. Welfare rose by less than a hundredth and the
+floor is banked.

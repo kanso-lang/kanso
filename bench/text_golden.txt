@@ -23,7 +23,7 @@
 jsonbench text=442145
 encodebench text=368056
 oneshot text=448337
-basket text=366024
+basket text=365928
 widebench text=382142
 deepbench text=333303
 escapebench text=323335
@@ -33,4 +33,4 @@ scanbench text=528076
 digestbench text=349921
 readbench text=323537
 livebench text=452911
-runbench text=892161
+runbench text=871297
