@@ -1,0 +1,217 @@
+---
+layout: default
+title: "getting started with senro"
+description: "build senro's guestbook one file at a time: the entry, the schema, a model, the actions and a view."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>getting started</h1>
+
+<p>this guide walks through senro's guestbook, the app the framework was first built against. by the end you will know how a senro app is laid out, where each of its decisions lives, and what senro supplies without being asked. it assumes you can read kanso; <a href="/book/tour.html">the tour</a> covers what you need.</p>
+
+<h2>what you need</h2>
+
+<p>three things: kanso, built from <a href="https://github.com/kanso-lang/kanso">its repository</a> with <code>cargo build --release</code>; a checkout of <a href="https://github.com/kanso-lang/senro">senro</a>; and a Postgres server. senro's file <code>.kanso-version</code> names the kanso commit it is tested against. the guestbook expects Postgres on <code>127.0.0.1:54329</code> with the user <code>postgres</code> and no password, which is what senro's own specs use.</p>
+
+<h2>the shape of an app</h2>
+
+<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>accounts</code>, <code>session</code>), one for its model (<code>signatures</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./accounts"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./home"</span>
+<span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+
+<span class="k">derive</span> kata/views
+<span class="k">derive</span> models/tables
+<span class="k">derive</span> routes/rest
+
+made <span class="o">=</span> <span class="f">models/made</span> schema
+
+<span class="c"># The components whose actions run on the server.</span>
+served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
+
+served_routes <span class="o">=</span> <span class="f">web/components</span> routes entries/secret served
+
+connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
+
+<span class="f">connected</span>
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/run</span> db made <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema))
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected)</code></pre>
+</div>
+
+<p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's reader, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
+
+<p>the last statement is the app: connect to Postgres, create the tables if they are missing and compare them with the schema, then serve on port 3000. <code>web/serve</code> answers each connection in a fiber of its own and lends each request a database session from a pool.</p>
+
+<h2>the schema</h2>
+
+<p>the schema is the migrations, oldest first. a migration is a value built from a fixed set of changes, so it cannot break when a model changes later, and there is no separate schema file to keep in step with it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+
+<span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
+<span class="c"># models derivation folds these into the schema the app is compiled against.</span>
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined]
+
+signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
+
+id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
+
+joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
+
+name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
+
+message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
+
+digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
+</div>
+
+<h2>a model</h2>
+
+<p>a model is a record type whose name matches a table: <code>signature</code> reads the <code>signatures</code> table. each field is checked against a column, so a field the table lacks stops the build. the functions beside the type are the model's policies and its rules.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># A signature as the `signatures` table stores it. senro/models checks each</span>
+<span class="c"># field against the table's columns and writes `signature_from`, which builds</span>
+<span class="c"># one from a row.</span>
+<span class="k">pub</span> <span class="k">type</span> signature
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">message</span>
+
+<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
+<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
+<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
+  <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
+
+<span class="c"># Anyone may sign the book.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span>
+
+<span class="c"># A signature needs a name and a message, and a message short enough to</span>
+<span class="c"># read at a glance.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> s
+  <span class="f">models/problems</span> [
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">text/trim</span> s<span class="o">.</span>name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say who you are."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">text/trim</span> s<span class="o">.</span>message <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say something."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">length</span> s<span class="o">.</span>message <span class="o">&gt;</span> <span class="n">280</span>) <span class="s">"Keep it under 280."</span>)
+  ]</code></pre>
+</div>
+
+<p>from these, <code>models/tables</code> writes <code>signature_from</code>, which builds a signature from a row, and checked writes such as <code>signature_destroyed</code>, which asks <code>destroy?</code> before it deletes.</p>
+
+<h2>actions and routes</h2>
+
+<p>an action is a public function in a resource's module. it takes the request and a database session and answers an effect that yields the response. its name places it: <code>index</code> is <code>GET /entries</code>, <code>create</code> is <code>POST /entries</code>, and the other five of a resource's seven actions follow Rails. a public function with any other name is refused where it is declared.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/entries.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="c"># The session says who is signed in, and carries a notice across the</span>
+<span class="c"># redirect that follows a signature or a sign-in; the page that shows the</span>
+<span class="c"># notice clears it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  s <span class="o">=</span> <span class="f">web/session</span> req secret
+  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
+
+<span class="c"># A development secret. A deployed guestbook signs its sessions with its own.</span>
+<span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
+
+<span class="c"># A signature is made through its model, whose rules decide whether it is</span>
+<span class="c"># fit to keep. It is signed with the name of the account signed in, and a</span>
+<span class="c"># visitor who is not signed in is sent to sign in. The fields go to Postgres</span>
+<span class="c"># as parameters, so what a visitor types is stored as text and never read as</span>
+<span class="c"># SQL.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
+  <span class="f">return</span> effect (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) if viewer <span class="o">==</span> <span class="s">""</span>
+  f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
+  <span class="f">models/created</span> viewer db signatures/signature_model f
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
+</div>
+
+<p><code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret. a visitor who is not signed in is redirected to the sign-in page. otherwise the form goes through the model: <code>models/created</code> checks the policy and the rules and answers either the new row or the problems to show.</p>
+
+<h2>a view</h2>
+
+<p>a view is a kata template. its first line names what it takes, and the rest is indented markup, closed for you: a tag with its classes and attributes, then its text. <code>{viewer}</code> interpolates and escapes, <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw, and the control lines are <code>if</code> and <code>for</code>. <code>kata/views</code> compiles each template to kanso functions and checks each field it reads. <code>signed_view</code>, which <code>entries/index</code> calls, describes the page as data, so senro's page script can render it in the browser with the same template compiled to wasm; a first request gets it rendered as HTML.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/views/signed.kata</div>
+  <pre><code>takes signatures form flash removals viewer
+header
+  h1 Guestbook
+  p.lede Leave a line for whoever comes next.
+if viewer == ""
+  nav.door
+    a href="/session/new" Sign in
+    a href="/accounts/new" Make an account
+else
+  form.out method="post" action="/session"
+    input type="hidden" name="_method" value="DELETE"
+    span Signed in as {viewer}.
+    button Sign out
+if flash != ""
+  p.flash = flash
+if viewer != ""
+  form.sign method="post" action="/entries"
+    textarea name="message" placeholder="say something" required="required" = form.message
+    if form.problems["message"] != none
+      p.problem = form.problems["message"]
+    button Sign
+ol.entries
+  for e in signatures
+    li
+      p.message = e.message
+      p.who = e.name
+      == removals["{e.id}"]</code></pre>
+</div>
+
+<h2>running it</h2>
+
+<p>from the root of the senro checkout:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shell</div>
+  <pre><code>kanso run examples/guestbook</code></pre>
+</div>
+
+<p>open <code>http://localhost:3000</code>, make an account and sign the book. <code>kanso run</code> builds at kanso's development tier; <code>kanso build examples/guestbook</code> makes a release binary, which stretches passwords about fourteen times faster.</p>
+</article>

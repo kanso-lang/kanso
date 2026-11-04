@@ -1,0 +1,148 @@
+---
+layout: default
+title: "routing in senro"
+description: "how senro places an app's routes: a resource's seven actions, ids, singular resources, path_to, and legacy aliases."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>routing</h1>
+
+<p>a senro app declares no routes. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide covers the seven actions, how an id reaches an action, singular resources, naming a route from code, and keeping an old URL working.</p>
+
+<h2>the seven actions</h2>
+
+<p>a resource is a module, and its actions are the seven Rails gives a resource. for a module named <code>posts</code>:</p>
+
+<table>
+<thead><tr><th>action</th><th>request</th><th>what it is for</th></tr></thead>
+<tbody>
+<tr><td><code>posts/index</code></td><td><code>GET /posts</code></td><td>every post</td></tr>
+<tr><td><code>posts/new</code></td><td><code>GET /posts/new</code></td><td>a form for a new one</td></tr>
+<tr><td><code>posts/create</code></td><td><code>POST /posts</code></td><td>make one from the form</td></tr>
+<tr><td><code>posts/show</code></td><td><code>GET /posts/:id</code></td><td>one post</td></tr>
+<tr><td><code>posts/edit</code></td><td><code>GET /posts/:id/edit</code></td><td>a form to change it</td></tr>
+<tr><td><code>posts/update</code></td><td><code>PATCH /posts/:id</code></td><td>change it from the form</td></tr>
+<tr><td><code>posts/destroy</code></td><td><code>DELETE /posts/:id</code></td><td>remove it</td></tr>
+</tbody>
+</table>
+
+<p>a module named <code>home</code> is the exception: <code>home/index</code> answers <code>GET /</code>. a browser's form can only send GET and POST, so a form that means PATCH or DELETE posts a hidden field, <code>_method</code>, and the server reads the request as that method. a public function with any other name is refused where it is declared, so a misspelled action never becomes a dead route.</p>
+
+<h2>ids</h2>
+
+<p>an action whose route has <code>:id</code> takes it as a third argument. annotated as an int, it reaches the action as one, and a segment that is not a number is not that route.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/singular/posts.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _
+  <span class="s">"every post"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ id:int
+  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+</div>
+
+<p>the annotation matters for more than conversion. <code>GET /posts/new</code> and <code>GET /posts/:id</code> would both answer <code>/posts/new</code> if <code>id</code> could be any word, and senro refuses the pair.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/errors/overlapping_routes/posts.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> _
+  <span class="s">"a blank form"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ id
+  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">kanso check</div>
+  <pre><code>error[derive]: `GET /posts/:id` and `GET /posts/new` (posts/new) answer the same request: annotate `id` as `int` so a word is not taken for an id
+  --&gt; ./posts.kso:4:8
+   4 | pub fn show _ id
+              ^</code></pre>
+</div>
+
+<h2>singular resources</h2>
+
+<p>some resources have one of them per visitor: a profile, a session, a cart. a module whose <code>show</code>, <code>edit</code>, <code>update</code> and <code>destroy</code> take no id is a singular resource, as Rails has them. its routes drop the <code>:id</code>, and it has no <code>index</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/singular/profile.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
+
+<span class="k">pub</span> <span class="k">type</span> profile
+  <span class="f">name</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _
+  <span class="s">"your profile is at <span class="i">{routes/path_to (profile </span>"</span>ada<span class="s">")}"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> _ _
+  <span class="s">"edit it"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> _ _
+  <span class="s">"saved"</span></code></pre>
+</div>
+
+<p>with the <code>posts</code> module above, the app's routes are these:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">the route table&#x27;s keys</div>
+  <pre><code>["GET /posts" "GET /posts/:id" "GET /profile" "GET /profile/edit" "PATCH /profile"]</code></pre>
+</div>
+
+<p>the guestbook's sign-in is one: <code>session/new</code> is the form at <code>GET /session/new</code>, <code>session/create</code> signs in at <code>POST /session</code>, and <code>session/destroy</code> signs out at <code>DELETE /session</code>.</p>
+
+<h2>naming a route</h2>
+
+<p><code>routes/path_to</code> answers a route's path, so a link or a redirect never spells a path by hand. it takes an action's name, with an id when the route has one, or a record whose type is declared in a module with a <code>show</code> action.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/path_to/posts.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
+
+<span class="k">pub</span> <span class="k">type</span> post
+  <span class="f">id</span>
+  <span class="f">title</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _
+  <span class="s">"every post: <span class="i">{routes/path_to </span>"</span>posts/index<span class="s">"}"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ id:int
+  <span class="s">"post <span class="i">{id}</span> is at <span class="i">{routes/path_to (post id </span>"</span>hello<span class="s">")}"</span></code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">kanso run</div>
+  <pre><code>post 3 is at /posts/3
+every post: /posts
+/posts/7
+/</code></pre>
+</div>
+
+<p>both forms are checked while the app compiles. a name that is no route is refused at the call, and so is an id given to a route without one or left off a route that needs it.</p>
+
+<h2>keeping an old URL</h2>
+
+<p>an app that must keep an old path working declares <code>legacy_route_aliases</code> in one of its modules: a map from the old method and path to the action that answers it now. the name says what it is, a measure for compatibility, and each alias answers with a permanent redirect (308) to its action's route, so a resource keeps one URL.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/aliases/legacy.kso</div>
+  <pre><code><span class="k">pub</span> <span class="f">legacy_route_aliases</span> <span class="o">=</span> {
+  <span class="s">"GET /entry/:id"</span>:<span class="s">"entries/show"</span>
+  <span class="s">"GET /signbook"</span>:<span class="s">"entries/index"</span>
+  <span class="s">"POST /sign"</span>:<span class="s">"entries/create"</span>
+}</code></pre>
+</div>
+
+<p>an alias must name a route, take <code>:id</code> as its second segment exactly when its route does, use its route's method, and answer no request that a route or another alias answers. each of those mistakes is a compile error at the declaration.</p>
+
+<h2>what the derivation writes</h2>
+
+<p><code>derive routes/rest</code> writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
+</article>

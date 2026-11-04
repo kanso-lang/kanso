@@ -1,0 +1,29 @@
+---
+layout: default
+title: "senro guides"
+description: "guides to senro, the web framework for kanso: getting started, and each part of the framework in turn."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>the guides</h1>
+
+<p>each guide covers one part of senro, with code taken from the apps senro is built against. a panel titled with a file's path shows that file as senro's repository holds it; the site's build checks every such panel against the commit it names, so the code here is the code that runs.</p>
+
+<ul class="guide-list">
+  <li><a href="getting-started.html">getting started</a><p>build the guestbook one file at a time: the schema, a model, the actions and a view, then run it against Postgres.</p></li>
+  <li><a href="models.html">models and migrations</a><p>where the schema comes from, how a model is checked against its table, and the policies and rules that guard each write.</p></li>
+  <li><a href="views.html">views and components</a><p>kata templates, layouts, components whose actions run in the browser or on the server, and pages rendered in the browser from data.</p></li>
+  <li><a href="routing.html">routing</a><p>how an action's name places it: the seven actions, ids, singular resources, naming a route from code, and keeping an old URL.</p></li>
+  <li><a href="sessions.html">sessions and sign-in</a><p>the signed session, making an account, how passwords are kept, and signing in without saying which names exist.</p></li>
+</ul>
+</article>

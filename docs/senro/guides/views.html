@@ -1,0 +1,155 @@
+---
+layout: default
+title: "views and components in senro"
+description: "senro's views are kata templates compiled to kanso; a component binds an action to a click, and a page can be rendered in the browser from data with the same functions the server uses."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>views and components</h1>
+
+<p>senro's view layer is kata. a view is a <code>.kata</code> file, compiled to a kanso function while the app compiles, so the compiler checks a template the way it checks any other code. this guide covers the format, layouts, components, and pages rendered in the browser.</p>
+
+<h2>templates</h2>
+
+<p>templates live in a directory of their own that holds no kanso source, the guestbook's <code>views</code>. the entry imports the directory and writes <code>derive kata/views</code>, and each file becomes a public function of that module named after it: <code>views/signed.kata</code> is called as <code>views/signed</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/views/signed.kata</div>
+  <pre><code>takes signatures form flash removals viewer
+header
+  h1 Guestbook
+  p.lede Leave a line for whoever comes next.
+if viewer == ""
+  nav.door
+    a href="/session/new" Sign in
+    a href="/accounts/new" Make an account
+else
+  form.out method="post" action="/session"
+    input type="hidden" name="_method" value="DELETE"
+    span Signed in as {viewer}.
+    button Sign out
+if flash != ""
+  p.flash = flash
+if viewer != ""
+  form.sign method="post" action="/entries"
+    textarea name="message" placeholder="say something" required="required" = form.message
+    if form.problems["message"] != none
+      p.problem = form.problems["message"]
+    button Sign
+ol.entries
+  for e in signatures
+    li
+      p.message = e.message
+      p.who = e.name
+      == removals["{e.id}"]</code></pre>
+</div>
+
+<p>the first line, <code>takes</code>, names the parameters in order. nesting is by indentation and tags close themselves. <code>tag.class#id</code> is shorthand, and a bare <code>.class</code> means a <code>div</code>. an attribute is <code>name="text"</code>, where the text may hold <code>{expr}</code>, or <code>name=expr</code> for a value. <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw. the control lines are <code>if</code>, <code>else if</code>, <code>else</code> and <code>for x in xs</code>, and <code>#</code> starts a comment.</p>
+
+<p>because the template is compiled to kanso, <code>kanso check</code> reads it. a field the template reads that its record does not have is a compile error at the template, and <code>kanso derived</code> prints the source kata wrote.</p>
+
+<h2>layouts</h2>
+
+<p>a layout is a template that takes the page's body and writes it raw. the guestbook's loads senro's page script, which is what lets a page update in place.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/views/layout.kata</div>
+  <pre><code>takes title body
+doctype html
+html
+  head
+    meta charset="utf-8"
+    meta name="viewport" content="width=device-width, initial-scale=1"
+    title = title
+    link rel="stylesheet" href="/site.css"
+    script src="/senro.js" defer="defer"
+  body
+    main
+      == body</code></pre>
+</div>
+
+<h2>components</h2>
+
+<p>a template that binds an action is a component. <code>on-click=more</code> binds a click on an element to the function <code>more</code> in the template's module. a component takes one value, its state, and an action takes the state and answers the next one. the pantry's meal planner is a counter:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/planner/view.kata</div>
+  <pre><code>takes meals
+div.planner
+  span.label Meals planned this week
+  button.minus on-click=fewer aria-label="one fewer" −
+  span.count = meals
+  button.plus on-click=more aria-label="one more" +</code></pre>
+</div>
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
+  <pre><code><span class="c"># The week's meal plan, counted in the browser. These are the component's</span>
+<span class="c"># actions: each takes the count and answers the next one, and the planner's</span>
+<span class="c"># template binds them to its buttons.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">more</span> meals
+  meals <span class="o">+</span> <span class="n">1</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">fewer</span> meals
+  <span class="f">if</span> (meals <span class="o">&gt;</span> <span class="n">0</span>) (meals <span class="o">-</span> <span class="n">1</span>) <span class="n">0</span></code></pre>
+</div>
+
+<p>where an action runs depends on what it asks for. an action that takes only the state runs in the browser, in the app's browser module, without asking the server. one that also asks for <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server: the click posts the state to <code>/senro/act/&lt;component&gt;</code>, and the page morphs the component's next rendering into place. the guestbook's remove button is that kind:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/removal/view.kata</div>
+  <pre><code>takes id
+button.remove on-click=removed aria-label="remove entry {id}" ×</code></pre>
+</div>
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/removal/removal.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+<span class="k">import</span> <span class="s">"../signatures"</span>
+
+<span class="c"># Removes an entry. The action asks for the viewer and a database session, so</span>
+<span class="c"># it runs on the server. Its state is the entry's id, which anyone can send,</span>
+<span class="c"># so it removes the entry through the model, whose policy says no to anyone</span>
+<span class="c"># but the person who signed it, and a no is the answer.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">removed</span> viewer db id
+  <span class="f">models/destroyed</span> viewer db signatures/signature_model id
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">settled</span> id w)
+
+<span class="k">fn</span> <span class="f">settled</span> id w
+  <span class="f">if</span> (<span class="f">models/refused?</span> w) w id</code></pre>
+</div>
+
+<p>its state is the entry's id, which anyone can send, so the action removes the entry through the model, whose policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself: every write a component makes goes through a policy.</p>
+
+<h2>pages in the browser</h2>
+
+<p>when an app answers its pages with <code>views/answer</code> or <code>views/answer_as</code>, kata writes two more functions per page. <code>signed_view</code> describes the page as data, the template's name and the values it reads, and <code>signed_keyed</code> renders the template from that data. the first request gets the page rendered on the server as HTML. once the browser module has loaded, a link followed or a form sent on the app's own origin fetches the page as data and renders it in the browser with the same template compiled to wasm.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/browser.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../browser"</span>
+<span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+
+<span class="k">derive</span> kata/views
+
+<span class="c"># The guestbook's pages, compiled for the browser with</span>
+<span class="c"># `kanso build browser.kso --wasm`. Its one component, the remove button,</span>
+<span class="c"># runs on the server, so the module holds no component of its own.</span>
+browser/answer_pages {} views/rendered</code></pre>
+</div>
+
+<p>the module is built with <code>kanso build browser.kso --wasm</code>. senro's page script keeps it in the browser's Cache Storage under its modification time, so a returning visitor does not download it again, and a page opened before a deploy loads itself again once. kanso's differential law is what makes this safe: every engine answers the same bytes, so the browser's rendering of a page and the server's cannot drift apart. senro's specs render a page both ways and compare them byte for byte.</p>
+
+<h2>live pages</h2>
+
+<p>when a request that is not a GET finishes, the server notifies Postgres's <code>senro</code> channel, and every page holding <code>/senro/live</code> open fetches itself again. one visitor's signature appears on another's screen without a reload, and a field someone is typing in keeps what they typed, unless it was in the form they just sent.</p>
+</article>
