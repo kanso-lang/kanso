@@ -1479,10 +1479,11 @@ functions: across the other benchmarks emitted_other_defines rose to 2,365,
 emitted_other_calls to 21,933, emitted_other_branches to 18,972 and
 emitted_other_lines to 180,154, all of it in runbench and digestbench.
 
-The rows are CI's. work_runbench fell to 916,548,004 (-25,174,129, -2.7%)
-and work_digestbench to 3,288,791 (-815,411); no other work row moved.
-runbench's and digestbench's binaries are smaller (text 890,609, -2,800,
-and 349,505, -4,224), and the emitter writes 201 more calls into runbench
+The rows are CI's, on the tree merged with the find2 fix above.
+work_runbench fell to 916,918,990 (-25,175,172, -2.7%) and
+work_digestbench to 3,288,791 (-815,411); no other work row moved.
+runbench's and digestbench's binaries are smaller (text 891,873, -2,800,
+and 349,633, -4,224), and the emitter writes 201 more calls into runbench
 for the new functions. The library is part of every compile, so
 entry_instructions rose to 87,745,536 (+556,994) and library_instructions to
 73,432,676 (+471,339). The browser rows did not move. Welfare rose by 0.06
