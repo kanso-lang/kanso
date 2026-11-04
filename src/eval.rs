@@ -223,6 +223,9 @@ pub enum Desc {
     ReadFile(String),
     /// the same read with no test of what the bytes are (ruled 2026-08-29)
     ReadBytes(String),
+    /// n bytes from the operating system's secure source, which KANSO_SEED
+    /// does not reach (#2298)
+    RandomBytes(usize),
     Write(String),
     WriteErr(String),
     Env(String),

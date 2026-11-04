@@ -61,7 +61,7 @@ impl Toolchain {
         let module = Module::new(&engine, &wasm32::counted(&bytes)[..])
             .expect("the artifact is a wasm module");
         let mut store = Store::new(&engine, ());
-        let instance = Linker::new(&engine)
+        let instance = wasm32::page_linker(&engine)
             .instantiate_and_start(&mut store, &module)
             .expect("the toolchain instantiates");
         Toolchain { store, instance }
