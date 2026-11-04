@@ -112342,3 +112342,15 @@ call that writes it. The record form runs by dispatch on the record's type:
 the derivation declares one `path_to` arm per model with a show route, which
 needs a derivation that can declare a function arm (`derive/define`, planned
 on #2198).
+
+## 2026-10-29 — a call's description carries the strings it was written with
+
+#2198's string form refuses `path_to "posts/shwo" id` at the call, so a
+derivation has to read the string. Each `derive/call` now carries `strings`
+beside `arguments`: an argument's text when it is a string written whole, and
+"" for anything else, including a string with an interpolation in it.
+
+tests/golden/derive gains a convention that refuses a link whose string
+names no route, at the call, on both engines. On the compiler before this
+change it was refused for a different reason, at the convention: no record
+type had a field `strings`.
