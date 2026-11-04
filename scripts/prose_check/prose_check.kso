@@ -91,11 +91,18 @@ t4 = "(?i)<p>\\s*of course,\\b"
 throat = [t1 t2 t3 t4]
 
 fn with_book top
-  os/list_dir "docs/book" .> (inner -> over_pages top inner)
+  os/list_dir "docs/book" .> (inner -> with_senro top inner)
 
-fn over_pages top inner
+# senro's pages, and its guides a directory below them.
+fn with_senro top inner
+  os/list_dir "docs/senro"
+    .> (s -> os/list_dir "docs/senro/guides" .> (g -> over_pages top inner s g))
+
+fn over_pages top inner senro guides
   both = list/concat (under "docs" top) (under "docs/book" inner)
-  pages = list/sort (list/to_list both)
+  found = under "docs/senro/guides" guides
+  site = list/concat (under "docs/senro" senro) found
+  pages = list/sort (list/to_list (list/concat both site))
   read_pages pages 1 [] (found -> reported pages found)
 
 fn under dir names

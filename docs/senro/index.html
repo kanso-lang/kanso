@@ -1,0 +1,242 @@
+---
+layout: default
+title: "senro—a web framework for kanso"
+description: "senro (線路): a web framework for kanso in the tradition of Rails. Routes, schema and views come from conventions run while the app compiles, and a mistake Rails reports on a request is a compile error here."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<section class="hero senro-hero">
+  <svg class="enso-bg" viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="82" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-dasharray="455 60" transform="rotate(-80 100 100)"/>
+  </svg>
+  <div class="container hero-inner">
+    <div>
+      <p class="hero-kanji" lang="ja">線路</p>
+      <h1 class="hero-title">senro</h1>
+      <p class="hero-thesis">a web framework for kanso. write the parts of the app that are <em>yours</em>; conventions place the rest while it compiles.</p>
+      <div class="hero-actions">
+        <a class="button button-solid" href="guides/getting-started.html">get started</a>
+        <a class="button button-ghost" href="guides/index.html">read the guides</a>
+      </div>
+    </div>
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations.kso</div>
+  <pre><code>import "../../models"
+
+# The guestbook's schema, as the changes that built it, oldest first. The
+# models derivation folds these into the schema the app is compiled against.
+pub all = [signed joined]
+
+signed = models/create_table "signatures" [id name message]
+
+id = models/column "id" "serial"
+
+joined = models/create_table "accounts" [id name digest]
+
+name = models/column "name" "text"
+
+message = models/column "message" "text"
+
+digest = models/column "digest" "text"</code></pre>
+</div>
+  </div>
+</section>
+
+<section class="principle">
+  <div class="container principle-inner">
+    <span class="eyebrow">the name</span>
+    <blockquote>senro (線路) is japanese for a railway line: the track a train runs on. Rails gave web development its conventions; senro lays the same track for a language whose compiler can check them.</blockquote>
+  </div>
+</section>
+
+<section class="section" id="app">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">an app</span>
+      <h2 class="section-title">a guestbook, whole</h2>
+      <p class="lede">senro's first app is a guestbook: visitors make an account, sign in, sign the book and remove what they signed. These are its own files. The panel above is its schema.</p>
+    </div>
+    <p>A model is a record type beside the rules for it. The policies say who may create and remove a signature, and <code>problems</code> says what makes one unfit to keep.</p>
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <pre><code>import "../../models"
+import "std/text"
+
+# A signature as the `signatures` table stores it. senro/models checks each
+# field against the table's columns and writes `signature_from`, which builds
+# one from a row.
+pub type signature
+  id
+  name
+  message
+
+# Only the person who signed an entry may remove it. The models derivation
+# reads this policy and writes `signature_destroyed`, which asks it before it
+# deletes anything, so there is no other way to remove a signature.
+pub fn destroy? viewer s
+  s.name == viewer
+
+# Anyone may sign the book.
+pub fn create? _ _
+  true
+
+# A signature needs a name and a message, and a message short enough to
+# read at a glance.
+pub fn problems s
+  models/problems [
+    (models/rule "name" (text/trim s.name == "") "Say who you are.")
+    (models/rule "message" (text/trim s.message == "") "Say something.")
+    (models/rule "message" (length s.message &gt; 280) "Keep it under 280.")
+  ]</code></pre>
+</div>
+    <p>An action is a public function, and its name places it. <code>entries/index</code> answers <code>GET /entries</code> and <code>entries/create</code> answers <code>POST /entries</code>. Nothing else declares a route.</p>
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/entries.kso</div>
+  <pre><code>import "../../models"
+import "../../pg"
+import "../../web"
+import "./removal"
+import "./signatures"
+import "./views"
+import "std/list"
+
+# The session says who is signed in, and carries a notice across the
+# redirect that follows a signature or a sign-in; the page that shows the
+# notice clears it.
+pub fn index req db
+  s = web/session req secret
+  pg/query db newest [] .&gt; (r -&gt; shown req r.rows s (filled "" {}) 200)
+
+# A development secret. A deployed guestbook signs its sessions with its own.
+pub secret = "the guestbook's development secret"
+
+# A signature is made through its model, whose rules decide whether it is
+# fit to keep. It is signed with the name of the account signed in, and a
+# visitor who is not signed in is sent to sign in. The fields go to Postgres
+# as parameters, so what a visitor types is stored as text and never read as
+# SQL.
+pub fn create req db
+  viewer = web/viewer req secret
+  return effect (web/redirect "/session/new") if viewer == ""
+  f = put (web/form req.body) "name" viewer
+  models/created viewer db signatures/signature_model f
+    .&gt; (w -&gt; signed req db w)</code></pre>
+</div>
+    <p>A view is a kata template. It names what it takes on its first line, and the compiler checks every field it reads against the record it is handed.</p>
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/views/signed.kata</div>
+  <pre><code>takes signatures form flash removals viewer
+header
+  h1 Guestbook
+  p.lede Leave a line for whoever comes next.
+if viewer == ""
+  nav.door
+    a href="/session/new" Sign in
+    a href="/accounts/new" Make an account
+else
+  form.out method="post" action="/session"
+    input type="hidden" name="_method" value="DELETE"
+    span Signed in as {viewer}.
+    button Sign out
+if flash != ""
+  p.flash = flash
+if viewer != ""
+  form.sign method="post" action="/entries"
+    textarea name="message" placeholder="say something" required="required" = form.message
+    if form.problems["message"] != none
+      p.problem = form.problems["message"]
+    button Sign
+ol.entries
+  for e in signatures
+    li
+      p.message = e.message
+      p.who = e.name
+      == removals["{e.id}"]</code></pre>
+</div>
+  </div>
+</section>
+
+<section class="section" id="decides">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">conventions</span>
+      <h2 class="section-title">what senro decides</h2>
+      <p class="lede">each convention is a kanso function the compiler runs during the build. what it writes is checked like code someone wrote, and <code>kanso derived</code> prints it.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <span class="feature-num">01</span>
+        <h3>routes</h3>
+        <p>every route is one of a resource's seven actions, placed by its module and its name. singular resources such as <code>/profile</code> follow the same rule. an old URL is kept with <code>legacy_route_aliases</code>, which redirects to the resource's route.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">02</span>
+        <h3>the schema</h3>
+        <p>there is no schema file. the migrations are values, folded into the schema while the app compiles, and each model's fields are checked against its table's columns. when the server starts it compares the live tables with that schema.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">03</span>
+        <h3>models</h3>
+        <p>a model's reader, its checked writes and its policies come from the record type and the functions beside it. a write the policy refuses has no other way into the table.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">04</span>
+        <h3>views</h3>
+        <p>templates are kata files, compiled to kanso functions. the same functions run on the server and, compiled to wasm, in the browser, so a page can be rendered from data on either side and the two agree byte for byte.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">05</span>
+        <h3>sessions</h3>
+        <p>a session is a signed cookie. sign-in stretches passwords with PBKDF2 and salts them with the operating system's random bytes, and a session older than its limit is refused.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">06</span>
+        <h3>postgres</h3>
+        <p>senro speaks Postgres's wire protocol in a client written in kanso, over TLS when the server asks for it. there is no C binding and no second database to abstract over.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="refuses">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">refusals</span>
+      <h2 class="section-title">what senro refuses</h2>
+      <p class="lede">a mistake Rails reports when a request reaches it is a compile error here. a misspelled action is the plainest case.</p>
+    </div>
+<div class="code-panel">
+  <div class="code-panel-title">spec/errors/misspelled_action/posts.kso</div>
+  <pre><code>pub fn index _
+  "every post"
+
+pub fn destory _
+  "gone"</code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">kanso check</div>
+  <pre><code>error[derive]: `destory` is not an action: name it index, new, create, show, edit, update or destroy
+  --&gt; ./posts.kso:4:8
+   4 | pub fn destory _
+              ^</code></pre>
+</div>
+    <p>the same goes for two routes that could answer one request, a <code>path_to</code> that names no route, a model field with no column, and a template that reads a field its record lacks.</p>
+  </div>
+</section>
+
+<section class="section" id="next">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">next</span>
+      <h2 class="section-title">where to go from here</h2>
+    </div>
+    <p><a href="guides/getting-started.html">getting started</a> builds the guestbook one file at a time. the <a href="guides/index.html">guides</a> cover each part of the framework in turn, and <a href="https://github.com/kanso-lang/senro/blob/main/PRINCIPLES.md">PRINCIPLES.md</a> states the beliefs behind its design. senro is young: the guestbook and a pantry planner are the apps it has been built against, and its source is at <a href="https://github.com/kanso-lang/senro">github.com/kanso-lang/senro</a>.</p>
+  </div>
+</section>
