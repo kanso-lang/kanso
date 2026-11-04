@@ -39,6 +39,9 @@
       "include": "#conditional"
     },
     {
+      "include": "#return"
+    },
+    {
       "include": "#constant"
     },
     {
@@ -193,7 +196,7 @@
       "name": "support.function.qualified.kanso"
     },
     "builtin": {
-      "match": "\\b(effect|entries|err|keys|length|print|push|put|values)\\b",
+      "match": "\\b(annotate|bind|delete|effect|entries|err|keys|length|merge|print|push|put|rescue|values)\\b",
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {
@@ -223,7 +226,7 @@
           "name": "keyword.operator.pipe.kanso"
         },
         {
-          "match": "&&|\\|\\|",
+          "match": "\\b(and|or|not)\\b",
           "name": "keyword.operator.logical.kanso"
         },
         {
@@ -258,6 +261,10 @@
     "annotated-type": {
       "match": "(?<=:)([a-z][a-z0-9_]*(?:\\[\\])?)",
       "name": "entity.name.type.kanso"
+    },
+    "return": {
+      "match": "\\breturn\\b",
+      "name": "keyword.control.return.kanso"
     }
   }
 }
