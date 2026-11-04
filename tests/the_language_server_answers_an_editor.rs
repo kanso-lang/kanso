@@ -99,6 +99,14 @@ fn the_check_s_diagnostics_reach_the_editor() {
     transcript("diagnostics");
 }
 
+/// `parts s` hands `s` to `text/split`, which hands it to `builtin_split`.
+/// The builtin has no arms to read, so what it accepts comes from
+/// `infer::builtin_takes`, and the hover says `string`.
+#[test]
+fn a_parameter_handed_to_a_builtin_reads_as_what_it_takes() {
+    transcript("builtins");
+}
+
 #[test]
 fn a_name_leads_to_where_it_was_declared() {
     transcript("definition");

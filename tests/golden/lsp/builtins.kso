@@ -1,0 +1,6 @@
+import "std/text"
+
+fn parts s
+  text/split s ","
+
+print (text/join (parts "a,b") ";")

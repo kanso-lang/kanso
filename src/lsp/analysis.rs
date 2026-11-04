@@ -12,7 +12,8 @@
 //!   that binds the position by name hands on what that name accepts in turn,
 //!   so the answer follows a value through as many calls as it passes. With
 //!   `fn bar s:string` and `fn bar n:int`, `fn foo x = bar x` accepts
-//!   `string | int`.
+//!   `string | int`. A builtin has no arms, so a parameter handed to one
+//!   takes what `infer::builtin_takes` says it takes at that position.
 //! - **What it was handed**: `infer::Inference::param`, the set the whole
 //!   program's calls widened it to. This is what the engines dispatch on.
 //!
@@ -369,6 +370,11 @@ impl<'p> Facts<'p> {
                     let mut want = accepts(&d.params[p], &self.typesets);
                     for (u, arms) in uses[i][p].iter().zip(&reached[i][p]) {
                         if arms.is_empty() {
+                            if !self.groups.contains_key(&(u.name, u.args.len())) {
+                                if let Some(takes) = infer::builtin_takes(u.name, u.at) {
+                                    want = want.meet(&Want::of(takes));
+                                }
+                            }
                             continue;
                         }
                         let took = arms

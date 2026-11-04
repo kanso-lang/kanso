@@ -103,7 +103,7 @@ fn lazy_where_a_list_goes(
     let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
     for (pos, arg) in args.iter().enumerate() {
         let Some(demand) = builtin_demand(bare, pos) else { continue };
-        if !demand.contains(&LitKind::List) {
+        if demand & crate::infer::LIST == 0 {
             continue;
         }
         let Expr::App { head: inner, args: inner_args, piped: false, .. } = arg else { continue };
@@ -115,7 +115,7 @@ fn lazy_where_a_list_goes(
         if answers & !FAIL != REC {
             continue;
         }
-        let want: Vec<String> = demand.iter().map(|k| describe_literal(*k).to_string()).collect();
+        let want = describe_demand(demand);
         diags.push(Diagnostic::new(
             "type",
             format!(
@@ -222,7 +222,7 @@ fn list_where_a_map_goes(
     };
     let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
     let Some(demand) = builtin_demand(bare, 0) else { return };
-    if demand.contains(&LitKind::List) || !demand.contains(&LitKind::Map) {
+    if demand & crate::infer::LIST != 0 || demand & crate::infer::MAP == 0 {
         return;
     }
     let Some(arg) = args.first() else { return };

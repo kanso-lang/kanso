@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"definitionProvider":true},"serverInfo":{"name":"kanso"}}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://{{ROOT}}/builtins.kso","diagnostics":[]}}
+{"jsonrpc":"2.0","id":2,"result":{"contents":{"kind":"markdown","value":"```kanso\ns: string\n```"},"range":{"start":{"line":2,"character":9},"end":{"line":2,"character":10}}}}
+{"jsonrpc":"2.0","id":3,"result":{"contents":{"kind":"markdown","value":"```kanso\ns: string\n```"},"range":{"start":{"line":3,"character":13},"end":{"line":3,"character":14}}}}
+{"jsonrpc":"2.0","id":4,"result":{"contents":{"kind":"markdown","value":"```kanso\nfn parts s:string → list\n```"},"range":{"start":{"line":2,"character":3},"end":{"line":2,"character":8}}}}
+{"jsonrpc":"2.0","id":5,"result":null}

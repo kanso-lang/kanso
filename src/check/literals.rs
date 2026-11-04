@@ -60,67 +60,42 @@ impl<'a> LiteralGroups<'a> {
     }
 }
 
-/// What each builtin will accept in each position, verified by running the
-/// wrong thing at each one and reading the diagnostic it gives. Absent
-/// entries are unconstrained: this says nothing it has not checked.
-fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
-    use LitKind::*;
-    let table: &[(&str, &[&[LitKind]])] = &[
-        ("length", &[&[Str, List, Map]]),
-        ("join", &[&[List], &[Str]]),
-        ("entries", &[&[Map]]),
-        ("keys", &[&[Map]]),
-        ("values", &[&[Map]]),
-        ("bytes", &[&[Str]]),
-        ("to_bytes", &[&[List]]),
-        ("char_code", &[&[Str]]),
-        ("chars", &[&[Str]]),
-        ("split", &[&[Str], &[Str]]),
-        ("sqrt", &[&[Int, Float]]),
-        ("bit_and", &[&[Int], &[Int]]),
-        ("bit_or", &[&[Int], &[Int]]),
-        ("bit_xor", &[&[Int], &[Int]]),
-        ("bit_not", &[&[Int]]),
-        ("bit_shl", &[&[Int], &[Int]]),
-        ("bit_shr", &[&[Int], &[Int]]),
-        ("round", &[&[Int, Float]]),
-        ("print", &[&[Str]]),
-        ("write", &[&[Str]]),
-        ("write_err", &[&[Str]]),
-        ("env", &[&[Str]]),
-        ("exists", &[&[Str]]),
-        ("is_dir", &[&[Str]]),
-        ("modified", &[&[Str]]),
-        ("list_dir", &[&[Str]]),
-        ("read_bytes", &[&[Str]]),
-        ("random_bytes", &[&[Int]]),
-        ("read_file", &[&[Str]]),
-        ("run", &[&[Str], &[List]]),
-        ("start", &[&[Str], &[List]]),
-        ("kill", &[&[Int]]),
-        ("make_dir", &[&[Str]]),
-        ("write_file", &[&[Str], &[Str]]),
-        ("listen", &[&[Int]]),
-        ("net_port", &[&[Int]]),
-        ("accept", &[&[Int]]),
-        ("net_read", &[&[Int]]),
-        ("net_read_bytes", &[&[Int]]),
-        ("dial", &[&[Str], &[Int]]),
-        ("net_secure", &[&[Int], &[Str]]),
-        ("net_write", &[&[Int], &[Str]]),
-        ("net_close", &[&[Int]]),
-        ("pool_make", &[&[Int]]),
-        ("pool_take", &[&[Int]]),
-        ("pool_give", &[&[Int]]),
-        ("concat", &[&[List], &[List]]),
-        ("push", &[&[List]]),
-        ("put", &[&[Map, List]]),
-        ("delete", &[&[Map]]),
-        ("sleep", &[&[Int]]),
-        ("random", &[&[Int]]),
-        ("from_code", &[&[Int]]),
-    ];
-    table.iter().find(|(n, _)| *n == name).and_then(|(_, positions)| positions.get(index)).copied()
+/// What a builtin takes at a position: its row in `infer::BUILTIN_TAKES`,
+/// which a spec checks against the interpreter, and one rule of the
+/// language's own. Every engine renders whatever `print` is handed, so a
+/// value a program computes prints as it is; a literal handed to `print` is
+/// refused unless it is a string, which sends a number through a template.
+fn builtin_demand(name: &str, index: usize) -> Option<crate::infer::Set> {
+    match (name, index) {
+        ("print", 0) => Some(crate::infer::STR),
+        _ => crate::infer::builtin_takes(name, index),
+    }
+}
+
+fn lit_set(kind: LitKind) -> crate::infer::Set {
+    use crate::infer::*;
+    match kind {
+        LitKind::Int => ANY_INT,
+        LitKind::Float => FLOAT,
+        LitKind::Str => STR,
+        LitKind::List => LIST,
+        LitKind::Map => MAP,
+    }
+}
+
+/// A demand in words: the literal kinds it admits, and bytes, which no
+/// literal is but several builtins take.
+fn describe_demand(set: crate::infer::Set) -> Vec<String> {
+    let mut words: Vec<String> =
+        [LitKind::Int, LitKind::Float, LitKind::Str, LitKind::List, LitKind::Map]
+            .into_iter()
+            .filter(|k| set & lit_set(*k) != 0)
+            .map(|k| describe_literal(k).to_string())
+            .collect();
+    if set & crate::infer::BYTES != 0 {
+        words.push("bytes".to_string());
+    }
+    words
 }
 
 /// What a literal is, coarsely enough to compare against a pattern.
@@ -247,9 +222,8 @@ fn literal_argument_at(
         let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
             continue;
         };
-        if !allowed.contains(&kind) {
-            let want: Vec<String> =
-                allowed.iter().map(|k| describe_literal(*k).to_string()).collect();
+        if allowed & lit_set(kind) == 0 {
+            let want = describe_demand(allowed);
             diags.push(Diagnostic::new(
                 "type",
                 format!("`{bare}` takes {} here, not {}", or_join(want), describe_literal(kind)),
