@@ -1420,7 +1420,8 @@ the tab; native wrote nothing to stderr before the fix. The micro golden
 position, and with the fix reverted native printed nothing where the
 interpreter prints `2 2 3 2 4`.
 
-The rows are from a job on 0x19 model 0x11. No scan path changed, since the
+The rows are from a job on 0x19 model 0x11, on the tree merged with #2311,
+which moved none of the same rows. No scan path changed, since the
 new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
 so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
 codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
