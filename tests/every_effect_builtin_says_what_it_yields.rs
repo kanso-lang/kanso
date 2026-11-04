@@ -118,6 +118,7 @@ fn the_reading_finds_every_effect_builtin() {
             "pool_take",
             "print",
             "random",
+            "random_bytes",
             "read_bytes",
             "read_file",
             "read_line",
