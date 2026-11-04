@@ -1495,6 +1495,13 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
     long long p = from < 1 ? 0 : from - 1;
     unsigned char ca = (unsigned char)(a & 0xff);
     unsigned char cb = (unsigned char)(b & 0xff);
+    /* A byte is the low byte of the int's magnitude, as the interpreter's
+       `low_byte` reads it, so -98 is 98 (#2313). One test covers both, and
+       at an emitted site's literals it folds away. */
+    if (__builtin_expect((a | b) < 0, 0)) {
+        ca = (unsigned char)((a < 0 ? 0ULL - (unsigned long long)a : (unsigned long long)a) & 0xff);
+        cb = (unsigned char)((b < 0 ? 0ULL - (unsigned long long)b : (unsigned long long)b) & 0xff);
+    }
     long long i = p;
 #if defined(__aarch64__)
     /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
@@ -2159,6 +2166,13 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
     long long p = from < 1 ? 0 : from - 1;
     unsigned char ca = (unsigned char)(a & 0xff);
     unsigned char cb = (unsigned char)(b & 0xff);
+    /* A byte is the low byte of the int's magnitude, as the interpreter's
+       `low_byte` reads it, so -98 is 98 (#2313). One test covers both, and
+       at an emitted site's literals it folds away. */
+    if (__builtin_expect((a | b) < 0, 0)) {
+        ca = (unsigned char)((a < 0 ? 0ULL - (unsigned long long)a : (unsigned long long)a) & 0xff);
+        cb = (unsigned char)((b < 0 ? 0ULL - (unsigned long long)b : (unsigned long long)b) & 0xff);
+    }
     long long i = p;
     if (floor_v > 0 && floor_v <= 256) {
         unsigned char cl = (unsigned char)(floor_v - 1);

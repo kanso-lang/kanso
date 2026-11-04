@@ -8,6 +8,8 @@
 # pointer, a length and four integers, because five KValues are ten
 # register-sized arguments where the abi has six. Every case below runs the
 # same scan through that door; the last two run it through the boxed one.
+#
+# A byte is read as the low byte of the int's magnitude, so -98 is 98 (`b`).
 import "std/text"
 
 s = text/bytes "abcd\tefgh"
@@ -28,3 +30,5 @@ pub play = print "the a byte: {text/find2_below s 1 98 122 1}"
   .> (_ -> print "the last byte of all: {text/find2_below long 1 48 48 1}")
   .> (_ -> print "a zero limit is no limit: {text/find2_below s 1 122 121 0}")
   .> (_ -> print "a limit past a byte: {text/find2_below s 1 122 121 257}")
+  .> (_ -> print "a negative byte: {text/find2_below s 1 -98 122 1}")
+  .> (_ -> print "negative, vector step: {text/find2_below long 1 -113 122 1}")

@@ -10,3 +10,5 @@ inside the vector step: 6
 past it, walked: 23
 the last byte of all: 24
 no match at all: 25
+a negative byte: 2
+negative, vector step: 6

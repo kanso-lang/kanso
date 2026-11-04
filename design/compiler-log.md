@@ -20,18 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a call's description carries the strings it was written with
-
-#2198's string form refuses `path_to "posts/shwo" id` at the call, so a
-derivation has to read the string. Each `derive/call` now carries `strings`
-beside `arguments`: an argument's text when it is a string written whole, and
-"" for anything else, including a string with an interpolation in it.
-
-tests/golden/derive gains a convention that refuses a link whose string
-names no route, at the call, on both engines. On the compiler before this
-change it was refused for a different reason, at the convention: no record
-type had a field `strings`.
-
 ## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
 
 #2198's record form runs `path_to post` by dispatch on the record's type, so
@@ -1432,3 +1420,41 @@ compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
 doors with a non-int, so layout is the likely cause of all four; nothing here
 isolates it. The front end, the emitter, the interpreter and the tab did not
 move. Welfare rose by less than 0.0001 and the floor is banked.
+
+## 2026-11-04 — find2 reads a negative byte as the interpreter does
+
+The interpreter reads each byte `find2` and `find2_below` look for as the low
+byte of the int's magnitude, so -98 is 98. Native's two raw scans read
+`a & 0xff`, so -98 was 158, and `find2 (bytes "abc") 1 -98 0` answered 4
+where the interpreter answered 2 (#2313). The interpreter is the oracle, so
+native changed. Both scans read `& 0xff` first and correct the two bytes
+only when `(a | b) < 0`. At the emitted sites the bytes are literals and the
+test folds away.
+
+The first version computed both magnitudes on every call, through a helper
+that the release tier's hot unit and `a_short_scan_tail_answers_like_the_byte_walk`
+each lift out of the runtime by name. The second lift did not know the
+helper and the spec failed on both hosts, so the magnitude is computed in
+place. That version cost the browser run 92,400 instructions; the single
+sign test costs 52,800.
+
+The micro goldens `find2_at_its_edges` and `find2_below_at_its_edges` each
+gain a negative byte in the scalar walk and one in the vector step. Before
+the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
+2 and 3.
+
+The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
+128 bytes, and scanbench's and runbench's, which inline the raw scans most,
+by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
+(+4,048). work_runbench rose to 942,094,162 (+372,029
+over main). Four other work rows moved by a few hundred instructions:
+work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
+(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
+(+141). An earlier run on the first version read encodebench 3.8M lower,
+and this one reads it within 238 of main, so neither reading is the change.
+browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
+wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
+and codegen_instructions_release fell to 371,954,589 (-46,231). The front
+end, the emitter and the interpreter did not move. Welfare fell by less than
+0.01. The differential law requires the fix, so the floor was lowered by
+exactly that, with the reason in bench/welfare_floor.json.
