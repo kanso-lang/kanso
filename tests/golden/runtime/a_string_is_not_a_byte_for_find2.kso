@@ -1,0 +1,7 @@
+# The last of find2's three int positions refuses a string as the first does.
+import "std/text"
+
+fn opaque v
+  (push [] v)[1]
+
+pub play = print "{text/find2 (text/bytes "abc") 1 98 (opaque "a")}"

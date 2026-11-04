@@ -1,0 +1,17 @@
+# find2 and find2_below take an int of either kind in each position after the
+# bytes, and read a bignum the way the interpreter does: a start past a word
+# scans from the front, a byte keeps the low byte of its magnitude, and a floor
+# past a word sits above every byte or below them all. Native read the
+# bignum's pointer as the number until #2310.
+import "std/text"
+
+fn opaque v
+  (push [] v)[1]
+
+bs = text/bytes "abc"
+
+pub play = print "{text/find2 bs (opaque 18446744073709551616) 98 99}"
+  .> (_ -> print "{text/find2 bs 1 (opaque 18446744073709551714) 0}")
+  .> (_ -> print "{text/find2 bs 1 0 (opaque -18446744073709551715)}")
+  .> (_ -> print "{text/find2_below bs 2 0 0 (opaque 18446744073709551616)}")
+  .> (_ -> print "{text/find2_below bs 1 0 0 (opaque -18446744073709551616)}")

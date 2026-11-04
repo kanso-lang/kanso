@@ -1,0 +1,9 @@
+# find2's positions after the bytes are ints, and a value the checker cannot
+# see through still has to be one when the call runs. Native used to scan
+# with the payload of whatever arrived, and answered 2 here.
+import "std/text"
+
+fn opaque v
+  (push [] v)[1]
+
+pub play = print "{text/find2 (text/bytes "abc") (opaque true) 98 99}"
