@@ -795,7 +795,8 @@ const VALUE_READS: &[&str] = &[
 fn reads_a_value(head: &Expr, arity: usize) -> bool {
     let Expr::Ident(n, _, _) = head else { return false };
     let word = n.as_str().strip_prefix("builtin_").unwrap_or(n.as_str());
-    VALUE_READS.contains(&word) && crate::check::builtin_arity(word) == Some(arity)
+    VALUE_READS.contains(&word)
+        && crate::check::BUILTIN_ARITY.iter().any(|&(b, a)| b == word && a == arity)
 }
 
 fn names_read(e: &Expr, locals: &HashSet<String>, out: &mut HashSet<String>) {
