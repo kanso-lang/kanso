@@ -20,20 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — http answers any status, and its suite runs
-
-#2209, filed by the docs worker. `std/net/http` could answer only 200 and
-404, and `response` cannot be built outside the module, so an order service
-answered a refused order with 200 and a sentence. `http/respond code headers
-body` answers any status, with the reason phrase its code is registered with,
-and an empty phrase for a code without one, which HTTP allows.
-
-The suite beside it had never run. tests/std_suites.rs walked one level below
-lib/, and lib/net/http is two, so `http_test.kso` passed or failed unread. The
-walk now goes all the way down and pins the count at seven suites. With the
-422 phrase misspelled, both of its specs went red on lib/net/http, which
-neither could see before.
-
 ## 2026-10-29 — a reader lets the others run
 
 #2208, filed by the docs worker. A program that is both ends of a connection,
@@ -1273,3 +1259,90 @@ another phase's beat verdicts; that is a likely cause, and nothing here
 isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
 -> 8,939,665), each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+
+## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
+
+#2299. Both shapes joined the run program in #2301, measured before this.
+
+**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
+and the running XOR. A list built in one iteration and read in the next is
+a value that crosses a rewind, and the carry tier that could copy it out is
+closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
+loop kept everything every HMAC built. It now carries the sixteen words as
+arguments, as `compress` has carried its eight since 2026-09-23, and the
+beat report reads "rewinds every iteration". Each word read out of a list
+is masked with `whole`: an item of a list could be anything to inference,
+and the mask, a no-op on a word, makes the argument a number. Without the
+mask the loop kept its grow-only verdict, "argument 2 may carry heap".
+`paired_xor` had no other caller and is gone.
+
+**The postcard.** The issue's shape is a loop that hands
+`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
+bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
+is the digest's answer. It spelled its words as bytes through `list/fold`,
+and inference gives a library function one return set for every caller in
+the program, so the fold answers anything and so does the digest. `bytes_of`
+is now a push loop of its own, the slot reads `0x220` (a list or an err),
+and the loop carries it. The general case, any function answering through a
+shared driver, is #2302.
+
+A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
+hand the slot. It changed nothing, because the handed set was the digest's
+TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
+could not have told a builtin from a library function anyway. It was
+reverted before commit.
+
+**Measured on this container**, the same box before and after:
+
+| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
+|---|---:|---:|
+| wall | 4.24 s | 0.68 s |
+| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
+| peak resident | 1,523,724 kB | 2,300 kB |
+
+Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
+vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
+interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
+after. The mem fixtures read one arena block each, where they read three
+and five.
+
+Their other rows move with the loop that now rewinds:
+a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
+a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
+a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
+a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
+a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
+a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
+a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
+a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
+A loop that gives its arena back each iteration copies what it carries out
+first, which fits the evacuations, and has no buffer of the last
+iteration's left to reuse; the byte loop's pushes replace the fold's. That
+reading fits the rows, and nothing here isolates each counter.
+
+**What an iteration costs now.** Callgrind on 2,000 iterations reads
+202,252,987 instructions, about 101,000 an iteration for two compressions.
+`digested`, with the rounds and the schedule inlined into it, is 50%;
+`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
+called rather than inlined; list pushes and the fold that spells the first
+HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
+compression, so this is roughly ten times that. **OPEN:** inlining the four
+mixing functions is the next lead.
+
+CI's rows, on the run program with both phases: work_runbench 947,406,395
+-> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
+5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
+2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
+run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
+run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
+run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
+1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
+96,452,880. The sixteen-argument loop and the byte loop are more code:
+runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
+which take the totals emitted_other_branches 18,498 -> 18,759,
+emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
+emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
+Compiling the longer library costs entry_instructions 86,832,572 ->
+87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
+(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
+-> 95.63 and is banked.

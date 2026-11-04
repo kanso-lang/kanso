@@ -33,4 +33,4 @@ scanbench text=525980
 digestbench text=353169
 readbench text=322561
 livebench text=451935
-runbench text=889681
+runbench text=892849
