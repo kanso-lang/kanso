@@ -2271,6 +2271,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _, _) if base(n) == "read_file" => STR | NONE,
                 // the same absence, and the bytes as they are
                 Expr::Ident(n, _, _) if base(n) == "read_bytes" => BYTES | NONE,
+                // the operating system's secure bytes, which cannot be absent
+                Expr::Ident(n, _, _) if base(n) == "random_bytes" => BYTES,
                 Expr::Ident(n, _, _) if base(n) == "stdin" => STR,
                 Expr::Ident(n, _, _) if base(n) == "read_line" => STR | DONE,
                 // status, stdout, stderr — the std wrapper reads them into a record
@@ -2486,6 +2488,7 @@ pub fn is_effect_builtin(name: &str) -> bool {
         name.strip_prefix("builtin_").unwrap_or(name),
         "read_file"
             | "read_bytes"
+            | "random_bytes"
             | "write"
             | "write_err"
             | "write_file"

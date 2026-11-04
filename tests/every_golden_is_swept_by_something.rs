@@ -3,8 +3,8 @@
 //! missing a row.
 //!
 //! There are three sweeps and between them they looked like the whole board.
-//! On 2026-09-18 they were not: `all_counters.sh` printed "the twelve cost
-//! veins and the lazy tier agree with their goldens" on a tree whose
+//! On 2026-09-18 they were not: `all_counters.sh` printed that every cost
+//! vein and the lazy tier agreed with their goldens, on a tree whose
 //! interpreted row had moved 18,540,440 instructions. `interp_instructions`
 //! was in neither that list nor `all_compile.sh`'s, along with `interp_memory`,
 //! `startup_instructions` and `instructions` -- the last being retired
@@ -13,9 +13,8 @@
 //! day. What it showed is that two green sweeps did not mean what a reader
 //! would take them to mean.
 //!
-//! This is the third spec in the family and the widest. `every_counter_gate_is
-//! _in_the_sweep.rs` pins that every `*_counters.sh` is a row in the counter
-//! sweep; `the_compile_sweep_names_every_compile_gate.rs` pins that every
+//! This is the third spec in the family and the widest. The counter sweep
+//! reads its veins from the `*_counters.sh` gates themselves; `the_compile_sweep_names_every_compile_gate.rs` pins that every
 //! compile-side golden is read by something the compile sweep runs. Both are
 //! scoped to one sweep, and the gap they left was the gates belonging to
 //! NEITHER of them, which by construction neither could see.
@@ -35,7 +34,6 @@ fn root() -> &'static Path {
 }
 
 const CI: &str = include_str!("../.github/workflows/ci.yml");
-const COUNTERS: &str = include_str!("../scripts/gates/all_counters.sh");
 const COMPILE: &str = include_str!("../scripts/gates/all_compile.sh");
 const INTERP: &str = include_str!("../scripts/gates/all_interp.sh");
 
@@ -67,12 +65,29 @@ fn quoted<'a>(script: &'a str, word: &str) -> &'a str {
         .0
 }
 
+/// The veins the counter sweep reads, as its `--list` prints them. It finds
+/// them in `scripts/gates` rather than declaring them, so it is run rather
+/// than read.
+fn counter_veins() -> Vec<String> {
+    let out = std::process::Command::new("sh")
+        .arg("scripts/gates/all_counters.sh")
+        .arg("--list")
+        .current_dir(root())
+        .output()
+        .expect("the counter sweep runs");
+    assert!(out.status.success(), "all_counters.sh --list failed: {out:?}");
+    String::from_utf8(out.stdout)
+        .expect("the list is text")
+        .lines()
+        .map(|l| l.split_whitespace().next().expect("a line names its vein").to_string())
+        .collect()
+}
+
 /// Every gate any sweep names. The counter sweep names a VEIN and runs
 /// `<vein>_counters.sh`; the other two name their gates outright.
 fn swept() -> BTreeSet<String> {
     let mut names = BTreeSet::new();
-    for row in quoted(COUNTERS, "veins").split_whitespace() {
-        let vein = row.split(':').next().expect("a row names its vein");
+    for vein in counter_veins() {
         names.insert(format!("{vein}_counters"));
     }
     for gates in [quoted(COMPILE, "gates"), quoted(INTERP, "gates")] {
@@ -132,13 +147,10 @@ fn no_sweep_names_a_gate_that_is_not_there() {
 /// A sweep that names nothing would pass the first test trivially.
 #[test]
 fn the_sweeps_are_not_empty() {
-    for (name, script, word) in [
-        ("all_counters.sh", COUNTERS, "veins"),
-        ("all_compile.sh", COMPILE, "gates"),
-        ("all_interp.sh", INTERP, "gates"),
-    ] {
+    assert!(counter_veins().len() >= 4, "all_counters.sh reads fewer than four veins");
+    for (name, script) in [("all_compile.sh", COMPILE), ("all_interp.sh", INTERP)] {
         assert!(
-            quoted(script, word).split_whitespace().count() >= 4,
+            quoted(script, "gates").split_whitespace().count() >= 4,
             "{name} names fewer than four rows, which is not a sweep"
         );
     }

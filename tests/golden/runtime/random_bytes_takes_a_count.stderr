@@ -1,0 +1,2 @@
+error[runtime]: random_bytes takes a count (an int), got x
+  failed in random_bytes_takes_a_count/play at random_bytes_takes_a_count.kso:7

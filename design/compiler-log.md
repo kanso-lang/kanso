@@ -20,34 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a reader lets the others run
-
-#2208, filed by the docs worker. A program that is both ends of a connection,
-dialling in one statement of a group and accepting in the next, never
-finished on either engine: the client's `net/read` blocked the whole runtime
-before the server's accept and write could run. `accept` already went back
-in the queue when nothing was waiting. A read now does the same when nothing
-has arrived: natively `k_step` peeks the socket without blocking and yields,
-and the interpreter asks its executor whether the connection is readable
-before it reads. A peer that has closed reads as ready, and the read answers
-what it always did. Outside a group a read still blocks, as `accept` does,
-because a server is often one statement and its client is outside the
-program. `net/read_bytes` takes the same path; `net/write` does not yet.
-
-tests/a_reader_lets_the_others_run.rs runs the issue's program with `read`
-and with `read_bytes` on both engines under a ten-second deadline, in a
-process group of its own so a hang is killed whole rather than leaving the
-built program holding the test's streams. With the change reverted it failed
-for the right reason, a native run that never finished.
-
-The peek makes the runtime larger, so CI's rows move: codegen_instructions_dev
-116,812,856 -> 116,821,778, codegen_instructions_release 371,560,989 ->
-371,573,437, and each benchmark's text grows by 288 bytes, so text
-5,641,403 -> 5,645,435. Run instructions
-fall by a few hundred to two thousand a benchmark, runbench 825,011,247 ->
-825,009,321. Welfare falls by less than 0.01, and the floor follows under the
-rule for a change that makes the language do what its specification says.
-
 ## 2026-10-29 — the tab's list of machine calls has one home
 
 #2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
@@ -1346,3 +1318,55 @@ Compiling the longer library costs entry_instructions 86,832,572 ->
 87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
 (+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
 -> 95.63 and is banked.
+
+## 2026-11-04 — bytes nobody can predict
+
+senro's sign-in needs random salts and tokens, and std had only
+`math/random`, which `KANSO_SEED` replays (#2298, under #2280).
+`os/random_bytes n` is a description that yields `n` bytes from the
+operating system's secure source. Native code calls `getentropy` in
+256-byte pieces, or `arc4random_buf` on macOS, as desc 40. The interpreter
+makes the same libc call from Rust. In the tab, wasi-libc's `getentropy` is
+WASI's `random_get`, which `kanso-engine.js` already answered with
+`crypto.getRandomValues`. The interpreter build, `kanso.wasm`, had no call
+out to the page: its seed and sources are pushed in through exports. A
+pushed buffer cannot know how many bytes a program will ask for, so it
+gained one import, `kanso_host.random_fill`, which the page fills from
+`crypto.getRandomValues` in 65,536-byte slices. The wasmi hosts in `tests/`
+define it through `wasm32::page_linker` and leave the zeros. The import is
+wasm32's alone: macOS refused to link the native library with it unresolved,
+which Linux had allowed. Off the page the browser executor takes the
+machine's bytes.
+
+Three specs, each seen red. `random_bytes_are_as_many_as_were_asked_for`
+in the micro corpus asks for 32, 1 and 0 bytes and appends `"ok"`, which only
+bytes accept, so it pins the length and the kind of value on every engine the
+corpus reaches. It went red at `31 ok` with native broken to one byte short.
+`random_bytes_takes_a_count` in the runtime corpus pins the refusal of a
+string on both engines. `tests/random_bytes_ignore_the_seed.rs` runs one
+program twice under `KANSO_SEED=7` and holds the dice equal and the bytes
+different. It went red when the interpreter drew from its seeded generator.
+Under node with the page's host function, the interpreter build replays the
+dice and not the bytes, and it fills a 70,000-byte ask.
+
+The rows are from a job on 0x19 model 0x11, on the tree merged with main.
+Before the merge, a job on model 0x1, the silicon the goldens were recorded
+on, read the same numbers as one on 0x11. Every binary's `.text` grew by 272 bytes, the new
+case and helper, so text across the fourteen benchmarks rose to 5,869,488
+(+3,808). The runtime instruction rows fell by 45 to 1,578, though no
+benchmark runs the new case, so layout is the likely cause; nothing here
+isolates it. codegen_instructions_release rose to 371,998,504 (+125,509) and
+codegen_instructions_dev to 117,050,653 (+18,303), likely clang compiling the
+larger runtime. The front end moved too, and its code changed only by the
+table entries, so again layout is the likely cause:
+compile_instructions to 24,100,614 (+1,169), entry_instructions to 87,192,183
+(+3,765), library_instructions to 72,964,207 (+2,990) and emit_instructions
+to 5,601,693 (+811). interp_instructions fell to 622,464,159 (-35,790). In
+the tab, browser_compile_instructions rose to 349,357,398 (+18,068) and
+browser_run_instructions to 78,344,393 (+6,012). Welfare fell by less than 0.0001. A secure source of randomness is required
+for the sign-in the senro mandate asks for, so the floor drops by exactly
+that cost.
+
+The page's sections for `kanso build --wasm` and the language server were
+owed, and this change was the fourth entry since the page last moved, so
+docs/compiler.html gains all three as sections 281 to 283.

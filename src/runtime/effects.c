@@ -45,6 +45,34 @@ KValue k_b_read_bytes(KValue path) {
     return k_mkdesc(30, path, k_none());
 }
 
+/* n bytes from the operating system's secure source (#2298). `random` is a
+   seeded stream that KANSO_SEED replays; these bytes are for salts and tokens,
+   so nothing replays them. */
+KValue k_b_random_bytes(KValue n) {
+    if (!k_not_failure(n)) return n;
+    if (n.tag != K_INT || n.payload < 0) k_die_got("random_bytes takes a count (an int)", n);
+    return k_mkdesc(40, n, k_none());
+}
+
+/* getentropy(3) hands out at most 256 bytes a call, on glibc, wasi-libc and
+   the BSDs alike; under WASI it is the host's random_get, which the page
+   answers with crypto.getRandomValues. macOS has arc4random_buf, which has no
+   limit and cannot fail. */
+static int k_entropy(unsigned char* at, long long n) {
+#ifdef __APPLE__
+    arc4random_buf(at, (size_t)n);
+    return 0;
+#else
+    while (n > 0) {
+        size_t k = n < 256 ? (size_t)n : 256;
+        if (getentropy(at, k)) return -1;
+        at += k;
+        n -= (long long)k;
+    }
+    return 0;
+#endif
+}
+
 /* argv is a kanso list of strings; the description carries it whole so the
    process is not started until the description runs. */
 /* Sockets and running children live for the process. A program holds a
@@ -1112,6 +1140,13 @@ static KValue k_exec(KDesc* d) {
             size_t got = fread(data, 1, (size_t)size, fh);
             fclose(fh);
             return k_bytes_view(data, (long long)got);
+        }
+        case 40: {
+            long long n = d->x.payload;
+            unsigned char* data = (unsigned char*)k_alloc((size_t)(n > 0 ? n : 1));
+            if (k_entropy(data, n))
+                return k_err(k_str("cannot read the system's random source"), NULL);
+            return k_bytes_view(data, n);
         }
         case 20: {
             int fd = socket(AF_INET, SOCK_STREAM, 0);

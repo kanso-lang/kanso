@@ -1,5 +1,5 @@
 #!/bin/sh
-# Every counter gate at once, and the twelve goldens they read.
+# Every counter gate at once, and the goldens they read.
 #
 # Each is its own file, so following the rule in CLAUDE.md -- "counters changed,
 # regenerate every vein in the same PR" -- meant remembering a filename apiece
@@ -7,8 +7,8 @@
 # branch that changed how closures are built regenerated the .mem vein, the four
 # code goldens and the wasm blob and missed all nine, and CI found them one round
 # late, which cost eight minutes for something a container answers in twenty
-# seconds. The count is TWELVE now and it is not written down anywhere but the
-# table below, which is what a spec reads.
+# seconds. `--list` prints how many there are now; the sweep reads them from
+# the gates themselves, so no count is written down here.
 #
 # It does NOT stop at the first divergence. Each vein is an independent
 # dimension of the same run, and the CI job that owns them says why: stopping
@@ -29,31 +29,28 @@ write=0
 [ "$1" = "--write" ] && write=1
 
 
-# vein:program:golden
-#
-# The program column names the COUNTING binary. `kanso build` strips the
-# emitted `k_stats_on` gates unless asked for them, so the bare name is a
-# binary whose inlined fast paths no longer bail to the runtime call that
-# counts -- run it under KANSO_COUNTERS=1 and every vein here moves at once.
-# That is not a hypothetical: this table and the twelve gate scripts beside it
-# are two separate readers of the same programs, and repointing only the gates
-# left the sweep reading the wrong binaries and calling all twelve moved.
-veins="decode:jsonbench-counters:bench/cost_golden.txt
-encode:encodebench-counters:bench/cost_golden_encode.txt
-oneshot:oneshot-counters:bench/cost_golden_oneshot.txt
-basket:basket-counters:bench/cost_golden_basket.txt
-wide:widebench-counters:bench/cost_golden_wide.txt
-pend:pendbench-counters:bench/cost_golden_pend.txt
-escape:escapebench-counters:bench/cost_golden_escape.txt
-digest:digestbench-counters:bench/cost_golden_digest.txt
-read:readbench-counters:bench/cost_golden_read.txt
-scan:scanbench-counters:bench/cost_golden_scan.txt
-live:livebench-counters:bench/cost_golden_live.txt
-run:runbench-counters:bench/cost_golden_run.txt"
+# Each vein is a gate, `scripts/gates/<vein>_counters.sh`, and the sweep takes
+# the program and the golden from the gate itself: the COUNTING binary the gate
+# runs under KANSO_COUNTERS=1, and the `bench/cost_golden*.txt` it diffs. There
+# is no second list to keep in step. One once lived here, and repointing only
+# the gates at the `-counters` binaries left this sweep reading the wrong ones
+# and calling every vein moved (kanso#2291).
+veins=""
+for gate in scripts/gates/*_counters.sh; do
+  vein=$(basename "$gate" _counters.sh)
+  [ "$vein" = all ] && continue
+  prog=$(sed -n 's/.*KANSO_COUNTERS=1 \.\/\([a-z0-9_-]*\).*/\1/p' "$gate" | head -n 1)
+  golden=$(grep -o 'bench/cost_golden[a-z0-9_]*\.txt' "$gate" | head -n 1)
+  if [ -z "$prog" ] || [ -z "$golden" ]; then
+    echo "$gate names no counting program or no cost golden" >&2
+    exit 1
+  fi
+  veins="$veins $vein:$prog:$golden"
+done
 
-# The table is the one list of what this sweep covers. `--list` prints it
-# without building anything, and the spec beside it compares that output with
-# the cost goldens on disk.
+# `--list` prints each vein and its golden without building anything, and
+# tests/every_counter_gate_is_in_the_sweep.rs compares that output with the
+# cost goldens on disk.
 if [ "$1" = "--list" ]; then
   for row in $veins; do
     echo "${row%%:*} ${row##*:}"
@@ -90,10 +87,10 @@ for row in $veins; do
   rm -f "$got" "$want"
 done
 
-# NOT A ROW IN THE TABLE ABOVE, and it cannot be one: the lazy tier's goldens
-# are `tests/golden/mem/*.mem`, read by `tests/golden.rs`, so there is no
-# `*_counters.sh` gate naming them and the derivation the table is pinned to
-# walks straight past. CLAUDE.md names the .mem vein FIRST in the list a
+# NOT A VEIN ABOVE, and it cannot be one: the lazy tier's goldens are
+# `tests/golden/mem/*.mem`, read by `tests/golden.rs`, so there is no
+# `*_counters.sh` gate naming them and the loop over the gates walks straight
+# past. CLAUDE.md names the .mem vein FIRST in the list a
 # counter change must regenerate, and until 2026-09-06 this sweep could not see
 # it. The compile sweep had the same hole in the same week, twice over.
 #
@@ -130,7 +127,7 @@ else
 fi
 
 if [ -z "$moved" ]; then
-  echo "counters: the twelve cost veins and the lazy tier agree with their goldens"
+  echo "counters: every cost vein and the lazy tier agree with their goldens"
   exit 0
 fi
 echo "counters moved:$moved"

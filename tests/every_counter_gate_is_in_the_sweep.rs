@@ -1,21 +1,15 @@
-//! The local sweep names every counter gate, and cannot quietly miss one.
+//! The local sweep covers every counter golden, and the lazy tier beside them.
 //!
-//! `scripts/gates/all_counters.sh` exists because there are ten separate
-//! `*_counters.sh` gates and no single entry point, so following CLAUDE.md's
-//! "counters changed, regenerate every vein in the same PR" meant remembering
-//! ten filenames and which golden each one writes. kanso#1249 remembered the
-//! .mem vein, the four code goldens and the wasm blob and missed nine of the
-//! ten cost goldens; CI found them a round late.
+//! `scripts/gates/all_counters.sh` exists because each counter vein is a gate
+//! of its own, and following CLAUDE.md's "counters changed, regenerate every
+//! vein in the same PR" meant remembering each filename and which golden it
+//! writes. kanso#1249 remembered the .mem vein, the four code goldens and the
+//! wasm blob and missed nine cost goldens; CI found them a round late.
 //!
-//! A sweep that names nine of ten is worse than no sweep, because it looks
-//! like coverage. So the table inside the script is pinned to a property of
-//! the tree rather than to anyone's memory: there is one row for every
-//! `scripts/gates/*_counters.sh`, and every row's golden is a file that
-//! exists. A new benchmark whose gate is added and whose row is not turns
-//! this red, which is the case the script is here to prevent.
-//!
-//! Reading the table is not running it. The behavioural half is the script
-//! itself, which the container runs before a push and CI runs vein by vein.
+//! The sweep reads its veins from the gates themselves, so it cannot name one
+//! gate and run another (kanso#2291). What can still go wrong is a cost golden
+//! on disk that no gate reads, and a lazy tier the sweep never runs; the two
+//! tests here watch those.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -26,117 +20,14 @@ fn root() -> &'static Path {
 
 const SWEEP: &str = include_str!("../scripts/gates/all_counters.sh");
 
-/// The `vein:program:golden` rows between the `veins="` line and its closing
-/// quote. Reading the whole file for colons would also pick up the comment
-/// prose, which is the shape of mistake that makes a check pass for the
-/// wrong reason.
-fn rows() -> Vec<(String, String, String)> {
-    let body = SWEEP
-        .split_once("veins=\"")
-        .expect("the sweep declares a veins table")
-        .1
-        .split_once('"')
-        .expect("the veins table is closed")
-        .0;
-    body.lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|l| {
-            let mut it = l.split(':');
-            let vein = it.next().expect("a row names its vein").to_string();
-            let program = it.next().expect("a row names its program").to_string();
-            let golden = it.next().expect("a row names its golden").to_string();
-            assert!(it.next().is_none(), "a row is exactly vein:program:golden, got {l:?}");
-            (vein, program, golden)
-        })
-        .collect()
-}
-
-/// Every `*_counters.sh` under scripts/gates, by the prefix that names its
-/// vein — minus the sweep itself, which matches the same suffix. The first
-/// draft did not exclude it and demanded a row for a vein called "all",
-/// which is how this test proved it could fail before it passed.
-fn gates_on_disk() -> BTreeSet<String> {
-    std::fs::read_dir(root().join("scripts/gates"))
-        .expect("the gates directory reads")
-        .map(|e| e.expect("a directory entry reads").file_name())
-        .filter_map(|n| {
-            let name = n.to_str()?.to_string();
-            let vein = name.strip_suffix("_counters.sh")?.to_string();
-            (vein != "all").then_some(vein)
-        })
-        .collect()
-}
-
-#[test]
-fn the_sweep_names_every_counter_gate() {
-    let named: BTreeSet<String> = rows().into_iter().map(|(v, _, _)| v).collect();
-    let on_disk = gates_on_disk();
-    assert!(!on_disk.is_empty(), "there is at least one counter gate to sweep");
-    let missing: Vec<_> = on_disk.difference(&named).collect();
-    assert!(
-        missing.is_empty(),
-        "scripts/gates/all_counters.sh has no row for {missing:?} — a sweep that \
-         names all but one looks like coverage and is not"
-    );
-    let extra: Vec<_> = named.difference(&on_disk).collect();
-    assert!(extra.is_empty(), "the sweep names {extra:?}, which has no gate on disk");
-}
-
-/// A row has to name something the BUILD can produce, which is not the same as
-/// something the checkout contains. `bench/jsonbench/` is gitignored and
-/// written by `bench/make_jsonbench`, so it is present in any tree that has run
-/// the benchmarks and absent from a fresh clone.
-///
-/// The first version of this asserted the directory exists, passed in a
-/// worktree that had already built, and turned CI red on two hosts. That is the
-/// same shape as the bug this whole file is about: a check that reads state the
-/// repository does not carry.
-#[test]
-fn every_row_names_a_golden_and_a_program_the_build_can_produce() {
-    for (vein, program, golden) in rows() {
-        assert!(
-            root().join(&golden).exists(),
-            "{vein} points at {golden}, which is not in the tree"
-        );
-        // Every row names the COUNTING build now, `jsonbench-counters` rather
-        // than `jsonbench`, because the shipped binary has no counter gates
-        // left to read. The benchmark it is built from is the name without the
-        // suffix, so the source check runs against that -- and the suffix gets
-        // a check of its own below rather than a free pass, since a row naming
-        // a binary nothing produces is exactly what this test is for.
-        let source = program.strip_suffix("-counters").unwrap_or(&program);
-        let checked_in = root().join("bench").join(source);
-        let generated = root().join("bench").join(format!("make_{source}"));
-        assert!(
-            checked_in.exists() || generated.exists(),
-            "{vein} points at bench/{program}, whose benchmark {source} is \
-             neither a directory nor generated by bench/make_{source}"
-        );
-        // build_benchmarks.sh builds a `-counters` binary for each benchmark
-        // bench/benchmarks.txt lists without `plain`.
-        if program != source {
-            let list = std::fs::read_to_string(root().join("bench/benchmarks.txt"))
-                .expect("bench/benchmarks.txt reads");
-            assert!(
-                list.lines().any(|l| l == source),
-                "{vein} points at {program}, and build_benchmarks.sh never \
-                 makes it: bench/benchmarks.txt does not list {source}, or marks \
-                 it `plain`. The gate would run against whatever that name \
-                 happened to be, or nothing."
-            );
-        }
-    }
-}
-
 /// Every cost golden on disk is one the sweep says it covers, and every golden
 /// it says it covers is on disk.
 ///
 /// This used to read a count word out of CLAUDE.md, because the instructions
 /// had said four cost goldens when there were ten and a branch that believed
-/// them regenerated one of ten. The count is now nowhere but the script's own
-/// table, so the check runs the script the way a session would, with
-/// `--list`, and compares what it prints with the directory (kanso#1846).
+/// them regenerated one of ten (kanso#1846). The count is written nowhere, so
+/// the check runs the script the way a session would, with `--list`, and
+/// compares what it prints with the directory.
 #[test]
 fn the_sweep_lists_every_cost_golden() {
     let out = std::process::Command::new("sh")
@@ -173,8 +64,8 @@ fn the_sweep_lists_every_cost_golden() {
 ///
 /// `tests/golden/mem/*.mem` is the vein CLAUDE.md names FIRST in the list a
 /// counter change must regenerate, and it is read by `tests/golden.rs` rather
-/// than by a `*_counters.sh` gate — so the derivation the veins table is pinned
-/// to cannot see it, and until 2026-09-06 neither could the sweep. The compile
+/// than by a `*_counters.sh` gate, so the sweep's loop over the gates cannot
+/// see it, and until 2026-09-06 neither could the sweep. The compile
 /// sweep had the same hole twice in the same week: a golden read only by a cargo
 /// test, invisible to both the script's list and the spec replaying it.
 ///

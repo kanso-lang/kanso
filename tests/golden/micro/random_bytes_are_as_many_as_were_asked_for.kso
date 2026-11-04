@@ -1,0 +1,23 @@
+# `os/random_bytes n` yields n bytes from the operating system's secure source
+# (#2298). They differ on every run, so this pins what a program can rely on:
+# as many as it asked for, and bytes rather than a list of numbers. Only bytes
+# take `text/append`, so the two letters read back off the end show which.
+import "std/io"
+import "std/os"
+import "std/text"
+
+fn told b
+  io/write "{length b} {past (text/append b "ok") (length b)}\n"
+
+fn past b n
+  letters (text/slice b (n + 1) (n + 2))
+
+fn letters none
+  "nothing"
+
+fn letters b
+  text/utf8 b
+
+pub play = os/random_bytes 32 .> told
+  .> (_ -> os/random_bytes 1 .> told)
+  .> (_ -> os/random_bytes 0 .> told)

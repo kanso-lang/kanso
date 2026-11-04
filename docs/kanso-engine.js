@@ -148,7 +148,16 @@ let wasm = null;
 
 async function loadWasm() {
   const response = await fetch(new URL('kanso.wasm', HERE));
-  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), {});
+  /* The interpreter's one call out: secure bytes for os/random_bytes, which
+     a page has only through crypto. getRandomValues fills 65,536 bytes at
+     most, so a larger ask is filled a slice at a time. */
+  const kanso_host = {
+    random_fill(at, len) {
+      const out = new Uint8Array(wasm.memory.buffer, at >>> 0, len >>> 0);
+      for (let k = 0; k < out.length; k += 65536) crypto.getRandomValues(out.subarray(k, k + 65536));
+    },
+  };
+  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), { kanso_host });
   wasm = instance.exports;
 }
 

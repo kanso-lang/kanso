@@ -18,7 +18,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use wasmi::{Engine, Extern, Linker, Module, Store, Val};
+use wasmi::{Engine, Extern, Module, Store, Val};
 
 #[path = "support/wasm32.rs"]
 mod wasm32;
@@ -107,7 +107,7 @@ impl Toolchain {
         let bytes = std::fs::read(root().join("docs/kanso.wasm")).expect("the wasm artifact reads");
         let module = Module::new(&engine, &bytes[..]).expect("the artifact is a wasm module");
         let mut store = Store::new(&engine, ());
-        let instance = Linker::new(&engine)
+        let instance = wasm32::page_linker(&engine)
             .instantiate_and_start(&mut store, &module)
             .expect("the toolchain instantiates");
         Toolchain { store, instance }

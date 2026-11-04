@@ -57,6 +57,10 @@ impl<'a> Interp<'a> {
                 Ok(None) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            Desc::RandomBytes(n) => Ok(match executor.random_bytes(*n) {
+                Ok(raw) => Value::Bytes(Rc::new(raw)),
+                Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+            }),
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
@@ -588,6 +592,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::ReadLine => out.push_str("  read_line\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::ReadBytes(path) => out.push_str(&format!("  read_bytes {path:?}\n")),
+        Desc::RandomBytes(n) => out.push_str(&format!("  random_bytes {n}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
         Desc::Start(cmd, argv) => out.push_str(&format!("  start {cmd:?} {argv:?}\n")),
         Desc::Kill(handle) => out.push_str(&format!("  kill {handle}\n")),
