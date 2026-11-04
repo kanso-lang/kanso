@@ -2482,9 +2482,10 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
 /// What each builtin takes at each position, by bare name: the tags the
 /// interpreter runs it on. `builtin_set` above says what a builtin answers;
 /// this says what it is handed, and the two are the compiler's whole account
-/// of a builtin's type. The literal check refuses a literal a row leaves out,
-/// the none check refuses a none, and the language server narrows a
-/// parameter handed straight to a builtin.
+/// of a builtin's type. At the positions a row counts as checked, the literal
+/// check refuses a literal the row leaves out and the none check refuses a
+/// none. At every position, the language server narrows a parameter handed
+/// straight to a builtin.
 ///
 /// The number after a row is how many of its leading positions the
 /// compile-time checks enforce; the language server reads every position.
