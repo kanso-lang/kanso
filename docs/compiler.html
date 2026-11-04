@@ -4354,6 +4354,10 @@ welfare                      77.37         82.09</code></pre>
 
 <p>A write to a socket whose peer has gone is an err on both engines and says <code>cannot write</code>. Native code used to receive SIGPIPE from the write and end without a word, while the interpreter got an error worded by the host. The native write now ignores the signal for its duration. A server can rescue the err and keep serving the connections that are still there.</p>
 
+<h2 id="stretched"><span class="sec-num">280</span>a password stretched in constant memory</h2>
+
+<p><code>sha256/pbkdf2</code> kept about fifteen kilobytes of arena for every iteration, so a sign-in that stretched a password 100,000 times peaked at 1.5 GB resident. A loop that hashed its own digest kept about five. Both shapes joined the run program as the <code>stretched</code> and <code>carried</code> phases before either was fixed, so the fix scores as a rise.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

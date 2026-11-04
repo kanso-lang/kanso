@@ -1,0 +1,25 @@
+# What a loop that hashes its own answer holds, watched (kanso#2299).
+#
+# `looped` hands the digest of `u` to its next iteration and carries a list it
+# never reads. Each digest is thirty-two bytes, and everything `sha256/digest`
+# built to make one is dead when the next iteration starts, so the arena
+# should hold one iteration's work however many there are.
+#
+# `sha256/digest` answered through `list/fold`, which every caller in a
+# program shares, so the compiler read its answer as any value at all, and a
+# slot that may hold any value is never carried across a rewind.
+#
+# Watched, not frozen: regenerate deliberately and say which way it went.
+import "std/sha256"
+
+pub fn carried u left
+  looped [1 2 3] u left (left == 0)
+
+fn looped _ u _ true
+  u
+
+fn looped p u left false
+  next = sha256/digest u
+  looped p next (left - 1) (left - 1 == 0)
+
+pub play = print (carried [1 2 3 4] 600)

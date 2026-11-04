@@ -318,12 +318,27 @@
 # loop has run (#2263). Natively every pass's group and its garbage stayed
 # in the arena until the loop ended, which took the program from 4 arena
 # blocks to 15.
+#
+# Two more joined on 2026-11-04, measured on main before kanso#2299's fix. The
+# whole program with both reads 1,045,660,009, and each column is that less
+# the whole with the phase reading nothing: one iteration for `stretched`,
+# none for `carried`.
+#
+#   stretched  pbkdf2, 200 iterations                     21,850,870  2.09%
+#   carried    600 digests round a tail loop              31,753,429  3.04%
+#
+# `stretched` is `sha256/pbkdf2` as a sign-in calls it. `carried` hands each
+# digest to its next iteration, and the digest reads as any value because it
+# answers through the shared `list/fold`. Both loops kept everything they
+# built, about ten kilobytes an iteration for `stretched` and five for
+# `carried`, so their counts are sized to lift the program's peak.
 import "./admitted"
 import "./appended"
 import "./bag"
 import "./branched"
 import "./bucketed"
 import "./bump"
+import "./carried"
 import "./counted"
 import "./deduped"
 import "./deep"
@@ -349,6 +364,7 @@ import "./rewind"
 import "./scatter"
 import "./split"
 import "./stack"
+import "./stretched"
 import "./worded"
 import "std/io"
 import "std/json"
@@ -425,6 +441,10 @@ relayed_steps = 3000
 
 worded_words = 4000
 
+stretched_iterations = 200
+
+carried_hashes = 600
+
 fn decoded _ 0 sofar
   sofar
 
@@ -487,8 +507,10 @@ fn tally raw doc a b
   ported19 = ported18 + lasted/total lasted_items
   ported20 = ported19 + relayed/total relayed_steps
   ported21 = ported20 + worded/total worded_words
+  ported22 = ported21 + stretched/total stretched_iterations
+  ported23 = ported22 + carried/total carried_hashes
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported21 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported23 + rest))
   bulk .> on
 
 fn shaped raw doc a
