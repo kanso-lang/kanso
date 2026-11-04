@@ -112267,3 +112267,17 @@ allocation; it is now kept only when a directory is taken to its entry,
 and compile_allocs and interp_allocs are unchanged. Welfare falls by less
 than 0.0001, and the floor follows under the rule for a change that makes
 the tools do what the documentation says.
+
+## 2026-10-29 — http answers any status, and its suite runs
+
+#2209, filed by the docs worker. `std/net/http` could answer only 200 and
+404, and `response` cannot be built outside the module, so an order service
+answered a refused order with 200 and a sentence. `http/respond code headers
+body` answers any status, with the reason phrase its code is registered with,
+and an empty phrase for a code without one, which HTTP allows.
+
+The suite beside it had never run. tests/std_suites.rs walked one level below
+lib/, and lib/net/http is two, so `http_test.kso` passed or failed unread. The
+walk now goes all the way down and pins the count at seven suites. With the
+422 phrase misspelled, both of its specs went red on lib/net/http, which
+neither could see before.

@@ -222,8 +222,20 @@ fn hexed x at acc false
 # The digest as its thirty-two bytes, big-endian, for a caller that hashes
 # the hash again, as HMAC does.
 pub fn digest b
-  words = blocked (padded_bytes b) h0 h1 h2 h3 h4 h5 h6 h7 1
-  list/to_list (list/fold words [] (acc w -> list/concat acc (word_bytes w)))
+  bytes_of (blocked (padded_bytes b) h0 h1 h2 h3 h4 h5 h6 h7 1)
+
+# The words as bytes, four to a word, most significant first. A loop of its
+# own rather than a fold, because `list/fold` is shared by every caller in a
+# program and so answers anything at all, and a digest that answers anything
+# cannot be carried round a caller's loop (kanso#2299).
+fn bytes_of words
+  laid_out words 1 []
+
+fn laid_out words at acc
+  return acc if at < 1 or at > length words
+  w = words[at]
+  high = push (push acc (bits/shr w 24 & 255)) (bits/shr w 16 & 255)
+  laid_out words (at + 1) (push (push high (bits/shr w 8 & 255)) (w & 255))
 
 fn word_bytes w
   [(bits/shr w 24 & 255) (bits/shr w 16 & 255) (bits/shr w 8 & 255) (w & 255)]
@@ -245,13 +257,17 @@ fn state_after block
   blocked block h0 h1 h2 h3 h4 h5 h6 h7 1
 
 fn mac p message
-  digest_from p.outer (digest_from p.inner message)
+  bytes_of (mac_words p message)
 
-fn digest_from s message
+fn mac_words p message
+  words_from p.outer (bytes_of (words_from p.inner message))
+
+# The eight words a message leaves, hashed on from the state `s` that whole
+# blocks already left.
+fn words_from s message
   return [] if length s < 8
   padded = padded_after message 64
-  words = blocked padded s[1] s[2] s[3] s[4] s[5] s[6] s[7] s[8] 1
-  list/to_list (list/fold words [] (acc w -> list/concat acc (word_bytes w)))
+  blocked padded s[1] s[2] s[3] s[4] s[5] s[6] s[7] s[8] 1
 
 fn keyed k
   return keyed (digest k) if length k > 64
@@ -273,18 +289,61 @@ fn all_blocks password salt times i last acc
   more = list/concat acc (stretched password salt times i)
   all_blocks password salt times (i + 1) last more
 
+# The chain carries its words as arguments: the latest HMAC's eight and the
+# running XOR's eight. Nothing heap-shaped crosses from one iteration to the
+# next, so the loop hands its arena back each time round, the way `compress`
+# does between rounds. Carried as two lists, every HMAC's padding, schedule
+# and bytes stayed in the arena until the block was done (kanso#2299).
+#
+# A word read out of a list is masked with `whole` though it is already
+# thirty-two bits. The mask changes nothing, and it is what tells the compiler
+# the argument is a number: an item of a list could be anything, and an
+# argument that could be anything keeps the loop from rewinding.
 fn stretched password salt times i
   p = keyed_pads password
-  first = mac p (list/concat salt (word_bytes i))
-  chained p first first (times - 1)
+  u = mac_words p (list/concat salt (word_bytes i))
+  return [] if length u < 8
+  words = chained p
+    u[1] & whole
+    u[2] & whole
+    u[3] & whole
+    u[4] & whole
+    u[5] & whole
+    u[6] & whole
+    u[7] & whole
+    u[8] & whole
+    u[1] & whole
+    u[2] & whole
+    u[3] & whole
+    u[4] & whole
+    u[5] & whole
+    u[6] & whole
+    u[7] & whole
+    u[8] & whole
+    times - 1
+  bytes_of words
 
-fn chained _ _ acc 0
-  acc
+fn chained _ _ _ _ _ _ _ _ _ s t u v w x y z 0
+  [s t u v w x y z]
 
-fn chained p u acc left
-  next = mac p u
-  chained p next (paired_xor acc next 1 []) (left - 1)
-
-fn paired_xor a b at acc
-  return acc if at < 1 or at > length a or at > length b
-  paired_xor a b (at + 1) (push acc (bits/xor a[at] b[at]))
+fn chained p a b c d e f g h s t u v w x y z left
+  n = mac_words p (bytes_of [a b c d e f g h])
+  return [s t u v w x y z] if length n < 8
+  chained p
+    n[1] & whole
+    n[2] & whole
+    n[3] & whole
+    n[4] & whole
+    n[5] & whole
+    n[6] & whole
+    n[7] & whole
+    n[8] & whole
+    s ^ n[1]
+    t ^ n[2]
+    u ^ n[3]
+    v ^ n[4]
+    w ^ n[5]
+    x ^ n[6]
+    y ^ n[7]
+    z ^ n[8]
+    left - 1

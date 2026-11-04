@@ -20,20 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — http answers any status, and its suite runs
-
-#2209, filed by the docs worker. `std/net/http` could answer only 200 and
-404, and `response` cannot be built outside the module, so an order service
-answered a refused order with 200 and a sentence. `http/respond code headers
-body` answers any status, with the reason phrase its code is registered with,
-and an empty phrase for a code without one, which HTTP allows.
-
-The suite beside it had never run. tests/std_suites.rs walked one level below
-lib/, and lib/net/http is two, so `http_test.kso` passed or failed unread. The
-walk now goes all the way down and pins the count at seven suites. With the
-422 phrase misspelled, both of its specs went red on lib/net/http, which
-neither could see before.
-
 ## 2026-10-29 — a reader lets the others run
 
 #2208, filed by the docs worker. A program that is both ends of a connection,
@@ -1270,3 +1256,57 @@ another phase's beat verdicts; that is a likely cause, and nothing here
 isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
 -> 8,939,665), each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
+
+#2299. Both shapes joined the run program in #2301, measured before this.
+
+**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
+and the running XOR. A list built in one iteration and read in the next is
+a value that crosses a rewind, and the carry tier that could copy it out is
+closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
+loop kept everything every HMAC built. It now carries the sixteen words as
+arguments, as `compress` has carried its eight since 2026-09-23, and the
+beat report reads "rewinds every iteration". Each word read out of a list
+is masked with `whole`: an item of a list could be anything to inference,
+and the mask, a no-op on a word, makes the argument a number. Without the
+mask the loop kept its grow-only verdict, "argument 2 may carry heap".
+`paired_xor` had no other caller and is gone.
+
+**The postcard.** The issue's shape is a loop that hands
+`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
+bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
+is the digest's answer. It spelled its words as bytes through `list/fold`,
+and inference gives a library function one return set for every caller in
+the program, so the fold answers anything and so does the digest. `bytes_of`
+is now a push loop of its own, the slot reads `0x220` (a list or an err),
+and the loop carries it. The general case, any function answering through a
+shared driver, is #2302.
+
+A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
+hand the slot. It changed nothing, because the handed set was the digest's
+TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
+could not have told a builtin from a library function anyway. It was
+reverted before commit.
+
+**Measured on this container**, the same box before and after:
+
+| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
+|---|---:|---:|
+| wall | 4.24 s | 0.68 s |
+| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
+| peak resident | 1,523,724 kB | 2,300 kB |
+
+Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
+vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
+interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
+after. The mem fixtures read one arena block each, where they read three
+and five.
+
+**What an iteration costs now.** Callgrind on 2,000 iterations reads
+202,252,987 instructions, about 101,000 an iteration for two compressions.
+`digested`, with the rounds and the schedule inlined into it, is 50%;
+`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
+called rather than inlined; list pushes and the fold that spells the first
+HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
+compression, so this is roughly ten times that. **OPEN:** inlining the four
+mixing functions is the next lead.

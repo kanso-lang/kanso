@@ -4356,7 +4356,9 @@ welfare                      77.37         82.09</code></pre>
 
 <h2 id="stretched"><span class="sec-num">280</span>a password stretched in constant memory</h2>
 
-<p><code>sha256/pbkdf2</code> kept about fifteen kilobytes of arena for every iteration, so a sign-in that stretched a password 100,000 times peaked at 1.5 GB resident. A loop that hashed its own digest kept about five. Both shapes joined the run program as the <code>stretched</code> and <code>carried</code> phases before either was fixed, so the fix scores as a rise.</p>
+<p><code>sha256/pbkdf2</code> kept about fifteen kilobytes of arena for every iteration. A sign-in that stretched a password 100,000 times peaked at 1.5 GB resident and spent three of its four seconds in the kernel, faulting in pages that were never handed back. The loop that chains the HMACs handed its next iteration two lists, the latest HMAC and the running XOR, and a list built in one iteration and read in the next keeps the arena from rewinding. The loop now carries those sixteen words as arguments, the way <code>compress</code> carries its eight. The same run takes 0.68 seconds in 2.3 MB on this container. Each iteration still costs about a hundred thousand instructions, half of them in the rounds and a third in calls to the four mixing functions, which is roughly ten times what a C SHA-256 spends.</p>
+
+<p>A loop that hashed its own digest kept its garbage for a different reason. <code>sha256/digest</code> spelled its words as bytes through <code>list/fold</code>, and inference gives a library function one answer for every caller, so the fold, and with it the digest, could answer anything. A loop slot that may hold anything is never carried across a rewind. The spelling is its own loop now, the digest answers a list, and the loop rewinds. Any function that answers through a shared driver has the same shape, and #2302 holds it. The run program's <code>stretched</code> and <code>carried</code> phases were added before the fix so that it scores as a rise.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
