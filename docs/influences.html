@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "the influences—kanso"
-description: "the people whose work shaped kanso: rob mee, kent beck, sandi metz, avdi grimm, rich hickey, simon peyton jones, abhi hiremagalur — and, unavoidably, marie kondo."
+description: "the people whose work shaped kanso: rob mee, kent beck, sandi metz, avdi grimm, rich hickey, simon peyton jones, matthew kane parker, abhi hiremagalur — and, unavoidably, marie kondo."
 ---
 <style>
 .influence { margin: 3.5rem 0; }
@@ -56,6 +56,12 @@ description: "the people whose work shaped kanso: rob mee, kent beck, sandi metz
 <h2>simon peyton jones</h2>
 <span class="role">principal architect of haskell's ghc</span>
 <p>peyton jones spent three decades proving that purity is not an academic indulgence—leading ghc, shepherding haskell's type system through research result after research result, and showing that a language can be lazy, pure, and industrial at once. haskell is the existence proof kanso leans on: that effects can be values, that the compiler can know everything, and that rigor scales. kanso departs from haskell everywhere it can afford to—fewer concepts, no monads homework—but it departs from a position haskell secured.</p>
+</div>
+
+<div class="influence">
+<h2>matthew kane parker</h2>
+<span class="role">pivotal labs</span>
+<p>parker asked a question most teams think they settled years ago: <a href="https://blogs.vmware.com/tanzu/what-is-a-unit-test-the-answer-might-surprise-you/">what is a unit test?</a> his answer is that a unit is a piece of behaviour a caller can observe, whatever classes happen to carry it. a suite that tests each class through its collaborators' doubles has written the program's current shape into its assertions, so the first refactoring breaks tests that were never about behaviour. a suite that asserts what the code does survives the refactoring and catches the regression. kanso's spec rules are this argument applied to a compiler: a spec asserts output bytes, a diagnostic a user sees or a counter a golden pins, enters where a user enters, and never checks an internal verdict, because a check on the decomposition goes green when the decomposition moves. kanso's designer counts parker among the people who taught him the most.</p>
 </div>
 
 <div class="influence">
