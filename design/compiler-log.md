@@ -1349,21 +1349,21 @@ different. It went red when the interpreter drew from its seeded generator.
 Under node with the page's host function, the interpreter build replays the
 dice and not the bytes, and it fills a 70,000-byte ask.
 
-The rows come from a job on 0x19 model 0x11, and a second job on the
-silicon the goldens were recorded on, model 0x1, read the same numbers. Every
-binary's `.text` grew by 272 bytes, the new
-case and helper, so text across the fourteen benchmarks rose to 5,833,568
-(+3,808). The runtime instruction rows fell by 45 to 1,868, though no
+The rows are from a job on 0x19 model 0x11, on the tree merged with main.
+Before the merge, a job on model 0x1, the silicon the goldens were recorded
+on, read the same numbers as one on 0x11. Every binary's `.text` grew by 272 bytes, the new
+case and helper, so text across the fourteen benchmarks rose to 5,869,488
+(+3,808). The runtime instruction rows fell by 45 to 1,578, though no
 benchmark runs the new case, so layout is the likely cause; nothing here
 isolates it. codegen_instructions_release rose to 371,998,504 (+125,509) and
 codegen_instructions_dev to 117,050,653 (+18,303), likely clang compiling the
 larger runtime. The front end moved too, and its code changed only by the
 table entries, so again layout is the likely cause:
-compile_instructions to 24,100,614 (+1,169), entry_instructions to 86,836,326
-(+3,754), library_instructions to 72,624,833 (+2,980) and emit_instructions
+compile_instructions to 24,100,614 (+1,169), entry_instructions to 87,192,183
+(+3,765), library_instructions to 72,964,207 (+2,990) and emit_instructions
 to 5,601,693 (+811). interp_instructions fell to 622,464,159 (-35,790). In
 the tab, browser_compile_instructions rose to 349,357,398 (+18,068) and
-browser_run_instructions to 78,344,393 (+6,012). Welfare fell by 0.00009. A secure source of randomness is required
+browser_run_instructions to 78,344,393 (+6,012). Welfare fell by less than 0.0001. A secure source of randomness is required
 for the sign-in the senro mandate asks for, so the floor drops by exactly
 that cost.
 
