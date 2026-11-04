@@ -2,8 +2,8 @@
 # The gates neither `all_counters.sh` nor `all_compile.sh` reads.
 #
 # Between them those two sweeps look like the whole board, and on 2026-09-18
-# they were not. `all_counters.sh` reported "the twelve cost veins and the lazy
-# tier agree with their goldens" on a tree whose interpreted row had moved
+# they were not. `all_counters.sh` reported that every cost vein and the lazy
+# tier agreed with its golden, on a tree whose interpreted row had moved
 # 18,540,440 instructions, because `interp_instructions` is in neither list.
 # The change was deliberate and CI measured it, so nothing was lost that day --
 # but a sweep that names all but four looks like coverage, which is the reason
