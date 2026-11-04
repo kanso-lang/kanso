@@ -1,4 +1,4 @@
-error[type]: `length` takes a list, a map, or a string here, not an int
+error[type]: `length` takes a list, a map, a string, or bytes here, not an int
   --> builtin_arg_type.kso:1:16
    1 | print "{length 5}"
                       ^

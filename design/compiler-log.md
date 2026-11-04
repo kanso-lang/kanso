@@ -20,20 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — the tab's list of machine calls has one home
-
-#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
-written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
-book panels become live editors, and as a kanso list in the browser
-differential, which decides which samples it covers. They drifted for months.
-The differential now reads the list out of book-play.js, the way it already
-reads the playground's examples out of play.js, and its own copy is gone. A
-page without the list fails the run rather than covering every sample.
-
-Read the same way, the page's list selects the same 717 programs the old copy
-did. With `read_file` taken out of the page's regex the run selected 725, so
-the differential follows the page.
-
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
 #2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
@@ -1370,3 +1356,59 @@ that cost.
 The page's sections for `kanso build --wasm` and the language server were
 owed, and this change was the fourth entry since the page last moved, so
 docs/compiler.html gains all three as sections 281 to 283.
+
+## 2026-11-04 — a parameter handed to a builtin reads as what the builtin takes
+
+Kanso#2288. The hover in `kanso lsp` followed a parameter into every group
+it was passed to and stopped at builtins, because nothing recorded what a
+builtin takes. `fn parts s = text/split s ","` read `s` as the whole union.
+
+`infer::BUILTIN_TAKES` now holds it, beside `infer::builtin_set`, which says
+what a builtin answers. A row is a set per position over the full tag
+vocabulary. The check's own table in `src/check/literals.rs`, written in
+literal kinds, is deleted, and the literal check, the none check and the two
+list checks read the new rows. The hover meets a parameter's set with the
+row's set at each position it is handed to a builtin, so `s` reads
+`string`. `print` keeps one rule in literals.rs, the language's own: the
+check refuses a literal that is not a string, while every engine prints any
+value a program computes.
+
+Each row carries a third field, how many of its leading positions the
+compile-time checks enforce. The first build had the checks read every
+position, and the suite showed what that costs: the none check refused a
+key that may be none in `scripts/welfare_rescore` (40 failures across the
+rescorer's specs), and the literal check refused `delete m 2.5`, which the
+runtime corpus pins as the interpreter's refusal. Refusing more at compile
+time is a change to the language, which #2288 did not ask for, so the
+checks enforce exactly the positions the old table held. The hover reads
+every position.
+
+`tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every row
+against the interpreter. For each position a row constrains, it hands the
+builtin a value of each of fourteen tags the row leaves out, hidden behind
+an index into a one-element list so no check that reads the row answers
+first, and requires `error[runtime]` under `kanso play --interp`. A control
+with only fillers must run without a refusal. 1019 probes. It went red
+with `BYTES` dropped from `concat`'s first position, and red again in the
+control with a float as `split`'s filler. The golden transcript
+`tests/golden/lsp/builtins` went red with the hover's lookup removed.
+
+Measuring rewrote several rows. `concat`, `push`, `length` and `utf8` take
+bytes, `utf8` takes a list, `write_file` and `net_write` take bytes as text,
+and `put` and `delete` take an int or a string as the key. `length`'s
+refusal now names bytes, which moved two error goldens and the book's
+appendix A sample. The handle positions of `net/read`, `pool/take` and their
+kin are gone from the table: std hands them a record's `handle`, and only
+their own module can build the record, so no program reaches them.
+
+The probe ran native first by mistake, since `kanso play` builds a binary,
+and found native `text/find2` and `text/find2_below` answering for any value
+in their int positions where the interpreter refuses. That is #2310.
+
+The rows are from a job on family 0x19 model 0x1, the recorded silicon.
+compile_instructions fell to 24,090,335 (-10,279), entry_instructions to
+87,188,542 (-3,641), library_instructions to 72,961,337 (-2,870) and
+browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
+cause; the check now reads one table through one function, and layout may
+account for some of it. No runtime, text or allocation row moved. Welfare
+rose from 95.627876 to 95.627948, banked.

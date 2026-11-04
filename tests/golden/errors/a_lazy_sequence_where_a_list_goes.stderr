@@ -1,4 +1,4 @@
-error[type]: `length` takes a list, a map, or a string here, and `list/map` answers a lazy sequence — make it a list with `list/to_list`
+error[type]: `length` takes a list, a map, a string, or bytes here, and `list/map` answers a lazy sequence — make it a list with `list/to_list`
   --> a_lazy_sequence_where_a_list_goes.kso:8:16
    8 | print (length (list/map [1 2] (n -> n + 1)))
                       ^

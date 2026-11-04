@@ -112309,3 +112309,17 @@ The peek makes the runtime larger, so CI's rows move: codegen_instructions_dev
 fall by a few hundred to two thousand a benchmark, runbench 825,011,247 ->
 825,009,321. Welfare falls by less than 0.01, and the floor follows under the
 rule for a change that makes the language do what its specification says.
+
+## 2026-10-29 — the tab's list of machine calls has one home
+
+#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
+written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
+book panels become live editors, and as a kanso list in the browser
+differential, which decides which samples it covers. They drifted for months.
+The differential now reads the list out of book-play.js, the way it already
+reads the playground's examples out of play.js, and its own copy is gone. A
+page without the list fails the run rather than covering every sample.
+
+Read the same way, the page's list selects the same 717 programs the old copy
+did. With `read_file` taken out of the page's regex the run selected 725, so
+the differential follows the page.
