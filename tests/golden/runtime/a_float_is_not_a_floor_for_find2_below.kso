@@ -1,0 +1,7 @@
+# find2_below's floor is its fourth int position, and it refuses a float.
+import "std/text"
+
+fn opaque v
+  (push [] v)[1]
+
+pub play = print "{text/find2_below (text/bytes "abc") 1 98 99 (opaque 32.0)}"

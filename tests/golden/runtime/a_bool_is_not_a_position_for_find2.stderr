@@ -1,0 +1,2 @@
+error[runtime]: find2 takes bytes
+  failed in a_bool_is_not_a_position_for_find2/play at a_bool_is_not_a_position_for_find2.kso:9

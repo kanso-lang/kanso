@@ -1536,6 +1536,25 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
     return len + 1;
 }
 
+/* find2's positions after the bytes are ints of either kind, as the
+   interpreter reads them: a start past a word scans from the front, a byte
+   past a word keeps the low byte of its magnitude, and a floor past a word
+   sits above every byte or below them all. Anything else is refused. */
+static inline int k_find2_int(KValue v) { return v.tag == K_INT || v.tag == K_BIG; }
+static long long k_find2_from(KValue v) { return v.tag == K_BIG ? 1 : v.payload; }
+static long long k_find2_byte(KValue v) {
+    if (v.tag != K_BIG) return v.payload;
+    KBigView w;
+    k_big_view(v, &w);
+    return (long long)(w.d[0] & 0xff);
+}
+static long long k_find2_floor(KValue v) {
+    if (v.tag != K_BIG) return v.payload;
+    KBigView w;
+    k_big_view(v, &w);
+    return w.neg ? -0x7fffffffffffffffLL - 1 : 0x7fffffffffffffffLL;
+}
+
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
     if (!k_not_failure(from)) { if (K_COUNTING) k_stat_find2_calls++; return from; }
@@ -1543,10 +1562,15 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
         if (K_COUNTING) k_stat_find2_calls++;
         return k_both_or_either(a, b);
     }
-    if (cs.tag != K_BYTES) { if (K_COUNTING) k_stat_find2_calls++; k_die("find2 takes bytes"); }
+    /* The fast shim sends here every call whose tags are not bytes and
+       three small ints, so these tests cost nothing on the scanning path. */
+    if (cs.tag != K_BYTES || !k_find2_int(from) || !k_find2_int(a) || !k_find2_int(b)) {
+        if (K_COUNTING) k_stat_find2_calls++;
+        k_die("find2 takes bytes");
+    }
     KBytes* by = k_as_bytes(cs);
-    return k_int(k_b_find2_raw(by->data, by->len, from.payload, a.payload,
-                               b.payload));
+    return k_int(k_b_find2_raw(by->data, by->len, k_find2_from(from), k_find2_byte(a),
+                               k_find2_byte(b)));
 }
 
 /* Where a JSON number's bytes end. The answer is the first position at or
@@ -2192,10 +2216,14 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
         return k_both_or_either(a, b);
     }
     if (!k_not_failure(lim)) { if (K_COUNTING) k_stat_find2_calls++; return lim; }
-    if (cs.tag != K_BYTES) { if (K_COUNTING) k_stat_find2_calls++; k_die("find2_below takes bytes"); }
+    if (cs.tag != K_BYTES || !k_find2_int(from) || !k_find2_int(a) || !k_find2_int(b)
+        || !k_find2_int(lim)) {
+        if (K_COUNTING) k_stat_find2_calls++;
+        k_die("find2_below takes bytes");
+    }
     KBytes* by = k_as_bytes(cs);
-    return k_int(k_b_find2_below_raw(by->data, by->len, from.payload, a.payload,
-                                     b.payload, lim.payload));
+    return k_int(k_b_find2_below_raw(by->data, by->len, k_find2_from(from), k_find2_byte(a),
+                                     k_find2_byte(b), k_find2_floor(lim)));
 }
 
 /* The bytes arm of `slice`, with the KValue convention taken off its inputs.

@@ -1,0 +1,2 @@
+error[runtime]: find2 takes bytes
+  failed in a_string_is_not_a_byte_for_find2/play at a_string_is_not_a_byte_for_find2.kso:7
