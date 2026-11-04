@@ -20,20 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — the tab's list of machine calls has one home
-
-#2219, a cleanup the docs worker filed. Which calls a tab cannot answer was
-written twice: as `NEEDS_A_MACHINE` in docs/book-play.js, which decides which
-book panels become live editors, and as a kanso list in the browser
-differential, which decides which samples it covers. They drifted for months.
-The differential now reads the list out of book-play.js, the way it already
-reads the playground's examples out of play.js, and its own copy is gone. A
-page without the list fails the run rather than covering every sample.
-
-Read the same way, the page's list selects the same 717 programs the old copy
-did. With `read_file` taken out of the page's regex the run selected 725, so
-the differential follows the page.
-
 ## 2026-10-29 — gavel: `path_to` takes a record or a route's name
 
 #2198. #2186 ruled that `path_to posts/show post.id` looks the route up in
@@ -1370,3 +1356,41 @@ that cost.
 The page's sections for `kanso build --wasm` and the language server were
 owed, and this change was the fourth entry since the page last moved, so
 docs/compiler.html gains all three as sections 281 to 283.
+
+## 2026-11-04 — find2 refuses what the interpreter refuses
+
+`text/find2` and `text/find2_below` take bytes and then three or four ints. The
+interpreter refused anything else in those positions; native answered (#2310).
+The emitted shims `k_b_find2_fast` and `k_b_find2_below_fast` test every tag
+and send any call that is not bytes and small ints to the out-of-line doors
+`k_b_find2` and `k_b_find2_below` in runtime/text.c. Those doors tested only
+the bytes, so a bool, a string or a float was scanned with its payload as the
+number, and a bignum with its pointer. The doors now refuse anything but an
+int, in the interpreter's words (`find2 takes bytes`, `find2_below takes
+bytes`).
+
+A tag test alone would have made native refuse a bignum, which the interpreter
+reads. So the doors read one as the interpreter does: a start past a word
+scans from the front, a byte keeps the low byte of its magnitude, and a floor
+past a word sits above every byte or below them all. A negative small byte
+still reads two ways, the magnitude's low byte in the interpreter and `& 0xff`
+in native. That one is on the scanning path and is #2313.
+
+Four specs, each seen red. Three runtime goldens pin the refusal of a bool
+start, a string byte and a float floor on native, `--interp`, the oracle and
+the tab; native wrote nothing to stderr before the fix. The micro golden
+`a_bignum_reads_the_same_in_every_find2_position` puts a bignum in each
+position, and with the fix reverted native printed nothing where the
+interpreter prints `2 2 3 2 4`.
+
+The rows are from a job on 0x19 model 0x11. No scan path changed, since the
+new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
+so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
+codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
+compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
+(-218). The runtime instruction rows fell by 1,890: encodebench to
+2,335,339,191 (-630), oneshot to 9,978,933 (-385) and runbench to 941,722,133
+(-945), while livebench rose to 938,654,286 (+70). No benchmark reaches the
+doors with a non-int, so layout is the likely cause of all four; nothing here
+isolates it. The front end, the emitter, the interpreter and the tab did not
+move. Welfare rose by less than 0.0001 and the floor is banked.
