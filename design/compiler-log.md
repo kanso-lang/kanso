@@ -1275,5 +1275,7 @@ drops by exactly that cost.
 added `--wasm`. The usage line now names the flag and says what it writes,
 and `tests/front_door.rs` holds the line; it failed on the old text.
 
-Only a string in the driver changed. By CI's measure
-codegen_instructions_release fell to 371,872,695 and no other row moved.
+Only a string in the driver changed. By CI's measure, on the tree merged
+with the language server, codegen_instructions_release fell to 371,872,995
+(-15) and no other row moved. The emitted IR is unchanged; the binary's
+layout is the likely cause, though nothing here isolates it.
