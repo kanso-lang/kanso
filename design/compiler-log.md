@@ -1253,3 +1253,20 @@ the cause. `sha256/digest` answers through `list/fold`, and inference gives
 a library function one answer for every caller in the program, so the
 digest reads as any value. A loop slot that may hold any value is never
 carried across a rewind.
+
+CI's rows for the two phases: work_runbench 890,914,087 -> 947,406,395
+(+56,492,308, 6.0% of the new whole), run_allocs 1,930,602 -> 2,040,700,
+run_alloc_bytes 237,920,257 -> 245,492,129, run_arena_blocks 4 -> 7,
+run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
+-> 4,718,608, run_cohort_frees 11 -> 13, run_perm_allocs 131 -> 133,
+run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
+1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
+run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
+emitted_other lines 69,443 -> 71,622 and text 856,929 -> 889,681.
+run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
+container reads 195,099 with the phases present as well. Inference is
+whole-program, so new callers of the shared library functions can change
+another phase's beat verdicts; that is a likely cause, and nothing here
+isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
+-> 8,939,665), each keeping its ratio to its baseline, and the floor moves
+only by the rounding of the two baselines.
