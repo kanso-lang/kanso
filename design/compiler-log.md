@@ -1471,3 +1471,29 @@ the interpreter dispatches, so no existing word's scan position moves.
 The spec is in `tests/sockets_serve.rs`: a one-statement server accepts the
 harness's connection and prints who called. Watched red on each engine in
 turn, with the address replaced by `0.0.0.0`.
+
+The rows are CI's. The runtime's new case adds 288 bytes of `.text` to every
+binary: jsonbench 442,145, encodebench 368,056, oneshot 448,337, basket
+366,024, widebench 382,142, deepbench 333,303, escapebench 323,335,
+pendbench 342,395, indexbench 322,233, scanbench 528,076, digestbench
+349,921, readbench 323,537, livebench 452,911 and runbench 892,161, so text across the fourteen rose to
+5,874,576 (+4,032). Clang
+compiles the larger runtime: codegen_instructions_dev 117,101,715 (+43,557)
+and codegen_instructions_release 371,967,035 (+12,446). The table and the
+library grew by one word each, so the front end and the engines read a
+little more: compile_instructions 24,090,400 (+65), entry_instructions
+87,746,589 (+1,053), library_instructions 73,433,509 (+833),
+emit_instructions 5,602,736 (+1,043), interp_instructions 622,466,237
+(+2,078), browser_compile_instructions 349,304,764 (+9,566) and
+browser_run_instructions 78,403,189 (+5,996). No benchmark calls `net/peer`,
+so the work rows move by layout: work_jsonbench 549,338,422, work_encodebench
+2,335,340,285, work_oneshot 9,980,090, work_basket 18,296,275,
+work_widebench 28,686,523, work_escapebench 40,309,541, work_pendbench
+154,124,923, work_indexbench 1,888,327, work_scanbench 268,526,
+work_digestbench 3,289,743, work_readbench 4,584,584, work_livebench
+938,655,611 and work_runbench 916,954,250 (+35,260), while work_deepbench
+fell to 197,755,729 (-103,256). Nothing here isolates a cause for those.
+Welfare fell by less than 0.005; `net/peer` is the prerequisite for senro's
+sign-in rate limit under #2280, as `os/random_bytes` was for its sign-in, so
+the floor drops by exactly what CI measured, with the reason in
+bench/welfare_floor.json.
