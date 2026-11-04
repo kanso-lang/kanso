@@ -1248,7 +1248,10 @@ run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
 run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
 1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
 run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
-emitted_other lines 69,443 -> 71,622 and text 856,929 -> 889,681.
+runbench's emitted lines 69,443 -> 71,622 and its text 856,929 -> 889,681,
+which take the totals emitted_other_branches 18,260 -> 18,498,
+emitted_other_calls 21,198 -> 21,507, emitted_other_defines 2,327 -> 2,359,
+emitted_other_lines 174,304 -> 176,483 and text 5,829,760 -> 5,862,512.
 run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
 container reads 195,099 with the phases present as well. Inference is
 whole-program, so new callers of the shared library functions can change
