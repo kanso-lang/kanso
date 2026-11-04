@@ -1310,3 +1310,21 @@ called rather than inlined; list pushes and the fold that spells the first
 HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
 compression, so this is roughly ten times that. **OPEN:** inlining the four
 mixing functions is the next lead.
+
+CI's rows, on the run program with both phases: work_runbench 947,406,395
+-> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
+5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
+2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
+run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
+run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
+run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
+1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
+96,452,880. The sixteen-argument loop and the byte loop are more code:
+runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
+which take the totals emitted_other_branches 18,498 -> 18,759,
+emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
+emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
+Compiling the longer library costs entry_instructions 86,832,572 ->
+87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
+(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
+-> 95.63 and is banked.
