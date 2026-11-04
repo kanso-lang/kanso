@@ -1,0 +1,157 @@
+---
+layout: default
+title: "models and migrations in senro"
+description: "senro's schema is folded from migrations while the app compiles; a model is a record type checked against its table, with policies that guard every write and rules that decide what is fit to keep."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>models and migrations</h1>
+
+<p>a senro app keeps its data in Postgres. this guide covers where the schema comes from, how a model is tied to a table, the policies that guard each write, and the rules that decide whether a record is fit to keep.</p>
+
+<h2>migrations are the schema</h2>
+
+<p>an app's migrations are a list of values in one module, oldest first. each is built from a fixed set of changes, <code>models/create_table</code> and its columns here, so a migration written a year ago cannot break when a model changes today.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+
+<span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
+<span class="c"># models derivation folds these into the schema the app is compiled against.</span>
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined]
+
+signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
+
+id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
+
+joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
+
+name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
+
+message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
+
+digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
+</div>
+
+<p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/made schema</code> as it starts, which creates each table that is missing, and then <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
+
+<p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
+
+<h2>a model is a record type</h2>
+
+<p>a record type in a module is a model when its name matches a table: <code>signature</code> reads <code>signatures</code>. every field must be a column. a misspelled field stops the build, with the error at the type.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/errors/field_without_column/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">type</span> note
+  <span class="f">bdoy</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">shown</span> n
+  <span class="f">n</span><span class="o">.</span><span class="f">bdoy</span></code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">kanso check</div>
+  <pre><code>error[derive]: `bdoy` is not a column of `notes`
+  --&gt; ./notes.kso:1:10
+   1 | pub type note
+                ^</code></pre>
+</div>
+
+<p>a type named after no table is refused the same way. for each model the derivation writes a reader into the model's module, <code>signature_from row</code>, which builds a record from a row a query answered and takes each field from the column of the same name.</p>
+
+<h2>policies</h2>
+
+<p>a model's module says who may change its rows. <code>create?</code>, <code>update?</code> and <code>destroy?</code> each take the viewer and the record and answer true or false. the guestbook lets anyone sign and only the signer remove:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># A signature as the `signatures` table stores it. senro/models checks each</span>
+<span class="c"># field against the table's columns and writes `signature_from`, which builds</span>
+<span class="c"># one from a row.</span>
+<span class="k">pub</span> <span class="k">type</span> signature
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">message</span>
+
+<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
+<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
+<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
+  <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
+
+<span class="c"># Anyone may sign the book.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span>
+
+<span class="c"># A signature needs a name and a message, and a message short enough to</span>
+<span class="c"># read at a glance.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> s
+  <span class="f">models/problems</span> [
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">text/trim</span> s<span class="o">.</span>name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say who you are."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">text/trim</span> s<span class="o">.</span>message <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say something."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">length</span> s<span class="o">.</span>message <span class="o">&gt;</span> <span class="n">280</span>) <span class="s">"Keep it under 280."</span>)
+  ]</code></pre>
+</div>
+
+<p>the derivation describes each model as a value, <code>signature_model</code>, and the writes take it. <code>models/created viewer db model fields</code> reads the fields into a record, asks <code>create?</code>, checks the rules, and inserts only when both pass. <code>models/updated</code> and <code>models/destroyed</code> read the row first, ask their policy, and write only on a yes, answering <code>web/denied</code> or <code>web/absent</code> otherwise. a model with no such policy cannot be written this way, so writes default closed.</p>
+
+<p>reads default open. a module may declare <code>visible?</code>, and <code>models/shown viewer model rows</code> keeps the records a query answered that the viewer may see; without it every row shows. a missing read policy can show a row but never change one.</p>
+
+<h2>rules</h2>
+
+<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/entries.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="c"># A signature is made through its model, whose rules decide whether it is</span>
+<span class="c"># fit to keep. It is signed with the name of the account signed in, and a</span>
+<span class="c"># visitor who is not signed in is sent to sign in. The fields go to Postgres</span>
+<span class="c"># as parameters, so what a visitor types is stored as text and never read as</span>
+<span class="c"># SQL.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
+  <span class="f">return</span> effect (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) if viewer <span class="o">==</span> <span class="s">""</span>
+  f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
+  <span class="f">models/created</span> viewer db signatures/signature_model f
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)
+
+<span class="c"># A signature the rules turned back: the page again, answered 422, with the</span>
+<span class="c"># form as the visitor filled it in and what to fix.</span>
+<span class="k">fn</span> <span class="f">signed</span> req db w:models/invalid
+  s <span class="o">=</span> <span class="f">web/session</span> req secret
+  form <span class="o">=</span> <span class="f">filled</span> w<span class="o">.</span><span class="f">record</span><span class="o">.</span><span class="f">message</span> w<span class="o">.</span><span class="f">problems</span>
+  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s form <span class="n">422</span>)
+
+<span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
+<span class="c"># reloading it does not sign the book again.</span>
+<span class="k">fn</span> <span class="f">signed</span> req _ _
+  thanked <span class="o">=</span> <span class="f">put</span> (<span class="f">web/session</span> req secret) <span class="s">"flash"</span> <span class="s">"Thank you for signing."</span>
+  <span class="f">effect</span> (<span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) secret thanked)</code></pre>
+</div>
+
+<h2>queries</h2>
+
+<p>a query is SQL with numbered parameters, sent through <code>pg/query db sql args</code>. what a visitor types goes to Postgres as a parameter and is never read as SQL. senro speaks Postgres's wire protocol in a client written in kanso, logs in with SCRAM-SHA-256, and secures the connection with TLS when <code>pg/connect_tls</code> asks for it.</p>
+</article>
