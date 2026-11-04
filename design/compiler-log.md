@@ -1388,9 +1388,9 @@ new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
 so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
 codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
 compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
-(-218). The runtime instruction rows fell by 1,890: encodebench to
-2,335,339,191 (-630), oneshot to 9,978,933 (-385) and runbench to 941,722,133
-(-945), while livebench rose to 938,654,286 (+70). No benchmark reaches the
+(-218). The runtime instruction rows fell by 1,890: work_encodebench to
+2,335,339,191 (-630), work_oneshot to 9,978,933 (-385) and work_runbench to
+941,722,133 (-945), while work_livebench rose to 938,654,286 (+70). No benchmark reaches the
 doors with a non-int, so layout is the likely cause of all four; nothing here
 isolates it. The front end, the emitter, the interpreter and the tab did not
 move. Welfare rose by less than 0.0001 and the floor is banked.
