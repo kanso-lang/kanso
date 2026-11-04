@@ -14,7 +14,7 @@ this says only which of them are in the tree.
 |---|---|---|
 | 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
 | 3.2 | free-the-top mini-rewind | **declined** 2026-07-27, with the reopening condition named |
-| 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime.c`, "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
+| 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime/evacuate.c`, the comment above `k_memo_outlives`: "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
 | 3.4 | three-way escape split | **declined** 2026-07-27, measured |
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
 | 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
@@ -346,7 +346,8 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    encode at 4, oneshot's boundary fires, vse at 2 blocks. Revisit when a
    workload shows arena growth with no beat or cohort fire — that signal,
    not the idea, is the reopening condition.
-3. **Generalize the non-heap-scalar rewind rule** (runtime.c:134) to every
+3. **Generalize the non-heap-scalar rewind rule** (`k_memo_outlives` in
+   `src/runtime/evacuate.c`) to every
    scalar-returning call site / arm — the one legitimate sub-beat case, using
    the SCALAR set `beat.rs` already computes. Abandon any placement that rewinds
    a frame producing surviving heap (use-after-free).
