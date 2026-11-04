@@ -73,6 +73,7 @@ extra_css: /book/book.css
 <a href="#b-push"><code>push</code></a>
 <a href="#b-put"><code>put</code></a>
 <a href="#b-random"><code>math/random</code></a>
+<a href="#b-random_bytes"><code>os/random_bytes</code></a>
 <a href="#b-read_file"><code>os/read_file</code></a>
 <a href="#b-read_file-bang"><code>os/read_file!</code></a>
 <a href="#b-read_line"><code>io/read_line</code></a>
@@ -701,6 +702,10 @@ dee is done</code></pre>
 <h3 id="b-modified"><code>os/modified</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/modified string → io (yields int | file_not_found)</code></p>
 <p>a description that yields when a file last changed, in milliseconds since the epoch, the unit <code>time/now</code> answers in. a path that is not there yields <code>file_not_found</code>, as it does for <code>os/read_file</code>. comparing two readings is how a program notices that a file changed under it.</p>
+
+<h3 id="b-random_bytes"><code>os/random_bytes</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>os/random_bytes int → io (yields bytes)</code></p>
+<p>a description that yields that many bytes from the operating system's secure source: getrandom or arc4random_buf on a machine, and <code>crypto.getRandomValues</code> in the browser. use it for salts, keys and tokens, where <code>math/random</code> is wrong because <code>KANSO_SEED</code> replays it. that seed has no effect here, so a seeded run is still reproducible in every respect except the bytes a secret is made of. a count that is not a non-negative integer is a runtime error.</p>
 
 <h3 id="b-read_file"><code>os/read_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/read_file string → io (yields string | file_not_found)</code></p>

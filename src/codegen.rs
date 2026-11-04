@@ -73,7 +73,7 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 79] = [
+pub(crate) const BUILTIN_CALLS: [&str; 80] = [
     "effect",
     "built_text",
     "net_port",
@@ -100,6 +100,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 79] = [
     "annotate",
     "read_file",
     "read_bytes",
+    "random_bytes",
     "write",
     "write_err",
     "env",

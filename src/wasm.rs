@@ -13,6 +13,18 @@ thread_local! {
     static SERVER: RefCell<crate::lsp::Server> = RefCell::new(crate::lsp::Server::new());
 }
 
+/// What the page supplies that a wasm32-unknown-unknown module cannot reach
+/// on its own. The seed and the sources are handed in through exports before
+/// a run; secure bytes cannot be, because how many a program wants is known
+/// only when it asks, so this one call goes out to the host, which answers it
+/// with `crypto.getRandomValues` (#2298).
+mod kanso_host {
+    #[link(wasm_import_module = "kanso_host")]
+    extern "C" {
+        pub fn random_fill(at: *mut u8, len: usize);
+    }
+}
+
 fn current_file() -> String {
     FILE.with(|f| f.borrow().clone())
 }
@@ -119,6 +131,14 @@ impl Executor for BrowserExecutor {
 
     fn random(&mut self, n: u64) -> u64 {
         next_random(n)
+    }
+
+    fn random_bytes(&mut self, n: usize) -> Result<Vec<u8>, String> {
+        let mut out = vec![0u8; n];
+        // SAFETY: the host writes exactly `n` bytes at a pointer into this
+        // module's memory that names a live, writable buffer of that length.
+        unsafe { kanso_host::random_fill(out.as_mut_ptr(), n) };
+        Ok(out)
     }
 
     fn args(&mut self) -> Vec<String> {
