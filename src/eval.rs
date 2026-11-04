@@ -260,6 +260,8 @@ pub enum Desc {
     Await(i64),
     Listen(i64),
     SocketPort(i64),
+    /// The address at the other end of a connection.
+    Peer(i64),
     Accept(i64),
     Receive(i64),
     ReceiveBytes(i64),

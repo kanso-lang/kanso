@@ -73,7 +73,7 @@ fn ties(program: &Program) -> bool {
     program.fns.iter().filter(|d| !d.name.starts_with("list/")).any(|d| d.body.iter().any(stmt))
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 80] = [
+pub(crate) const BUILTIN_CALLS: [&str; 81] = [
     "effect",
     "built_text",
     "net_port",
@@ -119,6 +119,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 80] = [
     "net_secure",
     "net_write",
     "net_close",
+    "net_peer",
     "pool_make",
     "pool_take",
     "pool_give",
