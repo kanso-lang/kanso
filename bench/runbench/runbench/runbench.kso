@@ -441,9 +441,9 @@ relayed_steps = 3000
 
 worded_words = 4000
 
-stretched_iterations = 300
+stretched_iterations = 200
 
-carried_hashes = 1000
+carried_hashes = 600
 
 fn decoded _ 0 sofar
   sofar
