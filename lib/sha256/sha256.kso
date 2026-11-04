@@ -52,14 +52,15 @@ rounds = list/to_list (list/concat (list/concat front back) tail)
 
 # One 512-bit block's sixty-four message words. The first sixteen are the
 # block's own big-endian words; each of the rest folds two earlier ones
-# through the small mixers.
+# through the small mixers. The two words the mixers read are masked for the
+# reason `words_from` gives.
 fn schedule w _ true
   w
 
 fn schedule w at false
   return w if at - 16 < 1 or length w < at - 2
-  s0 = small_sigma0 w[at - 15]
-  s1 = small_sigma1 w[at - 2]
+  s0 = small_sigma0 (w[at - 15] & whole)
+  s1 = small_sigma1 (w[at - 2] & whole)
   next = w[at - 16] + s0 + w[at - 7] + s1 & whole
   rolled (push w next) (at + 1)
 
@@ -113,19 +114,28 @@ h7 = 1541459225
 # sixty-four rounds are done. Held as a list, the words were a fresh list
 # every round, the one value that crossed from round to round, and the loop
 # could not hand its arena back between rounds or between blocks.
-fn compress a b c d e f g h w at
-  rounding a b c d e f g h w at (at > 64)
+#
+# The round constants arrive as the argument `ks` rather than being read from
+# `rounds` directly. `rounds` is built by library calls, and inference gives a
+# library function one answer for every caller, so a read of it may be a
+# failure as far as the compiler knows. An argument never holds a failure,
+# because a call with a failing argument passes the failure on without running
+# the body. With the failure ruled out, every word the round computes is a
+# plain int, the eight words cross from round to round as raw machine words,
+# and the tag tests on each bit operation fold away (kanso#2304).
+fn compress a b c d e f g h w ks at
+  rounding a b c d e f g h w ks at (at > 64)
 
-fn rounding a b c d e f g h _ _ true
+fn rounding a b c d e f g h _ _ _ true
   [a b c d e f g h]
 
-fn rounding a b c d e f g h w at false
-  return [a b c d e f g h] if at < 1 or length w < at or length rounds < at
+fn rounding a b c d e f g h w ks at false
+  return [a b c d e f g h] if at < 1 or length w < at or length ks < at
   mixed = big_sigma1 e + choice e f g
-  fed = rounds[at] + w[at]
+  fed = ks[at] + w[at]
   t1 = h + mixed + fed & whole
   t2 = big_sigma0 a + majority a b c & whole
-  compress (t1 + t2 & whole) a b c (d + t1 & whole) e f g w (at + 1)
+  compress (t1 + t2 & whole) a b c (d + t1 & whole) e f g w ks (at + 1)
 
 # The padded message, block by block. `at` is a one-based byte offset into it.
 # The running hash is eight words, carried the way the rounds carry theirs.
@@ -134,7 +144,7 @@ fn digested _ a b c d e f g h _ true
 
 fn digested padded a b c d e f g h at false
   w = schedule (first_sixteen padded at 0 []) 17 false
-  r = compress a b c d e f g h w 1
+  r = compress a b c d e f g h w rounds 1
   return [a b c d e f g h] if length r < 8
   na = a + r[1] & whole
   nb = b + r[2] & whole
@@ -263,11 +273,21 @@ fn mac_words p message
   words_from p.outer (bytes_of (words_from p.inner message))
 
 # The eight words a message leaves, hashed on from the state `s` that whole
-# blocks already left.
+# blocks already left. Each word read out of `s` is masked, though it is
+# already thirty-two bits, because an item of a list could be anything and the
+# mask is what tells the compiler it is an int.
 fn words_from s message
   return [] if length s < 8
   padded = padded_after message 64
-  blocked padded s[1] s[2] s[3] s[4] s[5] s[6] s[7] s[8] 1
+  a = s[1] & whole
+  b = s[2] & whole
+  c = s[3] & whole
+  d = s[4] & whole
+  e = s[5] & whole
+  f = s[6] & whole
+  g = s[7] & whole
+  h = s[8] & whole
+  blocked padded a b c d e f g h 1
 
 fn keyed k
   return keyed (digest k) if length k > 64
