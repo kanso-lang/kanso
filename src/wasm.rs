@@ -18,10 +18,25 @@ thread_local! {
 /// a run; secure bytes cannot be, because how many a program wants is known
 /// only when it asks, so this one call goes out to the host, which answers it
 /// with `crypto.getRandomValues` (#2298).
-mod kanso_host {
+#[cfg(target_arch = "wasm32")]
+fn host_random_fill(out: &mut [u8]) {
     #[link(wasm_import_module = "kanso_host")]
     extern "C" {
-        pub fn random_fill(at: *mut u8, len: usize);
+        fn random_fill(at: *mut u8, len: usize);
+    }
+    // SAFETY: the host writes exactly `out.len()` bytes at a pointer into
+    // this module's memory that names a live, writable buffer of that length.
+    unsafe { random_fill(out.as_mut_ptr(), out.len()) }
+}
+
+/// The native build compiles this module too, for its own tests, and has no
+/// page to ask: there the bytes come from the machine, as the CLI's do. macOS
+/// refuses to link a library holding the page's import unresolved.
+#[cfg(not(target_arch = "wasm32"))]
+fn host_random_fill(out: &mut [u8]) {
+    #[cfg(unix)]
+    if let Ok(bytes) = crate::eval::os_entropy(out.len()) {
+        out.copy_from_slice(&bytes);
     }
 }
 
@@ -135,9 +150,7 @@ impl Executor for BrowserExecutor {
 
     fn random_bytes(&mut self, n: usize) -> Result<Vec<u8>, String> {
         let mut out = vec![0u8; n];
-        // SAFETY: the host writes exactly `n` bytes at a pointer into this
-        // module's memory that names a live, writable buffer of that length.
-        unsafe { kanso_host::random_fill(out.as_mut_ptr(), n) };
+        host_random_fill(&mut out);
         Ok(out)
     }
 
