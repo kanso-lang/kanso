@@ -1,11 +1,10 @@
 name: delete a branch
 
-# scripts/purge_merged_branches.sh records why this exists: "A ref-deletion
-# push from the container is refused by the agent proxy with HTTP 403, so the
-# sweep waits on a shell that can push a deletion." This is that shell.
-# Actions runs on GitHub's own infrastructure rather than through the proxy,
-# where deleting a ref is an ordinary push, and the perf-history job already
-# proves `contents: write` is enough to push from here.
+# A session's container cannot delete a remote branch: the agent proxy
+# refuses a ref-deletion push with HTTP 403. This workflow is a shell that
+# can. Actions runs on GitHub's own infrastructure rather than through the
+# proxy, where deleting a ref is an ordinary push, and the perf-history job
+# already proves `contents: write` is enough to push from here.
 #
 # Every deletion prints the sha the branch pointed at before it goes, because
 # that sha is what puts it back:
@@ -13,8 +12,9 @@ name: delete a branch
 #     git push origin <sha>:refs/heads/<name>
 #
 # Nothing here decides WHETHER a branch is dead. This repository squash-merges,
-# so no git-native merged-ness test works — the purge script's header explains
-# that at length. Whoever dispatches this has made that judgement already.
+# so no git-native merged-ness test works: a landed branch is known by a squash
+# commit on main carrying its own subject with `(#N)` appended. Whoever
+# dispatches this has made that judgement already.
 
 on:
   workflow_dispatch:
