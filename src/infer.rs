@@ -2527,12 +2527,20 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"
         | "filter" => LIST | fails,
         "map" => LIST | fails,
-        // a list written at a position answers none outside it (kanso#2086)
-        "put" => match args[0] & (MAP | LIST) {
-            LIST => LIST | NONE | fails,
-            0 | MAP => MAP | fails,
-            _ => MAP | LIST | NONE | fails,
-        },
+        // a list written at a position answers none outside it (kanso#2086),
+        // and only an int is a position: a list handed any other key is
+        // refused at run time on every engine, so it never answers none
+        "put" => {
+            let outside = match args.get(1).is_none_or(|k| k & ANY_INT != 0) {
+                true => NONE,
+                false => 0,
+            };
+            match args[0] & (MAP | LIST) {
+                LIST => LIST | outside | fails,
+                0 | MAP => MAP | fails,
+                _ => MAP | LIST | outside | fails,
+            }
+        }
         "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,

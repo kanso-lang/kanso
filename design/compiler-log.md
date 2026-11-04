@@ -1480,6 +1480,18 @@ golden reports its runtime failure again. A fold whose lambda really can
 answer none now reads as possibly none where it read as anything, so the
 checker asks for that none to be handled; before, it was let through.
 
+The macOS host then refused scripts/welfare_rescore. Its `columned` answers
+either `without row "welfare"`, a fold, or `put row "welfare" score`, and the
+fold's answer had hidden the put's. `builtin_set` answered `LIST | NONE` for
+a put on a value that might be a list, whatever the key, and a list handed a
+text key is refused at run time on both engines ("put writes a list at an
+int position"), so it never answers none. A put now admits the none only
+when its key may be an int. The micro golden
+`a_put_by_text_key_never_answers_none` is a program main refuses and this
+branch prints, on both engines. `kanso check` over every directory in
+scripts, lib, examples and bench reports the same errors on main's binary
+and this one.
+
 The new mem fixture `a_fold_answer_carried_round_a_loop` carries a fold's
 answer round twelve thousand iterations. It held 4 arena blocks before and
 holds 1. A user function that answers `list/to_list` of a fold over a
