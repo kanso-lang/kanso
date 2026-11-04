@@ -112152,3 +112152,32 @@ a_field_read_of_a_list, and passes with it.
 
 The browser compile moves by two instructions, browser_compile_instructions
 343,196,938 (-2), and no other row moves.
+
+## 2026-10-29 — a derivation sees the calls a module makes, and can refuse one
+
+#2186's routing convention owes a compile error at a `path_to` that names a
+function that is not a route. A derivation could see an app's functions but
+not their calls, so it could refuse only at a declaration. A module in the
+description now carries `calls`: each call a function of the module makes to
+a named function, with the caller, the callee, each argument's name ("" for
+one that is not a name), and where it is written. `derive/refuse_call` makes
+a compile error at one of them, in the caller's file.
+
+Building the case for it found that a module the entry imports could arrive
+described with nothing in it. When another of the entry's modules imports it
+first and does not re-export it, its declarations come in already demoted,
+and the description read each declaration's own pub flag. It now reads the
+entry's exports, which say what reaches the entry as pub by any route.
+
+tests/golden/derive gains a derivation that lists the calls between modules
+and one that refuses a link to a function that is not a route, at the call.
+The second was watched red twice: with no calls to read, and with
+`posts/show` refused too before the exports fix.
+
+bench/entry_corpus derives, so the entry row prices collecting the calls:
+entry_instructions 85,153,572 (+443,584). `lib/derive` is embedded in the
+compiler and grew, so the other compile rows move with it:
+compile_instructions 24,083,702 (+18,776), library_instructions 71,386,812
+(+60,840) and browser_compile_instructions 343,219,110 (+22,172). Welfare fell
+by 0.002, and the floor follows under the rule for a feature a ruling
+requires.

@@ -402,8 +402,16 @@ async function runLibrary(stem, src) {
   return Object.assign(callKanso('kanso_run', entry), { engine: 'interp' });
 }
 
+/* The language server `kanso lsp` runs, in the tab: hand it one protocol
+   message and get back the array of messages it answers with (a response,
+   diagnostics, both or neither). An editor reaches the same Server over
+   stdio; only the framing differs. */
+function lsp(message) {
+  return JSON.parse(callKanso('kanso_lsp', JSON.stringify(message)).text);
+}
+
 window.KansoEngine = {
-  ready, runSource, playSource, runLibrary, highlight, callKanso,
+  ready, runSource, playSource, runLibrary, highlight, callKanso, lsp,
   writeInput, readOut, linkAndRun,
   get wasm() { return wasm; },
   get native() { return runtimeModule !== null; },

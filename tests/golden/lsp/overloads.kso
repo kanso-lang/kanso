@@ -1,0 +1,13 @@
+fn bar s:string
+  "a string: {s}"
+
+fn bar n:int
+  "an int: {n}"
+
+fn foo x
+  bar x
+
+fn twice y
+  foo y
+
+print (twice 2)

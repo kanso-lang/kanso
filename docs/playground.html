@@ -112,6 +112,39 @@ description: "run kanso in your browser: programs compile to wasm right in the t
   white-space: pre-wrap;
 }
 .play-error { color: var(--tok-kw); }
+.play-main { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.play-main .play-editor { flex: 1; }
+/* what the language server says about the name under the pointer: the
+   type the compiler inferred there, or the diagnostic on it */
+.play-editor pre.play-hover {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 8px;
+  bottom: auto;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 34rem;
+  overflow: hidden;
+  padding: 0.4rem 0.6rem;
+  pointer-events: none;
+  right: auto;
+  white-space: pre-wrap;
+  z-index: 2;
+}
+.play-editor pre.play-hover[hidden] { display: none; }
+.play-problems {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0.6rem 1.25rem;
+  white-space: pre-wrap;
+}
+.play-problems[hidden] { display: none; }
 .play-repl {
   background: var(--code-bg);
   border: 1px solid var(--code-border);
@@ -183,10 +216,14 @@ description: "run kanso in your browser: programs compile to wasm right in the t
   </div>
 
   <div class="play-grid">
-    <div class="play-editor">
-      <pre aria-hidden="true"><code id="mirror"></code></pre>
-      <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="kanso source editor">print "hello, kanso"
+    <div class="play-main">
+      <div class="play-editor">
+        <pre aria-hidden="true"><code id="mirror"></code></pre>
+        <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="kanso source editor">print "hello, kanso"
 </textarea>
+        <pre class="play-hover" id="hover" role="tooltip" hidden></pre>
+      </div>
+      <pre class="play-problems play-error" id="problems" hidden></pre>
     </div>
     <div class="play-side">
       <pre class="play-output" id="output">loading the toolchain…</pre>
