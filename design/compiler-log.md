@@ -1259,6 +1259,7 @@ another phase's beat verdicts; that is a likely cause, and nothing here
 isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
 -> 8,939,665), each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+
 ## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
 
 #2299. Both shapes joined the run program in #2301, measured before this.
@@ -1304,6 +1305,20 @@ vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
 interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
 after. The mem fixtures read one arena block each, where they read three
 and five.
+
+Their other rows move with the loop that now rewinds:
+a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
+a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
+a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
+a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
+a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
+a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
+a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
+a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
+A loop that gives its arena back each iteration copies what it carries out
+first, which fits the evacuations, and has no buffer of the last
+iteration's left to reuse; the byte loop's pushes replace the fold's. That
+reading fits the rows, and nothing here isolates each counter.
 
 **What an iteration costs now.** Callgrind on 2,000 iterations reads
 202,252,987 instructions, about 101,000 an iteration for two compressions.
