@@ -112181,3 +112181,29 @@ compile_instructions 24,083,702 (+18,776), library_instructions 71,386,812
 (+60,840) and browser_compile_instructions 343,219,110 (+22,172). Welfare fell
 by 0.002, and the floor follows under the rule for a feature a ruling
 requires.
+
+## 2026-10-29 — a parameter is not the function it shares a name with
+
+The none check asks, at each call whose argument can be a none, whether the
+callee's group has an arm for one. It found the group by name and arity
+alone. std/list's merge sort takes its key as a parameter named `key` and
+calls it on an element it reads by index, so a program with a one-argument
+function named `key` had that parameter read as its own function, and the
+read was refused twice inside std/list, at a line the program's author
+cannot change. The proof that the index is in bounds usually kept the
+question from being asked. A dispatch tie elsewhere in the program took that
+proof away, so the tie arrived with two errors nobody wrote. The senro
+routing prototype found it.
+
+The check now asks first whether the declaration binds the name, the
+question the box check already asks through the same per-declaration set.
+
+tests/golden/errors gains the program: a function named `key`, a tie, and a
+call into std/list. It was watched red through the corpus runner with the
+test switched off, reporting the two refusals in list.kso, and passes with it.
+
+The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
+browser_compile_instructions 343,289,574 (+70,464), entry_instructions
+85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
+falls by less than 0.001, and the floor follows under the rule for a change
+that makes the language do what its specification says.

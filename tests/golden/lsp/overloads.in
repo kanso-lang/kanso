@@ -1,0 +1,11 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso","languageId":"kanso","version":1,"text":{{TEXT:overloads.kso}}}}}
+{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":6,"character":7}}}
+{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":7,"character":6}}}
+{"jsonrpc":"2.0","id":4,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":7,"character":3}}}
+{"jsonrpc":"2.0","id":5,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":9,"character":9}}}
+{"jsonrpc":"2.0","id":6,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":6,"character":4}}}
+{"jsonrpc":"2.0","id":7,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://{{ROOT}}/overloads.kso"},"position":{"line":11,"character":0}}}
+{"jsonrpc":"2.0","id":8,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

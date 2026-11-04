@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"definitionProvider":true},"serverInfo":{"name":"kanso"}}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://{{ROOT}}/definition.kso","diagnostics":[]}}
+{"jsonrpc":"2.0","id":2,"result":[{"uri":"file://{{ROOT}}/definition.kso","range":{"start":{"line":0,"character":3},"end":{"line":0,"character":3}}}]}
+{"jsonrpc":"2.0","id":3,"result":[{"uri":"file://{{ROOT}}/definition.kso","range":{"start":{"line":4,"character":2},"end":{"line":4,"character":2}}}]}
+{"jsonrpc":"2.0","id":4,"result":[{"uri":"file://{{ROOT}}/definition.kso","range":{"start":{"line":3,"character":12},"end":{"line":3,"character":12}}}]}
+{"jsonrpc":"2.0","id":5,"result":{"contents":{"kind":"markdown","value":"```kanso\nsize: int\n```"},"range":{"start":{"line":4,"character":2},"end":{"line":4,"character":6}}}}
+{"jsonrpc":"2.0","id":6,"result":[{"uri":"file://{{ROOT}}/definition.kso","range":{"start":{"line":3,"character":3},"end":{"line":3,"character":3}}}]}
+{"jsonrpc":"2.0","id":7,"result":null}

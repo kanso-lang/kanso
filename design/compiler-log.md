@@ -20,32 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a parameter is not the function it shares a name with
-
-The none check asks, at each call whose argument can be a none, whether the
-callee's group has an arm for one. It found the group by name and arity
-alone. std/list's merge sort takes its key as a parameter named `key` and
-calls it on an element it reads by index, so a program with a one-argument
-function named `key` had that parameter read as its own function, and the
-read was refused twice inside std/list, at a line the program's author
-cannot change. The proof that the index is in bounds usually kept the
-question from being asked. A dispatch tie elsewhere in the program took that
-proof away, so the tie arrived with two errors nobody wrote. The senro
-routing prototype found it.
-
-The check now asks first whether the declaration binds the name, the
-question the box check already asks through the same per-declaration set.
-
-tests/golden/errors gains the program: a function named `key`, a tie, and a
-call into std/list. It was watched red through the corpus runner with the
-test switched off, reporting the two refusals in list.kso, and passes with it.
-
-The compile rows move by layout: compile_instructions 24,095,553 (+11,851),
-browser_compile_instructions 343,289,574 (+70,464), entry_instructions
-85,147,962 (-5,610) and library_instructions 71,380,536 (-6,276). Welfare
-falls by less than 0.001, and the floor follows under the rule for a change
-that makes the language do what its specification says.
-
 ## 2026-10-29 — six messages that named the wrong cause
 
 Two messages a newcomer meets in the first hour named the wrong cause
@@ -1245,6 +1219,55 @@ codegen_instructions_release rose to 371,872,843. emit_instructions fell to
 browser build is part of the senro mandate, so the floor drops by exactly
 that cost.
 
+
+## 2026-11-03 — an editor asks the compiler what a name is
+
+Clay asked for a language server that works in RubyMine and in the
+playground, whose hover shows the type the compiler worked with. `kanso lsp`
+speaks the Language Server Protocol over stdin and stdout. It publishes the
+diagnostics `kanso check` prints, answers a hover and jumps to a definition.
+The playground runs the same `Server` through a wasm export, `kanso_lsp`,
+which takes one message and returns the replies as a JSON array.
+
+The diagnostics are read out of the check's own rendering, so an editor shows
+the words the command line does, from every compile route, with no second list
+to keep in step. A hover reads the program the check compiled. A parameter's
+type is what it accepts: each call the parameter is handed to contributes the
+union of what the arms it can reach take at that position, and the
+parameter's uses are intersected. An arm that binds the position by name passes
+on what that name accepts, so the answer follows a value through every call it
+passes, as a greatest fixpoint over the whole program. With `fn bar s:string`
+and `fn bar n:int`, `fn foo x` whose body is `bar x` shows `x: int | string`.
+When the program's own calls hand the parameter something narrower, the
+inference's `param` set, which the engines dispatch on, appears on a second
+line. Unions are spelled the way typesets and appendix B spell them.
+
+A use the walk does not read constrains nothing: an operator's operand, a
+builtin's argument, a capture in a lambda. The answer can be wider than the
+truth and never narrower. Builtins are the gap most readers will meet, since
+`text/split s sep` hands both to `builtin_split` and so reads as accepting
+anything; the interpreter knows each builtin's argument types only by refusing
+the wrong ones at run time, and the table that would close the gap is a
+follow-up. A buffer that does not compile has diagnostics and no hovers.
+
+`tests/the_language_server_answers_an_editor.rs` replays three recorded
+sessions from `tests/golden/lsp` and compares every reply byte for byte. The
+overloads transcript went red when a call contributed only its first arm, and
+green with the union.
+
+The server is outside the compile path, and main.rs gains only the verb, so
+the compile rows moved with the binary's layout, by CI's measure on the tree
+merged with `kanso build --wasm`: compile_instructions to 24,099,445 (-2,937),
+entry_instructions to 86,832,572 (-7,738), library_instructions to 72,621,853
+(-6,424), startup_instructions to 50,264 (-3), emit_instructions to 5,600,882
+(+1,639) and interp_instructions to 622,499,949 (+108,439).
+codegen_instructions_release rose to 371,873,010 (+167), which this diff does
+not explain: the emitted IR and the runtime are unchanged. The tab's compile
+rose too, browser_compile_instructions to 349,339,330 (+49,747); the wasm
+engine now carries a second caller of `compile_source`, which is a likely
+reason, though nothing here isolates it. Welfare fell by less than 0.01.
+Editor support for the language is part of making it usable, so the floor
+drops by exactly that cost.
 
 ## 2026-11-03 — the usage text names build --wasm
 

@@ -1,0 +1,8 @@
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"definitionProvider":true},"serverInfo":{"name":"kanso"}}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://{{ROOT}}/diagnostics.kso","diagnostics":[{"range":{"start":{"line":3,"character":7},"end":{"line":3,"character":12}},"severity":1,"code":"arity","source":"kanso","message":"no 2-argument arm of `greet` (arms take 1)"},{"range":{"start":{"line":4,"character":6},"end":{"line":4,"character":10}},"severity":1,"code":"name","source":"kanso","message":"unknown name `plum`"}]}}
+{"jsonrpc":"2.0","id":2,"result":null}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://{{ROOT}}/diagnostics.kso","diagnostics":[]}}
+{"jsonrpc":"2.0","id":3,"result":{"contents":{"kind":"markdown","value":"```kanso\nfn greet name:string → string\n```"},"range":{"start":{"line":0,"character":3},"end":{"line":0,"character":8}}}}
+{"jsonrpc":"2.0","id":4,"error":{"code":-32601,"message":"`textDocument/formatting` is not a method kanso answers"}}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://{{ROOT}}/diagnostics.kso","diagnostics":[]}}
+{"jsonrpc":"2.0","id":5,"result":null}
