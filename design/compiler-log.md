@@ -20,41 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a derivation defines arms, and the module they belong to compiles them
-
-#2198's record form runs `path_to post` by dispatch on the record's type, so
-the routing convention has to write a `path_to` arm for each model. A
-derivation can now answer `derive/define origin source`: an arm written out as
-source, for the module `origin` names. A module may already add an arm to a
-library's function for a type it declares, so the arm goes there and not in
-the entry, which declares no models.
-
-When any derivation defines an arm, the entry's dependencies load a second
-time, and each module that was given arms reads them as one more of its own
-files, `posts.derived.kso` beside `posts.kso`. The arm is qualified, formatted
-and checked as code someone wrote in that module, and an error in it quotes
-the line the convention wrote. An arm for a module the derivation was not
-shown is refused at the `derive` line. `kanso derived` prints each arm under
-the module it went to. In the tab the modules arrive as text and the arms join
-them the same way.
-
-tests/golden/derive gains three cases, each run on both engines: a `path_to`
-arm defined for each record type in a module with a `show` action, an arm that
-reads a missing field and is refused in the derived file, and an arm for
-std/list, refused. With the second load switched off the first case printed
-"no route" twice where it prints `/posts/3`. tests/wasm_engine.rs runs the
-first case in the page; it was watched red with the derived files keyed so
-the module could not find them.
-
-The rows: bench/entry_corpus derives, so it pays for each call's strings and
-for the larger `lib/derive`: entry_instructions 85,282,135 (+134,173),
-compile_instructions 24,096,578 (+1,025), library_instructions 71,383,015
-(+2,479), and browser_compile_instructions 343,289,572 (-2). The first build
-keyed the derived files on every module load, which cost compile_allocs 14
-and interp_allocs 12 on programs that derive nothing; the key is asked for
-only while arms load, and neither row moves. Welfare falls by less than
-0.001, and the floor follows under the rule for a feature a ruling requires.
-
 ## 2026-10-29 — a page split into words joins the run program
 
 `regexp/split "[^a-z']+"` allocated about thirty times per field it answered
@@ -1420,6 +1385,44 @@ compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
 doors with a non-int, so layout is the likely cause of all four; nothing here
 isolates it. The front end, the emitter, the interpreter and the tab did not
 move. Welfare rose by less than 0.0001 and the floor is banked.
+
+## 2026-11-04 — find2 reads a negative byte as the interpreter does
+
+The interpreter reads each byte `find2` and `find2_below` look for as the low
+byte of the int's magnitude, so -98 is 98. Native's two raw scans read
+`a & 0xff`, so -98 was 158, and `find2 (bytes "abc") 1 -98 0` answered 4
+where the interpreter answered 2 (#2313). The interpreter is the oracle, so
+native changed. Both scans read `& 0xff` first and correct the two bytes
+only when `(a | b) < 0`. At the emitted sites the bytes are literals and the
+test folds away.
+
+The first version computed both magnitudes on every call, through a helper
+that the release tier's hot unit and `a_short_scan_tail_answers_like_the_byte_walk`
+each lift out of the runtime by name. The second lift did not know the
+helper and the spec failed on both hosts, so the magnitude is computed in
+place. That version cost the browser run 92,400 instructions; the single
+sign test costs 52,800.
+
+The micro goldens `find2_at_its_edges` and `find2_below_at_its_edges` each
+gain a negative byte in the scalar walk and one in the vector step. Before
+the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
+2 and 3.
+
+The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
+128 bytes, and scanbench's and runbench's, which inline the raw scans most,
+by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
+(+4,048). work_runbench rose to 942,094,162 (+372,029
+over main). Four other work rows moved by a few hundred instructions:
+work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
+(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
+(+141). An earlier run on the first version read encodebench 3.8M lower,
+and this one reads it within 238 of main, so neither reading is the change.
+browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
+wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
+and codegen_instructions_release fell to 371,954,589 (-46,231). The front
+end, the emitter and the interpreter did not move. Welfare fell by less than
+0.01. The differential law requires the fix, so the floor was lowered by
+exactly that, with the reason in bench/welfare_floor.json.
 
 ## 2026-11-04 — sha256's rounds carry raw words, and pbkdf2's chain skips its bytes
 

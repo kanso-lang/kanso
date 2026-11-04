@@ -10,3 +10,5 @@ past the vector step: 21
 the last byte of all: 24
 a zero limit is no limit: 10
 a limit past a byte: 1
+a negative byte: 2
+negative, vector step: 3

@@ -9,6 +9,8 @@
 # long string is twenty-four bytes: the vector step takes sixteen of them and
 # the remaining eight are walked one at a time, so a hit in each half is a
 # different piece of code answering.
+#
+# A byte is read as the low byte of the int's magnitude, so -98 is 98 (`b`).
 import "std/text"
 
 short = text/bytes "abcd"
@@ -27,3 +29,5 @@ pub play = print "middle: {text/find2 short 1 99 100}"
   .> (_ -> print "past it, walked: {text/find2 long 1 109 109}")
   .> (_ -> print "the last byte of all: {text/find2 long 20 110 110}")
   .> (_ -> print "no match at all: {text/find2 long 1 122 122}")
+  .> (_ -> print "a negative byte: {text/find2 short 1 -98 -98}")
+  .> (_ -> print "negative, vector step: {text/find2 long 1 -53 -53}")
