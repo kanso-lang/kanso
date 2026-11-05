@@ -1,0 +1,3 @@
+import "./letters"
+
+print (letters/measured (letters/noted "7"))
