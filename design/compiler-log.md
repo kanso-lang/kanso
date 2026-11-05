@@ -1555,6 +1555,8 @@ Rows: the new check costs every compile a little. `compile_instructions`
 rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791 and
 `library_instructions` 1,497 to 73,495,778. CI's browser rows fell,
 `browser_compile_instructions` by 982,599 to 349,304,764 and
-`browser_run_instructions` by 14,989 to 78,403,189, and #2336 read the same
-two numbers on a change that shares nothing with this one, so the fall
-comes from outside the tree.
+`browser_run_instructions` by 14,989 to 78,403,189. #2336 read the same two
+numbers on a change that shares no code with this one, and #2340, which
+changes only the site, read the old ones, so the fall is not this check's.
+What does move them is open: both branches rebuild the compiler for wasm
+from changed sources, and nothing here isolates more than that.
