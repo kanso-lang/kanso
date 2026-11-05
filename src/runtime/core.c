@@ -133,7 +133,7 @@ static inline int k_bytes_malloced(const KBytes* b) {
     return b->cap != 0 && !(b->cap & 1);
 }
 
-/* Lazy v1 (the log's 2026-07-21 ruling): a conditionally-demanded binding's
+/* Lazy v1 (design/lazy-v1-plan.md): a conditionally-demanded binding's
    pending computation. RC'd, malloc-backed, recycled through a free list --
    never the beat arenas, so a pending thunk can't pin a rewindable region.
    Captured args are copied in at creation; the site dispatcher
