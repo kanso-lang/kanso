@@ -1526,8 +1526,13 @@ holds 1. A user function that answers `list/to_list` of a fold over a
 digest's words held 13 blocks at two thousand iterations and holds 1. Both
 print the same on every engine.
 
-`list/map` and the other shared drivers answer through handed values the same
-way; this entry covers fold alone.
+`list/map` answers a `mapped` record, and `list/to_list` reads it through a
+fold, so a function that answers `list/to_list (list/map xs f)` reads as a
+list as well: the mem fixture `a_mapped_answer_carried_round_a_loop` holds 1
+block where the compiler before this entry held 4.
+A driver that answers one element, such as `list/find`, answers whatever the
+elements can be. (Corrected after merge: this paragraph first said the other
+drivers were not narrowed.)
 
 The rows are CI's, taken on the tree merged with net/peer, on the recorded
 silicon. runbench's work fell to 915,613,360 (-1,340,890) and its text to
