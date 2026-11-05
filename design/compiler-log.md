@@ -1513,11 +1513,20 @@ answers and never less; a group that answers a map and nothing else hands a
 map, and an arm that takes no map cannot take it.
 
 The check asks only when a call hands an argument that is itself a call,
-and only at positions where every arm of the callee restricts. That mask is
-a third field on the table the none check already builds per group, so it
-adds no table of its own. A group's arms are read through the member list
-the box check threads, and the program's types are collected the first
-time a refusal is likely.
+and only at positions where every arm of the callee restricts. A group's
+arms are read through the member list the box check threads, and the
+program's types are collected the first time a refusal is likely.
+
+Three tables in the same pass were keyed by the group: the none check's,
+the box check's, and the discarded-effect check's, which was keyed by
+position too and so hashed the name once per parameter to build. Each now
+reads one `Group` built in one walk of the declarations, with the new
+check's mask beside the others. The discarded-effect check also asks
+whether an argument is a call before it hashes the callee, where it used
+to hash every callee first. Measured here against the same tree with the
+new check's call commented out, `kanso check` of the compile, entry and
+library corpora ran 99k, 336k and 323k fewer instructions, so the check
+and the merged table together cost less than the tree before them.
 
 A field read is left alone on either side of the call. A getter's arms do
 not say what it takes or answers: on an err, `.reason` reads the err's own
