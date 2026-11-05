@@ -34,7 +34,9 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
 <span class="k">import</span> <span class="s">"./accounts"</span>
+<span class="k">import</span> <span class="s">"./confirmations"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
@@ -79,7 +81,7 @@ connected <span class="o">=</span> <span class="f">pg/connect</span> <span class
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -90,13 +92,18 @@ joined <span class="o">=</span> <span class="f">models/create_table</span> <span
 <span class="c"># The address a reset link is sent to.</span>
 emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
 
+<span class="c"># When the address was confirmed, or empty until it is.</span>
+confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
 
 digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span>
 
-email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span></code></pre>
+email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
+
+confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span></code></pre>
 </div>
 
 <h2>a model</h2>
