@@ -1,0 +1,8 @@
+error[name]: the name `done` is already taken
+  --> a_constant_named_like_a_builtin_value.kso:7:1
+   7 | done = "delete from jobs where id = $1"
+       ^
+error[name]: the name `none` is already taken
+  --> a_constant_named_like_a_builtin_value.kso:9:1
+   9 | none = 0
+       ^

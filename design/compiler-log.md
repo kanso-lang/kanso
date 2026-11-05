@@ -20,18 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — prose_check pairs each page's div tags
-
-Item 3 of #2213. ch07 shipped with a stray `</div>` that the browser forgave
-and every gate passed over. prose_check now walks the `<div>` and `</div>`
-tags of every page it reads and reports a close with nothing open, or an open
-never closed, at its line. On main it found two more, in appendix a after the
-type-order panel, and this change deletes them. No page puts a div inside a
-comment, so the walk reads the raw page. A ratchet row puts a stray close back
-after ch07's first panel and the gate goes red. The summary line counts
-findings rather than tells, and the advice about the slop families prints only
-when one of them was found.
-
 ## 2026-10-29 — book_panels reads output panels by their source, and golden paths
 
 Items 1 and 2 of #2213. The landing page titles its outputs `output`, and
@@ -1545,3 +1533,27 @@ through the entry the micro corpus stages for a `pub play` library, and
 Goldens: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
 corpus, the senro shape reduced, which checked clean before this change;
 and the micro above, which prints `2` on every engine.
+
+## 2026-11-05 — a declaration cannot take a nullary value's name
+
+A library could declare a constant named `done`. std/list's iterators answer
+`done` when they run out, and with the constant declared that answer read
+the constant, so a fold elsewhere in the program found no arm for it and
+failed at run time (#2338). senro's jobs module found it with a SQL string
+named `done`. An entry already refused the name, because there it is a
+binding and the shadow check holds the nullary values as globals; a library
+declares it instead, and `collect_globals` checked declarations against the
+ambient names and the types only.
+
+A declaration named `done`, `none`, `true` or `false` is now refused as a
+name already taken. The one program in the tree that declared one was
+`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
+`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
+declares `done` and `none`, and checked clean before the change.
+
+Rows: the new check costs every compile a little. `compile_instructions`
+rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
+`library_instructions` 1,497 to 73,495,778 and
+`browser_compile_instructions` 3,822 to 350,291,185, and
+`browser_run_instructions` did not move. The rule is part of the language,
+so the welfare floor moves down by exactly the check's cost.
