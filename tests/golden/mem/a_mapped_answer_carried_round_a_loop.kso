@@ -1,0 +1,25 @@
+# What a loop that carries a mapped list holds, watched (kanso#2302).
+#
+# `doubled` answers `list/to_list` of `list/map`. The map is a `mapped`
+# record, and `to_list` reads it through `list/fold`, so the answer is a list
+# exactly when a call to the fold answers what its init and lambda can. It
+# did not before kanso#2321, and this loop kept four arena blocks at twelve
+# thousand iterations. It holds one.
+#
+# Watched, not frozen: regenerate deliberately and say which way it went.
+import "std/list"
+
+fn doubled xs
+  list/to_list (list/map xs (x -> x * 2 % 251))
+
+pub fn carried u left
+  looped [1 2 3] u left (left == 0)
+
+fn looped _ u _ true
+  u
+
+fn looped p u left false
+  next = doubled u
+  looped p next (left - 1) (left - 1 == 0)
+
+pub play = print (carried [1 2 3 4 5 6 7 8] 12000)
