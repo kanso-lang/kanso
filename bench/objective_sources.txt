@@ -42,6 +42,9 @@
 # runtime work: the run program's retired instructions
 run_instructions work_runbench
 
+# the dev tier's run: the same program built at -O0, joined 2026-11-05
+dev_run_instructions work_runbench_dev
+
 # runtime memory: the three pools, summed by `peak_of` into one term
 run_peak_bytes run_arena_peak_bytes
 run_peak_bytes run_held_peak_bytes

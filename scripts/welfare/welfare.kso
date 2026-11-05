@@ -126,11 +126,45 @@ d_run_speed = dimension run_speed_counters "run speed" 2.0 0.45
 # notice them.
 d_run_memory = dimension run_memory_counters "run memory" 2.0 0.40
 
-d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.30
+# THE DEV-TIER RUN, the eighth term on the development side, added 2026-11-05
+# under the 2026-10-06 ruling that welfare weighs every environment kanso runs
+# in and none at zero. `kanso run` and a bare `kanso build` hand a developer a
+# binary built at `-O0`, and until this term nothing in the objective saw how
+# fast that binary ran. A change could make it twice as slow and score nothing,
+# and the reverse: kanso#2304 found PBKDF2 at 3.0 seconds there against 0.22 at
+# release, and a fix for it had no term to land on.
+#
+# The workload is the run program, the same bench/runbench the production side
+# counts, built at the dev tier and counted by the same gate as the
+# `runbench_dev` row. Satiation 1.0, the interpreter's: it is a real execution
+# and keeps paying for speed, but it is the loop a developer waits on rather
+# than the deployment.
+#
+# 0.10 of the side, about what interpreter speed carries, because the two are
+# the same wait from the developer's chair: a program run while working on it,
+# once natively and once by `kanso test`. The seven terms that were here keep
+# the shares the paragraphs below argue for, each multiplied by `held_back`,
+# so every ratio between them survives and the dev run takes the tenth they
+# give up.
+#
+# NO MEMORY TERM, and that is measured rather than assumed. The dev tier links
+# the same runtime and emits the same allocations as the release tier, with
+# only `alwaysinline` left off the helpers, so its peak is the production run's
+# peak and a second term would weigh one number twice. The log entry of
+# 2026-11-05 carries the reading.
+dev_run_share = 0.10
+
+held_back = 1.0 - dev_run_share
+
+d_dev_run = dimension dev_run_counters "dev run speed" 1.0 dev_run_share
+
+d_compile_speed = dimension compile_speed_counters "compile speed" 0.5
+  (held_back * 0.30)
 
 # Unchanged at 0.12: the compiler's own footprint is a CI-container guard
 # rather than something a developer perceives.
-d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.08
+d_compile_memory = dimension compile_memory_counters "compile memory" 0.5
+  (held_back * 0.08)
 
 # THE THREE COUNTERS THE 2026-09-16 GAVEL PUT ON THE DEVELOPMENT SIDE, and the
 # one it put on the production side. Weights inside a sub-welfare sum to one,
@@ -162,9 +196,10 @@ d_codegen_release = dimension codegen_release_counters "release build" 0.5 0.15
 # instructions off a `kanso build` and not one objective counter could see the
 # saving. The 0.22 splits by what the two halves cost -- 1.00 billion for the
 # children against 395 million for the emit, near enough 0.16 and 0.06.
-d_codegen_dev = dimension codegen_dev_counters "dev codegen" 0.5 0.16
+d_codegen_dev = dimension codegen_dev_counters "dev codegen" 0.5
+  (held_back * 0.16)
 
-d_emit = dimension emit_counters "emitting" 0.5 0.06
+d_emit = dimension emit_counters "emitting" 0.5 (held_back * 0.06)
 
 # INTERPRETER START-UP, and Clay's order for the interpreted side is the whole
 # of the pricing: "start-time is vastly more important than speed which is more
@@ -175,15 +210,17 @@ d_emit = dimension emit_counters "emitting" 0.5 0.06
 # It earns that because `kanso test` pays it on every invocation and production
 # never pays it once. That is the dimension no single scalar could hold, and
 # the reason the split was ruled rather than a re-weighting.
-d_start = dimension start_counters "interpreter start-up" 0.5 0.25
+d_start = dimension start_counters "interpreter start-up" 0.5 (held_back * 0.25)
 
 # The interpreted engine executing. Satiation 1.0 sits between the front end's
 # 0.5 and the native run's 2.0: an interpreted run is a real execution and
 # keeps paying for speed, but it is the oracle rather than the deployment, so
 # it stops paying sooner than the binary does.
-d_interp_speed = dimension interp_speed_counters "interpreter speed" 1.0 0.11
+d_interp_speed = dimension interp_speed_counters "interpreter speed" 1.0
+  (held_back * 0.11)
 
-d_interp_memory = dimension interp_memory_counters "interpreter memory" 1.0 0.04
+d_interp_memory = dimension interp_memory_counters "interpreter memory" 1.0
+  (held_back * 0.04)
 
 # THE BROWSER, a third side under the meta, ruled 2026-10-06: "welfare weighs
 # every environment kanso runs in, and none at zero." The playground compiles a
@@ -250,6 +287,9 @@ run_speed_counters = ["run_instructions"]
 # program's own phases are what make it possible for either to show.
 run_memory_counters = ["run_peak_bytes"]
 
+# The run program built at the dev tier: its row in the instruction golden.
+dev_run_counters = ["dev_run_instructions"]
+
 # What compiling COSTS, not what it counts. Rounds, visits and emitted lines
 # are the compiler's own bookkeeping — how many times a fixpoint went round,
 # how many expressions a pass looked at, how many lines came out. They are
@@ -297,7 +337,8 @@ tab_peak_counters = ["browser_run_peak_bytes"]
 # TWO WELFARES AND A META, ruled 2026-09-16. Production is the binary: what the
 # program costs to run and what it cost to build for shipping. Development is
 # the edit-test loop: the front end `kanso test` runs on every invocation, the
-# dev-tier build, and the interpreted engine that runs the specs.
+# dev-tier build and the binary it makes, and the interpreted engine that runs
+# the specs.
 prod_terms = [d_run_speed d_run_memory d_codegen_release]
 
 dev_terms = [
@@ -308,6 +349,7 @@ dev_terms = [
   d_start
   d_interp_speed
   d_interp_memory
+  d_dev_run
 ]
 
 browser_terms = [d_tab_compile d_tab_held d_tab_run d_tab_peak]
@@ -359,11 +401,12 @@ meta_satiation = 1.0
 # the saturation rule — and it is emitted with the model so the one thing that
 # rewrites history.jsonl's welfare column does not keep its own copy to go
 # stale. The date is the day of the gavel that last moved the formula.
-formula = "2026-10-06"
+formula = "2026-11-05"
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
-run_counters = list/concat run_speed_counters run_memory_counters
+run_counters = list/concat (list/concat run_speed_counters run_memory_counters)
+  dev_run_counters
 
 compile_counters = list/concat compile_speed_counters compile_memory_counters
 
@@ -508,17 +551,21 @@ fn added veins
   built = list/concat (list/concat dev rel) emit
   list/concat (list/concat start ispeed) (list/concat imem built)
 
-# ONE ROW OUT OF FOURTEEN. bench/instructions_golden.txt carries a row for
-# every benchmark the gate counts, and since the 2026-09-06 gavel the objective
-# reads exactly one of them: the consolidated run program's. The thirteen
-# beside it are diagnostics -- they still fail CI when they move, and they say
-# WHERE a move came from, which one number cannot.
+# TWO ROWS OF THE INSTRUCTION GOLDEN. bench/instructions_golden.txt carries a
+# row for every benchmark the gate counts, and the objective reads the run
+# program's: `runbench` at release since the 2026-09-06 gavel, and
+# `runbench_dev` at the dev tier since 2026-11-05. The rest are diagnostics --
+# they still fail CI when they move, and they say WHERE a move came from,
+# which one number cannot.
 #
-# The pin is `pinned`, in gauge's chain: it opens this row's box before
-# anything is scored, so a golden that lost the row refuses rather than
-# scoring as nothing.
+# The pin is `pinned`, in gauge's chain: it opens both rows' boxes before
+# anything is scored, so a golden that lost one refuses rather than scoring it
+# as nothing.
 fn worked work
-  [["run_instructions" work["runbench"]]]
+  [
+    ["run_instructions" work["runbench"]]
+    ["dev_run_instructions" work["runbench_dev"]]
+  ]
 
 # How much a term being `ratio` times better than baseline is worth. A straight
 # ratio says the tenth halving is worth as much as the first, which is false:
@@ -771,6 +818,7 @@ fn floored now
 # anything is scored: a miss ends the run naming the index it could not find.
 fn pinned work ir traffic held ent
   work["runbench"]!
+    .> (_ -> work["runbench_dev"]!)
     .> (_ -> ir["compile_instructions"]!)
     .> (_ -> ent["entry_instructions"]!)
     .> (_ -> traffic["compile_allocs"]!)

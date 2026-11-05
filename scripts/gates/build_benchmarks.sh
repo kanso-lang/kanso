@@ -16,6 +16,12 @@ for b in $(sh scripts/gates/benchmarks.sh counted); do
   ./target/release/kanso build bench/$b --release --counters >/dev/null
   mv $b $b-counters
 done
+# The run program once more at the dev tier, which is what `kanso run` and a
+# bare `kanso build` hand a developer. instructions.sh counts it as the
+# `runbench_dev` row, the development side's run-speed term. Built before the
+# release set, which writes `runbench` again.
+./target/release/kanso build bench/runbench >/dev/null
+mv runbench runbench_dev
 for b in $(sh scripts/gates/benchmarks.sh); do
   ./target/release/kanso build bench/$b --release >/dev/null
 done
