@@ -1,5 +1,10 @@
 import "std/text"
 
+# A program's own record with a `body` that may be none is a different field
+# from a response's body. A program with one checks, and its pages render.
+type note
+  body
+
 # content-length counts bytes, and a page whose body is not plain ascii has
 # more bytes than characters. A client takes the number at its word, so a
 # count of characters hands back a truncated page.
@@ -44,6 +49,12 @@ test_parsed_keeps_the_body = asked.body == "the body"
 spaced = parsed "POST /notes HTTP/1.1\r\nhost: x\r\n\r\none\r\n\r\ntwo"
 
 test_parsed_keeps_a_blank_line_in_the_body = spaced.body == "one\r\n\r\ntwo"
+
+unread = note (text/to_int "not a number")
+
+test_a_note_without_a_body = unread.body == none
+
+test_a_page_beside_such_a_note = contains? (rendered abc) "content-length: 3"
 
 fn contains? haystack needle
   length (text/split haystack needle) > 1
