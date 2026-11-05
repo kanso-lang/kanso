@@ -133,6 +133,8 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
   <span class="f">effect</span> (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
 </div>
 
+<p>a scaffold field declared <code>name:attachment</code> writes all of this: a text column for the key, a file input in a form sent as <code>multipart/form-data</code>, and an update that keeps the stored file when the input is left empty. the generators guide shows the notebook's <code>cover</code>.</p>
+
 <p>files go to <code>storage/</code> beside the app, or to the directory <code>SENRO_STORAGE</code> names. each key is 32 hex digits from 16 random bytes, and beside the file a <code>.meta</code> file keeps the content type and the filename the browser sent.</p>
 
 <h2>serving a file</h2>

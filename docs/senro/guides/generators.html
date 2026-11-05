@@ -31,7 +31,7 @@ description: "how senro's generators write an app and a resource, and what each 
   create examples/notebook/migrations.kso
   create examples/notebook/views/layout.kata
   create examples/notebook/views/home.kata
-$ kanso run generate -- scaffold examples/notebook note title:text pages:int
+$ kanso run generate -- scaffold examples/notebook note title:text pages:int cover:attachment
   create examples/notebook/notes.kso
   create examples/notebook/views/notes_index.kata
   create examples/notebook/views/note_shown.kata
@@ -54,10 +54,10 @@ $ kanso run generate -- scaffold examples/notebook page body:text note:reference
   <pre><code>$ kanso run generate -- scaffold examples/notebook note title:text
 generate: examples/notebook/notes.kso is there already
 $ kanso run generate -- scaffold examples/notebook book title:words
-generate: cannot read `title:words`: a field is name:text, name:int or name:references</code></pre>
+generate: cannot read `title:words`: a field is name:text, name:int, name:references or name:attachment</code></pre>
 </div>
 
-<p>a field is <code>name:text</code>, <code>name:int</code> or <code>name:references</code>. the first two are the kinds a posted form's value reads back as without a parser of its own, and the third nests the resource under another, as described below under a resource under another. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
+<p>a field is <code>name:text</code>, <code>name:int</code>, <code>name:references</code> or <code>name:attachment</code>. the first two are the kinds a posted form's value reads back as without a parser of its own. the third nests the resource under another, as described below under a resource under another. the fourth is a file, kept as the uploads guide describes, and its column holds the key the file was kept under. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
 
 <h2>the entry</h2>
 
@@ -82,13 +82,20 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pr
 <span class="c"># The app's schema, as the changes that built it, oldest first.</span>
 <span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes users_made]
 
-notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [notes_id notes_title notes_pages]
+notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
+  <span class="f">notes_id</span>
+  <span class="f">notes_title</span>
+  <span class="f">notes_pages</span>
+  <span class="f">notes_cover</span>
+]
 
 notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
 
 notes_title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>
 
 notes_pages <span class="o">=</span> <span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span>
+
+notes_cover <span class="o">=</span> <span class="f">models/column</span> <span class="s">"cover"</span> <span class="s">"text not null default ''"</span>
 
 pages_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [pages_id pages_body pages_note_id]
 
@@ -113,7 +120,7 @@ users_digest <span class="o">=</span> <span class="f">models/column</span> <span
 
 <h2>the resource</h2>
 
-<p>the resource is one module. its record names the table's columns, and the models derivation checks each against the schema the migrations fold into. the three policies let anyone write, which suits a first run and nothing after it. <code>problems</code> holds the model's rules; the scaffold writes one for each int field, and <code>models/whole_number</code> is broken by anything an <code>integer</code> column would refuse.</p>
+<p>the resource is one module, named for its table, and the models guide says how that gives it its record: the derivation declares <code>note</code> here with a field for each column of <code>notes</code>, so the module never lists them. the three policies let anyone write, which suits a first run and nothing after it. <code>problems</code> holds the model's rules; the scaffold writes one for each int field, and <code>models/whole_number</code> is broken by anything an <code>integer</code> column would refuse.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
@@ -125,14 +132,11 @@ users_digest <span class="o">=</span> <span class="f">models/column</span> <span
 <span class="k">import</span> <span class="s">"std/net/http"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A note as the `notes` table stores it. The models derivation checks each</span>
-<span class="c"># field against the table's columns, and writes `note_from`, which builds</span>
-<span class="c"># one from a row, and `note_model`, which the writes below go through.</span>
-<span class="k">pub</span> <span class="k">type</span> note
-  <span class="f">id</span>
-  <span class="f">title</span>
-  <span class="f">pages</span>
-
+<span class="c"># A note is a row of the `notes` table. This module is named for the table,</span>
+<span class="c"># so the models derivation declares `note` here with a field for each</span>
+<span class="c"># column, and writes `note_from`, which builds one from a row, and</span>
+<span class="c"># `note_model`, which the writes below go through.</span>
+<span class="c">#</span>
 <span class="c"># Anyone may make, change and remove a note. The models module asks these</span>
 <span class="c"># before it writes; narrow them to the visitors who should.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
@@ -156,9 +160,14 @@ model <span class="o">=</span> <span class="f">note_model</span></code></pre>
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
-  <span class="f">pg/query</span> db listed [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req r<span class="o">.</span>rows))
+  number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
+  asked <span class="o">=</span> <span class="f">models/paged</span> db listed [] number per_page
+  <span class="f">asked</span> <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req p))
 
-column_names <span class="o">=</span> [<span class="s">"id"</span> <span class="s">"title"</span> <span class="s">"pages"</span>]
+<span class="c"># How many rows a page of the list shows.</span>
+per_page <span class="o">=</span> <span class="n">25</span>
+
+column_names <span class="o">=</span> [<span class="s">"id"</span> <span class="s">"title"</span> <span class="s">"pages"</span> <span class="s">"cover"</span>]
 
 columns <span class="o">=</span> <span class="f">text/join</span> column_names <span class="s">", "</span>
 
@@ -173,7 +182,7 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
   <span class="f">effect</span> (<span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} <span class="n">200</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  given <span class="o">=</span> <span class="f">picked</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
+  given <span class="o">=</span> <span class="f">sent</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
   <span class="f">models/created</span> <span class="s">""</span> db model given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">made</span> req w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
@@ -186,6 +195,52 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
   <span class="f">models/destroyed</span> <span class="s">""</span> db model <span class="s">"<span class="i">{id}</span>"</span> <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">gone</span> w))</code></pre>
+</div>
+
+<p><code>index</code> shows a page of notes at a time. <code>models/page_number</code> reads the page the query string asks for, and anything that is not a whole number of 1 or more reads as the first page. <code>models/paged</code> runs the listing's query with a limit and an offset, asking for one row more than <code>per_page</code> so that it knows whether another page follows, as Pagy does for a Rails app. the list links the page before and the page after, each only when there is one.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">listing</span> req p
+  every <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p<span class="o">.</span><span class="f">rows</span> note_from)
+  page <span class="o">=</span> <span class="f">views/notes_index_view</span> every p<span class="o">.</span><span class="f">number</span> p<span class="o">.</span><span class="f">more</span>
+  <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/views/notes_index.kata</div>
+  <pre><code>takes rows number more
+header
+  h1 Notes
+  p.lede
+    a href="/notes/new" New note
+ul.notes
+  for r in rows
+    li
+      a href="/notes/{r.id}" = r.title
+nav.pages
+  if number &gt; 1
+    a href="/notes?page={number - 1}" Previous page
+  if more
+    a href="/notes?page={number + 1}" Next page</code></pre>
+</div>
+
+<p>a form with a file in it is sent as <code>multipart/form-data</code>, and senro keeps the file and hands the action its key in the field's place. a file input left empty sends an empty value, and <code>update</code> leaves it out of the change, so a note keeps its cover when it is edited without choosing another. <code>create</code> takes every field, an empty cover among them.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">picked</span> f
+  <span class="f">without_empty_files</span> (<span class="f">sent</span> f) [<span class="s">"cover"</span>]
+
+<span class="k">fn</span> <span class="f">sent</span> f
+  {
+    <span class="s">"cover"</span>:(<span class="f">web/value</span> f <span class="s">"cover"</span>)
+    <span class="s">"pages"</span>:(<span class="f">web/value</span> f <span class="s">"pages"</span>)
+    <span class="s">"title"</span>:(<span class="f">web/value</span> f <span class="s">"title"</span>)
+  }
+
+<span class="k">fn</span> <span class="f">without_empty_files</span> given names
+  <span class="f">list/fold</span> names given (<span class="f">m</span> n <span class="o">-&gt;</span> <span class="f">if</span> (m[n] <span class="o">==</span> <span class="s">""</span>) (<span class="f">delete</span> m n) m)</code></pre>
 </div>
 
 <p>what each write answers decides the response. a record that breaks a rule comes back as <code>models/invalid</code>, and the form is shown again with what was typed and a 422. a write a policy refuses is a <code>web/denied</code>, and a row that is not there is a <code>web/absent</code>; <code>web/refusal</code> answers them with a 403 and a 404. anything else is the written row, and the action redirects to it.</p>
@@ -234,7 +289,7 @@ header
   h1 Note
   p.lede
     a href="/notes" All notes
-form method="post" action=path
+form method="post" action=path enctype="multipart/form-data"
   input type="hidden" name="_method" value=method
   label
     | title
@@ -246,6 +301,11 @@ form method="post" action=path
     input name="pages" value=fields["pages"]
   if problems["pages"] != none
     p.problem = problems["pages"]
+  label
+    | cover
+    input type="file" name="cover"
+  if fields["cover"] != ""
+    p.kept Leave it empty to keep the file it has.
   button Save</code></pre>
 </div>
 
@@ -262,8 +322,9 @@ form method="post" action=path
 <span class="c"># is found only under its own note, and a note that is not there has none to</span>
 <span class="c"># list or make.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db note_id:int
-  asked <span class="o">=</span> <span class="f">pg/query</span> db listed [<span class="s">"<span class="i">{note_id}</span>"</span>]
-  listing_of <span class="o">=</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req note_id r<span class="o">.</span>rows))
+  number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
+  asked <span class="o">=</span> <span class="f">models/paged</span> db listed [<span class="s">"<span class="i">{note_id}</span>"</span>] number per_page
+  listing_of <span class="o">=</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req note_id p))
   <span class="f">within</span> db note_id (<span class="f">asked</span> <span class="o">.&gt;</span> listing_of)
 
 listed <span class="o">=</span> <span class="s">""</span>"

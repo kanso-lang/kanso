@@ -190,6 +190,31 @@ every post: /posts
 
 <p>an alias must name a route, take <code>:id</code> as its second segment exactly when its route does, use its route's method, and answer no request that a route or another alias answers. each of those mistakes is a compile error at the declaration.</p>
 
+<h2>a query string</h2>
+
+<p>a route is found by its path alone, so <code>/search?q=two%20words&amp;page=3</code> reaches the action <code>GET /search</code> names. the action reads the query with <code>web/query req</code>, which answers it as a form, and <code>web/value</code> reads a field from it as it reads a posted one. a field the query does not carry reads as "". the server sets the query aside when it parses the request, under a header name of its own, and a header of that name sent by the client is replaced, so a client cannot pass a query off as one it did not send.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/queried/search.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../web"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+
+<span class="c"># What the action read from the query string.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req _
+  q <span class="o">=</span> <span class="f">web/query</span> req
+  shown <span class="o">=</span> <span class="s">"q=<span class="i">{web/value q </span>"</span>q<span class="s">"} page=<span class="i">{web/value q </span>"</span>page<span class="s">"}"</span>
+  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"<span class="i">{req.path}</span>: <span class="i">{shown}</span>"</span>)</code></pre>
+</div>
+
+<p>senro's spec asks for that path, for <code>/search</code> with no query, and for <code>/search</code> with a forged header, and the action answers:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/serve/queried.out</div>
+  <pre><code>/search: q=two words page=3
+/search: q= page=
+/search: q= page=</code></pre>
+</div>
+
 <h2>what the derivation writes</h2>
 
 <p><code>derive routes/rest</code> writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
