@@ -1,19 +1,19 @@
-//! The compile-side sweep names every compile-side gate, and cannot quietly
-//! miss one.
+//! The compile-side sweep reads every compile-side golden.
 //!
 //! `scripts/gates/all_counters.sh` walks the RUNTIME cost goldens and nothing
 //! else. The compile side is separate gates, two of whose counters are
 //! welfare terms, and a change under `lib/` moves every one of them because
-//! `lib/` is `include_str!`'d into the compiler. On 2026-09-05 a
+//! the library is `include_str!`'d into the compiler. On 2026-09-05 a
 //! twelve-line library change read as a welfare RISE with those veins stale and
 //! a FALL once they were regenerated, and nothing in the sweep beside them
 //! would have said so.
 //!
-//! `all_compile.sh` closes that. A sweep that names all but one looks like
-//! coverage and is not, which is the lesson
-//! `every_counter_gate_is_in_the_sweep.rs` already carries for the other half,
-//! so the list is pinned to a property of the tree rather than to anyone's
-//! memory: a gate whose script reads a compile-side golden is in the sweep.
+//! `all_compile.sh` closes that. It finds its gates in `scripts/gates` by the
+//! goldens they name, as `all_counters.sh` finds its veins, so there is no list
+//! here to keep in step with it (kanso#2345). What this file pins is the
+//! plumbing: `--list` runs and names gates that exist, every compile golden on
+//! disk is read by something the sweep runs, and the sweep builds before it
+//! reads.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -24,124 +24,8 @@ fn root() -> &'static Path {
 
 const SWEEP: &str = include_str!("../scripts/gates/all_compile.sh");
 
-/// The names on the `gates="..."` line.
+/// The gates the sweep runs, as `--list` prints them.
 fn named() -> BTreeSet<String> {
-    SWEEP
-        .split_once("gates=\"")
-        .expect("the sweep declares a gates list")
-        .1
-        .split_once('"')
-        .expect("the gates list is closed")
-        .0
-        .split_whitespace()
-        .map(str::to_string)
-        .collect()
-}
-
-/// Every gate under scripts/gates whose script reads a compile-side golden.
-///
-/// `bench/entry_*` is in the prefix list beside `bench/compile_*` because the
-/// entry path is a compile the module rows cannot reach: `kanso check <dir>`
-/// takes compile_module_inner and `kanso check <file>` takes
-/// compile_parsed_entry. A prefix list is exactly the shape that goes stale
-/// when a vein is added under a new name, which is why the two derivations
-/// below name theirs in one place each.
-///
-/// AND IT WENT STALE, exactly as that sentence said it would. `bench/library_*`
-/// joined on 2026-09-08 with `library_instructions`, the row for the THIRD
-/// compile path — `kanso check <a file of definitions>` takes compile_library,
-/// which neither of the other two rows enters. It matched neither prefix, so
-/// both derivations in this file walked past it and the sweep would have read
-/// as coverage while missing the newest vein. The warning was already written
-/// here; what it lacked was a reader. The trend gate's own coverage spec,
-/// `every_counter_golden_is_walked_by_the_trend_gate.rs`, keys on
-/// `contains("golden")` instead and went red on its own the moment the file
-/// existed.
-///
-/// AND IT WENT STALE A THIRD TIME the same day, when `bench/emit_*` joined
-/// for `emit_instructions` — `codegen::emit_ir` inclusive, the compiler's own
-/// emitting, which nothing counted once the codegen rows stopped counting
-/// kanso's own process. `bench/emitted_golden` was already named below and is
-/// a DIFFERENT file: it counts what the compiler WROTE for the decoder, where
-/// this one counts what writing cost. One letter apart and unrelated, which
-/// this file has now said about two pairs of names.
-///
-/// AND IT WENT STALE A SECOND TIME, on 2026-09-17, when `bench/codegen_*`
-/// joined for the two rows the 2026-09-16 gavel owes -- dev-tier and
-/// release-tier codegen, the only rows here that count what clang does. Twice
-/// is a pattern rather than an accident, and the prefix list stays only
-/// because the alternative -- every golden under bench/ that is not a runtime
-/// cost golden -- is a second list of the same shape wearing a negation. What
-/// is worth writing down is that this comment has now predicted its own
-/// failure twice and been read late both times.
-///
-/// One is excluded for a reason that is not "it was inconvenient":
-/// `build_benchmarks` is not a gate and says so in its own first line.
-/// `all_compile` matches its own list and is not a gate; `all_counters` reads
-/// the runtime side. `compile_ir_row` was a fourth exclusion until 2026-09-05,
-/// when the per-chip table it read was retired under the one-row-one-value
-/// ruling and the comparison moved back inside `compile_instructions`.
-fn compile_gates_on_disk() -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    for entry in std::fs::read_dir(root().join("scripts/gates")).expect("the gates directory reads")
-    {
-        let path = entry.expect("a directory entry reads").path();
-        let Some(name) = path.file_stem().and_then(|n| n.to_str()) else { continue };
-        if path.extension().and_then(|e| e.to_str()) != Some("sh") {
-            continue;
-        }
-        if matches!(name, "all_compile" | "all_counters" | "build_benchmarks") {
-            continue;
-        }
-        let body = std::fs::read_to_string(&path).expect("a gate reads");
-        let reads_compile_golden = body.lines().any(|l| {
-            (l.contains("bench/compile_") && l.contains("golden"))
-                || (l.contains("bench/entry_") && l.contains("golden"))
-                || (l.contains("bench/library_") && l.contains("golden"))
-                || (l.contains("bench/codegen_") && l.contains("golden"))
-                || (l.contains("bench/emit_") && l.contains("golden"))
-                || l.contains("bench/text_golden")
-                || l.contains("bench/emitted_golden")
-        });
-        if reads_compile_golden {
-            out.insert(name.to_string());
-        }
-    }
-    out
-}
-
-#[test]
-fn the_sweep_names_every_gate_that_reads_a_compile_golden() {
-    let named = named();
-    let on_disk = compile_gates_on_disk();
-    assert!(!on_disk.is_empty(), "there is at least one compile gate to sweep");
-    let missing: Vec<_> = on_disk.difference(&named).collect();
-    assert!(
-        missing.is_empty(),
-        "scripts/gates/all_compile.sh has no entry for {missing:?} — a sweep that \
-         names all but one looks like coverage and is not"
-    );
-    let extra: Vec<_> = named.difference(&on_disk).collect();
-    assert!(extra.is_empty(), "the sweep names {extra:?}, which reads no compile golden");
-}
-
-/// And every name on the list is a gate that exists and can be run. The first
-/// draft of the runtime sweep's twin asserted a directory that a fresh clone
-/// does not carry; a name is checked against the tree rather than assumed.
-#[test]
-fn every_named_gate_is_a_script_on_disk() {
-    for gate in named() {
-        let path = root().join(format!("scripts/gates/{gate}.sh"));
-        assert!(path.exists(), "the sweep names {gate}, which is not in scripts/gates");
-    }
-}
-
-/// What the sweep prints with `--list` is the set derived from the gates on
-/// disk. This used to check that a CLAUDE.md bullet named every gate, which
-/// kept one list in two places. The script is now the only list, and
-/// `--list` is how a session reads it (kanso#1846).
-#[test]
-fn the_sweep_lists_every_compile_gate() {
     let out = std::process::Command::new("sh")
         .arg("scripts/gates/all_compile.sh")
         .arg("--list")
@@ -149,22 +33,22 @@ fn the_sweep_lists_every_compile_gate() {
         .output()
         .expect("the sweep runs");
     assert!(out.status.success(), "all_compile.sh --list failed: {out:?}");
-    let listed: BTreeSet<String> = String::from_utf8(out.stdout)
-        .expect("the list is text")
-        .lines()
-        .map(str::to_string)
-        .collect();
-    let on_disk = compile_gates_on_disk();
-    let missing: Vec<_> = on_disk.difference(&listed).collect();
-    assert!(
-        missing.is_empty(),
-        "all_compile.sh --list does not name {missing:?}, which reads a compile golden"
-    );
-    let extra: Vec<_> = listed.difference(&on_disk).collect();
-    assert!(
-        extra.is_empty(),
-        "all_compile.sh --list names {extra:?}, which reads no compile golden"
-    );
+    String::from_utf8(out.stdout).expect("the list is text").lines().map(str::to_string).collect()
+}
+
+/// `--list` names real gates, and enough of them to be a sweep. A derivation
+/// that matched nothing would leave every test below it passing vacuously.
+#[test]
+fn the_sweep_lists_gates_that_exist() {
+    let named = named();
+    assert!(named.len() >= 4, "all_compile.sh --list names {named:?}, which is not a sweep");
+    for gate in &named {
+        let path = root().join(format!("scripts/gates/{gate}.sh"));
+        assert!(path.exists(), "the sweep names {gate}, which is not in scripts/gates");
+    }
+    for skipped in ["all_compile", "all_counters", "build_benchmarks"] {
+        assert!(!named.contains(skipped), "the sweep names {skipped}, which is not a gate");
+    }
 }
 
 /// And every compile-side GOLDEN is reachable from the sweep — which the test
