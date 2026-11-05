@@ -126,13 +126,11 @@ digest <span class="o">=</span> <span class="f">models/column</span> <span class
 <span class="k">import</span> <span class="s">"std/list"</span>
 
 <span class="c"># A signature is made through its model, whose rules decide whether it is</span>
-<span class="c"># fit to keep. It is signed with the name of the account signed in, and a</span>
-<span class="c"># visitor who is not signed in is sent to sign in. The fields go to Postgres</span>
-<span class="c"># as parameters, so what a visitor types is stored as text and never read as</span>
-<span class="c"># SQL.</span>
+<span class="c"># fit to keep. It is signed with the name of the account signed in. The</span>
+<span class="c"># fields go to Postgres as parameters, so what a visitor types is stored as</span>
+<span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
-  <span class="f">return</span> effect (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) if viewer <span class="o">==</span> <span class="s">""</span>
   f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
   <span class="f">models/created</span> viewer db signatures/signature_model f
     <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)

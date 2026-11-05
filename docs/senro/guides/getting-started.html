@@ -52,7 +52,9 @@ made <span class="o">=</span> <span class="f">models/made</span> schema
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
 
-served_routes <span class="o">=</span> <span class="f">web/components</span> routes entries/secret served
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret
+
+served_routes <span class="o">=</span> <span class="f">web/components</span> signed entries/secret served
 
 connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
@@ -155,19 +157,17 @@ digest <span class="o">=</span> <span class="f">models/column</span> <span class
 <span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
 
 <span class="c"># A signature is made through its model, whose rules decide whether it is</span>
-<span class="c"># fit to keep. It is signed with the name of the account signed in, and a</span>
-<span class="c"># visitor who is not signed in is sent to sign in. The fields go to Postgres</span>
-<span class="c"># as parameters, so what a visitor types is stored as text and never read as</span>
-<span class="c"># SQL.</span>
+<span class="c"># fit to keep. It is signed with the name of the account signed in. The</span>
+<span class="c"># fields go to Postgres as parameters, so what a visitor types is stored as</span>
+<span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
-  <span class="f">return</span> effect (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) if viewer <span class="o">==</span> <span class="s">""</span>
   f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
   <span class="f">models/created</span> viewer db signatures/signature_model f
     <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
 </div>
 
-<p><code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret. a visitor who is not signed in is redirected to the sign-in page. otherwise the form goes through the model: <code>models/created</code> checks the policy and the rules and answers either the new row or the problems to show.</p>
+<p><code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret. it never sees a visitor who is not signed in: the entry serves every action that its module does not open through <code>web/requiring_sign_in</code>, which sends that visitor to the sign-in page first (the sessions guide has the details). the form goes through the model: <code>models/created</code> checks the policy and the rules and answers either the new row or the problems to show.</p>
 
 <h2>a view</h2>
 
