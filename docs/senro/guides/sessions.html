@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "sessions and sign-in in senro"
-description: "senro keeps a session in a signed cookie, stretches passwords with PBKDF2-SHA-256 under a random salt, and signs a visitor in for a fixed number of days."
+description: "senro keeps a session in a signed cookie, stretches passwords with PBKDF2-SHA-256 under a random salt, signs a visitor in for a fixed number of days, and resets a lost password through a link sent by mail."
 ---
 <style>
 .senro-hero .hero-kanji { letter-spacing: 0.2em; }
@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, and how it limits sign-in attempts and asks for a signed-in visitor.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, and how a visitor who has lost a password chooses a new one.</p>
 
 <h2>the session</h2>
 
@@ -29,7 +29,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <h2>making an account</h2>
 
-<p>an account is a model like any other. its <code>create</code> action checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing.</p>
+<p>an account is a model like any other: a name, a digest of the password, and an email address, which is where a reset link goes. its <code>create</code> action looks up the name and the address and checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/accounts.kso</div>
@@ -41,12 +41,20 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
+<span class="c"># What a sign-up form asked for.</span>
+<span class="k">type</span> signup
+  <span class="f">name</span>
+  <span class="f">email</span>
+  <span class="f">password</span>
+
 <span class="c"># An account, as the `accounts` table stores it: the name its holder signs</span>
-<span class="c"># with, and a digest of the password. The password itself is never stored.</span>
+<span class="c"># with, a digest of the password, and the address a reset link goes to. The</span>
+<span class="c"># password itself is never stored.</span>
 <span class="k">pub</span> <span class="k">type</span> account
   <span class="f">id</span>
   <span class="f">name</span>
   <span class="f">digest</span>
+  <span class="f">email</span>
 
 <span class="c"># Anyone may make an account.</span>
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
@@ -55,30 +63,45 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
   <span class="f">true</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
-  <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> {} <span class="n">200</span>)
+  <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> <span class="s">""</span> {} <span class="n">200</span>)
 
-<span class="c"># An account needs a name nobody holds and a password of eight characters or</span>
-<span class="c"># more. The name is looked up before the password is stretched, so a sign-up</span>
-<span class="c"># that cannot succeed costs no hashing.</span>
+<span class="c"># An account needs a name and an address nobody holds, and a password of</span>
+<span class="c"># eight characters or more. Both are looked up before the password is</span>
+<span class="c"># stretched, so a sign-up that cannot succeed costs no hashing.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
   name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
+  email <span class="o">=</span> <span class="f">text/lowercase</span> (<span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"email"</span>))
   password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
-  <span class="f">pg/query</span> db held [name] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">joined</span> req db name password r<span class="o">.</span>rows)
+  asked <span class="o">=</span> <span class="f">signup</span> name email password
+  <span class="f">pg/query</span> db held [name]
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">pg/query</span> db addressed [email] <span class="o">.&gt;</span> (m <span class="o">-&gt;</span> <span class="f">joined</span> req db asked n m))
 
 held <span class="o">=</span> <span class="s">"select id from accounts where name = $1"</span>
 
-<span class="k">fn</span> <span class="f">joined</span> req db name password rows
+addressed <span class="o">=</span> <span class="s">"select id from accounts where email = $1"</span>
+
+<span class="k">fn</span> <span class="f">joined</span> req db asked by_name by_email
+  name <span class="o">=</span> <span class="f">asked</span><span class="o">.</span><span class="f">name</span>
+  email <span class="o">=</span> <span class="f">asked</span><span class="o">.</span><span class="f">email</span>
+  password <span class="o">=</span> <span class="f">asked</span><span class="o">.</span><span class="f">password</span>
   short <span class="o">=</span> <span class="s">"Use eight characters or more."</span>
+  taken <span class="o">=</span> <span class="s">"That address has an account."</span>
   found <span class="o">=</span> <span class="f">models/problems</span> [
     (<span class="f">models/rule</span> <span class="s">"name"</span> (name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Choose a name."</span>)
-    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">length</span> rows <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"That name is taken."</span>)
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">length</span> by_name<span class="o">.</span>rows <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"That name is taken."</span>)
+    (<span class="f">models/rule</span> <span class="s">"email"</span> (<span class="f">not</span> addressed? email) <span class="s">"Give an email address."</span>)
+    (<span class="f">models/rule</span> <span class="s">"email"</span> (<span class="f">length</span> by_email<span class="o">.</span>rows <span class="o">&gt;</span> <span class="n">0</span>) taken)
     (<span class="f">models/rule</span> <span class="s">"password"</span> (<span class="f">length</span> password <span class="o">&lt;</span> <span class="n">8</span>) short)
   ]
-  <span class="f">return</span> effect (<span class="f">opened</span> req name found <span class="n">422</span>) if models/problems? found
+  <span class="f">return</span> effect (<span class="f">opened</span> req name email found <span class="n">422</span>) if models/problems? found
+  fields <span class="o">=</span> { <span class="s">"email"</span>:email <span class="s">"name"</span>:name }
   <span class="f">passwords/digested</span> password
-    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">models/created</span> <span class="s">""</span> db account_model { <span class="s">"digest"</span>:d <span class="s">"name"</span>:name })
+    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">models/created</span> <span class="s">""</span> db account_model (<span class="f">put</span> fields <span class="s">"digest"</span> d))
     <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">made</span> req w)
+
+<span class="k">fn</span> <span class="f">addressed?</span> email
+  <span class="f">length</span> (<span class="f">text/split</span> email <span class="s">"@"</span>) <span class="o">==</span> <span class="n">2</span>
 
 <span class="k">fn</span> <span class="f">made</span> req kept:account
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
@@ -89,11 +112,12 @@ held <span class="o">=</span> <span class="s">"select id from accounts where nam
 <span class="k">fn</span> <span class="f">made</span> _ _
   <span class="f">effect</span> web/denied
 
-<span class="c"># The sign-up form shows the name as typed and the problem with each field,</span>
-<span class="c"># if any. A password is never sent back.</span>
-<span class="k">fn</span> <span class="f">opened</span> req name problems code
+<span class="c"># The sign-up form shows the name and address as typed and the problem with</span>
+<span class="c"># each field, if any. A password is never sent back.</span>
+<span class="k">fn</span> <span class="f">opened</span> req name email problems code
   heading <span class="o">=</span> <span class="s">"Make an account"</span>
-  page <span class="o">=</span> <span class="f">views/door_view</span> heading <span class="s">"/accounts"</span> <span class="s">"Make it"</span> name problems false
+  to <span class="o">=</span> <span class="s">"/accounts"</span>
+  page <span class="o">=</span> <span class="f">views/door_view</span> heading to <span class="s">"Make it"</span> name email problems true false
   framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Make an account · Guestbook"</span> page
   <span class="f">views/answer_as</span> req code framed</code></pre>
 </div>
@@ -166,7 +190,7 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
   <span class="f">web/lasting</span> r
 
 <span class="k">fn</span> <span class="f">kept_if</span> r false
-  r
+  <span class="f">r</span>
 
 <span class="k">fn</span> <span class="f">refused</span> req name
   wrong <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"That name and password do not match."</span> }
@@ -183,7 +207,8 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
   <span class="f">effect</span> (<span class="f">web/kept</span> r entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed out."</span>))
 
 <span class="k">fn</span> <span class="f">opened</span> req name problems code
-  page <span class="o">=</span> <span class="f">views/door_view</span> <span class="s">"Sign in"</span> <span class="s">"/session"</span> <span class="s">"Sign in"</span> name problems true
+  to <span class="o">=</span> <span class="s">"/session"</span>
+  page <span class="o">=</span> <span class="f">views/door_view</span> <span class="s">"Sign in"</span> to <span class="s">"Sign in"</span> name <span class="s">""</span> problems false true
   <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Sign in · Guestbook"</span> page)</code></pre>
 </div>
 
@@ -219,6 +244,7 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
 <span class="k">import</span> <span class="s">"./signatures"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
@@ -227,4 +253,188 @@ signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> rou
 </div>
 
 <p><code>web/requiring_sign_in routes secret</code> wraps every action that is not open. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
+<h2>sending mail</h2>
+
+<p>senro's <code>mail</code> module sends plain-text mail. <code>mail/composed from to subject body</code> makes a message, and <code>mail/delivered message</code> sends it the way the <code>SENRO_MAIL</code> environment variable says:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">SENRO_MAIL</div>
+  <pre><code>unset or ""                    standard error, for development
+dir:&lt;path&gt;                     a file of its own under &lt;path&gt;
+smtp://user:pass@host:587      SMTP, after STARTTLS
+smtps://user:pass@host:465     SMTP inside TLS from the first byte
+smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre>
+</div>
+
+<p><code>smtp://</code> refuses a server that does not offer STARTTLS rather than send in the clear, because a reset link read off the wire is as good as a password. a header that holds a line break is refused before anything is sent, so a subject typed into a form cannot add headers of its own. a subject that is not ASCII travels as RFC 2047 encoded words, and a body that is not ASCII, or has a line longer than SMTP allows, travels as base64.</p>
+
+<h2>a lost password</h2>
+
+<p>a visitor who has lost a password follows "Forgot your password?" on the sign-in form to the guestbook's <code>resets</code> resource, which plays the part of Rails 8's generated passwords controller. <code>resets/new</code> asks for an address, and <code>resets/create</code> mails a link to it when an account has that address. the answer is the same either way, and so is the answer when the mail cannot be sent, so the form never says which addresses have accounts. the link leads to <code>resets/edit</code>, and <code>resets/update</code> sets the new password.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/resets.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../mail"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../passwords"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="c"># A visitor who has lost a password asks for a link by email, follows it,</span>
+<span class="c"># and chooses a new one, as Rails 8's generated PasswordsController has it.</span>
+<span class="c"># The link carries a token `passwords/reset_token` signs over the account</span>
+<span class="c"># and the digest it keeps, so nothing is stored, and a link works once and</span>
+<span class="c"># for fifteen minutes.</span>
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"edit"</span> <span class="s">"new"</span> <span class="s">"update"</span>]
+
+<span class="c"># Asking is limited as signing in is, so the form cannot be used to fill</span>
+<span class="c"># someone's inbox.</span>
+<span class="k">pub</span> <span class="f">rate_limits</span> <span class="o">=</span> { <span class="s">"create"</span>:<span class="s">"10 per 3 minutes"</span> }
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  <span class="f">effect</span> (<span class="f">asked</span> req s <span class="n">200</span>)
+
+<span class="c"># The answer is the same whether or not the address has an account, and</span>
+<span class="c"># whether or not the mail could be sent, so the form says nothing about</span>
+<span class="c"># which addresses are registered. A failure to send goes to standard error.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  email <span class="o">=</span> <span class="f">text/lowercase</span> (<span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"email"</span>))
+  <span class="f">pg/query</span> db holder [email]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">sent</span> (<span class="f">list/first</span> r<span class="o">.</span>rows) email)
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no reset mail: <span class="i">{u.reason}</span>\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/"</span> on_its_way))
+
+holder <span class="o">=</span> <span class="s">"select id, digest from accounts where email = $1"</span>
+
+on_its_way <span class="o">=</span> <span class="s">"If that address has an account, a link is on its way to it."</span>
+
+<span class="k">fn</span> <span class="f">sent</span> none _
+  <span class="f">effect</span> <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">sent</span> row email
+  id <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"id"</span>
+  kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">site</span> <span class="o">.&gt;</span> (base <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">linked</span> base id kept t)))
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">letter</span> email link))
+
+<span class="k">fn</span> <span class="f">linked</span> base id kept t
+  <span class="s">"<span class="i">{base}</span>/resets/<span class="i">{passwords/reset_token entries/secret id kept t}</span>/edit"</span>
+
+<span class="c"># Where a link in a mail points. It is configured, never read from the</span>
+<span class="c"># request's Host header: whoever sends a request chooses that header, and a</span>
+<span class="c"># reset link built from it would carry the token to a site of their choosing.</span>
+site <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_URL"</span> <span class="o">.&gt;</span> (u <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">base_of</span> u))
+
+<span class="k">fn</span> <span class="f">base_of</span> none
+  <span class="s">"http://127.0.0.1:3000"</span>
+
+<span class="k">fn</span> <span class="f">base_of</span> u
+  <span class="f">u</span>
+
+sender <span class="o">=</span> <span class="s">"Guestbook &lt;noreply@guestbook.test&gt;"</span>
+
+<span class="k">fn</span> <span class="f">letter</span> email link
+  lines <span class="o">=</span> [
+    <span class="s">"Someone asked to reset the password of your guestbook account."</span>
+    <span class="s">""</span>
+    <span class="s">"Choose a new one here, within fifteen minutes:"</span>
+    <span class="s">""</span>
+    <span class="f">link</span>
+    <span class="s">""</span>
+    <span class="s">"If it was not you, there is nothing to do: your password is unchanged."</span>
+  ]
+  body <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">"\n"</span>
+  <span class="f">mail/composed</span> sender email <span class="s">"Reset your guestbook password"</span> body
+
+<span class="c"># The `id` a reset's member routes take is the token itself.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id
+  <span class="f">checked</span> db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> <span class="f">offered</span> req id good)
+
+<span class="k">fn</span> <span class="f">offered</span> req token true
+  <span class="f">effect</span> (<span class="f">chosen</span> req token {} <span class="n">200</span>)
+
+<span class="k">fn</span> <span class="f">offered</span> req _ false
+  <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/resets/new"</span> expired)
+
+expired <span class="o">=</span> <span class="s">"That link has expired or was used. Ask for another."</span>
+
+<span class="c"># A new password of eight characters or more, set through a link that is</span>
+<span class="c"># still good. Setting it changes the digest, which is what retires the link.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
+  password <span class="o">=</span> <span class="f">web/value</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"password"</span>
+  <span class="f">checked</span> db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> <span class="f">chose</span> req db id password good)
+
+<span class="k">fn</span> <span class="f">chose</span> req _ _ _ false
+  <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/resets/new"</span> expired)
+
+<span class="k">fn</span> <span class="f">chose</span> req db token password true
+  short <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Use eight characters or more."</span> }
+  <span class="f">return</span> effect (<span class="f">chosen</span> req token short <span class="n">422</span>) if length password <span class="o">&lt;</span> <span class="n">8</span>
+  id <span class="o">=</span> <span class="f">id_of</span> (<span class="f">passwords/reset_id</span> token)
+  <span class="f">passwords/digested</span> password
+    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">pg/query</span> db reset [d id])
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/"</span> changed))
+
+reset <span class="o">=</span> <span class="s">"update accounts set digest = $1 where id = $2"</span>
+
+changed <span class="o">=</span> <span class="s">"Your password is changed. Sign in with it."</span>
+
+<span class="c"># Whether `token` is good now for the account it names.</span>
+<span class="k">fn</span> <span class="f">checked</span> db token
+  id <span class="o">=</span> <span class="f">id_of</span> (<span class="f">passwords/reset_id</span> token)
+  <span class="f">pg/query</span> db digest_by_id [id]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">good?</span> token (<span class="f">list/first</span> r<span class="o">.</span>rows) t)))
+
+digest_by_id <span class="o">=</span> <span class="s">"select digest from accounts where id = $1"</span>
+
+<span class="k">fn</span> <span class="f">good?</span> _ none _
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">good?</span> token row t
+  kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
+  <span class="f">passwords/reset_valid?</span> entries/secret token kept t
+
+<span class="k">fn</span> <span class="f">id_of</span> none
+  <span class="s">"0"</span>
+
+<span class="k">fn</span> <span class="f">id_of</span> n
+  <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="c"># A redirect carrying a notice for the page it lands on.</span>
+<span class="k">fn</span> <span class="f">told</span> req to notice
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  <span class="f">web/kept</span> (<span class="f">web/redirect</span> to) entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> notice)
+
+<span class="k">fn</span> <span class="f">asked</span> req s code
+  flash <span class="o">=</span> <span class="f">said</span> s[<span class="s">"flash"</span>]
+  page <span class="o">=</span> <span class="f">views/reset_asked_view</span> flash {}
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Forgot your password · Guestbook"</span> page
+  r <span class="o">=</span> <span class="f">views/answer_as</span> req code framed
+  <span class="f">web/kept</span> r entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> <span class="s">""</span>)
+
+<span class="k">fn</span> <span class="f">chosen</span> req token problems code
+  page <span class="o">=</span> <span class="f">views/reset_chosen_view</span> <span class="s">"/resets/<span class="i">{token}</span>"</span> problems
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"A new password · Guestbook"</span> page
+  <span class="f">views/answer_as</span> req code framed
+
+<span class="k">fn</span> <span class="f">said</span> none
+  <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">said</span> v
+  <span class="f">v</span></code></pre>
+</div>
+
+<p>the link carries a token from <code>passwords/reset_token</code>: the account's id, the moment the token stops working, and an HMAC-SHA-256 over both and the digest the account keeps now. it stands in the route as the member's <code>id</code>. nothing is stored. setting the new password changes the digest, so the link works once, and it stops working fifteen minutes after it was made. <code>passwords/reset_valid?</code> checks a token against the digest the account holds when the link is followed, comparing the signatures over every byte.</p>
+
+<p>the link starts with <code>SENRO_URL</code> and never with the request's Host header. whoever sends a request chooses that header, and a reset link built from it would carry the token to a site of their choosing.</p>
 </article>

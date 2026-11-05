@@ -21,7 +21,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 
 <h2>migrations are the schema</h2>
 
-<p>an app's migrations are a list of values in one module, oldest first. each is built from a fixed set of changes, <code>models/create_table</code> and its columns here, so a migration written a year ago cannot break when a model changes today.</p>
+<p>an app's migrations are a list of values in one module, oldest first. each is built from a fixed set of changes, <code>models/create_table</code> and <code>models/add_column</code> here, so a migration written a year ago cannot break when a model changes today.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/migrations.kso</div>
@@ -29,7 +29,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -37,11 +37,16 @@ id <span class="o">=</span> <span class="f">models/column</span> <span class="s"
 
 joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
 
+<span class="c"># The address a reset link is sent to.</span>
+emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
 
-digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
+digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span>
+
+email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span></code></pre>
 </div>
 
 <p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/made schema</code> as it starts, which creates each table that is missing, and then <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
