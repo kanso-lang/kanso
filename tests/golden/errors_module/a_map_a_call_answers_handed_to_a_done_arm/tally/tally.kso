@@ -1,0 +1,11 @@
+import "std/list"
+
+# `done` is the literal done, so this arm takes nothing else.
+fn kept done
+  "kept"
+
+fn tallied xs
+  list/fold xs {} (acc x -> put acc "{x}" x)
+
+pub fn shown xs
+  kept (tallied xs)

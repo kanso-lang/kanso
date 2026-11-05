@@ -9,22 +9,10 @@
 /// walked the whole program for itself; they are asked on one descent now, so
 /// the tables travel together.
 struct AfterInfer<'a, 'r> {
-    /// `check_effect_discarded`: a position every arm throws away.
-    discarded: crate::hash::Map<(&'a str, usize, usize), bool>,
-    /// `check_none_exhaustive`: a group's joined return set beside the
-    /// positions some arm names a none at, one bit each. Two facts about the
-    /// same group live in one entry so a call site pays ONE hash of the name:
-    /// a separate (name, arity, position) map cost a string hash per PARAMETER
-    /// to build and another per ARGUMENT to read, and both keys start with the
-    /// name. A position past the mask's width reads as handled, the
-    /// under-refusing direction, and nothing in the tree is close: the widest
-    /// group in lib/ takes five.
-    nones: crate::hash::Map<(&'a str, usize), (crate::infer::Set, u64)>,
+    /// What each dispatch group's arms say, one entry per group (see `Group`).
+    groups: &'r Groups<'a>,
     /// What a dispatch group answers, built once by the caller and handed
-    /// round. A fourth build used to sit in `check_none_exhaustive` and still
-    /// does, as `nones`: its entry carries a SECOND fact beside the set, so
-    /// reading this table instead would leave it hashing the name a second
-    /// time for the mask, at every call site.
+    /// round, for the checks that ask it of a call's argument.
     returns: &'r HashMap<(&'a str, usize), crate::infer::Set>,
     /// The plain index reads inference proved in range, by span: a read
     /// its `if`s bound cannot miss, so it is not a none the caller owes an
@@ -40,7 +28,13 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
     use crate::infer::DESC;
     let Expr::App { head, args, piped: false, .. } = e else { return };
     let Expr::Ident(name, _, _) = head.as_ref() else { return };
-    if !tables.returns.contains_key(&(name.as_str(), args.len())) {
+    // An effect is a call, so a call handing no call has nothing to lose,
+    // and asking that is a match where asking the table is a hash.
+    if !args.iter().any(|a| matches!(a, Expr::App { piped: false, .. })) {
+        return;
+    }
+    let Some(group) = tables.groups.get(&(name.as_str(), args.len())) else { return };
+    if group.thrown == 0 {
         return;
     }
     let describes = |e: &Expr| -> bool {
@@ -48,11 +42,8 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
         let Expr::Ident(name, _, _) = head.as_ref() else { return false };
         tables.returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & DESC != 0)
     };
-    for (pos, arg) in args.iter().enumerate() {
-        if !describes(arg) {
-            continue;
-        }
-        if !tables.discarded.get(&(name.as_str(), args.len(), pos)).copied().unwrap_or(false) {
+    for (pos, arg) in args.iter().enumerate().take(63) {
+        if group.thrown & (1u64 << pos) == 0 || !describes(arg) {
             continue;
         }
         diags.push(Diagnostic::new(
@@ -245,6 +236,137 @@ fn list_where_a_map_goes(
     }
 }
 
+/// An argument a call answers, of one kind only, where no arm of the callee
+/// takes that kind (kanso#2331). The literal check asks this of an argument
+/// whose kind is on the page; here the kind is what every arm of the
+/// argument's own group answers. That is a join, so it may say more than the
+/// call ever answers but never less: a group that answers a map and nothing
+/// else hands a map, and an arm that takes no map cannot take it. Only
+/// positions where every arm restricts are asked, which `restricted` names,
+/// so a call to a group with a bare binder there costs one lookup.
+fn answered_argument_at(
+    e: &Expr,
+    tables: &AfterInfer,
+    arms_of: &ArmsOf,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    // Most calls hand no argument that is itself a call, so that is asked
+    // before the table is.
+    if !args.iter().any(|a| matches!(a, Expr::App { piped: false, .. })) {
+        return;
+    }
+    // A field read is a getter whose arms do not say what it takes or
+    // answers: on an err it reads the err's own reason, cause or origin.
+    if crate::ast::getter_field(name).is_some() {
+        return;
+    }
+    let Some(group) = tables.groups.get(&(name.as_str(), args.len())) else { return };
+    let mask = group.restricted;
+    if mask == 0 {
+        return;
+    }
+    if shadow(name.as_str()) {
+        return;
+    }
+    for (i, arg) in args.iter().enumerate().take(64) {
+        if mask & (1u64 << i) == 0 {
+            continue;
+        }
+        let Expr::App { head: inner, args: inner_args, piped: false, .. } = arg else {
+            continue;
+        };
+        let Expr::Ident(maker, _, _) = inner.as_ref() else { continue };
+        if crate::ast::getter_field(maker).is_some() || shadow(maker.as_str()) {
+            continue;
+        }
+        let Some(&set) = tables.returns.get(&(maker.as_str(), inner_args.len())) else {
+            continue;
+        };
+        // A thunk is forced before it is matched, so it is the value it forces to.
+        let Some(kind) = sole_kind(set & !crate::infer::FAIL & !crate::infer::THUNK) else {
+            continue;
+        };
+        // The group's arms, threaded through `next` from its first; the
+        // types are built once, the first time a call gets this far.
+        let ArmsOf { program, next, types } = arms_of;
+        let mut arms: Vec<&FnDecl> = Vec::new();
+        let mut j = group.last;
+        while j != u32::MAX {
+            arms.push(&program.fns[j as usize]);
+            j = next[j as usize];
+        }
+        arms.reverse();
+        let types =
+            types.get_or_init(|| program.types.iter().map(|t| (t.name.as_str(), t)).collect());
+        let admitted =
+            arms.iter().any(|a| a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types)));
+        if admitted {
+            continue;
+        }
+        let wanted: Vec<String> =
+            arms.iter().filter_map(|a| a.params.get(i)).map(describe_pattern).collect();
+        diags.push(Diagnostic::new(
+            "type",
+            format!(
+                "no arm of `{name}` takes {} here (arms take {})",
+                describe_literal(kind),
+                dedup_join(wanted)
+            ),
+            arg.span(),
+        ));
+    }
+}
+
+/// What `answered_argument_at` reads only when a refusal is likely: a
+/// group's arms, and the program's types, built the first time one is.
+struct ArmsOf<'p, 'g> {
+    program: &'p Program,
+    next: &'g [u32],
+    types: std::cell::OnceCell<HashMap<&'p str, &'p TypeDecl>>,
+}
+
+/// What a dispatch group's arms say, gathered in one pass over the
+/// declarations so that a call site pays ONE hash of the name for all of it.
+/// Separate tables keyed by the name cost a string hash each to build and
+/// another each to read, and a (name, arity, position) table cost one per
+/// PARAMETER. Each mask holds a bit per position. A position past its width
+/// reads in the under-refusing direction, and nothing in the tree is close:
+/// the widest group in lib/ takes five.
+#[derive(Clone, Copy)]
+struct Group {
+    /// what any arm answers
+    returns: crate::infer::Set,
+    /// the last arm; the rest thread back through `next`
+    last: u32,
+    /// positions at which some arm binds anything, a box included
+    binds: u64,
+    /// positions at which some arm names a none
+    named: u64,
+    /// positions at which no arm binds bare, for `answered_argument_at`
+    restricted: u64,
+    /// positions every arm throws away with `_`
+    thrown: u64,
+}
+
+type Groups<'a> = crate::hash::Map<(&'a str, usize), Group>;
+
+/// The one literal kind a return set holds, or none when it holds more than
+/// one kind or anything a literal is not.
+fn sole_kind(s: crate::infer::Set) -> Option<LitKind> {
+    use crate::infer::{ANY_INT, FLOAT, LIST, MAP, STR};
+    match s {
+        MAP => Some(LitKind::Map),
+        LIST => Some(LitKind::List),
+        STR => Some(LitKind::Str),
+        FLOAT => Some(LitKind::Float),
+        s if s != 0 && s & !ANY_INT == 0 => Some(LitKind::Int),
+        _ => None,
+    }
+}
+
 /// The names one declaration binds to a list literal, for
 /// `list_where_a_map_goes`, which asks only after it has found a call of
 /// `put` or its kin. A name bound twice is left out.
@@ -398,9 +520,9 @@ fn yields_none(e: &Expr, tables: &AfterInfer, named: &BoundNones<'_>) -> bool {
             // passed over `os/read_bytes r.path`.
             Expr::Ident(name, _, _) if crate::ast::getter_field(name).is_some() => false,
             Expr::Ident(name, _, _) => tables
-                .nones
+                .groups
                 .get(&(name.as_str(), args.len()))
-                .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
+                .is_some_and(|g| g.returns & NONE != 0 && !unknown(g.returns)),
             _ => false,
         },
         _ => false,
@@ -495,7 +617,7 @@ fn none_exhaustive_at(
     // there by running each wrong kind, so a none reaching one is refused as
     // a group's would be. sat's `push` and kv's `length` of a slice past the
     // end passed check and stopped at run time.
-    let group = tables.nones.get(&(name.as_str(), args.len())).map(|&(_, named)| named);
+    let group = tables.groups.get(&(name.as_str(), args.len())).map(|g| g.named);
     let builtin = group.is_none() && crate::check::BUILTINS.contains(&name.as_str());
     if group.is_none() && !builtin {
         return;
@@ -556,75 +678,32 @@ fn check_after_infer<'p>(
     box_diags: &mut Vec<Diagnostic>,
     none_diags: &mut Vec<Diagnostic>,
 ) {
-    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for d in &program.fns {
-        for (pos, param) in d.params.iter().enumerate() {
-            let wildcard = matches!(param, Pattern::Wildcard(_));
-            let slot = discarded.entry((d.name.as_str(), d.params.len(), pos)).or_insert(true);
-            *slot &= wildcard;
-        }
-    }
-
-    let mut nones: crate::hash::Map<(&str, usize), (crate::infer::Set, u64)> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        // Only an arm that NAMES a none handles one. A wildcard binds a
-        // none the same way a bare name does, and the ruling's own
-        // fixture is a bare name: `fn describe price` runs for a none
-        // and prints `<none> yen`, which is the program the check
-        // exists to refuse. Counting either as an arm would leave the
-        // rule with nothing to say.
-        let mut named = 0u64;
-        for (pos, param) in d.params.iter().enumerate() {
-            let names_none = match param {
-                Pattern::Nullary(n, _) => n == "none",
-                Pattern::Annotated { ty, .. } => ty == "none",
-                _ => false,
-            };
-            if names_none {
-                named |= 1u64 << pos.min(63);
-            }
-        }
-        let entry = nones.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
-        entry.0 |= inference.returns[i];
-        entry.1 |= named;
-    }
-
-    let tables = AfterInfer {
-        discarded,
-        nones,
-        returns,
-        proven: &inference.proven,
-        none_free: &inference.none_free,
-    };
-
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
-    // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
-    // second hashed that string once per PARAMETER to build and once per
-    // ARGUMENT to read, on top of the hash the same call site already paid for
-    // the return set. The per-position bool is a bitmask beside the set and
-    // the group's member list: one hash per declaration to build it, one per
-    // call site to read it.
-    //
-    // A position past the mask's width reads as BINDING, which is the
-    // under-refusing direction — the same choice kanso#1369 made for the
-    // exhaustiveness mask, and for the same reason: a refusal this pass cannot
-    // justify is worse than one it declines to make. The widest group in lib/
-    // takes five parameters against a width of sixty-four.
-    //
-    // The middle field threads the group's members — the first in the map, the
-    // rest through `next` — for the tail read below.
-    let mut groups: crate::hash::Map<(&str, usize), (Set, u32, u64)> =
+    // ONE MAP. Every fact below is about a group, keyed by its name and
+    // arity, so they are gathered in one pass and a call site reads them all
+    // with one hash of the name (see `Group`). The member list threads each
+    // group's arms, the last in the map and the rest through `next`, for the
+    // tail read below.
+    let mut groups: Groups =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     let mut next: Vec<u32> = vec![u32::MAX; program.fns.len()];
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
-        let group = groups.entry(key).or_insert((0, u32::MAX, 0));
-        group.0 |= inference.returns[i];
-        next[i] = group.1;
-        group.1 = i as u32;
+        let group = groups.entry(key).or_insert(Group {
+            returns: 0,
+            last: u32::MAX,
+            binds: 0,
+            named: 0,
+            restricted: u64::MAX,
+            thrown: u64::MAX,
+        });
+        group.returns |= inference.returns[i];
+        next[i] = group.last;
+        group.last = i as u32;
+        let mut bare = 0u64;
+        let mut wild = 0u64;
         for (pos, param) in d.params.iter().enumerate().take(64) {
+            let bit = 1u64 << pos;
             // a bare binder takes a box, and so does an arm that names the
             // effect type: `e:<int>effect` says it holds the channel
             let anything = match param {
@@ -633,10 +712,44 @@ fn check_after_infer<'p>(
                 _ => false,
             };
             if anything {
-                group.2 |= 1u64 << pos;
+                group.binds |= bit;
+            }
+            // Only an arm that NAMES a none handles one. A wildcard binds a
+            // none the same way a bare name does, and the ruling's own
+            // fixture is a bare name: `fn describe price` runs for a none
+            // and prints `<none> yen`, which is the program the check
+            // exists to refuse. Counting either as an arm would leave the
+            // rule with nothing to say.
+            let names_none = match param {
+                Pattern::Nullary(n, _) => n == "none",
+                Pattern::Annotated { ty, .. } => ty == "none",
+                _ => false,
+            };
+            if names_none {
+                group.named |= bit;
+            }
+            if matches!(param, Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. }) {
+                bare |= bit;
+            }
+            if matches!(param, Pattern::Wildcard(_)) {
+                wild |= bit;
             }
         }
+        // A position past the width reads as bound bare and named a none by
+        // some arm, and thrown away by none, which refuses less.
+        if d.params.len() > 64 {
+            bare |= 1u64 << 63;
+            group.named |= 1u64 << 63;
+        }
+        group.restricted &= !bare;
+        group.thrown &= wild & !(1u64 << 63);
     }
+    let tables = AfterInfer {
+        groups: &groups,
+        returns,
+        proven: &inference.proven,
+        none_free: &inference.none_free,
+    };
     // a failure is a box too, since `err` makes one (#2087)
     let values = TOP & !FAIL & !THUNK & !DESC;
     let boxed = |s: Set| s & (DESC | FAIL) != 0 && s & values == 0;
@@ -653,7 +766,7 @@ fn check_after_infer<'p>(
     // walk on `boxed` would hide every such group behind the short circuit.
     // Asking for the bit alone admits a superset of what `boxed` admits, so no
     // refusal is lost, and a program with no io at all still pays nothing.
-    let any_boxed = groups.values().any(|(s, _, _)| s & (DESC | FAIL) != 0);
+    let any_boxed = groups.values().any(|g| g.returns & (DESC | FAIL) != 0);
     // a name the declaration binds itself — a parameter, a binding, a
     // lambda's parameter — is that binding, whatever declaration shares
     // its spelling; `fn either ... args` reads its own list, not `os/args`
@@ -729,7 +842,7 @@ fn check_after_infer<'p>(
     // twice, and a set for every declaration is an allocation apiece.
     struct Tails<'a> {
         program: &'a Program,
-        returns: &'a crate::hash::Map<(&'a str, usize), (Set, u32, u64)>,
+        returns: &'a Groups<'a>,
         next: &'a [u32],
         boxed: &'a dyn Fn(Set) -> bool,
         state: Vec<std::cell::Cell<u8>>,
@@ -740,7 +853,8 @@ fn check_after_infer<'p>(
     const YES: u8 = 3;
     impl Tails<'_> {
         fn group(&self, name: &str, arity: usize) -> bool {
-            let Some(&(set, head, _)) = self.returns.get(&(name, arity)) else {
+            let Some(&Group { returns: set, last: head, .. }) = self.returns.get(&(name, arity))
+            else {
                 return crate::infer::is_effect_builtin(name);
             };
             if (self.boxed)(set) {
@@ -1039,12 +1153,12 @@ fn check_after_infer<'p>(
                 if found.is_none() && !reads_value(name.as_str()) {
                     return;
                 }
-                let binds = found.map_or(0, |(_, _, b)| b);
+                let binds = found.map_or(0, |g| g.binds);
                 for (pos, arg) in args.iter().enumerate() {
                     if !is_box(arg) {
                         continue;
                     }
-                    if let Some((_, head, _)) = found {
+                    if let Some(Group { last: head, .. }) = found {
                         if pos >= 64 {
                             continue;
                         }
@@ -1080,6 +1194,7 @@ fn check_after_infer<'p>(
     // let it in, for the pass after this walk
     let mut handed: Vec<(Handed<'p>, u32)> = Vec::new();
     let mut handed_here: Vec<Handed<'p>> = Vec::new();
+    let arms_of = ArmsOf { program, next: &next, types: Default::default() };
     for (i, decl) in program.fns.iter().enumerate() {
         // The box question's shadowing test is asked of THIS declaration, and
         // the set behind it is filled on the first ask — so the closure has to
@@ -1099,6 +1214,7 @@ fn check_after_infer<'p>(
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);
+                answered_argument_at(cur, &tables, &arms_of, &shadow, none_diags);
                 wrong_kind_at_an_operator(cur, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
