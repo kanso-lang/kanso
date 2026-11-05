@@ -25,7 +25,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 
 <h2>the shape of an app</h2>
 
-<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>accounts</code>, <code>session</code>), one for its model (<code>signatures</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
+<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>account</code>, <code>session</code>), one for its model (<code>signatures</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
@@ -34,8 +34,8 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account"</span>
 <span class="k">import</span> <span class="s">"./account_mailer"</span>
-<span class="k">import</span> <span class="s">"./accounts"</span>
 <span class="k">import</span> <span class="s">"./confirmations"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
@@ -55,9 +55,11 @@ made <span class="o">=</span> <span class="f">models/made</span> schema
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
 
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret session/signed_against
+acting <span class="o">=</span> <span class="f">web/components</span> routes entries/secret served
 
-served_routes <span class="o">=</span> <span class="f">web/components</span> signed entries/secret served
+bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
+
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting entries/secret bound_of
 
 connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
@@ -195,11 +197,12 @@ header
 if viewer == ""
   nav.door
     a href="/session/new" Sign in
-    a href="/accounts/new" Make an account
+    a href="/account/new" Make an account
 else
   form.out method="post" action="/session"
     input type="hidden" name="_method" value="DELETE"
     span Signed in as {viewer}.
+    a href="/account/edit" Your account
     button Sign out
 if flash != ""
   p.flash = flash
