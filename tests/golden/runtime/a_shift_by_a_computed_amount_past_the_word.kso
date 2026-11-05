@@ -1,0 +1,9 @@
+import "std/bits"
+
+# The amount is a sum the program computed, so the shift tests that it is a
+# word from nought to sixty-three before it shifts, and sends sixty-four to the
+# refusal a literal amount reaches.
+fn shifted x by
+  bits/shl x (by + 1)
+
+pub play = print "{shifted 1 63}"

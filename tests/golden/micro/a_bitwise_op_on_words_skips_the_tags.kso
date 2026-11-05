@@ -1,0 +1,22 @@
+import "std/bits"
+
+# A rotation the way sha256 writes one: every operand a word, the left shift
+# by an amount computed from a parameter.
+fn spun x places
+  (bits/shl x (32 - places) & 4294967295) | bits/shr x places
+
+fn rounds x n
+  return x if n < 1
+  rounds (spun x 7 ^ spun x 18 ^ bits/shr x 3) (n - 1)
+
+# A sum that may outgrow a word, masked back to one. A sum that does outgrow
+# it is refused, in tests/golden/runtime/a_sum_past_the_word_meets_a_mask.
+fn masked a b
+  a + b & 4294967295
+
+pub play =
+  top = 4294967295
+  print "spun:    {spun 2882400018 7}"
+    .> (_ -> print "rounds:  {rounds 1779033703 1000}")
+    .> (_ -> print "masked:  {masked top top}")
+    .> (_ -> print "not:     {bits/complement 5 & 255}")
