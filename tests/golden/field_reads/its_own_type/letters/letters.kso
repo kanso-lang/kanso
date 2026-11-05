@@ -1,0 +1,35 @@
+import "std/text"
+
+# Two record types share a field name, and a note's body may be none.
+pub type letter
+  body
+
+pub type note
+  body
+
+pub fn noted s
+  note (text/to_int s)
+
+pub fn read n:note
+  shown n.body
+
+fn shown none
+  "no number"
+
+fn shown n
+  "{n}"
+
+# `r` is a letter, whose body is always a string, so measuring it is not
+# asked about a note's none. Before kanso#2350 the read answered every
+# record's `body`, and `length` refused it.
+pub fn size r:letter
+  length (as_bytes r.body)
+
+fn as_bytes s:string
+  text/bytes s
+
+fn as_bytes b
+  b
+
+pub fn written t
+  size (letter "dear {t}")

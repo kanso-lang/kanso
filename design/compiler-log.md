@@ -20,35 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — std/expect ships in the binary
-
-Chapter 7 teaches `std/expect` for test failures, and outside a checkout a
-test importing it said "`std/expect` is not in the shipped library". The
-loader finds a shipped module first in the table `src/lib/imports.rs`
-embeds and then on disk at `lib/` beside the binary or the working
-directory. Every other module under `lib/` was in the table, so a checkout
-never showed the gap: an installed binary, with no `lib/` beside it, and the
-browser, with no filesystem, could not import `std/expect`. It is in the
-table now, and in `SHIPPED_MODULES`, so its merged check is asked with the
-others'.
-
-`tests/every_shipped_module_checks_clean.rs` gains a third test that walks
-`lib/` and imports each module from a directory with `KANSO_STD` pointing at
-an empty one, so only the embedded copies can answer. It failed on main
-naming `expect` and nothing else.
-
-tests/a_play_file_is_keyed_by_its_text.rs leaned on `std/expect` being the
-one library module the binary did not carry, to play a file that reads a
-module from disk. It now plays a `std/shout` that exists only under
-`KANSO_STD`. Forcing `play_file_is_self_contained` to true still turns it red
-at the second play.
-
-The binary carries one more module's text, and four compile rows move by
-layout: browser_compile_instructions 343,289,560 -> 343,289,578,
-compile_instructions 24,096,621 -> 24,096,607, entry_instructions 86,700,059
--> 86,700,038 and library_instructions 72,615,632 -> 72,615,607. Welfare
-rises by less than a hundredth and is banked.
-
 ## 2026-10-29 — check.rs, values.c and lib.rs give up their separate sections
 
 #2249, from the weekly sweep. Three files past three thousand lines each held
@@ -1637,3 +1608,36 @@ little, because the helper runs on each file's diagnostics.
 `browser_compile_instructions` fell 799 to 350,296,781, by layout. The
 directive is a part of the language Clay asked for, so the welfare floor
 moves down by exactly that cost.
+
+## 2026-11-05 — a field read through an annotated name answers its own type
+
+**DONE (#2350).** Two record types in one program that both have a `body`
+field share one getter group, `Get_body`, with an arm for each type. Infer
+gave the group the join of its arms, so when one type's `body` could be none,
+reading `body` from the other type's value was refused as possibly none, even
+where the parameter was annotated with the other type. A senro model module
+with a `letter` and a `note` hit it, and `size_of` in http.kso was worked
+around for it in #2351.
+
+Infer now remembers the type of a binding that carries an annotation, and a
+field read whose one argument is such a name considers only the arm whose
+first pattern is that type's constructor. An unannotated read still joins
+every arm, which is the old answer and still a sound one.
+
+`tests/golden/field_reads/its_own_type` reads a `letters` body that is never
+none beside a `notes` body that can be, and prints `8` and `7`; the compiler
+before the change refused it. `another_types_none` reads the `notes` body
+through a name of that type and is still refused, at the same line.
+`tests/a_field_read_answers_its_own_type.rs` runs both.
+
+Rows: the first version stored the annotation in each environment entry,
+which grew the entry from 24 bytes to 40 and raised every compile row about
+0.28%. The types now sit in a side vector that stays empty in a function with
+no annotated parameters. Against main, `compile_instructions` fell 4,266 to
+24,110,987, `entry_instructions` 47,358 to 87,917,589,
+`library_instructions` 35,277 to 73,461,118 and `emit_instructions` 174 to
+5,613,223. `browser_compile_instructions` rose 270,018 to 350,566,799, and
+the side vector's first push is three more front-end allocations
+(`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
+(`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
+lets a correct program compile, so the floor moves down by that cost.
