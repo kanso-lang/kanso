@@ -25,6 +25,8 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <p><code>web/signed_in req response secret session id</code> keeps the session with <code>id</code> as its viewer, and <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
+<p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. <code>web/lasting response</code> keeps the session cookie the response sets for those fourteen days instead, which is Devise's "remember me". the guestbook's sign-in form has a "Keep me signed in" box, and <code>entered</code> below wraps the response in <code>web/lasting</code> when it is ticked.</p>
+
 <h2>making an account</h2>
 
 <p>an account is a model like any other. its <code>create</code> action checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing.</p>
@@ -91,7 +93,7 @@ held <span class="o">=</span> <span class="s">"select id from accounts where nam
 <span class="c"># if any. A password is never sent back.</span>
 <span class="k">fn</span> <span class="f">opened</span> req name problems code
   heading <span class="o">=</span> <span class="s">"Make an account"</span>
-  page <span class="o">=</span> <span class="f">views/door_view</span> heading <span class="s">"/accounts"</span> <span class="s">"Make it"</span> name problems
+  page <span class="o">=</span> <span class="f">views/door_view</span> heading <span class="s">"/accounts"</span> <span class="s">"Make it"</span> name problems false
   framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Make an account · Guestbook"</span> page
   <span class="f">views/answer_as</span> req code framed</code></pre>
 </div>
@@ -138,9 +140,10 @@ held <span class="o">=</span> <span class="s">"select id from accounts where nam
   f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
   name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
   password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
+  remember <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"remember"</span> <span class="o">==</span> <span class="s">"yes"</span>
   <span class="f">pg/query</span> db digest_of [name]
     <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">kept_digest</span> r<span class="o">.</span>rows)
-    <span class="o">.&gt;</span> (kept <span class="o">-&gt;</span> <span class="f">entered</span> req name kept password)
+    <span class="o">.&gt;</span> (kept <span class="o">-&gt;</span> <span class="f">entered</span> req name kept password remember)
 
 digest_of <span class="o">=</span> <span class="s">"select digest from accounts where name = $1"</span>
 
@@ -148,13 +151,22 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
   <span class="f">return</span> passwords/stand_in if length rows <span class="o">==</span> <span class="n">0</span>
   <span class="f">effect</span> (<span class="f">models/cell</span> rows[<span class="n">1</span>] <span class="s">"digest"</span>)
 
-<span class="k">fn</span> <span class="f">entered</span> req name kept password
+<span class="k">fn</span> <span class="f">entered</span> req name kept password remember
   <span class="f">return</span> refused req name if not passwords/matches? password kept
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
   back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
   welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
   home <span class="o">=</span> <span class="f">web/redirect</span> back
-  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret welcomed name)
+  signed <span class="o">=</span> <span class="f">web/signed_in</span> req home entries/secret welcomed name
+  <span class="f">effect</span> (<span class="f">kept_if</span> signed remember)
+
+<span class="c"># A visitor who ticked "Keep me signed in" keeps the sign-in after the</span>
+<span class="c"># browser closes.</span>
+<span class="k">fn</span> <span class="f">kept_if</span> r true
+  <span class="f">web/lasting</span> r
+
+<span class="k">fn</span> <span class="f">kept_if</span> r false
+  r
 
 <span class="k">fn</span> <span class="f">refused</span> req name
   wrong <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"That name and password do not match."</span> }
@@ -171,7 +183,7 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
   <span class="f">effect</span> (<span class="f">web/kept</span> r entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed out."</span>))
 
 <span class="k">fn</span> <span class="f">opened</span> req name problems code
-  page <span class="o">=</span> <span class="f">views/door_view</span> <span class="s">"Sign in"</span> <span class="s">"/session"</span> <span class="s">"Sign in"</span> name problems
+  page <span class="o">=</span> <span class="f">views/door_view</span> <span class="s">"Sign in"</span> <span class="s">"/session"</span> <span class="s">"Sign in"</span> name problems true
   <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Sign in · Guestbook"</span> page)</code></pre>
 </div>
 
@@ -179,7 +191,7 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 
 <h2>too many tries</h2>
 
-<p>a module limits how often one client may call an action by naming it in <code>rate_limits</code>, with a count per a window of seconds, minutes, hours or days. the guestbook's <code>session</code> module allows ten sign-in attempts in three minutes. senro tells clients apart by the address at the other end of the connection, which kanso's <code>net/peer</code> reads, and keeps the times of each client's calls to each limited action in the server's memory. a restart clears them, and two servers count separately.</p>
+<p>a module limits how often one client may call an action by naming it in <code>rate_limits</code>, with a count per a window of seconds, minutes, hours or days. the guestbook's <code>session</code> module allows ten sign-in attempts in three minutes. senro tells clients apart by the address at the other end of the connection, which kanso's <code>net/peer</code> reads, and keeps the times of each client's calls to each limited action in the server's memory. a restart clears them, and two servers count separately. once the server holds more than <code>web/sweep_past</code> clients, 1,024, it forgets every one whose calls have all aged out of their window, so a server that hears from many addresses keeps only the ones still being counted. <code>web/remembered</code> says how many it holds.</p>
 
 <p>a call past its limit is answered by the module's <code>over_limit</code> when it has one, and by a bare 429 when it does not. the guestbook's shows the sign-in form again, with a 429 and a line asking the visitor to wait. a name in <code>rate_limits</code> that is not an action of the module, or a limit senro cannot read, is refused when the app compiles:</p>
 
