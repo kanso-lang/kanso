@@ -1540,14 +1540,20 @@ rose to 810,150 (+13). In the run program, run_beat_iters rose to 196,398
 (+8,208). In the tab, browser_compile_instructions rose to 350,942,505
 (+1,637,741), browser_compile_peak_bytes to 856,131 (+136) and
 browser_run_instructions to 78,418,178 (+14,989); browser_run_peak_bytes fell
-to 1,572,864. The
-front end visits 7,388 declarations on the compile corpus, 9 fewer, and the
-module compile row fell on every count, to 1,163 lines, 109 calls, 80
-branches, 29 defines and 1,449 visits.
+to 1,572,864. The front end visits 7,388 declarations on the compile corpus,
+9 fewer, and the module compile row fell on every count, to 1,163 lines, 109
+calls, 80 branches, 29 defines and 1,449 visits.
+
+The compile rows are from two runs on AMD family 0x19 model 0x11, which agree
+to the instruction and read every other row as the recorded silicon does:
+compile_instructions rose to 24,210,964 (+120,564), emit_instructions to
+5,612,352 (+9,616), entry_instructions to 88,288,229 (+541,640) and
+library_instructions to 73,806,390 (+372,881).
 
 The first version cost the front end 207K more instructions on the compile
 corpus. A third of that was the test for the shipped fold, run on every arm
 of every call; it now runs only where the call's shape is a fold's, and the
 name test is a suffix compare. That left 122K, the second walk a lambda takes
 when its answer widens its accumulator. Seeding each lambda from its last
-visit's accumulator cost more than it saved and was dropped.
+visit's accumulator cost more than it saved and was dropped. Welfare rose by
+0.0016 and the floor is banked.
