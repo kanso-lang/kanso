@@ -29,7 +29,9 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+  <pre><code><span class="k">import</span> <span class="s">"../../jobs"</span>
+<span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../mail"</span>
 <span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
@@ -62,11 +64,14 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 
 connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
+<span class="c"># The server, with a worker beside it that sends the mail the app queues.</span>
+serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected
+
 <span class="f">connected</span>
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"guestbook"</span> migrations/all)
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> mail/performers serving)</code></pre>
 </div>
 
 <p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's reader, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
