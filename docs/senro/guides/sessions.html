@@ -106,24 +106,24 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
   fields <span class="o">=</span> { <span class="s">"email"</span>:email <span class="s">"name"</span>:name }
   <span class="f">passwords/digested</span> password
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">models/created</span> <span class="s">""</span> db account_model (<span class="f">put</span> fields <span class="s">"digest"</span> d))
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">made</span> req w)
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">made</span> req db w)
 
 <span class="k">fn</span> <span class="f">addressed?</span> email
   <span class="f">length</span> (<span class="f">text/split</span> email <span class="s">"@"</span>) <span class="o">==</span> <span class="n">2</span>
 
 <span class="c"># A new account is not signed in: its holder confirms the address first,</span>
 <span class="c"># through the link the mail carries, as Devise's `confirmable` asks. A mail</span>
-<span class="c"># that cannot be sent is logged, and the account can ask again by signing</span>
-<span class="c"># in.</span>
-<span class="k">fn</span> <span class="f">made</span> req kept:account
+<span class="c"># that cannot be queued is logged, as the worker logs one it cannot send,</span>
+<span class="c"># and the account can ask again by signing in.</span>
+<span class="k">fn</span> <span class="f">made</span> req db kept:account
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
   told <span class="o">=</span> <span class="s">"Welcome, <span class="i">{kept.name}</span>. Confirm your address with the link we sent."</span>
   welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> told
-  <span class="f">account_mailer/confirmation</span> kept<span class="o">.</span><span class="f">id</span> kept<span class="o">.</span><span class="f">email</span>
+  <span class="f">account_mailer/confirmation</span> db kept<span class="o">.</span><span class="f">id</span> kept<span class="o">.</span><span class="f">email</span>
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: <span class="i">{u.reason}</span>\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret welcomed))
 
-<span class="k">fn</span> <span class="f">made</span> _ _
+<span class="k">fn</span> <span class="f">made</span> _ _ _
   <span class="f">effect</span> web/denied
 
 <span class="c"># The account of whoever is signed in, as Devise's registrations edit it:</span>
@@ -314,7 +314,7 @@ held_by <span class="o">=</span> <span class="s">""</span>"
   right <span class="o">=</span> <span class="f">passwords/matches?</span> password a<span class="o">.</span><span class="f">digest</span>
   <span class="f">return</span> shut req name right if locked? a t
   <span class="f">return</span> missed req db name a t if not right
-  <span class="f">return</span> unconfirmed req name a if a<span class="o">.</span>confirmed <span class="o">==</span> <span class="s">""</span>
+  <span class="f">return</span> unconfirmed req db name a if a<span class="o">.</span>confirmed <span class="o">==</span> <span class="s">""</span>
   arrived <span class="o">=</span> [a<span class="o">.</span><span class="f">id</span> <span class="s">"<span class="i">{t}</span>"</span> (<span class="f">web/peer</span> req)]
   <span class="f">pg/query</span> db cleared arrived <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">signed</span> req name a remember)
 
@@ -356,7 +356,7 @@ cleared <span class="o">=</span> <span class="s">""</span>"
 <span class="k">fn</span> <span class="f">missed</span> req db name a t
   <span class="f">return</span> refused req name if a<span class="o">.</span>id <span class="o">==</span> <span class="s">""</span>
   <span class="f">pg/query</span> db counted [a<span class="o">.</span><span class="f">id</span> <span class="s">"<span class="i">{locks_after}</span>"</span> <span class="s">"<span class="i">{t}</span>"</span>]
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">locking</span> req name a (<span class="f">list/first</span> r<span class="o">.</span>rows))
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">locking</span> req db name a (<span class="f">list/first</span> r<span class="o">.</span>rows))
 
 counted <span class="o">=</span> <span class="s">""</span>"
   <span class="f">update</span> accounts set
@@ -368,13 +368,13 @@ counted <span class="o">=</span> <span class="s">""</span>"
   <span class="f">returning</span> locked
 <span class="s">""</span>"
 
-<span class="k">fn</span> <span class="f">locking</span> req name _ none
+<span class="k">fn</span> <span class="f">locking</span> req _ name _ none
   <span class="f">refused</span> req name
 
-<span class="k">fn</span> <span class="f">locking</span> req name a row
+<span class="k">fn</span> <span class="f">locking</span> req db name a row
   stamp <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"locked"</span>
   <span class="f">return</span> refused req name if stamp <span class="o">==</span> <span class="s">""</span>
-  <span class="f">account_mailer/unlock</span> a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span> stamp
+  <span class="f">account_mailer/unlock</span> db a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span> stamp
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: <span class="i">{u.reason}</span>\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">refused</span> req name)
 
@@ -397,9 +397,9 @@ counted <span class="o">=</span> <span class="s">""</span>"
 <span class="c"># The right password for an address not yet confirmed: the link is sent</span>
 <span class="c"># again, and the visitor is told to follow it. Only the holder of the</span>
 <span class="c"># password learns that the account exists.</span>
-<span class="k">fn</span> <span class="f">unconfirmed</span> req name a
+<span class="k">fn</span> <span class="f">unconfirmed</span> req db name a
   first <span class="o">=</span> <span class="s">"Confirm your address first. We have sent the link again."</span>
-  <span class="f">account_mailer/confirmation</span> a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span>
+  <span class="f">account_mailer/confirmation</span> db a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span>
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: <span class="i">{u.reason}</span>\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">opened</span> req name { <span class="s">"password"</span>:first } <span class="n">403</span>))
 
@@ -534,7 +534,9 @@ looked <span class="o">=</span> <span class="s">"select locked from accounts whe
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+  <pre><code><span class="k">import</span> <span class="s">"../../jobs"</span>
+<span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../mail"</span>
 <span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
@@ -585,9 +587,11 @@ smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre
 
 <p><code>smtp://</code> refuses a server that does not offer STARTTLS rather than send in the clear, because a reset link read off the wire is as good as a password. a header that holds a line break is refused before anything is sent, so a subject typed into a form cannot add headers of its own. a subject that is not ASCII travels as RFC 2047 encoded words, and a body that is not ASCII, or has a line longer than SMTP allows, travels as base64.</p>
 
+<p>the guestbook does not send its mail during the request. it queues each letter with <code>mail/delivered_later</code>, which refuses what <code>mail/delivered</code> would refuse and writes the rest to the jobs table, and a worker beside the server sends it a moment later. the <a href="jobs.html">background jobs guide</a> covers the table and the worker.</p>
+
 <h2>a lost password</h2>
 
-<p>a visitor who has lost a password follows "Forgot your password?" on the sign-in form to the guestbook's <code>resets</code> resource, which plays the part of Rails 8's generated passwords controller. <code>resets/new</code> asks for an address, and <code>resets/create</code> mails a link to it when an account has that address. the answer is the same either way, and so is the answer when the mail cannot be sent, so the form never says which addresses have accounts. the link leads to <code>resets/edit</code>, and <code>resets/update</code> sets the new password.</p>
+<p>a visitor who has lost a password follows "Forgot your password?" on the sign-in form to the guestbook's <code>resets</code> resource, which plays the part of Rails 8's generated passwords controller. <code>resets/new</code> asks for an address, and <code>resets/create</code> mails a link to it when an account has that address. the answer is the same either way, and so is the answer when the mail cannot be queued, so the form never says which addresses have accounts. the link leads to <code>resets/edit</code>, and <code>resets/update</code> sets the new password.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/resets.kso</div>
@@ -619,13 +623,14 @@ smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre
   <span class="f">effect</span> (<span class="f">asked</span> req s <span class="n">200</span>)
 
 <span class="c"># The answer is the same whether or not the address has an account, and</span>
-<span class="c"># whether or not the mail could be sent, so the form says nothing about</span>
-<span class="c"># which addresses are registered. A failure to send goes to standard error.</span>
+<span class="c"># whether or not the mail could be queued, so the form says nothing about</span>
+<span class="c"># which addresses are registered. A failure to queue goes to standard error,</span>
+<span class="c"># and the worker logs a failure to send.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
   email <span class="o">=</span> <span class="f">text/lowercase</span> (<span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"email"</span>))
   <span class="f">pg/query</span> db holder [email]
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">sent</span> (<span class="f">list/first</span> r<span class="o">.</span>rows) email)
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">sent</span> db (<span class="f">list/first</span> r<span class="o">.</span>rows) email)
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no reset mail: <span class="i">{u.reason}</span>\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/"</span> on_its_way))
 
@@ -633,12 +638,12 @@ holder <span class="o">=</span> <span class="s">"select id, digest from accounts
 
 on_its_way <span class="o">=</span> <span class="s">"If that address has an account, a link is on its way to it."</span>
 
-<span class="k">fn</span> <span class="f">sent</span> none _
+<span class="k">fn</span> <span class="f">sent</span> _ none _
   <span class="f">effect</span> <span class="s">""</span>
 
-<span class="k">fn</span> <span class="f">sent</span> row email
+<span class="k">fn</span> <span class="f">sent</span> db row email
   id <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"id"</span>
-  <span class="f">account_mailer/reset</span> id email (<span class="f">models/cell</span> row <span class="s">"digest"</span>)
+  <span class="f">account_mailer/reset</span> db id email (<span class="f">models/cell</span> row <span class="s">"digest"</span>)
 
 <span class="c"># The `id` a reset's member routes take is the token itself.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id
@@ -743,13 +748,14 @@ digest_by_id <span class="o">=</span> <span class="s">"select digest from accoun
 <span class="k">import</span> <span class="s">"std/time"</span>
 
 <span class="c"># The guestbook's mail, as a Rails mailer holds it: what each letter says,</span>
-<span class="c"># and the signed link it carries, which starts with `mail/url_for`. First, a</span>
+<span class="c"># and the signed link it carries, which starts with `mail/url_for`. Each</span>
+<span class="c"># letter is queued on `db` and sent by the worker beside the server. First, a</span>
 <span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
 <span class="c"># it works once.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> id email kept
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/<span class="i">{reset_token id kept t}</span>/edit"</span>)
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">reset_letter</span> email link))
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (<span class="f">reset_letter</span> email link))
 
 <span class="k">fn</span> <span class="f">reset_token</span> id kept t
   <span class="f">passwords/reset_token</span> entries/secret id kept t
@@ -771,10 +777,10 @@ digest_by_id <span class="o">=</span> <span class="s">"select digest from accoun
 <span class="c"># address and to the account's `confirmed` column, which is empty until the</span>
 <span class="c"># link is followed, so it works once, and not at all once the address</span>
 <span class="c"># changes. It lasts a day.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> id email
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> db id email
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/confirmations/<span class="i">{confirm_token id email t}</span>/edit"</span>)
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">confirm_letter</span> email link))
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (<span class="f">confirm_letter</span> email link))
 
 <span class="k">fn</span> <span class="f">confirm_token</span> id email t
   <span class="f">tokens/made</span> <span class="s">"confirm"</span> entries/secret id (<span class="f">bound</span> email <span class="s">""</span>) t <span class="n">1440</span>
@@ -803,10 +809,10 @@ digest_by_id <span class="o">=</span> <span class="s">"select digest from accoun
 <span class="c"># A link to unlock an account that too many wrong passwords locked. It is</span>
 <span class="c"># bound to the moment of the lock, so it works once, and not at all once the</span>
 <span class="c"># lock has ended.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> id email stamp
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> db id email stamp
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/unlocks/<span class="i">{unlock_token id stamp t}</span>/edit"</span>)
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">unlock_letter</span> email link))
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (<span class="f">unlock_letter</span> email link))
 
 <span class="k">fn</span> <span class="f">unlock_token</span> id stamp t
   <span class="f">tokens/made</span> <span class="s">"unlock"</span> entries/secret id stamp t <span class="n">1440</span>
