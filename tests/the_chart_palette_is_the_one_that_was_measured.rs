@@ -1,4 +1,4 @@
-//! The trend chart's seventeen colours are a measured set, and this pins them.
+//! The trend chart's eighteen colours are a measured set, and this pins them.
 //!
 //! Colour on a categorical chart is computable, so it was computed rather than
 //! chosen. The seven hues below are the only ordering, of the 5,040 the seven
@@ -60,7 +60,7 @@ fn page() -> String {
 }
 
 /// The measured set, in the measured order: token, light step, dark step.
-const PALETTE: [(&str, &str, &str); 17] = [
+const PALETTE: [(&str, &str, &str); 18] = [
     ("--series-run-instructions", "#eda100", "#c98500"),
     ("--series-run-memory", "#2a78d6", "#3987e5"),
     ("--series-release-build", "#b5309a", "#c765b2"),
@@ -72,6 +72,8 @@ const PALETTE: [(&str, &str, &str); 17] = [
     ("--series-emitting", "#a8437a", "#c25f92"),
     ("--series-interp-speed", "#0b8f9e", "#0f9bb0"),
     ("--series-interp-memory", "#7a5c00", "#a9862f"),
+    // the dev-tier run, 2026-11-05: one panel, 6.8:1 on the light surface
+    ("--series-dev-run", "#3550b8", "#6f86e0"),
     // the browser side, 2026-10-06: one panel each, so no adjacent pair
     ("--series-browser-compile", "#3d6fa8", "#5b93d6"),
     ("--series-browser-compile-memory", "#8a5a2b", "#c08a55"),

@@ -99,7 +99,10 @@ mkdir -p "$run_dir/bench"
 for f in large.json wide.json digest_input.txt; do
   cp "bench/$f" "$run_dir/bench/$f"
 done
-benches=$(sh scripts/gates/benchmarks.sh)
+# runbench_dev is the run program built at the dev tier, which no other gate
+# reads, so it joins here rather than in bench/benchmarks.txt: the machine-code,
+# checksum and counter gates that walk that list measure the binary that ships.
+benches="$(sh scripts/gates/benchmarks.sh) runbench_dev"
 for b in $benches; do
   cp "./$b" "$run_dir/$b"
 done

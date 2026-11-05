@@ -54,7 +54,8 @@ fn the_counter_set_is_the_one_the_formula_reads() {
     //
     // The five that arrived with the split are the ones no compile counter
     // could see: the emitter and the linker on both tiers, and the interpreted
-    // engine that `kanso test` runs on every invocation.
+    // engine that `kanso test` runs on every invocation. The browser's four
+    // joined on 2026-10-06, and the dev-tier run on 2026-11-05.
     let want = [
         // production
         "run_instructions",
@@ -69,6 +70,7 @@ fn the_counter_set_is_the_one_the_formula_reads() {
         "startup_instructions",
         "interp_instructions",
         "interp_peak_bytes",
+        "dev_run_instructions",
         // browser
         "browser_compile_instructions",
         "browser_compile_peak_bytes",

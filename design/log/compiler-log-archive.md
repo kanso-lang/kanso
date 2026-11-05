@@ -112448,3 +112448,19 @@ a flag fell to "wants a file or directory". The message now names the flag:
 tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
 plan with a golden; tests/front_door.rs gains `play` with no file and `check`
 with `--plan`. Both were watched red on the compiler before the change.
+
+## 2026-10-29 — check reads a play file as play
+
+#2205's first item, filed by the docs worker. `kanso check` sent any file
+with a declaration in it to the library compile, which refused a play file's
+first statement and checked nothing else, so a play file had no check at all
+and the book's `_check` samples had to stay `pub play` libraries. A file the
+library parse stops at a statement, and for that reason alone, is now
+checked as `kanso play` compiles it: a play file that would run reads `ok`,
+and one that would not is refused with what `play` says. The library parse's
+refusal is the one sign of the shape, so its wording now lives in one
+constant that the parser says and `check` reads.
+
+tests/check_reads_a_play_file.rs checks one play file that runs and one that
+names an unknown name. The compiler before this change refused both with the
+library's statement error.
