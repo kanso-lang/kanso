@@ -1121,8 +1121,8 @@ fn compile_module_loaded(
             )
         }),
     };
-    set_aside(&mut diags);
     inline::apply_wrappers(&mut merged, &wrappers);
+    set_aside(&mut diags);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
         // directory read as `(module pkg)` and a module in one file as
