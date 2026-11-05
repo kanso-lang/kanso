@@ -7,23 +7,24 @@ Every claim is falsifiable against the tree or a named paper.
 
 ## Where every idea stands
 
-Sixteen ideas, and the state of each. The prose below carries the reasoning;
-this says only which of them are in the tree.
+Sixteen ideas, and the state of each. The prose below holds the rows still
+open (3.3, 3.5 and 5.x) and the analysis behind them. What shipped is in the log, and what was
+declined is on the compiler page with its measurement.
 
 | # | idea | state |
 |---|---|---|
 | 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
-| 3.2 | free-the-top mini-rewind | **declined** 2026-07-27, with the reopening condition named |
+| 3.2 | free-the-top mini-rewind | **declined** 2026-07-27; the measurement and the reopening condition are on the compiler page's ledger |
 | 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime/evacuate.c`, the comment above `k_memo_outlives`: "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
-| 3.4 | three-way escape split | **declined** 2026-07-27, measured |
+| 3.4 | three-way escape split | **declined** 2026-07-27, measured; on the compiler page's ledger |
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
 | 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
 | 3.7 | cohort-counting soundness ratchet test | **shipped** |
 | 4.1 | static reuse-in-place inside the build-block | **declined**, measured; **moot** since `build` retired on 2026-10-10 (kanso#1837) |
 | 4.2 | tag-hoist under monomorphism speculation | **half harvested**, corrected 2026-09-02 — harvested for a value's tag in a numeric loop, and NOT for a callable's tag at a dispatch, which was worth 1.096% of oneshot and shipped in #1210 |
-| 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
+| 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a workload; on the compiler page's ledger |
 | 4.4 | build-blocks hosting in-place graph algorithms | **moot** since `build` retired on 2026-10-10 (kanso#1837), and `list/tie` is the one way to write a cycle. Before that: **the rule is widened** (2026-09-09): born flows through aliases, `if`, indexes and fields; a node reached through a call is still not proved, so the traversal algorithms wait on that flow |
-| 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
+| 4.5 | e-graph fusion over pure IR | **declined** for want of a customer; on the compiler page's ledger |
 | 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
 | 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
@@ -335,28 +336,11 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
 
 ## 3. Making beats more optimal — survivors ranked (payoff × feasibility)
 
-1. **Wire `linear.rs` into codegen — SHIPPED.** The reuse the docs claimed
-   now fires. Analysis + runtime fn both exist and are tested; only the codegen
-   selection between `k_b_push`/`k_b_push_mut` is missing. Add an
-   observable-allocation-count test, measure the spine case first. *(Memory-
-   behavior-sensitive — mutation in place; supervise the x86 gate.)*
-2. **Free-the-top mini-rewind — DECLINED FOR NOW (2026-07-27, evidence).**
-   No current workload exhibits unreclaimed LIFO scratch beyond what beats
-   and the cohort already rewind: the decode gauntlet runs at 3 blocks,
-   encode at 4, oneshot's boundary fires, vse at 2 blocks. Revisit when a
-   workload shows arena growth with no beat or cohort fire — that signal,
-   not the idea, is the reopening condition.
 3. **Generalize the non-heap-scalar rewind rule** (`k_memo_outlives` in
    `src/runtime/evacuate.c`) to every
    scalar-returning call site / arm — the one legitimate sub-beat case, using
    the SCALAR set `beat.rs` already computes. Abandon any placement that rewinds
    a frame producing surviving heap (use-after-free).
-4. **Three-way escape split — DECLINED FOR NOW (2026-07-27, measured).**
-   The gating measurement ran: vse holds arena_blocks=2 with its loops
-   beating — constant space already, so the split has nothing to buy on
-   the workload that was named as its test. Reopen if a beat-heavy
-   workload shows significant carry-copy volume (carry_dedup and the
-   copy-size pass now make that visible).
 5. **`--explain-copies` diagnostic + AARA CI footprint ratchet — PARTLY
    SUPERSEDED (2026-07-27).** The reuse→copy flip is now observable and
    CI-gated by the counter stack built this stretch: bytes_peak,
@@ -365,154 +349,6 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    the *where* — a diagnostic naming the source site of each evacuation
    copy — which needs span plumbing through the carry machinery and a
    CLI surface worth a ruling before building.
-6. **TRMC — SHIPPED, and WIDENED (2026-08-23).** Accumulating integer
-   recursion runs as a loop on all three engines. The widening landed
-   without threading Inference from check, which is what the earlier
-   scope assumed it needed: the proof comes off the shape instead. The
-   wrapper the rewrite already generates ascribes every counter position
-   `int`, so requiring each recursive call to hand those positions
-   arithmetic over counters carries integer-ness down every level, and
-   an operand built from counters and literals is an integer at every
-   depth. `n * fact (n - 1)` and `n * n + r (n - 1)` now qualify where
-   only `1 + count (n - 1)` did. Floats stay refused — reassociating
-   their addition changes the answer, and three fixtures are there to be
-   refused for exactly that reason. Single-consumer bit + surgical DPS
-   remain unexplored.
-7. **Cohort-counting soundness ratchet TEST — DONE (adversarial corpus,
-   2026-07-27).** Five attacks live in tests/golden/errors, all rejected
-   with pinned diagnostics: writing an argument's older value
-   (build_write_older_cohort), the same value laundered through a local
-   alias and a call (build_write_alias), an enclosing block's
-   construction from a nested block (build_write_enclosing_block), a
-   prior loop iteration's frozen cohort (build_write_prior_iteration),
-   and a deep-path write through a young wrapper into an old cell
-   (build_write_deep_path — a parse error: single-hop writes make the
-   channel unrepresentable, so a field write can only land on the named
-   root, which must be a construction of the innermost block). The legal
-   pastward case — outer block referencing an inner block's frozen
-   cohort — is pinned three-engine byte-identical in
-   tests/golden/micro/build_nested_cohort.kso. Loop granularity is
-   settled by the prior-iteration rejection: each incarnation of a
-   syntactic block is its own cohort.
-8. Two-level scratch arena — DECLINED FOR NOW (2026-07-27): same evidence
-   as item 2; the gating scrap-volume signal does not exist in any
-   current workload.
-
-## 4. Breaking new ground (survived attack, SPECULATIVE — each gets an experiment)
-
-- **Static reuse-in-place inside the build-block — DECLINED (measured
-  2026-07-28): the build block is not where the cost is.** Three fixtures,
-  seven runs each, maximum resident: a 20,000-node tree built once costs
-  4.4 MB; the same tree carried across a beat costs 17.6 MB; the same tree
-  carried across a beat *with the build block removed* costs 17.6 MB. The
-  block contributes nothing measurable, so a rebuild scoped to it has
-  nothing to reclaim. The 4x belongs to the carry, which copies any large
-  survivor whatever built it — already characterised, with its own floor:
-  evacuation holds the survivor twice while the garbage is still live
-  (see the 2026-07-28 entry on the evacuation law). In-place push was the
-  other suspect and was cleared: identical counters inside and outside a
-  block.
-- **Tag-hoist under monomorphism speculation — ALREADY HARVESTED
-  (measured 2026-07-28).** The unboxing proof got there first. A tight
-  numeric loop compiles with its arguments unboxed (`i64`, not `%KValue`),
-  every tag a compile-time constant, and the recursion a `musttail` self
-  call: there is no tag left in the loop to hoist. What separates it from
-  Rust is three `llvm.*.with.overflow` intrinsics per iteration, which is
-  semantics rather than representation — and against Rust compiled with
-  `-C overflow-checks=on` the same loop runs at **1.03x**. The 1.37x
-  against wrapping Rust is the price of kanso's int, not a gap in its
-  compilation. What remains, if the price is ever judged too high: a range
-  analysis that discharges the check where bounds are provable, which
-  needs specialization to see a caller's constant.
-
-  **Corrected 2026-09-02.** "Already harvested" was measured on a value's
-  tag in a monomorphic numeric loop, and read for a year as covering the
-  whole family. It does not cover the CALLABLE's tag. A fold applies its
-  reducer through `k_call{n}`, whose first ten instructions ask whether the
-  callable is a failure, whether it is a closure, and whether its arity
-  matches — all invariant across the loop, and all behind a call, where LICM
-  cannot reach them. Deleting them bounded the prize at 437,205 instructions
-  on oneshot, 1.096%. #1210 emits the test inline instead, LLVM unswitches
-  the loop on it, and six benchmark rows fall 0.5% to 4.5%. The lesson for
-  this ledger is that "no tag left in the loop" was a claim about one loop:
-  the tags a dispatcher asks about are in the caller's loop, not the
-  callee's, and no measurement of the callee can see them.
-- **Auto-SoA via whole-program field-touch — DECLINED for want of a
-  customer (measured 2026-07-28), with the prize recorded so it can be
-  reopened.** The prize is real: 200,000 three-field records traversed
-  twenty times touching one field run 50.3 ms and 23.8 MB as an
-  array-of-records, against 27.7 ms and 19.9 MB as three parallel arrays
-  holding the same data — **1.82x on time, 1.20x on peak**. (The first
-  version of this measurement was unfair, storing one field in the SoA
-  case against three in the AoS case; the numbers above are the corrected
-  run.)
-  What is missing is a workload with that shape. The gate the entry sets
-  — multi-pass or random access over a materialized collection — is met
-  only by vse, which traverses its electorate six times, and vse holds no
-  records at all: a voter is a list of scores read as `v[c]`, so a
-  field-touch analysis has nothing to see. Every workload that does hold
-  records — the json decoder, the encoder, kq — is single-pass, and
-  fusion already owns that case. Reopen when a record-shaped, multi-pass
-  workload exists; the transform's value is not in doubt, only its
-  customer.
-  Adjacent and distinct: vse's electorate is a matrix stored row-wise and
-  read column-wise, which is a transpose opportunity rather than a
-  field-touch one, and the entry's own note that the transpose fights
-  deforestation applies to it.
-- **Build-blocks as the sanctioned host for in-place graph algorithms —
-  NOT EXPRESSIBLE TODAY (measured 2026-07-28); the blocker is the
-  block-born rule, not the theorem.** Every algorithm named here reaches
-  its nodes by traversal or by index, and block-born-ness survives
-  neither. Measured, each rejected with `error[build]`: a node taken from
-  a list built in the same block (`cells[1]!`), a node reached by
-  following a field (`a.up`), a plain alias (`c = a`), and a node chosen
-  by a conditional (`c = if … a b`). Only a name bound **directly** to a
-  construction expression may be written.
-  So union-find cannot compress a path, an e-graph cannot rewire a class,
-  and unification cannot bind a variable it found — the mutation each one
-  needs is on a node it reached, and reaching loses the licence. What
-  build blocks support today is the case the book teaches: wiring a cycle
-  among a fixed set of directly-named constructions.
-  The rule is conservative rather than necessary. The theorem needs the
-  cohort to be closed — everything born in the block, nothing escaping —
-  and a node reached by indexing a block-born list *is* in the cohort. So
-  the enabling work is to make block-born a dataflow property (flowing
-  through aliases, conditionals, indexes of block-born collections and
-  fields of block-born nodes) instead of a syntactic one on the binding.
-  Ruled 2026-08-29 ("block-born is the whole cohort") and built
-  2026-09-09: the checker proves birth through those four flows now, and
-  the four shapes measured above are admitted. What it still cannot prove
-  is a value a call answers, and every traversal algorithm named here
-  reaches its nodes through one — union-find's `find` is a recursive
-  function whose node is a parameter. So 4.4 waits on birth flowing
-  through a call, which is the next widening of the same analysis, not a
-  new question.
-  (Interaction nets stay REFUTED: ~10x slower on numeric code — Asperti's own
-  retrospective; no polynomial bookkeeping bound; flat-freeze kills the sharing.)
-- **e-graph fusion over pure IR — DECLINED for want of a customer
-  (measured 2026-07-28); if the shape ever appears, inlining is the
-  cheaper answer.** The cliff is real and steep. The same chain —
-  select, then map, then sum, over 300,000 elements — costs **16
-  allocations** written inside one function and **1,200,022** with a
-  single link moved behind a function boundary, 11.2 MB against 92.8 MB
-  of allocation. Fusion stops dead at the call, exactly the
-  function-boundary limit the entry names.
-  No workload crosses it. Thirty-seven functions across vse, kq, std and
-  the benches have a single-expression body using an adapter, and every
-  one is a self-contained chain: `sum (list/map voters f)`,
-  `argmax (to_list (list/map (range ncand) f))`. The idiom the book
-  teaches — write the chain where it is consumed, or pipe it — is
-  exactly the idiom fusion already handles.
-  And if a program does grow the shape, an e-graph is the expensive way
-  to answer it. Inlining a small single-use function before fusion
-  reaches the same result, has two precedents in the tree already
-  (`inline_builtin_wrappers` undoes a rename; `inline_single_use_chains`
-  folds a single-use adapter binding), and needs no equality saturation.
-  Reopen with the cheap intervention first. The entry's warning stands
-  either way: do NOT extend it to co-schedule layout/lifetime/reuse —
-  those memory edges are context-sensitive and mutually recursive
-  (Wansbrough-SPJ smuggled back in), and peak-RSS is non-additive.
-
 ## 5. The theoretical ceiling
 
 "Zero runtime MM, statically-computed optimal schedule" is a **theorem only for
@@ -544,16 +380,3 @@ deep per-frame nested regions (fragments); one-e-graph co-scheduling of
 layout+lifetime+reuse; cohort-freeze interaction net; beat-offset TRMC as a
 memory win; optimal beat-boundary min-cost-cut with survivors (the survivor term
 IS a copying-GC minor collection — regresses the defining property).
-
-## The one-paragraph answer
-
-**Is beats the frontier?** Yes for management (O(1)-dead + O(static-survivors)
-beats generational O(live) trace; MLKit confirms). Nothing meaningful left in the
-free schedule; the real gap is the tag. **Perceus-on-beats?** The count never
-(delete the header); static reuse only in a sliver, home is the build-block; the
-LIFO win is cheaper via free-the-top. **Grindable new ground?** The reuse is wired
-(3.1); free-the-top + generalized scalar rewind; the born-in-shelf
-survivor split; tag-hoist (the real 13%); auto-SoA (gated on a numeric workload);
-build-blocks for in-place graph algorithms. And before regions ship, write the
-cohort-birthday ratchet test — the highest-value verification target because it's
-exactly the "X can never happen" shape that's burned us before.
