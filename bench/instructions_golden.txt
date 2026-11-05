@@ -37,8 +37,8 @@ escapebench 40309541
 pendbench 154124923
 indexbench 1888327
 scanbench 268526
-digestbench 3289743
+digestbench 3288941
 readbench 4584584
 livebench 938655611
-runbench 915613360
-runbench_dev 2955847773
+runbench 915612489
+runbench_dev 2822125403

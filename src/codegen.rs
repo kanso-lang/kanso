@@ -495,6 +495,8 @@ pub fn emit_ir_owned(program: Program, convention: ClosureConvention) -> Result<
 /// without the attribute `clang -cc1` read 316,180,072 instructions against
 /// 359,109,516, -11.95%. What a dev binary gives up is the inlining itself,
 /// which the dev tier does not promise: it is the tier that compiles fast.
+/// Two helpers keep the attribute, because inlining each saves the dev run
+/// more than it costs the compile; `KEPT_INLINE_AT_DEV` has the measurements.
 /// No helper needs to be inlined to be correct. None allocates on the stack,
 /// reads a frame or return address, or makes a `musttail` call, and the
 /// program's calls into them are all plain calls.
