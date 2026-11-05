@@ -1528,6 +1528,12 @@ new check's call commented out, `kanso check` of the compile, entry and
 library corpora ran 99k, 336k and 323k fewer instructions, so the check
 and the merged table together cost less than the tree before them.
 
+CI's rows against main agree in direction: compile instructions fell
+96,410 (-0.40%), entry 327,237 (-0.37%), library 312,109 (-0.42%), the
+tab's compile 665,638 (-0.19%), compile allocations 2 and the interpreted
+run's allocations 6. Emitting rose 7, which is layout, since the emitter
+runs no check. Welfare rose too little to show at two places and is banked.
+
 A field read is left alone on either side of the call. A getter's arms do
 not say what it takes or answers: on an err, `.reason` reads the err's own
 reason, so `e.reason.position` hands a json failure record to a getter whose
