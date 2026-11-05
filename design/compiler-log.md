@@ -1531,8 +1531,8 @@ and the merged table together cost less than the tree before them.
 CI's rows against main agree in direction: compile instructions fell
 96,410 (-0.40%), entry 327,237 (-0.37%), library 312,109 (-0.42%), the
 tab's compile 665,638 (-0.19%), compile allocations 2 and the interpreted
-run's allocations 6. Emitting rose 7, which is layout, since the emitter
-runs no check. Welfare rose too little to show at two places and is banked.
+run's allocations 6. emit_instructions rose 7, to 5,612,815, which is
+layout, since the emitter runs no check. Welfare rose too little to show at two places and is banked.
 
 A field read is left alone on either side of the call. A getter's arms do
 not say what it takes or answers: on an err, `.reason` reads the err's own
