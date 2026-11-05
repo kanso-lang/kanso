@@ -1559,9 +1559,10 @@ that still has the gap.
 
 The workload is bench/runbench, the program the production side counts.
 build_benchmarks.sh builds it a second time at the dev tier as `runbench_dev`,
-and instructions.sh counts that binary beside the other rows. The dev build
-reads 2,955,847,882 instructions against the release build's 915,613,360, a
-little over three times as many.
+and instructions.sh counts that binary beside the other rows. On CI the dev
+build reads 2,955,847,773 instructions against the release build's
+915,613,360, a little over three times as many; the other fourteen rows read
+as their golden does, so the job counted on the recorded silicon.
 
 The term is `dev_run_instructions`, at 0.10 of the development side and
 satiation 1.0, the interpreter's. A dev run and an interpreted run are the same
