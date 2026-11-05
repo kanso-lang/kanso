@@ -1575,6 +1575,26 @@ test for each callback answer that is not a description, and it stays,
 because whether a callback answers a cell is known only when it answers.
 `.?`'s entry still tests first, once per rescue built.
 
+Rows, from CI on the branch. The runtime's instructions rose with the cell
+tests: `work_deepbench` 539,637 to 198,295,366, `work_widebench` 15,990 to
+28,702,513, `work_runbench` 40,882 to 915,653,371, `work_encodebench` 496 to
+2,335,340,781, `work_oneshot` 181 to 9,980,271, `work_pendbench` 143 to
+154,125,066, `work_livebench` 90 to 938,655,701, `work_jsonbench` 7 to
+549,338,429, `work_readbench` 7 to 4,584,591 and `work_digestbench` 6 to
+3,288,947, while `work_runbench_dev` fell 34,240. The inline cell path adds
+code where a value's set holds a thunk: `emitted_other_defines` 2,367,
+`emitted_other_calls` 21,902, `emitted_other_branches` 19,043 and
+`emitted_other_lines` 180,685, and every binary's text grows 1,536 bytes for
+the runtime's new functions, `text` 5,877,065 in all. Compiling costs more
+with the code it emits: `codegen_instructions_release` 58,837 to 372,025,872,
+`codegen_instructions_dev` 3,473 to 116,855,724 and `emit_instructions` 582
+to 5,613,397. The interpreter forces where it did not, and
+`interp_instructions` rose 92,078 to 622,558,315. The browser rows fell,
+`browser_compile_instructions` to 349,304,764 and `browser_run_instructions`
+to 78,403,189, by the same amounts #2339 read with no change in common, and
+the cause of that is open. Welfare still rose, because that fall outweighs
+the runtime's rise, and the rise is banked.
+
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
 with a failure from std. Before the change both engines printed `<io>` for
