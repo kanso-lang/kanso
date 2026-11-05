@@ -90,6 +90,10 @@ struct Ctx<'a> {
     /// an err gets inside a container and every element read has to admit
     /// what one holds. A program whose literals never fail keeps this empty.
     stored_fails: Set,
+    /// What the body of the lambda walked last can answer. A call reads it
+    /// straight after its arguments, so for a lambda written as the last
+    /// argument it is that lambda's answer; see `folded`.
+    lambda_answer: Set,
     program: &'a Program,
     demand: crate::demand::DemandInfo<'a>,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
@@ -442,6 +446,7 @@ pub fn infer(program: &Program) -> Inference {
         consts: literal_consts(program),
         defers_into_containers,
         stored_fails: 0,
+        lambda_answer: TOP,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
@@ -1614,8 +1619,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             }
             // a parameter may shadow a name a fact is about
             let outer = std::mem::take(&mut ctx.facts);
-            let _ = eval_expr(ctx, body, &mut inner);
+            let answer = eval_expr(ctx, body, &mut inner);
             ctx.facts = outer;
+            ctx.lambda_answer = answer;
             FN
         }
         Expr::BinOp { op, lhs, rhs, .. } => {
@@ -2048,12 +2054,14 @@ fn eval_call<'a>(
     // let the err into its body while the interpreter refused it.
     let hands_err = matches!(head, Expr::Ident(n, _, _)
         if (n == "rescue" || n == "annotate") && !env.contains_key(n.as_str()));
+    let folds = calls_shipped_fold(ctx, head, args, env);
     let arg_sets: &mut [Set] = match args.len() <= inline.len() {
         true => {
-            for (i, (slot, a)) in inline.iter_mut().zip(args).enumerate() {
-                *slot = match hands_err && i == 1 {
-                    true => eval_callback(ctx, a, env),
-                    false => eval_expr(ctx, a, env),
+            for (i, a) in args.iter().enumerate() {
+                inline[i] = match (hands_err && i == 1, folds && i == 2) {
+                    (true, _) => eval_callback(ctx, a, env),
+                    (_, true) => eval_fold_step(ctx, a, inline[1], env),
+                    _ => eval_expr(ctx, a, env),
                 };
             }
             &mut inline[..args.len()]
@@ -2144,6 +2152,7 @@ fn eval_call<'a>(
         for (pos, arg) in arg_sets.iter().enumerate() {
             out |= (arg & FAIL) & !ctx.caught[caught_at + pos];
         }
+        let folded = folded(args, arg_sets, ctx.lambda_answer);
         for k in start..end {
             let i = ctx.group_members[k];
             // An arm a literal argument cannot reach neither sees the call
@@ -2162,6 +2171,7 @@ fn eval_call<'a>(
                     *ctx.per_call_none.entry(*name_span).or_insert(false) |= here & NONE != 0;
                     here
                 }
+                None if folds && is_shipped_fold(&ctx.program.fns[i]) => ctx.returns[i] & folded,
                 None => ctx.returns[i],
             };
         }
@@ -2371,6 +2381,74 @@ fn per_call_builtin(decl: &FnDecl) -> Option<&str> {
     passed.then_some(builtin)
 }
 
+/// Whether this call reaches the shipped `list/fold` with a lambda of two
+/// parameters as its `f`, the one shape `eval_fold_step` walks.
+fn calls_shipped_fold(ctx: &Ctx<'_>, head: &Expr, args: &[Expr], env: &Env<'_>) -> bool {
+    let Expr::Ident(name, _, _) = head else { return false };
+    if env.contains_key(name.as_str()) {
+        return false;
+    }
+    if !matches!(args, [_, _, Expr::Lambda { params, .. }] if params.len() == 2) {
+        return false;
+    }
+    let Some(&(start, end, _)) = ctx.groups.get(&(name.as_str(), 3)) else { return false };
+    (start as usize..end as usize).any(|k| is_shipped_fold(&ctx.program.fns[ctx.group_members[k]]))
+}
+
+/// The lambda a call hands the shipped fold, walked with its accumulator
+/// holding what the fold can hand it: the init, or an earlier answer of the
+/// lambda itself, walked again until that stops growing. The Lambda arm of
+/// `eval_expr` seeds every parameter as any value, which here read
+/// `put acc k v` as a put into a list that can answer `none`, though the
+/// accumulator was only ever the map the call started with. The element
+/// stays any value. `ctx.lambda_answer` is left holding the answer, as the
+/// Lambda arm leaves it.
+fn eval_fold_step<'a>(ctx: &mut Ctx<'a>, f: &'a Expr, init: Set, env: &mut Env<'a>) -> Set {
+    let Expr::Lambda { params, body, .. } = f else { return eval_expr(ctx, f, env) };
+    let outer = std::mem::take(&mut ctx.facts);
+    let mut acc = (init & !FAIL) | THUNK;
+    loop {
+        let mut inner = env.child(params.len());
+        inner.insert(&params[0].0, acc);
+        inner.insert(&params[1].0, TOP & !FAIL);
+        let answer = eval_expr(ctx, body, &mut inner);
+        ctx.lambda_answer = answer;
+        let next = acc | (answer & !FAIL);
+        if next == acc {
+            break;
+        }
+        acc = next;
+    }
+    ctx.facts = outer;
+    FN
+}
+
+/// An arm of the shipped `list/fold`. Every one answers its `init`, an
+/// answer of its `f`, or a failure (lib/list/list.kso says so above them),
+/// which is what lets a call read its own answer from what it passes.
+fn is_shipped_fold(decl: &FnDecl) -> bool {
+    decl.params.len() == 3
+        && (decl.name == "fold" || decl.name.ends_with("/fold"))
+        && &*decl.file == "std/list/list.kso"
+}
+
+/// What a call to the shipped `list/fold` can answer, given the sets it
+/// passes and the answer of the lambda it hands as `f`: the init, the
+/// lambda's answer, or a failure. The arms answer by calling `f`, a value
+/// they were handed, and such a call reads as any value at all, so without
+/// this every fold answered anything, and a loop that carried a fold's
+/// answer kept every iteration (#2302). A `THUNK` stays, because the
+/// accumulator rides into the helpers as an argument that may be deferred.
+/// A callback that is not a lambda literal keeps the group's own answer.
+fn folded(args: &[Expr], arg_sets: &[Set], lambda_answer: Set) -> Set {
+    match args {
+        [_, _, Expr::Lambda { params, .. }] if params.len() == 2 => {
+            arg_sets[1] | lambda_answer | FAIL | THUNK
+        }
+        _ => TOP,
+    }
+}
+
 /// A divisor the source spells as a number other than zero.
 fn nonzero_literal(e: &Expr) -> bool {
     match e {
@@ -2451,12 +2529,20 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "push" | "concat" | "chars" | "split" | "entries" | "keys" | "values" | "sort"
         | "filter" => LIST | fails,
         "map" => LIST | fails,
-        // a list written at a position answers none outside it (kanso#2086)
-        "put" => match args[0] & (MAP | LIST) {
-            LIST => LIST | NONE | fails,
-            0 | MAP => MAP | fails,
-            _ => MAP | LIST | NONE | fails,
-        },
+        // a list written at a position answers none outside it (kanso#2086),
+        // and only an int is a position: a list handed any other key is
+        // refused at run time on every engine, so it never answers none
+        "put" => {
+            let outside = match args.get(1).is_none_or(|k| k & ANY_INT != 0) {
+                true => NONE,
+                false => 0,
+            };
+            match args[0] & (MAP | LIST) {
+                LIST => LIST | outside | fails,
+                0 | MAP => MAP | fails,
+                _ => MAP | LIST | outside | fails,
+            }
+        }
         "delete" => MAP | fails,
         "merge" => REC | fails,
         "join" => STR | fails,

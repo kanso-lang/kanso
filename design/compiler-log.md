@@ -20,25 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — a play file shows its plan
-
-#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
-`run` refuses a file that holds definitions, so a program small enough for
-one file, which is how the book and the playground teach, had no plan to
-show. Three of the book's panels are about what a plan shows and were getting
-theirs through a stub entry no reader could type. `kanso play <file> --plan`
-now prints the plan `run --plan` would, from the play file, and skips the
-cached build.
-
-Asking for it before had answered "`play` is not a verb". `play` was missing
-from the list of verbs the usage message checks, and a known verb refused for
-a flag fell to "wants a file or directory". The message now names the flag:
-"`check` does not take `--plan`".
-
-tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
-plan with a golden; tests/front_door.rs gains `play` with no file and `check`
-with `--plan`. Both were watched red on the compiler before the change.
-
 ## 2026-10-29 — check reads a play file as play
 
 #2205's first item, filed by the docs worker. `kanso check` sent any file
@@ -1497,3 +1478,82 @@ Welfare fell by less than 0.005; `net/peer` is the prerequisite for senro's
 sign-in rate limit under #2280, as `os/random_bytes` was for its sign-in, so
 the floor drops by exactly what CI measured, with the reason in
 bench/welfare_floor.json.
+
+## 2026-11-04 — a call to list/fold answers what its init and lambda can answer
+
+#2302. Every arm of `list/fold` answers by calling `f`, a value it was
+handed, and inference reads a call to a handed value as answering anything.
+So every fold in a program answered anything, and so did any function that
+answered through one. A tail loop that carried such an answer had a slot
+reading TOP, and `costly_to_carry` in src/beat.rs never carries a TOP slot,
+because it may hold bytes. The loop stayed grow-only and kept every
+iteration's work.
+
+A call to the shipped fold now answers the group's answer intersected with
+what that call passes: its init, the answer of the lambda it hands as `f`,
+a failure, or a thunk. A callback that is not a lambda literal keeps the
+group's answer. The rule rests on a promise the fold arms keep (each answers
+its init, an answer of `f`, or a failure), and lib/list/list.kso states it
+above them.
+
+The lambda is walked at the call, with its accumulator holding the init and
+then whatever the walk answers, until that stops growing (`eval_fold_step`).
+The first version used the Lambda arm's walk, which seeds every parameter as
+any value. That read `list/group_by`'s `put acc k v` as a put into a list,
+which can answer none, and the runtime golden
+`a_library_failure_after_a_callback_names_the_outer_line` was refused at
+compile time for printing a value that might be none. Its accumulator is only
+ever the map it started with, and with the accumulator walked as that map the
+golden reports its runtime failure again. A fold whose lambda really can
+answer none now reads as possibly none where it read as anything, so the
+checker asks for that none to be handled; before, it was let through.
+
+The macOS host then refused scripts/welfare_rescore. Its `columned` answers
+either `without row "welfare"`, a fold, or `put row "welfare" score`, and the
+fold's answer had hidden the put's. `builtin_set` answered `LIST | NONE` for
+a put on a value that might be a list, whatever the key, and a list handed a
+text key is refused at run time on both engines ("put writes a list at an
+int position"), so it never answers none. A put now admits the none only
+when its key may be an int. The micro golden
+`a_put_by_text_key_never_answers_none` is a program main refuses and this
+branch prints, on both engines. `kanso check` over every directory in
+scripts, lib, examples and bench reports the same errors on main's binary
+and this one.
+
+The new mem fixture `a_fold_answer_carried_round_a_loop` carries a fold's
+answer round twelve thousand iterations. It held 4 arena blocks before and
+holds 1. A user function that answers `list/to_list` of a fold over a
+digest's words held 13 blocks at two thousand iterations and holds 1. Both
+print the same on every engine.
+
+`list/map` and the other shared drivers answer through handed values the same
+way; this entry covers fold alone.
+
+The rows are CI's, taken on the tree merged with net/peer, on the recorded
+silicon. runbench's work fell to 915,613,360 (-1,340,890) and its text to
+871,297 bytes (-20,864); basket's text fell 96 bytes and both programs emit a
+few fewer calls and branches. Some counters rose. work_basket rose to
+18,296,297 (+22). emitted_other_lines rose to 180,275 (+121) and runbench's
+emitted lines to 75,463 (+128) while its machine code shrank. interp_allocs
+rose to 810,150 (+13). In the run program, run_beat_iters rose to 196,398
+(+500), cohort_frees fell to 11 and run_perm_peak_bytes rose to 1,883,425
+(+8,208). In the tab, browser_compile_instructions rose to 350,942,505
+(+1,637,741), browser_compile_peak_bytes to 856,131 (+136) and
+browser_run_instructions to 78,418,178 (+14,989); browser_run_peak_bytes fell
+to 1,572,864. The front end visits 7,388 declarations on the compile corpus,
+9 fewer, and the module compile row fell on every count, to 1,163 lines, 109
+calls, 80 branches, 29 defines and 1,449 visits.
+
+The compile rows are from two runs on AMD family 0x19 model 0x11, which agree
+to the instruction and read every other row as the recorded silicon does:
+compile_instructions rose to 24,210,964 (+120,564), emit_instructions to
+5,612,352 (+9,616), entry_instructions to 88,288,229 (+541,640) and
+library_instructions to 73,806,390 (+372,881).
+
+The first version cost the front end 207K more instructions on the compile
+corpus. A third of that was the test for the shipped fold, run on every arm
+of every call; it now runs only where the call's shape is a fold's, and the
+name test is a suffix compare. That left 122K, the second walk a lambda takes
+when its answer widens its accumulator. Seeding each lambda from its last
+visit's accumulator cost more than it saved and was dropped. Welfare rose by
+0.0016 and the floor is banked.

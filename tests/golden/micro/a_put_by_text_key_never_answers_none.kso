@@ -1,0 +1,17 @@
+# A put answers none only when it writes a list at a position past its end
+# (kanso#2086), and a position is an int. Handed a text key, a list is refused
+# at run time on every engine, so a put by a text key never answers none.
+# `picked` may answer a list, so `stamped` may be handed one, and its answer
+# still reaches `print` as is. The compiler read it as possibly none and
+# refused this program.
+
+fn picked 1
+  { "id":1 }
+
+fn picked _
+  [1]
+
+fn stamped row
+  put row "seen" true
+
+pub play = print (stamped (picked 1))

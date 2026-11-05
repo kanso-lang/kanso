@@ -30,7 +30,7 @@
 jsonbench 549338422
 encodebench 2335340285
 oneshot 9980090
-basket 18296275
+basket 18296297
 widebench 28686523
 deepbench 197755729
 escapebench 40309541
@@ -40,4 +40,4 @@ scanbench 268526
 digestbench 3289743
 readbench 4584584
 livebench 938655611
-runbench 916954250
+runbench 915613360

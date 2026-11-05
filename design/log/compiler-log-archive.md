@@ -112429,3 +112429,22 @@ emitted_other_branches 17,933 -> 18,066, emitted_other_calls 20,709 ->
 Welfare re-bases run_instructions and
 run_peak_bytes, each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+
+## 2026-10-29 — a play file shows its plan
+
+#2204, filed by the docs worker. `--plan` was accepted by `run` alone, and
+`run` refuses a file that holds definitions, so a program small enough for
+one file, which is how the book and the playground teach, had no plan to
+show. Three of the book's panels are about what a plan shows and were getting
+theirs through a stub entry no reader could type. `kanso play <file> --plan`
+now prints the plan `run --plan` would, from the play file, and skips the
+cached build.
+
+Asking for it before had answered "`play` is not a verb". `play` was missing
+from the list of verbs the usage message checks, and a known verb refused for
+a flag fell to "wants a file or directory". The message now names the flag:
+"`check` does not take `--plan`".
+
+tests/a_play_file_shows_its_plan.rs runs the issue's program and compares the
+plan with a golden; tests/front_door.rs gains `play` with no file and `check`
+with `--plan`. Both were watched red on the compiler before the change.
