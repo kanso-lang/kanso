@@ -1,0 +1,6 @@
+# A sum of two words may be a bignum, so a mask on it tests that it is a word
+# before it masks, and a sum that grew past the word reaches the refusal.
+fn masked a b
+  a + b & 4294967295
+
+pub play = print "{masked 9223372036854775807 1}"

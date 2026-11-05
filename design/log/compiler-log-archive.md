@@ -112464,3 +112464,25 @@ constant that the parser says and `check` reads.
 tests/check_reads_a_play_file.rs checks one play file that runs and one that
 names an unknown name. The compiler before this change refused both with the
 library's statement error.
+
+## 2026-10-29 — an entry names a group
+
+#2205's second item. ch06 teaches the named group, `prepare =` above
+indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
+concurrent work, and it parsed only as a library constant. An entry or a
+play file refused it with "only `if` opens an indented block", which named
+nothing the reader had written. A binding whose header is `name =` alone,
+above more than one indented line, now parses its body as a constant's body
+is parsed, so its effect lines join into one group and run concurrently as
+the constant's do.
+
+tests/entry_file.rs runs an entry whose group sleeps in one member and prints
+in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
+library constant prints. The compiler before this change refused it.
+
+The three changes in #2240 move the compile rows by layout:
+compile_instructions 24,096,605 (+27), library_instructions 71,383,017 (+2),
+startup_instructions 50,258 (+4), codegen_instructions_release 371,560,989
+(-89) and browser_compile_instructions 343,289,560 (-12). Welfare falls by
+less than 0.0001, and the floor follows under the rule for a change that
+makes the tools do what the documentation says.

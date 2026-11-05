@@ -2452,6 +2452,18 @@ impl<'a> Backend<'a> {
         b: &str,
         span: Span,
     ) -> Result<String, String> {
+        let bitwise = match op {
+            "&" => Some("bit_and"),
+            "|" => Some("bit_or"),
+            "^" => Some("bit_xor"),
+            _ => None,
+        };
+        if let Some(name) = bitwise {
+            let args = [a.to_string(), b.to_string()];
+            if let Some(t) = direct_bit_op(f, name, &args, |f| self.origin_arg(f, span)) {
+                return Ok(t);
+            }
+        }
         let slow_call = match op {
             "+" => format!("call %KValue @k_add(%KValue {a}, %KValue {b})"),
             "-" => format!("call %KValue @k_sub(%KValue {a}, %KValue {b})"),

@@ -1,0 +1,2 @@
+error[runtime]: shl shifts by 0 to 63 places, got 64
+  failed in a_shift_by_a_computed_amount_past_the_word/shifted at a_shift_by_a_computed_amount_past_the_word.kso:7

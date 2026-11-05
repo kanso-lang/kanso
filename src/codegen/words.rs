@@ -419,6 +419,103 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t.to_string()
 }
 
+/// A bitwise builtin on ints, written as the machine op. The twin asks both
+/// tags before it does the op, and a dev build leaves the twin a call
+/// (`emit_ir_dev` says why), so the op costs a call and two tests there.
+/// Here the only tests left are the ones the sets cannot answer: a tag for an
+/// operand that may be a bignum, and for a shift by an amount that is not a
+/// literal, that the amount is nought to sixty-three. Anything that fails a
+/// test goes to the twin, whose C entry owns the message. `None` leaves the
+/// call to the caller, for an operand that may be other than an int.
+fn direct_bit_op(
+    f: &mut FnEmit,
+    name: &str,
+    args: &[String],
+    site: impl FnOnce(&FnEmit) -> String,
+) -> Option<String> {
+    let insn = match name {
+        "bit_and" => "and",
+        "bit_or" => "or",
+        "bit_xor" | "bit_not" => "xor",
+        "bit_shl" => "shl",
+        "bit_shr" => "ashr",
+        _ => return None,
+    };
+    let ints = |s: Set| s & infer::INT != 0 && s & !(infer::INT | infer::BIG) == 0;
+    if !args.iter().all(|a| ints(f.set_of(a))) {
+        return None;
+    }
+    let shifts = matches!(name, "bit_shl" | "bit_shr");
+    let pa = inline_payload(f, &args[0]);
+    let pb = match name {
+        "bit_not" => "-1".to_string(),
+        _ => inline_payload(f, &args[1]),
+    };
+    let mut tests = Vec::new();
+    match pb.parse::<i64>() {
+        Ok(by) if shifts && !(0..64).contains(&by) => return None,
+        Ok(_) => {}
+        Err(_) if shifts => {
+            let inside = f.tmp();
+            f.line_fmt(format_args!("{inside} = icmp ult i64 {pb}, 64"));
+            tests.push(inside.to_string());
+        }
+        Err(_) => {}
+    }
+    for a in args {
+        if f.set_of(a) != INT {
+            let tag = inline_tag(f, a);
+            let word = f.tmp();
+            f.line_fmt(format_args!("{word} = icmp eq i64 {tag}, 0"));
+            tests.push(word.to_string());
+        }
+    }
+    let Some(first) = tests.first().cloned() else {
+        let r = f.tmp();
+        f.line_fmt(format_args!("{r} = {insn} i64 {pa}, {pb}"));
+        return Some(boxed_word(f, &r));
+    };
+    let pass = tests[1..].iter().fold(first, |acc, t| {
+        let both = f.tmp();
+        f.line_fmt(format_args!("{both} = and i1 {acc}, {t}"));
+        both.to_string()
+    });
+    let fast = f.label();
+    let slow = f.label();
+    let merge = f.label();
+    f.line_fmt(format_args!("br i1 {pass}, label %{fast}, label %{slow}"));
+    f.start_block(&fast);
+    let r = f.tmp();
+    f.line_fmt(format_args!("{r} = {insn} i64 {pa}, {pb}"));
+    let fv = f.tmp();
+    f.line_fmt(format_args!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+    f.line_fmt(format_args!("br label %{merge}"));
+    f.start_block(&slow);
+    let sv = f.tmp();
+    let site = site(f);
+    let call_args: Vec<String> = args.iter().map(|a| format!("%KValue {a}")).collect();
+    f.line_fmt(format_args!(
+        "{sv} = call %KValue @k_b_{name}_fast({}, {site})",
+        call_args.join(", ")
+    ));
+    f.line_fmt(format_args!("br label %{merge}"));
+    f.start_block(&merge);
+    let t = f.tmp();
+    f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
+    f.record(&t, INT);
+    Some(t.to_string())
+}
+
+/// A word boxed as an int, with the word kept beside it so the next op on
+/// the value reads the word rather than taking it back out of the box.
+fn boxed_word(f: &mut FnEmit, word: &str) -> String {
+    let v = f.tmp();
+    f.line_fmt(format_args!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {word}, 1"));
+    f.record(&v, INT);
+    f.known_words.insert(v.to_string(), ("0".to_string(), word.to_string()));
+    v.to_string()
+}
+
 /// Branch to `hit` when a 1-based index lands inside the container whose
 /// length `len_ptr` points at, and to `miss` when it does not, one signed
 /// compare at a time. The length is loaded between the two, which keeps LLVM
