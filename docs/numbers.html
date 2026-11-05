@@ -90,6 +90,7 @@ divided by the weight those terms carry, times a hundred.</p>
   --series-emitting: #a8437a;
   --series-interp-speed: #0b8f9e;
   --series-interp-memory: #7a5c00;
+  --series-dev-run: #3550b8;
   --series-browser-compile: #3d6fa8;
   --series-browser-compile-memory: #8a5a2b;
   --series-browser-run: #b8336a;
@@ -110,6 +111,7 @@ divided by the weight those terms carry, times a hundred.</p>
     --series-emitting: #c25f92;
     --series-interp-speed: #0f9bb0;
     --series-interp-memory: #a9862f;
+    --series-dev-run: #6f86e0;
     --series-browser-compile: #5b93d6;
     --series-browser-compile-memory: #c08a55;
     --series-browser-run: #d4608f;
@@ -271,6 +273,9 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'interp_peak_bytes', hue: 'var(--series-interp-memory)',
       label: 'interpreter memory', read: (r) => r.interp_peak_bytes,
       note: 'That run\u2019s high-water mark. Last of the three the 2026-09-16 gavel ordered for the interpreted engine: start-up matters most, then speed, then this.' },
+    { token: 'dev_run_instructions', hue: 'var(--series-dev-run)',
+      label: 'dev run', read: (r) => r.dev_run_instructions,
+      note: 'The run program built at the dev tier, which is what <code>kanso run</code> hands a developer, counted under callgrind like the production row. Its memory is the production row\u2019s, byte for byte, so it has no line of its own.' },
     // The browser side, the third under the meta since 2026-10-06: the
     // playground compiling the interpreter's corpus inside the tab and running
     // what it emits, counted in wasm instructions executed rather than timed.

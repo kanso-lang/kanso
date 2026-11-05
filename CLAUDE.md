@@ -336,9 +336,9 @@ resembles it. Before an argument rests on one:
 
 - **Three sides and a meta.** `scripts/welfare/welfare.kso` scores a
   production side (the native run and release-tier codegen), a development
-  side (the front end, dev-tier codegen, the emitter, start-up, and the
-  interpreter's speed and memory) and a browser side (compiling and running in
-  the tab), and a meta over them. The meta is what CI gates on and the only
+  side (the front end, dev-tier codegen and the binary it makes, the emitter,
+  start-up, and the interpreter's speed and memory) and a browser side
+  (compiling and running in the tab), and a meta over them. The meta is what CI gates on and the only
   number with a floor. A weight is a share of its own side, each side sums to
   one, and `balanced?` refuses to score when one does not.
 - **Read the terms and the score from the tree.** `kanso run scripts/welfare`

@@ -69,14 +69,20 @@ fn every_listed_benchmark_is_a_program_under_bench() {
     );
 }
 
+/// The run program built at the dev tier. instructions.sh counts it after the
+/// listed benchmarks, and it is not in the list, because every other gate that
+/// walks the list measures the binary that ships.
+const DEV_RUN: &str = "runbench_dev";
+
 /// The gates print their rows in the list's order and diff them against these
 /// goldens line by line, so a golden in another order fails every run.
 #[test]
 fn every_golden_the_gates_diff_rows_the_list_in_order() {
     let all = listed();
     let others: Vec<String> = all.iter().filter(|b| *b != "jsonbench").cloned().collect();
+    let counted: Vec<String> = all.iter().cloned().chain([DEV_RUN.to_string()]).collect();
     for (golden, want) in [
-        ("bench/instructions_golden.txt", &all),
+        ("bench/instructions_golden.txt", &counted),
         ("bench/text_golden.txt", &all),
         // The emitted-code gate counts the decoder against
         // bench/emitted_golden.txt, so jsonbench is the one benchmark this
@@ -97,9 +103,20 @@ fn every_golden_the_gates_diff_rows_the_list_in_order() {
 /// purpose: they say where a move came from. What is left to protect is that
 /// the one it weighs is built: a term naming a benchmark nothing builds would
 /// read the same number forever while looking like a measurement.
+///
+/// The development side weighs the same program built at the dev tier, since
+/// 2026-11-05, so welfare reads two rows of one program. The dev row is checked
+/// against the line of build_benchmarks.sh that makes it from bench/runbench.
 #[test]
 fn the_benchmark_the_objective_weighs_is_listed() {
-    let weighed = weighed(&read("scripts/welfare/welfare.kso"));
+    let mut weighed = weighed(&read("scripts/welfare/welfare.kso"));
+    assert!(weighed.remove(DEV_RUN), "welfare does not read the dev tier's run row");
+    let build = read("scripts/gates/build_benchmarks.sh");
+    assert!(
+        build.lines().any(|l| l.trim() == "./target/release/kanso build bench/runbench >/dev/null")
+            && build.lines().any(|l| l.trim() == format!("mv runbench {DEV_RUN}")),
+        "build_benchmarks.sh no longer builds {DEV_RUN} from bench/runbench at the dev tier"
+    );
     assert_eq!(
         weighed.len(),
         1,

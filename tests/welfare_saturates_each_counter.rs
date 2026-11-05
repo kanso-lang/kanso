@@ -123,9 +123,11 @@ fn now_of(told: &str, name: &str) -> Option<u128> {
 /// 0.15 + 0.13333 + 0.10 = 0.38333.
 ///
 /// DEVELOPMENT: compile speed, compile memory, dev build and start-up all
-/// saturate at 1/(1+0.5) and carry 0.30, 0.08, 0.22 and 0.25; the two
-/// interpreter terms at 1/(1+1.0) carry 0.11 and 0.04.
-/// 0.85 * 0.66667 + 0.15 * 0.5 = 0.64167.
+/// saturate at 1/(1+0.5) and carry 0.30, 0.08, 0.22 and 0.25 of the seven
+/// older terms; the two interpreter terms at 1/(1+1.0) carry 0.11 and 0.04.
+/// Those seven hold 0.9 of the side and the dev-tier run, at 1/(1+1.0), the
+/// other 0.10.
+/// 0.9 * (0.85 * 0.66667 + 0.15 * 0.5) + 0.10 * 0.5 = 0.6275.
 ///
 /// BROWSER: compile speed and compile memory saturate at 1/(1+0.5) and carry
 /// 0.30 and 0.10; run speed and run memory at 1/(1+1.0) carry 0.40 and 0.20.
@@ -133,21 +135,22 @@ fn now_of(told: &str, name: &str) -> Option<u128> {
 ///
 /// META: f(x) = x/(x+1), and the sum is divided by f(1) = 0.5 to put the
 /// ceiling back at a hundred.
-/// 100 * (0.644 * 0.27711 + 0.276 * 0.39086 + 0.08 * 0.36170) / 0.5 = 63.05.
+/// 100 * (0.644 * 0.27711 + 0.276 * 0.38556 + 0.08 * 0.36170) / 0.5 = 62.76.
 ///
-/// It read 62.25 between the 2026-09-16 split and the browser side joining on
-/// 2026-10-06, 48.00 between the 2026-09-06 consolidation and the split, and
-/// 46.67 before Clay's 2026-09-02 gavel.
+/// It read 63.05 until the dev-tier run joined on 2026-11-05, 62.25 between
+/// the 2026-09-16 split and the browser side joining on 2026-10-06, 48.00
+/// between the 2026-09-06 consolidation and the split, and 46.67 before Clay's
+/// 2026-09-02 gavel.
 #[test]
 fn every_counter_at_parity_scores_the_weights_alone() {
-    assert_eq!(scored("parity", &[]), "welfare 63.05");
+    assert_eq!(scored("parity", &[]), "welfare 62.76");
 }
 
 /// COMPILE SPEED'S two counters, one of them a thousand times better than its
 /// baseline and the other at parity. Saturating each counter first bounds what
 /// the runaway can contribute at one, so the term is (1024/1024.5 + 2/3) / 2 *
-/// 0.30 on the development side, and the score is 64.05 (63.33 before the
-/// browser side joined). Saturating the MEAN instead answers 58.63 on
+/// 0.27 on the development side, and the score is 63.67 (64.05 before the
+/// dev-tier run joined, 63.33 before the browser side). Saturating the MEAN instead answers 58.63 on
 /// the same fixture, which is the shape the 2026-08-29 ruling closed.
 ///
 /// It used to be asserted on the run side, where eleven counters shared one
@@ -163,7 +166,7 @@ fn every_counter_at_parity_scores_the_weights_alone() {
 /// fraction above from the new count.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("compile_instructions", 1024)]), "welfare 64.05");
+    assert_eq!(scored("runaway", &[("compile_instructions", 1024)]), "welfare 63.67");
 }
 
 /// WEIGHT SAYS HOW MUCH A DIMENSION MATTERS; SATIATION SAYS HOW LONG IT KEEPS
@@ -187,17 +190,18 @@ fn one_counter_running_away_cannot_carry_its_term() {
 /// speed at 0.5 against interpreter speed at 1.0 -- because a cross-side
 /// comparison carries the meta's weights with it.
 ///
-/// 67.84 against 63.46. Doubling run instructions takes production from
+/// 67.55 against 63.13. Doubling run instructions takes production from
 /// 0.38333 to 0.45833; doubling compile instructions takes development from
-/// 0.64167 to 0.66167, since compile speed averages its two counters and only
-/// one of them moved. They read 67.45 and 62.69 before the browser side took
-/// its 0.08 of the meta on 2026-10-06.
+/// 0.6275 to 0.6455, since compile speed averages its two counters and only
+/// one of them moved. They read 67.84 and 63.46 before the dev-tier run joined
+/// on 2026-11-05, and 67.45 and 62.69 before the browser side took its 0.08 of
+/// the meta on 2026-10-06.
 #[test]
 fn a_doubling_is_worth_more_on_the_run_side_than_the_compile_side() {
     let run = scored("doubled-run", &[("run_instructions", 2)]);
     let compile = scored("doubled-compile", &[("compile_instructions", 2)]);
-    assert_eq!(run, "welfare 67.84", "a doubling of the run program's work");
-    assert_eq!(compile, "welfare 63.46", "the same doubling of what compiling costs");
+    assert_eq!(run, "welfare 67.55", "a doubling of the run program's work");
+    assert_eq!(compile, "welfare 63.13", "the same doubling of what compiling costs");
     assert!(
         run > compile,
         "the run side satiates later, so it keeps paying: {run} against {compile}"
