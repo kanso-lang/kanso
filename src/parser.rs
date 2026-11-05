@@ -1589,7 +1589,7 @@ impl<'a> P<'a> {
         }
     }
 
-    /* design/type-syntax.md ratifies Go's prefix slice — `[]T` reads left to
+    /* The 2026-07-24 type syntax gavel ratifies Go's prefix slice — `[]T` reads left to
     right and composes without backtracking, where postfix `T[]` reads
     inside-out. A map is an application, `map[K V]`, which needs one rule
     where Go's `map[K]V` needs a second that only `map` can use.

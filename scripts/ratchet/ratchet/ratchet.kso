@@ -108,7 +108,7 @@ kq_gate = "{kq_clone} && K=$PWD/target/release/kanso && cd /tmp/kq && {kq_run}"
 # `kanso.wasm` is stood in for. The assertion counts surviving references and
 # says nothing about any digest, so the size of one asset cannot change the
 # answer — and the real blob costs about fourteen gigabytes of live arena to
-# hash, which is filed as a blocking decision in design/pending-gavels.md. A
+# hash, which is filed as a blocking decision for Clay. A
 # second CI job holding that much every run is not a cost to add while the
 # question is open.
 ag_dir = "rm -rf /tmp/agsite && mkdir -p /tmp/agsite"

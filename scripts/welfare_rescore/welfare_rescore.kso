@@ -219,7 +219,7 @@ fn or_empty piece
 # 14.88% mean error. The same six phases dropped where all eight are present
 # costs 2.78%. The error tracks how much the unrepresented phases moved, which
 # no row records, so those rows stay unscored and the question is Clay's.
-# design/pending-gavels.md carries it.
+# It waits on a ruling.
 #
 # THE SPLICE IS CHECKED, NOT ASSUMED. The last all-phase row and the first row
 # carrying run_instructions are different commits, and the reconstruction is

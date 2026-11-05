@@ -33,7 +33,7 @@ set -e
 # BUILD FIRST, for the reason `all_compile.sh` gives at length: these gates read
 # a built compiler and staged benchmarks out of the working directory and none
 # of them produces those files. `build_benchmarks.sh` opens with the release
-# build, which is also what makes a `lib/*.kso` edit reach a program at all.
+# build, which is also what makes a `lib/` edit reach a program at all.
 sh scripts/gates/build_benchmarks.sh > /dev/null
 
 # Derived rather than remembered, and pinned by

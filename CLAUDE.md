@@ -151,7 +151,7 @@ says what happened. Read the queue with
   without a flag reads every one and names each that moved, and `--write`
   regenerates them with headers intact.
 - **The runtime sweep does not read the compile veins, and a library change
-  moves them**, because `lib/*.kso` is `include_str!`'d into the compiler.
+  moves them**, because `lib/` is `include_str!`'d into the compiler.
   `sh scripts/gates/all_compile.sh` runs the compile gates, and `--list` prints
   their names. Facts a reader needs about them:
   - `kanso check` routes by content: a directory is a module, a file with bare

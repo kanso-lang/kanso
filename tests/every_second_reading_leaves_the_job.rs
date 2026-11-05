@@ -6,8 +6,8 @@
 //! has a step that copies `/tmp/cg.<name>` and `/tmp/cg.<name>2` into the
 //! artifact for each name in one `for n in ...` line. That line said
 //! `compile entry library` until 2026-09-28, and the interpreter row, which
-//! is the counter STATUS.md's "A welfare counter reads three parts per
-//! billion" row is about, was never kept: the next time it read six apart
+//! is a welfare counter that once read three parts per billion apart
+//! between two jobs, was never kept: the next time it read six apart
 //! there would have been nothing to compare.
 //!
 //! So this reads the gates off disk, finds each name written both as

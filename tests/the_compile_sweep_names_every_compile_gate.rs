@@ -4,7 +4,7 @@
 //! `scripts/gates/all_counters.sh` walks the RUNTIME cost goldens and nothing
 //! else. The compile side is separate gates, two of whose counters are
 //! welfare terms, and a change under `lib/` moves every one of them because
-//! `lib/*.kso` is `include_str!`'d into the compiler. On 2026-09-05 a
+//! `lib/` is `include_str!`'d into the compiler. On 2026-09-05 a
 //! twelve-line library change read as a welfare RISE with those veins stale and
 //! a FALL once they were regenerated, and nothing in the sweep beside them
 //! would have said so.

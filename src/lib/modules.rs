@@ -402,7 +402,7 @@ const HAKO_FILES: &[(&str, &str)] = &[
     ("update.kso", include_str!("../../hako/hako/update.kso")),
 ];
 
-/// The root module gets the ambient imports (design/render-plan.md);
+/// The root module gets the ambient imports, such as render/to_string;
 /// dependencies never do — deps compile exactly as written.
 fn compile_module_root(
     dir: &std::path::Path,

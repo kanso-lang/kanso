@@ -1,6 +1,7 @@
 //! Whole-program demand analysis for the lazy v1 fragment.
 //!
-//! design/lazy-v1-plan.md pins the surface: a binding is conditionally
+//! The log's 2026-07-21 ruling, "ship the proven lazy fragment", pins the
+//! surface: a binding is conditionally
 //! demanded — and compiles to a thunk — when every use passes it,
 //! unscrutinized, into a dispatch argument position where at least one arm
 //! of the callee group discards that parameter. Dispatch is kanso's only

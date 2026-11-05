@@ -10,7 +10,7 @@
 //! it, so constant data is one of the two cases where the split is total.
 //! The gates printed `.bss` and not `.rodata`, which is half of that pair.
 //!
-//! WHY A SPEC AND NOT A SWEEP. STATUS.md's normalization row asked for this
+//! WHY A SPEC AND NOT A SWEEP. An earlier request asked for this
 //! on the interp gate alone, on the belief that `compile_instructions.sh`
 //! already printed `.rodata`. It did not: the only `.rodata` in any gate was
 //! in that calibration table, inside a comment. A list of gates written down
@@ -38,7 +38,7 @@ fn every_gate_that_reads_sections_reads_the_same_ones() {
         for line in body.lines() {
             // The section line is an awk program anchored on a `.`-prefixed
             // section name. Comments are skipped: the calibration table that
-            // misled STATUS.md lives in one.
+            // misled that request lives in one.
             let code = line.trim_start();
             if code.starts_with('#') {
                 continue;
