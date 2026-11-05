@@ -1510,10 +1510,23 @@ every arm answers one kind: a map, a list, a string, an int or a float, with
 a failure and a thunk set aside, since a thunk is forced before it is
 matched. Inference's return sets are joins, so they may say more than a call
 answers and never less; a group that answers a map and nothing else hands a
-map, and an arm that takes no map cannot take it. The check asks only at
-positions where every arm of the callee restricts, which a table built once
-per program names, so a call to a group with a bare binder there costs one
-lookup, and the arms are found by a walk only when a refusal is likely.
+map, and an arm that takes no map cannot take it.
 
-Golden: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
-corpus, the senro shape reduced. Before this change it checked clean.
+The check asks only when a call hands an argument that is itself a call,
+and only at positions where every arm of the callee restricts. That mask is
+a third field on the table the none check already builds per group, so it
+adds no table of its own. A group's arms are read through the member list
+the box check threads, and the program's types are collected the first
+time a refusal is likely.
+
+A field read is left alone on either side of the call. A getter's arms do
+not say what it takes or answers: on an err, `.reason` reads the err's own
+reason, so `e.reason.position` hands a json failure record to a getter whose
+return set, taken from the record's own `reason` field, says string. The
+first version refused that line of `a_blank_run_in_json_is_read_by_each_state`
+through the entry the micro corpus stages for a `pub play` library, and
+`a_field_read_twice_through_an_err` is that case reduced.
+
+Goldens: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
+corpus, the senro shape reduced, which checked clean before this change;
+and the micro above, which prints `2` on every engine.

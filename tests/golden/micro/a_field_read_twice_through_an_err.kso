@@ -1,0 +1,11 @@
+import "std/json"
+
+# `e.reason.position` reads an err's reason, which for json is a failure
+# record, and then that record's `position`. A read on an err answers
+# what the err holds rather than what the getter's arms answer, so the
+# check that meets a call's answer with the arms that take it leaves field
+# reads alone (#2331).
+fn read doc
+  json/decode! doc .? (e -> "{e.reason.position}") .> print
+
+pub play = read "["
