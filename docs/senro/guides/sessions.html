@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, and what senro does to keep a password safe.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, and how it limits sign-in attempts and asks for a signed-in visitor.</p>
 
 <h2>the session</h2>
 
@@ -47,6 +47,8 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
   <span class="f">digest</span>
 
 <span class="c"># Anyone may make an account.</span>
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
+
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
   <span class="f">true</span>
 
@@ -117,6 +119,13 @@ held <span class="o">=</span> <span class="s">"select id from accounts where nam
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
+<span class="c"># One address may try to sign in ten times in three minutes, as Rails 8's</span>
+<span class="c"># generated sessions controller allows. Past that, `over_limit` answers the</span>
+<span class="c"># sign-in page again, saying why.</span>
+<span class="k">pub</span> <span class="f">rate_limits</span> <span class="o">=</span> { <span class="s">"create"</span>:<span class="s">"10 per 3 minutes"</span> }
+
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
+
 <span class="c"># Signing in and out. The session is the signed cookie `web` keeps, and</span>
 <span class="c"># signing in writes the account's name into it as the viewer.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
@@ -142,12 +151,18 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 <span class="k">fn</span> <span class="f">entered</span> req name kept password
   <span class="f">return</span> refused req name if not passwords/matches? password kept
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
-  welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
-  <span class="f">effect</span> (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret welcomed name)
+  back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
+  welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
+  home <span class="o">=</span> <span class="f">web/redirect</span> back
+  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret welcomed name)
 
 <span class="k">fn</span> <span class="f">refused</span> req name
   wrong <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"That name and password do not match."</span> }
   <span class="f">effect</span> (<span class="f">opened</span> req name wrong <span class="n">422</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">over_limit</span> req
+  wait <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Too many tries. Try again in a few minutes."</span> }
+  <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> wait <span class="n">429</span>)
 
 <span class="c"># Signing out keeps the rest of the session and forgets the viewer.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
@@ -161,4 +176,43 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 </div>
 
 <p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match.</p>
+
+<h2>too many tries</h2>
+
+<p>a module limits how often one client may call an action by naming it in <code>rate_limits</code>, with a count per a window of seconds, minutes, hours or days. the guestbook's <code>session</code> module allows ten sign-in attempts in three minutes. senro tells clients apart by the address at the other end of the connection, which kanso's <code>net/peer</code> reads, and keeps the times of each client's calls to each limited action in the server's memory. a restart clears them, and two servers count separately.</p>
+
+<p>a call past its limit is answered by the module's <code>over_limit</code> when it has one, and by a bare 429 when it does not. the guestbook's shows the sign-in form again, with a 429 and a line asking the visitor to wait. a name in <code>rate_limits</code> that is not an action of the module, or a limit senro cannot read, is refused when the app compiles:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso check</div>
+  <pre><code>error[derive]: `5 a minute` is not a count per a window, such as "10 per 3 minutes"
+  --&gt; ./door.kso:1:5
+   1 | pub rate_limits = { "create":"5 a minute" }
+           ^</code></pre>
+</div>
+
+<h2>pages that ask for a sign-in</h2>
+
+<p>every action asks for a signed-in visitor unless its module names it in <code>without_sign_in</code>, as devise's <code>authenticate_user!</code> does for a Rails controller. the guestbook opens its home page, its list of entries, and the forms for making an account and signing in; writing an entry needs a signed-in visitor, and its action no longer checks for one itself. the entry asks for this once, when it serves its routes:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./accounts"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./home"</span>
+<span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret</code></pre>
+</div>
+
+<p><code>web/requiring_sign_in routes secret</code> wraps every action that is not open. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
 </article>
