@@ -65,34 +65,13 @@ generate: cannot read `title:words`: a field is name:text, name:int or name:refe
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
-<span class="k">import</span> <span class="s">"../../models"</span>
-<span class="k">import</span> <span class="s">"../../pg"</span>
-<span class="k">import</span> <span class="s">"../../routes"</span>
-<span class="k">import</span> <span class="s">"../../web"</span>
-<span class="k">import</span> <span class="s">"./home"</span>
-<span class="k">import</span> <span class="s">"./migrations"</span>
-<span class="k">import</span> <span class="s">"./notes"</span>
-<span class="k">import</span> <span class="s">"./pages"</span>
-<span class="k">import</span> <span class="s">"./views"</span>
-
-<span class="k">derive</span> kata/views
-<span class="k">derive</span> models/tables
-<span class="k">derive</span> routes/rest
-
-<span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
+  <pre><code><span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
 <span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
 <span class="c"># sets them.</span>
-connected <span class="o">=</span> <span class="f">pg/from_env</span>
-
-<span class="f">connected</span>
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> migrations/all)
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> routes connected)</code></pre>
+connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pre>
 </div>
 
-<p><code>import "./notes"</code> is the line <code>scaffold</code> added. it puts the import among the app's own, in order, so the entry reads as if it had been written by hand.</p>
+<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends with <code>web/serve 3000 routes connected</code>. each <code>scaffold</code> adds an import of the resource it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
 
 <h2>the migration</h2>
 
@@ -101,7 +80,7 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 
 <span class="c"># The app's schema, as the changes that built it, oldest first.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes users_made]
 
 notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [notes_id notes_title notes_pages]
 
@@ -119,10 +98,18 @@ pages_id <span class="o">=</span> <span class="f">models/column</span> <span cla
 
 pages_body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>
 
-pages_note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span></code></pre>
+pages_note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>
+
+users_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"users"</span> [users_id users_email users_digest]
+
+users_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
+
+users_email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
+
+users_digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
 </div>
 
-<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it; the models guide says how the list is run and recorded.</p>
+<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it, as <code>pages_made</code> and <code>users_made</code> do; the models guide says how the list is run and recorded.</p>
 
 <h2>the resource</h2>
 
@@ -318,7 +305,90 @@ $ kanso run generate -- scaffold examples/notebook book note:references page:ref
 generate: cannot read `page:references`: a resource nests under one parent</code></pre>
 </div>
 
+<h2>accounts and signing in</h2>
+
+<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes four modules and three views, appends a <code>users</code> table to the migrations, and changes the entry.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ kanso run generate -- authentication examples/notebook
+  create examples/notebook/password_mailer.kso
+  create examples/notebook/registration.kso
+  create examples/notebook/resets.kso
+  create examples/notebook/session.kso
+  create examples/notebook/views/door.kata
+  create examples/notebook/views/reset_asked.kata
+  create examples/notebook/views/reset_chosen.kata
+  change examples/notebook/migrations.kso
+  change examples/notebook/main.kso</code></pre>
+</div>
+
+<p>a user is an address and a digest of the password. <code>registration</code> makes one, at /registration/new, and signs it in. <code>session</code> signs in at /session/new and out with DELETE /session, and <code>resets</code> mails a link that sets a new password. these are the guestbook's modules with less in them: no names, no confirmation, no lock. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session.kso</div>
+  <pre><code><span class="c"># The key that signs every session. `generate authentication` made it at</span>
+<span class="c"># random. Keep it out of any repository the public can read; changing it</span>
+<span class="c"># signs every visitor out.</span>
+<span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"made at random by generate authentication"</span>
+
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
+
+<span class="c"># What a sign-in rests on: the digest the account keeps now. A new password</span>
+<span class="c"># changes it, so a password reset signs out every session made before it.</span>
+<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (<span class="f">db</span> email <span class="o">-&gt;</span> <span class="f">pg/query</span> db digest_by [email] <span class="o">.&gt;</span> kept_of)
+
+digest_by <span class="o">=</span> <span class="s">"select digest from users where email = $1"</span></code></pre>
+</div>
+
+<p>the secret that signs every session is 32 random bytes the generator made when it ran, so two apps never share one. keep it out of any repository the public can read; changing it signs every visitor out.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../jobs"</span>
+<span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../mail"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./home"</span>
+<span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./notes"</span>
+<span class="k">import</span> <span class="s">"./pages"</span>
+<span class="k">import</span> <span class="s">"./registration"</span>
+<span class="k">import</span> <span class="s">"./resets"</span>
+<span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+
+<span class="k">derive</span> kata/views
+<span class="k">derive</span> models/tables
+<span class="k">derive</span> routes/rest
+
+<span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
+<span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
+<span class="c"># sets them.</span>
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="c"># Every action asks for a sign-in unless its module lists it in</span>
+<span class="c"># `without_sign_in`, and a worker beside the server sends the mail the app</span>
+<span class="c"># queues.</span>
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes session/secret session/signed_against
+
+serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n">3000</span> signed connected
+
+<span class="f">connected</span>
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> migrations/all)
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> mail/performers serving)</code></pre>
+</div>
+
+<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. <code>jobs/beside</code> runs a worker next to the server that sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
+
+<p>senro's spec serves the generated app on both engines and uses it as a visitor would: it makes an account, works with notes and pages, signs out, and resets the password through the mail the app writes.</p>
+
 <h2>after generating</h2>
 
-<p>three things are worth doing before an app goes anywhere. narrow the policies to the visitors who should write (the sessions guide shows how to ask for a sign-in). add the model's other rules to <code>problems</code>, as the models guide describes, such as a title that may not be blank. and replace the home page, which says only that the app exists.</p>
+<p>three things are worth doing before an app goes anywhere. narrow the policies to the visitors who should write. add the model's other rules to <code>problems</code>, as the models guide describes, such as a title that may not be blank. and replace the home page, which says only that the app exists.</p>
 </article>
