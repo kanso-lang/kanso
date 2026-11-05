@@ -10,7 +10,7 @@
 //! functions that retire a single instruction.
 //!
 //! That fix landed for one gate. Six others had the identical `--threshold=90
-//! | head -40`, and one of them is the gate STATUS.md's standing row is about:
+//! | head -40`, and one of them is a gate whose row read apart between jobs:
 //! `interp_instructions` reads six apart across two CI jobs on one commit,
 //! each stable across the gate's own second reading, and the instrument for
 //! saying which frames moved did not exist. This spec is why the fix cannot
@@ -211,7 +211,7 @@ fn every_profiling_gate_annotates_its_whole_profile() {
              function table. It needs an exclusive `callgrind_annotate \
              --threshold=100`, on every run, or a move of a few instructions \
              cannot be located from two job logs. That is what kanso#1558 cost \
-             on compile_instructions and what STATUS.md's standing row wants on \
+             on compile_instructions and what the same move would cost on \
              interp_instructions."
         );
     }

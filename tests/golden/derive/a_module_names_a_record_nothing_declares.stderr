@@ -1,0 +1,4 @@
+error[type]: no type is called `pots`, so this arm can never match
+  --> tests/golden/derive/a_module_names_a_record_nothing_declares/posts.kso:9:11
+   9 | fn byline p:pots
+                 ^

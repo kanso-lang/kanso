@@ -1,0 +1,8 @@
+error[name]: no record type has a field `athor` (module tests/golden/derive/a_module_reads_a_field_its_derived_record_lacks/posts)
+  --> tests/golden/derive/a_module_reads_a_field_its_derived_record_lacks/posts.kso:10:19
+  10 |   "{p.title} by {p.athor}"
+                         ^
+error[name]: `p` is read for `title` and `athor`, and no record type has both (module tests/golden/derive/a_module_reads_a_field_its_derived_record_lacks/posts)
+  --> tests/golden/derive/a_module_reads_a_field_its_derived_record_lacks/posts.kso:10:19
+  10 |   "{p.title} by {p.athor}"
+                         ^

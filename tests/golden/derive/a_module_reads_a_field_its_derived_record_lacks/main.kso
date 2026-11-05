@@ -1,0 +1,6 @@
+import "./models"
+import "./posts"
+
+derive models/records
+
+print (posts/bylines ["hello" "again"])

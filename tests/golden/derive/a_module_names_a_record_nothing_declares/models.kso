@@ -1,0 +1,19 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# A module named for a table gets the table's record, declared in it with a
+# field for each column. Nothing in the module declares the type, so its own
+# annotation, constructor and field reads are the first anyone sees of it.
+tables = { "posts":["title" "author"] }
+
+pub fn records p
+  list/fold p.modules [] (acc m -> list/concat acc (declared m tables[m.name]))
+
+fn declared _ none
+  []
+
+fn declared m columns
+  t = text/slice m.name 1 (length m.name - 1)
+  fields = list/to_list (list/map columns (c -> "  {c}"))
+  [(derive/define m.name "pub type {t}\n{text/join fields "\n"}\n")]

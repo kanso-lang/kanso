@@ -1,6 +1,6 @@
 # A slice is `[]T`, and `T[]` compiled too — two spellings for one type, in a
 # language whose whole position is that the canonical form IS the grammar.
-# design/type-syntax.md rules the postfix out for a reason it states: `[]T`
+# The 2026-07-24 type syntax gavel rules the postfix out because `[]T`
 # reads left to right and composes without backtracking, where `T[]` reads
 # inside-out the moment anything nests.
 fn take xs:int[]
