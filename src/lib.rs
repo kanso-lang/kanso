@@ -2435,7 +2435,7 @@ fn enroll_bare(
 }
 
 /// Modules linked into every program without an import statement: groups
-/// that SYNTAX names (design/render-plan.md — "{x}" desugars to
+/// that SYNTAX names ("{x}" desugars to
 /// render/to_string). Ambient types bring their canonical arms; imports
 /// still govern bare-name spelling, so nothing here adds a visible name.
 /// A local arm named for an ambient group's export joins that group: a

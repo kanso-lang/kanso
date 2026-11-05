@@ -785,8 +785,8 @@ jobs:
       #
       # The interpreter and start-up rows went uncopied until 2026-09-28,
       # though both take a second reading under the same naming, and the
-      # interpreter row is the one STATUS.md's "A welfare counter reads three
-      # parts per billion" row is about. Every profile a gate writes beside a
+      # interpreter row is a welfare counter that once read three parts per
+      # billion apart between two jobs on one commit. Every profile a gate writes beside a
       # second reading of itself is copied here, and
       # tests/every_second_reading_leaves_the_job.rs reads the gates off disk
       # and holds this list to that.

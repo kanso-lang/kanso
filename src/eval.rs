@@ -824,7 +824,7 @@ pub struct Interp<'a> {
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
-/// native must report byte-identical values (design/lazy-v1-plan.md).
+/// native must report byte-identical values (the 2026-07-21 lazy ruling).
 #[derive(Default)]
 pub struct ThunkStats {
     pub allocs: Cell<u64>,
