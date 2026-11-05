@@ -1372,31 +1372,39 @@ fn callee_first(program: &Program) -> (Vec<usize>, Vec<usize>, Vec<u32>) {
 ///
 /// A name bound by an annotated parameter, `r:letter`, also carries the type
 /// it names, so a field read through it answers that type's field alone
-/// (kanso#2350).
+/// (kanso#2350). The types sit in a second vector, keyed by where their
+/// binding sits in the first, so the bindings stay as small as they were and
+/// a scope that binds no annotated name copies an empty vector.
 #[derive(Clone, Default)]
-struct Env<'a>(Vec<(&'a str, Set, Option<&'a str>)>);
+struct Env<'a>(Vec<(&'a str, Set)>, Vec<(u32, &'a str)>);
 
 impl<'a> Env<'a> {
     fn clear(&mut self) {
         self.0.clear();
+        self.1.clear();
     }
 
     fn insert(&mut self, name: &'a str, set: Set) {
-        self.0.push((name, set, None));
+        self.0.push((name, set));
     }
 
     fn insert_typed(&mut self, name: &'a str, set: Set, ty: &'a str) {
-        self.0.push((name, set, Some(ty)));
+        self.1.push((self.0.len() as u32, ty));
+        self.0.push((name, set));
     }
 
     fn get(&self, name: &str) -> Option<Set> {
-        self.0.iter().rev().find(|(n, _, _)| *n == name).map(|&(_, s, _)| s)
+        self.0.iter().rev().find(|(n, _)| *n == name).map(|&(_, s)| s)
     }
 
     /// The record type a name was annotated with where it was bound, if the
     /// latest binding of it was an annotated one.
     fn pinned(&self, name: &str) -> Option<&'a str> {
-        self.0.iter().rev().find(|(n, _, _)| *n == name).and_then(|&(_, _, t)| t)
+        if self.1.is_empty() {
+            return None;
+        }
+        let at = self.0.iter().rposition(|(n, _)| *n == name)? as u32;
+        self.1.iter().find(|(i, _)| *i == at).map(|&(_, ty)| ty)
     }
 
     fn contains_key(&self, name: &str) -> bool {
@@ -1409,7 +1417,7 @@ impl<'a> Env<'a> {
     fn child(&self, extra: usize) -> Env<'a> {
         let mut out = Vec::with_capacity(self.0.len() + extra);
         out.extend_from_slice(&self.0);
-        Env(out)
+        Env(out, self.1.clone())
     }
 }
 
