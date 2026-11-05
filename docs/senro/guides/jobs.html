@@ -1,0 +1,326 @@
+---
+layout: default
+title: "background jobs in senro"
+description: "senro keeps the work an app does after a request as rows of a Postgres table, claimed by workers that skip each other's rows and retry a failure with a growing wait."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>background jobs</h1>
+
+<p>some work should not hold up the request that asked for it. a sign-up that sends a confirmation should answer at once, whether the mail server is quick or slow that day. senro's <code>jobs</code> module keeps such work as rows of a Postgres table, as Rails' Active Job does on Solid Queue: a job outlives the process that queued it, and any number of workers can share a queue. this guide covers the table, queueing a job, the worker that claims and runs it, what happens when a job fails, and how the guestbook sends its mail through a worker beside the server.</p>
+
+<h2>the table</h2>
+
+<p>every job is a row of <code>senro_jobs</code>. <code>jobs/prepared</code> makes the table when it is missing, so an app needs no migration of its own for it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../pg"</span>
+<span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/json"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="c"># A job as its row holds it.</span>
+<span class="k">type</span> queued_job
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">args</span>
+  <span class="f">attempts</span>
+
+<span class="c"># Work an app does after the request that asked for it, as Rails' Active Job</span>
+<span class="c"># runs it on Solid Queue: each job is a row of `senro_jobs`, so it outlives</span>
+<span class="c"># the process that queued it, and any number of workers can share a queue.</span>
+<span class="c"># A job has a queue, the name of the performer that does it, its arguments</span>
+<span class="c"># as a map of strings, and the moment from which it may run.</span>
+<span class="c">#</span>
+<span class="c"># A worker claims one due job at a time with `for update skip locked`, so two</span>
+<span class="c"># workers never take the same row, and leases it for five minutes: a worker</span>
+<span class="c"># that dies mid-job leaves the row to be claimed again once the lease runs</span>
+<span class="c"># out. A job that succeeds is deleted. One whose performer fails is tried</span>
+<span class="c"># again later, attempts^4 + 2 seconds after the failure, as Rails'</span>
+<span class="c"># `polynomially_longer` waits, and after five attempts it stays in the table</span>
+<span class="c"># with the reason, for someone to read.</span>
+<span class="c">#</span>
+<span class="c"># `prepared` makes the table jobs live in when it is missing.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">prepared</span> db
+  <span class="f">pg/run</span> db ledger <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)
+
+ledger <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">create</span> table if not exists senro_jobs (
+    <span class="f">id</span> bigserial primary key,
+    <span class="f">queue</span> text not null,
+    <span class="f">name</span> text not null,
+    <span class="f">args</span> text not null,
+    <span class="f">run_at</span> bigint not null,
+    <span class="f">attempts</span> int not null default <span class="n">0</span>,
+    <span class="f">failure</span> text not null default ''
+  )
+<span class="s">""</span>"</code></pre>
+</div>
+
+<p>a job has a queue, the name of the performer that does it, its arguments as JSON, the moment from which it may run in milliseconds since the epoch, how many attempts it has had, and the reason the last one failed.</p>
+
+<h2>queueing a job</h2>
+
+<p><code>jobs/later db queue name args t</code> writes the row. the arguments are a map of strings, and the moment is whatever the caller chooses: now, for work to do as soon as a worker is free, or a minute from now for work that should wait.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="c"># A job as its row holds it.</span>
+<span class="k">type</span> queued_job
+  <span class="f">id</span>
+  <span class="f">name</span>
+  <span class="f">args</span>
+  <span class="f">attempts</span>
+
+<span class="c"># Queues the job `name` with `args` on `queue`, to run at `t` (milliseconds</span>
+<span class="c"># since the epoch) or after.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">later</span> db queue name args t
+  given <span class="o">=</span> [queue name (<span class="f">json/encode</span> args) <span class="s">"<span class="i">{t}</span>"</span>]
+  <span class="f">pg/query</span> db queued given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)
+
+queued <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">insert</span> into senro_jobs (queue, name, args, run_at)
+  <span class="f">values</span> ($<span class="n">1</span>, $<span class="n">2</span>, $<span class="n">3</span>, $<span class="n">4</span>::bigint)
+<span class="s">""</span>"</code></pre>
+</div>
+
+<h2>working a queue</h2>
+
+<p>a worker claims one due job at a time. the claim is a single statement: it picks the oldest due row on the queue with <code>for update skip locked</code>, so two workers never take the same row and neither waits on the other, and in the same statement it counts the attempt and moves the row's <code>run_at</code> five minutes on. that is a lease. a worker that dies mid-job leaves the row behind, and it is due again once the lease runs out.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="c"># The attempts a job gets, and how long a claim holds it.</span>
+<span class="k">pub</span> <span class="f">attempts_allowed</span> <span class="o">=</span> <span class="n">5</span>
+
+lease_ms <span class="o">=</span> <span class="n">5</span> <span class="o">*</span> <span class="n">60</span> <span class="o">*</span> <span class="n">1000</span>
+
+<span class="c"># Claims one job on `queue` that is due at `t`, and runs it. `performers` maps</span>
+<span class="c"># a job's name to a function of the session and the job's arguments that</span>
+<span class="c"># answers an effect. The answer says what happened: `none` when no job was</span>
+<span class="c"># due, or a line naming the job and how it went.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">worked</span> db queue performers t
+  given <span class="o">=</span> [queue <span class="s">"<span class="i">{t}</span>"</span> <span class="s">"<span class="i">{t + lease_ms}</span>"</span> <span class="s">"<span class="i">{attempts_allowed}</span>"</span>]
+  <span class="f">pg/query</span> db claimed given <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">ran</span> db performers t (<span class="f">list/first</span> r<span class="o">.</span>rows))
+
+claimed <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">update</span> senro_jobs set run_at <span class="o">=</span> $<span class="n">3</span>::bigint, attempts <span class="o">=</span> attempts <span class="o">+</span> <span class="n">1</span>
+  <span class="f">where</span> id <span class="o">=</span> (
+    <span class="f">select</span> id from senro_jobs
+    <span class="f">where</span> queue <span class="o">=</span> $<span class="n">1</span> and run_at <span class="o">&lt;=</span> $<span class="n">2</span>::bigint and attempts <span class="o">&lt;</span> $<span class="n">4</span>::int
+    <span class="f">order</span> by run_at, id
+    <span class="f">for</span> update skip locked
+    <span class="f">limit</span> <span class="n">1</span>
+  )
+  <span class="f">returning</span> id, name, args, attempts
+<span class="s">""</span>"</code></pre>
+</div>
+
+<p><code>performers</code> maps a job's name to a function of the database session and the job's arguments that answers an effect. a job whose performer succeeds is deleted. <code>jobs/worked</code> answers a line saying what happened, or <code>none</code> when nothing was due.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">ran</span> _ _ _ none
+  <span class="f">effect</span> none
+
+<span class="c"># A performer's failure was born in the app, so the worker may rescue it.</span>
+<span class="c"># A job whose name has no performer is the worker's own finding, and is</span>
+<span class="c"># recorded the same way without being raised.</span>
+<span class="k">fn</span> <span class="f">ran</span> db performers t row
+  j <span class="o">=</span> <span class="f">job_of</span> row
+  <span class="f">run_by</span> db performers[j<span class="o">.</span>name] j t
+
+<span class="k">fn</span> <span class="f">run_by</span> db none j t
+  <span class="f">failed</span> db j t <span class="s">"no performer is named <span class="i">{j.name}</span>"</span>
+
+<span class="k">fn</span> <span class="f">run_by</span> db perform j t
+  <span class="f">perform</span> db j<span class="o">.</span><span class="f">args</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">pg/query</span> db finished [j<span class="o">.</span>id])
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> <span class="s">"ran <span class="i">{j.name}</span>"</span>)
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">failed</span> db j t u<span class="o">.</span>reason)
+
+finished <span class="o">=</span> <span class="s">"delete from senro_jobs where id = $1::bigint"</span></code></pre>
+</div>
+
+<h2>when a job fails</h2>
+
+<p>a performer that fails is rescued with <code>.?</code>. the failure was born in the app's code, outside the jobs module, so the worker may catch it. the job keeps its reason in <code>failure</code> and may run again after attempts<sup>4</sup> + 2 seconds: 3 seconds after the first failure, 18 after the second, 83 after the third, 258 after the fourth. that is the wait Rails' <code>polynomially_longer</code> gives. after five attempts the claim no longer picks the row, and it stays in the table with its reason for someone to read. a job whose name has no performer is recorded the same way, as a failure that says so.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="c"># A failed attempt is kept with its reason, and the job waits attempts^4 + 2</span>
+<span class="c"># seconds before it may run again.</span>
+<span class="k">fn</span> <span class="f">failed</span> db j t reason
+  n <span class="o">=</span> <span class="f">j</span><span class="o">.</span><span class="f">attempts</span>
+  wait <span class="o">=</span> (n <span class="o">*</span> n <span class="o">*</span> n <span class="o">*</span> n <span class="o">+</span> <span class="n">2</span>) <span class="o">*</span> <span class="n">1000</span>
+  given <span class="o">=</span> [j<span class="o">.</span><span class="f">id</span> reason <span class="s">"<span class="i">{t + wait}</span>"</span>]
+  said <span class="o">=</span> <span class="s">"failed <span class="i">{j.name}</span> on attempt <span class="i">{n}</span>: <span class="i">{reason}</span>"</span>
+  <span class="f">pg/query</span> db kept given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> said)
+
+kept <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">update</span> senro_jobs set failure <span class="o">=</span> $<span class="n">2</span>, run_at <span class="o">=</span> $<span class="n">3</span>::bigint
+  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>::bigint
+<span class="s">""</span>"</code></pre>
+</div>
+
+<p>senro's spec for the module works a queue at moments it chooses, so the waits show in its output. it queues a job that runs, one that always fails, one with no performer, one for a minute later, and one on another queue:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/jobs/work.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../jobs"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="c"># The moment the spec starts from, and the moments it works the queue at:</span>
+<span class="c"># four at once, then three and sixty seconds on, then pairs far enough apart</span>
+<span class="c"># that every job still failing gets an attempt in each, until none has any</span>
+<span class="c"># left.</span>
+<span class="k">pub</span> <span class="f">t</span> <span class="o">=</span> <span class="n">1000000</span>
+
+soon <span class="o">=</span> [t t t t (t <span class="o">+</span> <span class="n">3000</span>) (t <span class="o">+</span> <span class="n">60000</span>) (t <span class="o">+</span> <span class="n">60000</span>) (t <span class="o">+</span> <span class="n">60000</span>)]
+
+apart <span class="o">=</span> [<span class="n">1000000</span> <span class="n">1000000</span> <span class="n">10000000</span> <span class="n">10000000</span> <span class="n">100000000</span> <span class="n">100000000</span>]
+
+<span class="k">pub</span> <span class="f">times</span> <span class="o">=</span> <span class="f">list/concat</span> soon (<span class="f">list/to_list</span> (<span class="f">list/map</span> apart (d <span class="o">-&gt;</span> t <span class="o">+</span> d)))
+
+<span class="c"># What each job named on the default queue does: `greet` prints, and</span>
+<span class="c"># `broken` fails every time.</span>
+<span class="k">pub</span> <span class="f">performers</span> <span class="o">=</span> { <span class="s">"broken"</span>:broken <span class="s">"greet"</span>:greeted }
+
+<span class="k">fn</span> <span class="f">greeted</span> _ args
+  <span class="f">print</span> <span class="s">"hello, <span class="i">{args[</span>"</span>name<span class="s">"]}"</span>
+
+<span class="k">fn</span> <span class="f">broken</span> _ _
+  <span class="f">err</span> <span class="s">"it broke"</span>
+
+<span class="c"># Works the default queue once at each time in `times`, printing what each</span>
+<span class="c"># step did.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">stepped</span> db moments
+  <span class="f">list/fold</span> moments (<span class="f">effect</span> db) (<span class="f">acc</span> at <span class="o">-&gt;</span> <span class="f">acc</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">step</span> db at))
+
+<span class="k">fn</span> <span class="f">step</span> db at
+  <span class="f">jobs/worked</span> db <span class="s">"default"</span> performers at
+    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at - t}</span>: <span class="i">{told said}</span>"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> db)
+
+<span class="k">fn</span> <span class="f">told</span> none
+  <span class="s">"nothing due"</span>
+
+<span class="k">fn</span> <span class="f">told</span> said
+  <span class="f">said</span></code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/db/jobs.out</div>
+  <pre><code>hello, Ada
+at 0: ran greet
+at 0: failed broken on attempt 1: it broke
+at 0: failed missing on attempt 1: no performer is named missing
+at 0: nothing due
+at 3000: failed broken on attempt 2: it broke
+at 60000: failed missing on attempt 2: no performer is named missing
+at 60000: failed broken on attempt 3: it broke
+hello, Bo
+at 60000: ran greet
+at 1000000: failed missing on attempt 3: no performer is named missing
+at 1000000: failed broken on attempt 4: it broke
+at 10000000: failed missing on attempt 4: no performer is named missing
+at 10000000: failed broken on attempt 5: it broke
+at 100000000: failed missing on attempt 5: no performer is named missing
+at 100000000: nothing due
+[{ "attempts":"5" "failure":"it broke" "name":"broken" "queue":"default" } { "attempts":"5" "failure":"no performer is named missing" "name":"missing" "queue":"default" } { "attempts":"0" "failure":"" "name":"greet" "queue":"mail" }]</code></pre>
+</div>
+
+<p>the failing job runs at 0, 3,000 and 60,000 milliseconds, and the job queued for later waits for its minute. the pairs of steps further apart give each failing job one more attempt until both have had five. the step at 100,000,000 finds nothing due, and the job on the <code>mail</code> queue is never taken, since this worker works the default queue.</p>
+
+<h2>a worker beside the server</h2>
+
+<p><code>jobs/worker</code> loops on <code>jobs/worked</code> with the clock's time, sleeping a second whenever nothing is due, and writes each outcome to standard error. <code>jobs/beside</code> runs one in a fiber of its own next to something else, such as the server, on a database session it opens for itself.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">jobs/jobs.kso</div>
+  <pre><code><span class="c"># Works `queue` for as long as the process runs: a job when one is due, and</span>
+<span class="c"># a second's sleep when none is. Each job's outcome goes to standard error.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">worker</span> db queue performers
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">worked</span> db queue performers t)
+    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> <span class="f">told</span> said)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">worker</span> db queue performers)
+
+<span class="c"># Runs `served`, such as `web/serve`, with a worker on `queue` beside it in a</span>
+<span class="c"># fiber of its own, on a session `connect` opens. The worker makes the jobs</span>
+<span class="c"># table when it is missing before it starts.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">beside</span> connect queue performers served
+  <span class="f">connect</span> <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">prepared</span> db) <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">worker</span> db queue performers)
+  <span class="f">served</span>
+
+<span class="k">fn</span> <span class="f">told</span> none
+  <span class="f">time/sleep</span> <span class="n">1000</span>
+
+<span class="k">fn</span> <span class="f">told</span> said
+  <span class="f">io/write_err</span> <span class="s">"senro jobs: <span class="i">{said}</span>\n"</span></code></pre>
+</div>
+
+<p>a bare line in a function body runs as a fiber, so <code>beside</code> starts the worker and then answers <code>served</code>, and the two run together for as long as the process does. more workers on more processes can share the queue, because the claim skips rows another worker holds.</p>
+
+<h2>mail sent later</h2>
+
+<p>the guestbook sends a confirmation when an account is made, a reset link when one is asked for, and an unlock link when too many wrong passwords lock an account. none of those requests should wait on the mail server. <code>mail/delivered_later db message</code> queues the message on the <code>mail</code> queue, as Action Mailer's <code>deliver_later</code> does, and <code>mail/performers</code> is what a worker on that queue runs to send it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">mail/mail.kso</div>
+  <pre><code><span class="c"># Queues `m` on the `mail` queue of the jobs table, so the request that asked</span>
+<span class="c"># for it answers without waiting on the mail server, as Action Mailer's</span>
+<span class="c"># `deliver_later` does. A worker running `mail/performers` sends it the way</span>
+<span class="c"># `delivered` does. A message `delivered` would refuse is refused here, before</span>
+<span class="c"># it is queued.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">delivered_later</span> db m
+  why <span class="o">=</span> <span class="f">refusal</span> m
+  <span class="f">return</span> err why if why <span class="o">!=</span> <span class="s">""</span>
+  fields <span class="o">=</span> { <span class="s">"body"</span>:m<span class="o">.</span><span class="f">body</span> <span class="s">"from"</span>:m<span class="o">.</span><span class="f">from</span> <span class="s">"subject"</span>:m<span class="o">.</span><span class="f">subject</span> <span class="s">"to"</span>:m<span class="o">.</span>to }
+  <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">jobs/later</span> db <span class="s">"mail"</span> <span class="s">"deliver"</span> fields t)
+
+<span class="c"># The performers a worker on the `mail` queue runs.</span>
+<span class="k">pub</span> <span class="f">performers</span> <span class="o">=</span> { <span class="s">"deliver"</span>:deliver }
+
+<span class="k">fn</span> <span class="f">deliver</span> _ f
+  <span class="f">delivered</span> (<span class="f">message</span> f[<span class="s">"from"</span>] f[<span class="s">"to"</span>] f[<span class="s">"subject"</span>] f[<span class="s">"body"</span>])</code></pre>
+</div>
+
+<p>a message <code>mail/delivered</code> would refuse, such as one whose subject holds a line break, is refused before it is queued, so the request that made it still hears about it. the guestbook's mailer queues each letter on the request's own session:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/account_mailer.kso</div>
+  <pre><code><span class="c"># The guestbook's mail, as a Rails mailer holds it: what each letter says,</span>
+<span class="c"># and the signed link it carries, which starts with `mail/url_for`. Each</span>
+<span class="c"># letter is queued on `db` and sent by the worker beside the server. First, a</span>
+<span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
+<span class="c"># it works once.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/<span class="i">{reset_token id kept t}</span>/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (<span class="f">reset_letter</span> email link))</code></pre>
+</div>
+
+<p>and its entry serves through <code>jobs/beside</code>, so a worker on the <code>mail</code> queue runs as long as the server does:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/main.kso</div>
+  <pre><code><span class="c"># The server, with a worker beside it that sends the mail the app queues.</span>
+serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected</code></pre>
+</div>
+
+<p>the entry's last step is <code>jobs/beside connected "mail" mail/performers serving</code>. a mail now arrives a second or so after the request that asked for it. the guestbook's browser spec waits for each one, and reads its counts of mail sent against the queue's order: once a later letter has arrived, any letter queued before it has arrived too.</p>
+</article>

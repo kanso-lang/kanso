@@ -37,6 +37,13 @@ $ kanso run generate -- scaffold examples/notebook note title:text pages:int
   create examples/notebook/views/note_shown.kata
   create examples/notebook/views/note_form.kata
   change examples/notebook/migrations.kso
+  change examples/notebook/main.kso
+$ kanso run generate -- scaffold examples/notebook page body:text note:references
+  create examples/notebook/pages.kso
+  create examples/notebook/views/pages_index.kata
+  create examples/notebook/views/page_shown.kata
+  create examples/notebook/views/page_form.kata
+  change examples/notebook/migrations.kso
   change examples/notebook/main.kso</code></pre>
 </div>
 
@@ -47,10 +54,10 @@ $ kanso run generate -- scaffold examples/notebook note title:text pages:int
   <pre><code>$ kanso run generate -- scaffold examples/notebook note title:text
 generate: examples/notebook/notes.kso is there already
 $ kanso run generate -- scaffold examples/notebook book title:words
-generate: cannot read `title:words`: a field is name:text or name:int</code></pre>
+generate: cannot read `title:words`: a field is name:text, name:int or name:references</code></pre>
 </div>
 
-<p>a field is <code>name:text</code> or <code>name:int</code>. those are the two kinds a posted form's value reads back as without a parser of its own. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
+<p>a field is <code>name:text</code>, <code>name:int</code> or <code>name:references</code>. the first two are the kinds a posted form's value reads back as without a parser of its own, and the third nests the resource under another, as described below under a resource under another. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
 
 <h2>the entry</h2>
 
@@ -66,6 +73,7 @@ generate: cannot read `title:words`: a field is name:text or name:int</code></pr
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
 <span class="k">import</span> <span class="s">"./notes"</span>
+<span class="k">import</span> <span class="s">"./pages"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
 <span class="k">derive</span> kata/views
@@ -93,15 +101,25 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 
 <span class="c"># The app's schema, as the changes that built it, oldest first.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes]
 
 notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [notes_id notes_title notes_pages]
 
-notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
+notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
 
 notes_title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>
 
-notes_pages <span class="o">=</span> <span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span></code></pre>
+notes_pages <span class="o">=</span> <span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span>
+
+pages_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [pages_id pages_body pages_note_id]
+
+pages_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
+
+pages_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
+
+pages_body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>
+
+pages_note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span></code></pre>
 </div>
 
 <p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it; the models guide says how the list is run and recorded.</p>
@@ -242,6 +260,62 @@ form method="post" action=path
   if problems["pages"] != none
     p.problem = problems["pages"]
   button Save</code></pre>
+</div>
+
+<h2>a resource under another</h2>
+
+<p>a field written <code>name:references</code> nests the resource under another, as Rails' generator reads it. the third command above makes pages that belong to a note. the migration gains two changes: <code>pages_made</code> makes the table with a <code>note_id</code> column that may not be empty, and <code>pages_to_notes</code>, written with <code>models/add_foreign_key</code>, has Postgres refuse a page whose note is not there and remove a note's pages along with the note.</p>
+
+<p>each of the resource's actions takes the note's id right after the database, which is how the <a href="routing.html">routing guide</a> places a nested resource: <code>pages/index</code> answers GET /notes/:note_id/pages, and <code>pages/show</code> GET /notes/:note_id/pages/:id.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/pages.kso</div>
+  <pre><code><span class="c"># A row of `pages` belongs to a note, so each action takes the note's id and</span>
+<span class="c"># the routes nest under it: `index` answers GET /notes/:note_id/pages. A row</span>
+<span class="c"># is found only under its own note, and a note that is not there has none to</span>
+<span class="c"># list or make.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db note_id:int
+  asked <span class="o">=</span> <span class="f">pg/query</span> db listed [<span class="s">"<span class="i">{note_id}</span>"</span>]
+  listing_of <span class="o">=</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req note_id r<span class="o">.</span>rows))
+  <span class="f">within</span> db note_id (<span class="f">asked</span> <span class="o">.&gt;</span> listing_of)
+
+listed <span class="o">=</span> <span class="s">""</span>"
+  select {columns} from pages
+  <span class="f">where</span> note_id <span class="o">=</span> $<span class="n">1</span>::integer order by id
+<span class="s">""</span>"
+
+found <span class="o">=</span> <span class="s">""</span>"
+  select {columns} from pages
+  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>::integer and note_id <span class="o">=</span> $<span class="n">2</span>::integer
+<span class="s">""</span>"
+
+parent <span class="o">=</span> <span class="s">"select id from notes where id = $1::integer"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db note_id:int id:int
+  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span> <span class="s">"<span class="i">{note_id}</span>"</span>]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+
+<span class="c"># `then` when the note is there, and a 404 when it is not.</span>
+<span class="k">fn</span> <span class="f">within</span> db id then
+  <span class="f">pg/query</span> db parent [<span class="s">"<span class="i">{id}</span>"</span>] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">held</span> (<span class="f">list/first</span> r<span class="o">.</span>rows) then)
+
+<span class="k">fn</span> <span class="f">held</span> none _
+  <span class="f">effect</span> http/not_found
+
+<span class="k">fn</span> <span class="f">held</span> _ then
+  <span class="f">then</span></code></pre>
+</div>
+
+<p>a page is looked up by its own id and its note's together, so <code>/notes/1/pages/7</code> finds nothing when page 7 belongs to note 2. listing a note's pages and making one first ask whether the note is there, and answer 404 when it is not.</p>
+
+<p>the note's resource must be there before the pages are generated, a resource nests under one parent, and a reference's name is at most 12 characters, so the lines the scaffold writes still fit in 80 columns.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ kanso run generate -- scaffold examples/notebook chapter body:text volume:references
+generate: examples/notebook has no volumes to nest chapters under
+$ kanso run generate -- scaffold examples/notebook book note:references page:references
+generate: cannot read `page:references`: a resource nests under one parent</code></pre>
 </div>
 
 <h2>after generating</h2>
