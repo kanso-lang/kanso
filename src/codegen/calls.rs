@@ -696,6 +696,11 @@ impl<'a> Backend<'a> {
                 f.record(&t, infer::builtin_set("length", &[held]));
                 return Ok(t.to_string());
             }
+            if BIT_TWINS.contains(&name) {
+                if let Some(t) = direct_bit_op(f, name, &emitted, |f| self.origin_arg(f, span)) {
+                    return Ok(t);
+                }
+            }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
             if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes") {

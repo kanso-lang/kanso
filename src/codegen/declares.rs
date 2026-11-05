@@ -2152,6 +2152,28 @@ const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
 
 static DECLARE_LINES: [DeclareLine; DECLARES_LINES] = index_declares(DECLARES);
 
+/// The helpers a dev build still inlines, because each pays for itself at
+/// `-O0` on the run program: inlined, `k_b_push_mut_known` cost 6,061,860 more
+/// instructions of `clang -cc1` on runbench's dev module and saved 20,738,000
+/// of the run, and `k_b_append_mut_int` cost 9,306,556 and saved 22,653,000.
+/// Every other helper was measured the same way and costs more to compile at
+/// its call sites than it saves: `k_b_at_fast` 203,771,636 against 12,070,000,
+/// `k_force_fast` 198,078,103 against 19,041,000.
+const KEPT_INLINE_AT_DEV: [&[u8]; 2] = [b"@k_b_push_mut_known(", b"@k_b_append_mut_int("];
+
+/// Whether the `define` line from `at` to `end` keeps its attribute in a dev
+/// build.
+const fn kept_inline_at_dev(text: &[u8], at: usize, end: usize) -> bool {
+    let mut k = 0;
+    while k < KEPT_INLINE_AT_DEV.len() {
+        if find_in(text, at, end, KEPT_INLINE_AT_DEV[k]) < end {
+            return true;
+        }
+        k += 1;
+    }
+    false
+}
+
 /// How many `define` lines of `text` carry the attribute a dev build leaves
 /// out.
 const fn inline_defines(text: &[u8]) -> usize {
@@ -2159,7 +2181,10 @@ const fn inline_defines(text: &[u8]) -> usize {
     let mut at = 0;
     while at < text.len() {
         let end = find_in(text, at, text.len(), b"\n");
-        if starts_at(text, at, end, b"define ") && find_in(text, at, end, INLINE_ATTR) < end {
+        if starts_at(text, at, end, b"define ")
+            && find_in(text, at, end, INLINE_ATTR) < end
+            && !kept_inline_at_dev(text, at, end)
+        {
             n += 1;
         }
         at = end + 1;
@@ -2170,8 +2195,8 @@ const fn inline_defines(text: &[u8]) -> usize {
 const DECLARES_DEV_LEN: usize =
     DECLARES.len() - INLINE_ATTR.len() * inline_defines(DECLARES.as_bytes());
 
-/// DECLARES with ` alwaysinline` taken off every `define` line, made when the
-/// compiler is built. A dev build writes this text rather than DECLARES, so
+/// DECLARES with ` alwaysinline` taken off every `define` line but the
+/// `KEPT_INLINE_AT_DEV` ones, made when the compiler is built. A dev build writes this text rather than DECLARES, so
 /// leaving the attribute out costs it nothing per line: a check in the loop
 /// below cost `kanso play`'s start-up 10,508 instructions on a one-line
 /// program, measured before the text moved here.
@@ -2182,7 +2207,7 @@ static DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
     let mut o = 0;
     while at < text.len() {
         let end = find_in(text, at, text.len(), b"\n");
-        let cut = match starts_at(text, at, end, b"define ") {
+        let cut = match starts_at(text, at, end, b"define ") && !kept_inline_at_dev(text, at, end) {
             true => find_in(text, at, end, INLINE_ATTR),
             false => end,
         };
@@ -2452,10 +2477,13 @@ mod the_dev_declares_are_the_release_ones_without_the_attribute {
     use super::declares_for;
 
     /// The oracle: the release text, with ` alwaysinline` taken off each
-    /// `define` line by a scan at run time.
+    /// `define` line by a scan at run time, but for the two helpers a dev
+    /// build still inlines.
     fn stripped(text: &str) -> String {
+        let kept =
+            |l: &str| l.contains("@k_b_push_mut_known(") || l.contains("@k_b_append_mut_int(");
         text.split('\n')
-            .map(|l| match l.starts_with("define ") {
+            .map(|l| match l.starts_with("define ") && !kept(l) {
                 true => l.replacen(" alwaysinline", "", 1),
                 false => l.to_string(),
             })
@@ -2470,7 +2498,11 @@ mod the_dev_declares_are_the_release_ones_without_the_attribute {
         for counting in [false, true] {
             let dev = declares_for(all, counting, false);
             assert_eq!(dev, stripped(&declares_for(all, counting, true)));
-            assert!(!dev.lines().any(|l| l.starts_with("define ") && l.contains(" alwaysinline")));
+            let inlined: Vec<&str> = dev
+                .lines()
+                .filter(|l| l.starts_with("define ") && l.contains(" alwaysinline"))
+                .collect();
+            assert_eq!(inlined.len(), 2, "only the two kept helpers are inlined: {inlined:?}");
             assert_eq!(
                 declares_for(none, counting, false),
                 stripped(&declares_for(none, counting, true))
