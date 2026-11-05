@@ -14,7 +14,9 @@
 //! would take them to mean.
 //!
 //! This is the third spec in the family and the widest. The counter sweep
-//! reads its veins from the `*_counters.sh` gates themselves; `the_compile_sweep_names_every_compile_gate.rs` pins that every
+//! reads its veins from the `*_counters.sh` gates themselves, the compile sweep
+//! reads its gates from the scripts that name a compile golden, and
+//! `the_compile_sweep_names_every_compile_gate.rs` pins that every
 //! compile-side golden is read by something the compile sweep runs. Both are
 //! scoped to one sweep, and the gap they left was the gates belonging to
 //! NEITHER of them, which by construction neither could see.
@@ -34,7 +36,6 @@ fn root() -> &'static Path {
 }
 
 const CI: &str = include_str!("../.github/workflows/ci.yml");
-const COMPILE: &str = include_str!("../scripts/gates/all_compile.sh");
 const INTERP: &str = include_str!("../scripts/gates/all_interp.sh");
 
 /// Every `scripts/gates/<name>.sh` the workflow invokes.
@@ -65,22 +66,27 @@ fn quoted<'a>(script: &'a str, word: &str) -> &'a str {
         .0
 }
 
-/// The veins the counter sweep reads, as its `--list` prints them. It finds
-/// them in `scripts/gates` rather than declaring them, so it is run rather
-/// than read.
-fn counter_veins() -> Vec<String> {
+/// The first word of each line a sweep's `--list` prints. The counter sweep
+/// and the compile sweep find their gates in `scripts/gates` rather than
+/// declaring them, so they are run rather than read.
+fn listed(sweep: &str) -> Vec<String> {
     let out = std::process::Command::new("sh")
-        .arg("scripts/gates/all_counters.sh")
+        .arg(format!("scripts/gates/{sweep}"))
         .arg("--list")
         .current_dir(root())
         .output()
-        .expect("the counter sweep runs");
-    assert!(out.status.success(), "all_counters.sh --list failed: {out:?}");
+        .expect("the sweep runs");
+    assert!(out.status.success(), "{sweep} --list failed: {out:?}");
     String::from_utf8(out.stdout)
         .expect("the list is text")
         .lines()
-        .map(|l| l.split_whitespace().next().expect("a line names its vein").to_string())
+        .map(|l| l.split_whitespace().next().expect("a line names its gate").to_string())
         .collect()
+}
+
+/// The veins the counter sweep reads.
+fn counter_veins() -> Vec<String> {
+    listed("all_counters.sh")
 }
 
 /// Every gate any sweep names. The counter sweep names a VEIN and runs
@@ -90,10 +96,9 @@ fn swept() -> BTreeSet<String> {
     for vein in counter_veins() {
         names.insert(format!("{vein}_counters"));
     }
-    for gates in [quoted(COMPILE, "gates"), quoted(INTERP, "gates")] {
-        for gate in gates.split_whitespace() {
-            names.insert(gate.to_string());
-        }
+    names.extend(listed("all_compile.sh"));
+    for gate in quoted(INTERP, "gates").split_whitespace() {
+        names.insert(gate.to_string());
     }
     names
 }
@@ -148,10 +153,9 @@ fn no_sweep_names_a_gate_that_is_not_there() {
 #[test]
 fn the_sweeps_are_not_empty() {
     assert!(counter_veins().len() >= 4, "all_counters.sh reads fewer than four veins");
-    for (name, script) in [("all_compile.sh", COMPILE), ("all_interp.sh", INTERP)] {
-        assert!(
-            quoted(script, "gates").split_whitespace().count() >= 4,
-            "{name} names fewer than four rows, which is not a sweep"
-        );
-    }
+    assert!(listed("all_compile.sh").len() >= 4, "all_compile.sh names fewer than four gates");
+    assert!(
+        quoted(INTERP, "gates").split_whitespace().count() >= 4,
+        "all_interp.sh names fewer than four rows, which is not a sweep"
+    );
 }

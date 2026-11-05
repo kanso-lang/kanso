@@ -10,11 +10,11 @@
 # beside this one would have said so.
 #
 # Running them by hand is what this replaces, and the reason is not typing:
-# three of them REFUSE on a container whose glibc or rustc does not match the
-# golden's measured-on line, and a refusal exits non-zero exactly like a
-# regression. A session that runs them raw and sees three failures learns
-# nothing it can act on, which is the same as not running them. So this
-# separates the two:
+# the host-gated ones REFUSE on a container whose glibc or rustc does not match
+# the golden's measured-on line, and a refusal exits non-zero exactly like a
+# regression. A session that runs them raw and sees refusals learns nothing it
+# can act on, which is the same as not running them. So this separates the
+# two:
 #
 #   AGREED    the gate compared and the numbers match
 #   MOVED     the gate compared and a number changed — read it, then say
@@ -26,26 +26,26 @@
 # row in the summary, and that is what fails a pull request. This exists so
 # a container can tell a moved vein from an unmeasurable one before pushing.
 set -e
-# Derived from the goldens rather than remembered: these are the gates whose
-# script names a compile-side golden (bench/compile_*_golden,
-# bench/entry_*_golden, bench/library_*_golden, text_golden, emitted_golden).
-# The library prefix joined on 2026-09-08 with the vein it names, and it is the
-# instance the spec beside this list predicted in its own comment: a PREFIX list
-# goes stale the moment a vein arrives under a new name, and both derivations
-# there walked straight past bench/library_instructions_golden.txt until they
-# were widened in the same commit.
-# `tests/the_compile_sweep_names_every_compile_gate.rs`
-# replays that derivation, so a gate added later is a red spec rather than a
-# vein nobody sweeps.
+# The gates are read from scripts/gates rather than listed: each gate whose
+# script names a compile-side golden (bench/compile_*, entry_*, library_*,
+# codegen_* and emit_* goldens, bench/text_golden and bench/emitted_golden) is
+# in the sweep, so a gate added later is swept without anyone remembering to
+# add it. A hand list here went stale three times (kanso#2345).
 #
-# ONE IS DELIBERATELY OUT. `build_benchmarks` is not a gate and says so in its
-# own first line. `compile_ir_row` used to be the second exclusion; it went with
-# the per-chip table on 2026-09-05, and the compile row now compares against its
-# single golden inside `compile_instructions` itself.
-gates="machine_code emitted_code compile_memory compile_allocs compile_instructions entry_instructions library_instructions compile_libraries codegen_instructions emit_instructions"
+# Three scripts are left out. `build_benchmarks` is not a gate and says so in
+# its own first line, `all_counters` sweeps the runtime side, and this file is
+# the sweep.
+reads_a_compile_golden='bench/(compile_|entry_|library_|codegen_|emit_).*golden|bench/text_golden|bench/emitted_golden'
+gates=""
+for script in scripts/gates/*.sh; do
+  g=$(basename "$script" .sh)
+  case "$g" in all_compile|all_counters|build_benchmarks) continue ;; esac
+  if grep -qE "$reads_a_compile_golden" "$script"; then
+    gates="$gates $g"
+  fi
+done
 
-# The list above is the one record of what this sweep covers. `--list` prints
-# it and stops; the spec beside it compares that output with the gates on disk.
+# `--list` prints the gates and stops, without building anything.
 if [ "$1" = "--list" ]; then
   for g in $gates; do
     echo "$g"
@@ -92,11 +92,10 @@ for g in $gates; do
   fi
 done
 
-# NOT DERIVED FROM THE LINE ABOVE, and it has to be named by hand because the
+# NOT DERIVED WITH THE GATES ABOVE, and it has to be named by hand because the
 # derivation cannot see it: `bench/compile_golden.txt` and
 # `bench/compile_golden_modules.txt` are read by a cargo test rather than by a
-# gate script, so no file under scripts/gates mentions them and both the
-# `gates=` line and the spec that replays it walk straight past. That is the
+# gate script, so no file under scripts/gates mentions them. That is the
 # hole b3024fb9 fell through — a library change moved the modules vein, this
 # sweep said nothing moved, and CI found it a round later. The widened spec in
 # `tests/the_compile_sweep_names_every_compile_gate.rs` now pins the property
