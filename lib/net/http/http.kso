@@ -178,14 +178,16 @@ fn preamble r
   "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n"
 
 fn header_block r
-  sized = list/concat r.headers ["content-length: {length (as_bytes r.body)}"]
+  sized = list/concat r.headers ["content-length: {size_of r.body}"]
   "{text/join sized "\r\n"}\r\n"
 
-fn as_bytes body:string
-  text/bytes body
+# A body's length in bytes. Each arm measures its own kind, so the count is
+# never asked of a value that only might be a body.
+fn size_of body:string
+  length (text/bytes body)
 
-fn as_bytes body
-  body
+fn size_of body
+  length body
 
 # One request, answered by the handler it is given. `serve_once` is the whole
 # of what a harness needs: a server that answers and stops.
