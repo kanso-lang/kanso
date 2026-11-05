@@ -1555,13 +1555,14 @@ Both engines had the gap in the same three places:
 - the subject of `.?` and `annotate` natively, in `k_sited_word`. The
   interpreter's builtin path already forced it.
 
-Each now forces before it asks. In codegen the force is `maybe_force`, which
-emits nothing where inference proves the value holds no thunk. In the
-runtime it sits on the branch that has already found something other than
-a description, so a chain of descriptions runs the instructions it ran
-before. The first version tested for a thunk ahead of that branch, on every
-step, and CI read deepbench 2,180,005 instructions (1.1%) higher for it.
-`.?`'s entry still tests first, once per rescue built.
+Each now forces before it asks, and each test sits on the branch that has
+already found something other than a description, so a chain of
+descriptions runs the instructions it ran before. In codegen the inline
+bind tests for a cell there, and only where inference leaves the value's
+set holding a thunk, and hands the cell to `k_maybe_bind`. The first
+version forced ahead of the description test, and CI read deepbench
+2,180,005 instructions (1.1%) higher for it. `.?`'s entry still tests
+first, once per rescue built.
 
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject

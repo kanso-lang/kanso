@@ -64,9 +64,7 @@ impl<'a> Backend<'a> {
                 f.record(&t, DESC);
                 return Ok(t.to_string());
             }
-            // a lazy binding handed on unread is an effect only once forced
-            let piped = self.emit_expr(f, &args[0])?;
-            let piped_value = self.maybe_force(f, piped);
+            let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
                 let mut body_args: Vec<Expr> = vec![Expr::Ident(
                     Name::new("__piped"),

@@ -1467,8 +1467,7 @@ impl<'a> Backend<'a> {
                 // the carry apply through the ordinary machinery
                 if let Expr::Lambda { params, body, .. } = head.as_ref() {
                     if params.len() == 1 && args.len() == 1 {
-                        let subject = self.emit_expr(f, &args[0])?;
-                        let value = self.maybe_force(f, subject);
+                        let value = self.emit_expr(f, &args[0])?;
                         // a description takes the executor's bind at runtime;
                         // anything else binds the parameter here and the
                         // lambda body becomes this function's own tail — the
@@ -1491,6 +1490,28 @@ impl<'a> Backend<'a> {
                         f.record(&t, TOP);
                         self.emit_ret(f, &t);
                         f.start_block(&check);
+                        // A lazy binding handed on unread is an effect only
+                        // once forced. k_maybe_bind forces it and decides, so
+                        // a cell takes that path, and the test sits where a
+                        // description has already been ruled out.
+                        if self.may_hold_thunk(f, &value) {
+                            let is_cell = f.tmp();
+                            f.line_fmt(format_args!("{is_cell} = icmp eq i64 {tag}, 14"));
+                            let cell_path = f.label();
+                            let settled = f.label();
+                            f.line_fmt(format_args!(
+                                "br i1 {is_cell}, label %{cell_path}, label %{settled}"
+                            ));
+                            f.start_block(&cell_path);
+                            let t = f.tmp();
+                            let closure = self.emit_expr(f, head)?;
+                            f.line_fmt(format_args!(
+                                "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
+                            ));
+                            f.record(&t, TOP);
+                            self.emit_ret(f, &t);
+                            f.start_block(&settled);
+                        }
                         let ok = inline_not_failure(f, &value);
                         let bail = f.label();
                         let cont = f.label();
