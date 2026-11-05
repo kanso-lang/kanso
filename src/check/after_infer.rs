@@ -245,6 +245,104 @@ fn list_where_a_map_goes(
     }
 }
 
+/// An argument a call answers, of one kind only, where no arm of the callee
+/// takes that kind (kanso#2331). The literal check asks this of an argument
+/// whose kind is on the page; here the kind is what every arm of the
+/// argument's own group answers. That is a join, so it may say more than the
+/// call ever answers but never less: a group that answers a map and nothing
+/// else hands a map, and an arm that takes no map cannot take it. Only
+/// positions where every arm restricts are asked, which `restricted` names,
+/// so a call to a group with a bare binder there costs one lookup.
+fn answered_argument_at(
+    e: &Expr,
+    program: &Program,
+    restricted: &crate::hash::Map<(&str, usize), u64>,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    shadow: &dyn Fn(&str) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
+    let Some(&mask) = restricted.get(&(name.as_str(), args.len())) else { return };
+    if shadow(name.as_str()) {
+        return;
+    }
+    for (i, arg) in args.iter().enumerate().take(64) {
+        if mask & (1u64 << i) == 0 {
+            continue;
+        }
+        let Expr::App { head: inner, args: inner_args, piped: false, .. } = arg else {
+            continue;
+        };
+        let Expr::Ident(maker, _, _) = inner.as_ref() else { continue };
+        if shadow(maker.as_str()) {
+            continue;
+        }
+        let Some(&set) = returns.get(&(maker.as_str(), inner_args.len())) else { continue };
+        // A thunk is forced before it is matched, so it is the value it forces to.
+        let Some(kind) = sole_kind(set & !crate::infer::FAIL & !crate::infer::THUNK) else {
+            continue;
+        };
+        // Rare from here on, so the arms and the types are found by a walk
+        // rather than kept in tables every call would pay to build.
+        let arms: Vec<&FnDecl> = program
+            .fns
+            .iter()
+            .filter(|d| d.name == *name && d.params.len() == args.len())
+            .collect();
+        let types: HashMap<&str, &TypeDecl> =
+            program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+        let admitted =
+            arms.iter().any(|a| a.params.get(i).is_some_and(|p| pattern_admits(p, kind, &types)));
+        if admitted {
+            continue;
+        }
+        let wanted: Vec<String> =
+            arms.iter().filter_map(|a| a.params.get(i)).map(describe_pattern).collect();
+        diags.push(Diagnostic::new(
+            "type",
+            format!(
+                "no arm of `{name}` takes {} here (arms take {})",
+                describe_literal(kind),
+                dedup_join(wanted)
+            ),
+            arg.span(),
+        ));
+    }
+}
+
+/// The one literal kind a return set holds, or none when it holds more than
+/// one kind or anything a literal is not.
+fn sole_kind(s: crate::infer::Set) -> Option<LitKind> {
+    use crate::infer::{ANY_INT, FLOAT, LIST, MAP, STR};
+    match s {
+        MAP => Some(LitKind::Map),
+        LIST => Some(LitKind::List),
+        STR => Some(LitKind::Str),
+        FLOAT => Some(LitKind::Float),
+        s if s != 0 && s & !ANY_INT == 0 => Some(LitKind::Int),
+        _ => None,
+    }
+}
+
+/// The positions of each group at which no arm binds bare, one bit each:
+/// the only positions where an argument can reach no arm at all.
+fn restricted_positions(program: &Program) -> crate::hash::Map<(&str, usize), u64> {
+    let mut restricted: crate::hash::Map<(&str, usize), u64> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for d in &program.fns {
+        let mut bits = 0u64;
+        for (pos, p) in d.params.iter().enumerate().take(64) {
+            if !matches!(p, Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. }) {
+                bits |= 1u64 << pos;
+            }
+        }
+        *restricted.entry((d.name.as_str(), d.params.len())).or_insert(u64::MAX) &= bits;
+    }
+    restricted.retain(|_, bits| *bits != 0);
+    restricted
+}
+
 /// The names one declaration binds to a list literal, for
 /// `list_where_a_map_goes`, which asks only after it has found a call of
 /// `put` or its kin. A name bound twice is left out.
@@ -591,6 +689,7 @@ fn check_after_infer<'p>(
         entry.1 |= named;
     }
 
+    let restricted = restricted_positions(program);
     let tables = AfterInfer {
         discarded,
         nones,
@@ -1099,6 +1198,7 @@ fn check_after_infer<'p>(
                 lazy_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 string_where_a_list_goes(cur, aliases, returns, &shadow, none_diags);
                 list_where_a_map_goes(cur, aliases, returns, &shadow, decl, none_diags);
+                answered_argument_at(cur, program, &restricted, returns, &shadow, none_diags);
                 wrong_kind_at_an_operator(cur, returns, &shadow, none_diags);
                 site(cur, &shadow, &[], &mut handed_here, box_diags);
                 crate::for_each_child(cur, |c| stack.push(c));

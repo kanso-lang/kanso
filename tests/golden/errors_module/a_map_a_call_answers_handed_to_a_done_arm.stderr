@@ -1,0 +1,4 @@
+error[type]: no arm of `kept` takes a map here (arms take done) (module tests/golden/errors_module/a_map_a_call_answers_handed_to_a_done_arm/tally)
+  --> tests/golden/errors_module/a_map_a_call_answers_handed_to_a_done_arm/tally/tally.kso:11:9
+  11 |   kept (tallied xs)
+               ^
