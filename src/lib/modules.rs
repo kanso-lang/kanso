@@ -483,11 +483,8 @@ fn load_with_definitions(
         let (mut imports, body) = parts.remove(&key).unwrap_or_default();
         imports.sort_unstable();
         imports.dedup();
-        let text = if imports.is_empty() {
-            body
-        } else {
-            format!("{}\n\n{body}", imports.join("\n"))
-        };
+        let text =
+            if imports.is_empty() { body } else { format!("{}\n\n{body}", imports.join("\n")) };
         texts.insert(name, text.clone());
         files.insert(key, text);
     }
