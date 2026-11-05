@@ -134,6 +134,39 @@ fn load_to_describe(
     (loaded, again)
 }
 
+/// While an entry's modules load to be described, drops each refusal that a
+/// derivation may answer by writing into the module: a name, a type, or a
+/// field nothing declares yet. `DEFERRED` records that one was dropped, and
+/// the second load, with what the derivations wrote, refuses whatever is
+/// still unknown.
+fn set_aside(diags: &mut Vec<crate::diag::Diagnostic>) {
+    if !DESCRIBING.with(|d| d.get()) {
+        return;
+    }
+    let before = diags.len();
+    diags.retain(|d| !(d.kind == "name" && d.message.starts_with("unknown name `")));
+    diags.retain(|d| !(d.kind == "type" && unknown_type(&d.message)));
+    diags.retain(|d| !(d.kind == "name" && unknown_field(&d.message)));
+    if diags.len() < before {
+        DEFERRED.with(|d| d.set(true));
+    }
+}
+
+/// A refusal of a type no declaration names, which a derivation may be about
+/// to declare in the module (`derive/define` of a `type`), so the first load
+/// sets it aside as it does an unknown name.
+fn unknown_type(message: &str) -> bool {
+    message.starts_with("no type is called `")
+        || message.starts_with("no type this file can see is called `")
+}
+
+/// A refusal of a field no record type has, which a record a derivation is
+/// about to declare may have.
+fn unknown_field(message: &str) -> bool {
+    message.starts_with("no record type has a field `")
+        || (message.contains("` is read for ") && message.contains(", and no record type has "))
+}
+
 /// A module's path as the derived files are keyed: the canonical path when
 /// one exists, and the path as given for a module handed in as sources.
 fn derived_key(dir: &std::path::Path) -> String {
@@ -1014,13 +1047,7 @@ fn compile_module_loaded(
                 );
             }
         }
-        if DESCRIBING.with(|d| d.get()) {
-            let before = diags.len();
-            diags.retain(|d| !(d.kind == "name" && d.message.starts_with("unknown name `")));
-            if diags.len() < before {
-                DEFERRED.with(|d| d.set(true));
-            }
-        }
+        set_aside(&mut diags);
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));
@@ -1082,7 +1109,7 @@ fn compile_module_loaded(
     // it, and it was asked once per import in every compile.
     let shipped =
         SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
-    let diags = match shipped {
+    let mut diags = match shipped {
         true => Vec::new(),
         false => phase::watched("check_merged", || {
             check::check_merged_after_aliases_with(
@@ -1095,6 +1122,7 @@ fn compile_module_loaded(
         }),
     };
     inline::apply_wrappers(&mut merged, &wrappers);
+    set_aside(&mut diags);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
         // directory read as `(module pkg)` and a module in one file as

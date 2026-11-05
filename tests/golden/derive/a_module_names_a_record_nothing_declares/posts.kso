@@ -1,0 +1,10 @@
+import "std/list"
+
+# `post` is the record models/records declares in this module from the
+# `posts` table.
+pub fn bylines titles
+  made = list/to_list (list/map titles (t -> post t "ada"))
+  list/to_list (list/map made byline)
+
+fn byline p:pots
+  "{p.title} by {p.author}"

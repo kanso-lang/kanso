@@ -10,10 +10,11 @@
 # data: ints, strings, bools, lists, maps, records and references to
 # functions, which is how a route table names its handlers and why the
 # checker sees each one. `declare_type` makes a record type in the entry,
-# named `name` with the listed fields. `define` adds an arm, written out as
-# source, to the module `origin` names (`posts/post` puts it in `posts`). The
-# module compiles it as one more of its own files, so the arm may claim the
-# module's own types, and it is checked like code someone wrote there.
+# named `name` with the listed fields. `define` adds an arm or a record type,
+# written out as source, to the module `origin` names (`posts/post` puts it in
+# `posts`). The module compiles it as one more of its own files, so an arm may
+# claim the module's own types, the module's own code may use a type defined
+# there, and either is checked like code someone wrote there.
 # `refuse` makes a compile error at the item `origin` names, which is how a
 # convention reports a function it cannot place.
 #
