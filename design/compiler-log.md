@@ -20,28 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — an entry names a group
-
-#2205's second item. ch06 teaches the named group, `prepare =` above
-indented effect lines and then `prepare .> (_ -> ...)`, as the way to join
-concurrent work, and it parsed only as a library constant. An entry or a
-play file refused it with "only `if` opens an indented block", which named
-nothing the reader had written. A binding whose header is `name =` alone,
-above more than one indented line, now parses its body as a constant's body
-is parsed, so its effect lines join into one group and run concurrently as
-the constant's do.
-
-tests/entry_file.rs runs an entry whose group sleeps in one member and prints
-in the other, on both engines, and reads `fast`, `slow`, `done`, the order a
-library constant prints. The compiler before this change refused it.
-
-The three changes in #2240 move the compile rows by layout:
-compile_instructions 24,096,605 (+27), library_instructions 71,383,017 (+2),
-startup_instructions 50,258 (+4), codegen_instructions_release 371,560,989
-(-89) and browser_compile_instructions 343,289,560 (-12). Welfare falls by
-less than 0.0001, and the floor follows under the rule for a change that
-makes the tools do what the documentation says.
-
 ## 2026-10-29 — a letter the scan refuses costs nothing
 
 `regexp/split "[^a-z']+"` tries a match at every letter of its subject, and
@@ -1579,3 +1557,47 @@ The new term starts at its baseline, where it earns half its weight, while the
 side's other terms sit far above theirs. So the meta falls by 0.65 with no
 counter moving, and the floor re-bases by that amount; the `--set` records
 why.
+
+## 2026-11-05 — the dev tier stops paying a call for each bitwise op
+
+A dev build leaves the runtime's helper twins out of line (`emit_ir_dev` has
+the measurement), so at `-O0` every `&`, `|`, `^`, `bits/shl` and `bits/shr`
+was a call into a twin that tested both tags and then did one instruction. In
+sha256's rounds those calls were 48% of a dev run, and 100,000 rounds of PBKDF2
+took 3.05 seconds at the dev tier against 0.24 at release (kanso#2304).
+
+Two changes. A bitwise op whose operands the sets prove are ints is now the
+machine op (`direct_bit_op` in src/codegen/words.rs). The only tests left are
+the ones the sets cannot answer: a tag test for an operand that may be a
+bignum, and a range test for a shift by an amount that is not a literal.
+Anything that fails a test goes to the twin, whose C entry owns the message.
+The word is kept beside its box, so the next op reads it directly. And a dev
+build keeps `alwaysinline` on two helpers, `k_b_push_mut_known` and
+`k_b_append_mut_int`, because inlined each saves the run more than it costs
+the compile. Every helper was priced on runbench's own dev module; the others
+cost far more to compile than they save, `k_b_at_fast` 203,771,636 instructions
+of `clang -cc1` against 12,070,000 of the run. `KEPT_INLINE_AT_DEV` carries the
+two numbers that decided it.
+
+The rows are CI's, on a job whose unchanged rows read as their goldens do.
+runbench_dev fell 133,722,370 to 2,822,125,403 (-4.52%), runbench fell 871 to
+915,612,489 and digestbench 802 to 3,288,941. codegen_instructions_dev fell
+249,464 to 116,852,251, since the dev module now writes an instruction where it
+wrote a call. Machine code fell 384 bytes on runbench and 304 on digestbench.
+Four counters rose: emit_instructions to 5,612,808 (+456),
+browser_compile_instructions to 350,953,001 (+10,496), emitted_other_lines to
+180,457 (+182) and emitted_other_branches to 19,018 (+50), the last two because
+a tested op writes its test and its fallback inline. Welfare rose from 95.04 to
+95.06 and the floor is banked. PBKDF2 at the dev tier now takes 1.7 seconds.
+
+Goldens: `a_bitwise_op_on_words_skips_the_tags` in the micro corpus, and
+`a_sum_past_the_word_meets_a_mask` and
+`a_shift_by_a_computed_amount_past_the_word` in the runtime corpus, the two
+refusals reached from the tested arm. All three went red when the tested arm
+answered zero and the op was made an `or`.
+
+What is left of the gap is `-O0` code itself: sha256's rounds spill every value
+to the stack, and list reads whose container inference cannot prove a list
+still call `k_b_at_fast`. Compiling the whole module at `-O1` cut PBKDF2's run
+to 0.44 seconds and cost clang four times the compile, which the dev tier
+exists to avoid.
