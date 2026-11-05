@@ -1555,14 +1555,25 @@ Both engines had the gap in the same three places:
 - the subject of `.?` and `annotate` natively, in `k_sited_word`. The
   interpreter's builtin path already forced it.
 
-Each now forces before it asks, and each test sits on the branch that has
-already found something other than a description, so a chain of
-descriptions runs the instructions it ran before. In codegen the inline
-bind tests for a cell there, and only where inference leaves the value's
-set holding a thunk, and hands the cell to `k_maybe_bind`. The first
-version forced ahead of the description test, and CI read deepbench
-2,180,005 instructions (1.1%) higher for it. `.?`'s entry still tests
-first, once per rescue built.
+Each now forces before it asks. The first version forced ahead of the
+description test, and CI read deepbench 2,180,005 instructions (1.1%)
+higher. Moving each test behind the description test left CI's reading
+where it was, at +2,179,642. A profile of deepbench in this container put
+the whole difference in two functions: `k_maybe_bind` (+1,308,003), where
+every bind of a plain value now paid the cell test, and the executor's
+loop (+871,637), which called `k_force` on every answer that was not a
+description.
+
+So the cell test now runs only where it can find something. Codegen calls
+`k_bind_settled`, which has no cell test, wherever inference rules a cell
+out, and `k_maybe_bind` only where the value's set holds a thunk. The inline
+tail bind tests for a cell under the same condition. The executor's loops
+test the tag before forcing, and the forcing sits in a cold helper out of
+line. In this container deepbench then reads 198,401,946 against main's
+197,862,309: +539,637 (0.27%), all in the executor's loop. That is one tag
+test for each callback answer that is not a description, and it stays,
+because whether a callback answers a cell is known only when it answers.
+`.?`'s entry still tests first, once per rescue built.
 
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject

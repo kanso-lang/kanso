@@ -1485,7 +1485,7 @@ impl<'a> Backend<'a> {
                         let t = f.tmp();
                         let closure = self.emit_expr(f, head)?;
                         f.line_fmt(format_args!(
-                            "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
+                            "{t} = call %KValue @k_bind_settled(%KValue {value}, %KValue {closure})"
                         ));
                         f.record(&t, TOP);
                         self.emit_ret(f, &t);
