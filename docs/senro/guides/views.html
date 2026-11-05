@@ -32,11 +32,12 @@ header
 if viewer == ""
   nav.door
     a href="/session/new" Sign in
-    a href="/accounts/new" Make an account
+    a href="/account/new" Make an account
 else
   form.out method="post" action="/session"
     input type="hidden" name="_method" value="DELETE"
     span Signed in as {viewer}.
+    a href="/account/edit" Your account
     button Sign out
 if flash != ""
   p.flash = flash

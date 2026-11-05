@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, how a visitor who has lost a password chooses a new one, how an account confirms its address, and how senro refuses a request another site sent.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, how a visitor changes a password or chooses a new one after losing it, how an account confirms its address, and how senro refuses a request another site sent.</p>
 
 <h2>the session</h2>
 
@@ -25,14 +25,14 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <p><code>web/signed_in req response secret session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
-<p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. <code>web/lasting response</code> keeps the session cookie the response sets for those fourteen days instead, which is Devise's "remember me". the guestbook's sign-in form has a "Keep me signed in" box, and <code>entered</code> below wraps the response in <code>web/lasting</code> when it is ticked.</p>
+<p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. a session made <code>web/lasting</code> keeps its cookie for those fourteen days instead, which is Devise's "remember me". the mark is in the session itself, so every later response that keeps the session, such as the page that clears a notice, keeps the cookie as long. the guestbook's sign-in form has a "Keep me signed in" box, and <code>entered</code> below marks the session when it is ticked. <code>web/signed_out session</code> forgets the sign-in, the mark with it, and keeps the rest.</p>
 
 <h2>making an account</h2>
 
-<p>an account is a model like any other: a name, a digest of the password, an email address, and when that address was confirmed. its <code>create</code> action looks up the name and the address and checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing. a new account is not signed in: it is mailed a link that confirms its address first, as described under confirming an address below.</p>
+<p>an account is a model like any other: a name, a digest of the password, an email address, and when that address was confirmed. the guestbook's <code>account</code> module is a singular resource, as Devise's registrations are, since a visitor only ever has one: <code>account/new</code> answers GET /account/new and <code>account/create</code> answers POST /account. its <code>create</code> action looks up the name and the address and checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing. a new account is not signed in: it is mailed a link that confirms its address first, as described under confirming an address below.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/accounts.kso</div>
+  <div class="code-panel-title">examples/guestbook/account.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"../../passwords"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
@@ -41,6 +41,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="c"># What a sign-up form asked for.</span>
@@ -59,7 +60,11 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
   <span class="f">email</span>
   <span class="f">confirmed</span>
 
-<span class="c"># Anyone may make an account.</span>
+<span class="c"># One address may try the current password ten times in three minutes, as</span>
+<span class="c"># it may try to sign in.</span>
+<span class="k">pub</span> <span class="f">rate_limits</span> <span class="o">=</span> { <span class="s">"update"</span>:<span class="s">"10 per 3 minutes"</span> }
+
+<span class="c"># Anyone may make an account. Changing its password asks for a sign-in.</span>
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
@@ -121,11 +126,60 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
 <span class="k">fn</span> <span class="f">made</span> _ _
   <span class="f">effect</span> web/denied
 
+<span class="c"># The account of whoever is signed in, as Devise's registrations edit it:</span>
+<span class="c"># a new password, given the current one. The account is a singular</span>
+<span class="c"># resource, since a visitor only ever edits their own.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req _
+  <span class="f">effect</span> (<span class="f">changing</span> req {} <span class="n">200</span>)
+
+<span class="c"># The current password must match, and the new one is eight characters or</span>
+<span class="c"># more. Changing it ends every other sign-in, since a sign-in rests on the</span>
+<span class="c"># digest, and this browser is signed in again on the new one so that it</span>
+<span class="c"># stays.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db
+  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  name <span class="o">=</span> <span class="f">web/viewer</span> req entries/secret
+  current <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"current"</span>
+  password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
+  <span class="f">pg/query</span> db digest_by [name]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">changed</span> req db name current password (<span class="f">list/first</span> r<span class="o">.</span>rows))
+
+digest_by <span class="o">=</span> <span class="s">"select digest from accounts where name = $1"</span>
+
+<span class="k">fn</span> <span class="f">changed</span> _ _ _ _ _ none
+  <span class="f">effect</span> web/denied
+
+<span class="k">fn</span> <span class="f">changed</span> req db name current password row
+  wrong <span class="o">=</span> { <span class="s">"current"</span>:<span class="s">"That is not your password."</span> }
+  short <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Use eight characters or more."</span> }
+  kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
+  <span class="f">return</span> effect (<span class="f">changing</span> req wrong <span class="n">422</span>) if not passwords/matches? current kept
+  <span class="f">return</span> effect (<span class="f">changing</span> req short <span class="n">422</span>) if length password <span class="o">&lt;</span> <span class="n">8</span>
+  <span class="f">passwords/digested</span> password
+    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">pg/query</span> db set_digest [d name] <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">kept_on</span> req name d))
+
+set_digest <span class="o">=</span> <span class="s">"update accounts set digest = $1 where name = $2"</span>
+
+<span class="k">fn</span> <span class="f">kept_on</span> req name digest
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  noticed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Your password is changed."</span>
+  home <span class="o">=</span> <span class="f">web/redirect</span> <span class="s">"/"</span>
+  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret noticed name digest)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">over_limit</span> req
+  wait <span class="o">=</span> { <span class="s">"current"</span>:<span class="s">"Too many tries. Try again in a few minutes."</span> }
+  <span class="f">effect</span> (<span class="f">changing</span> req wait <span class="n">429</span>)
+
+<span class="k">fn</span> <span class="f">changing</span> req problems code
+  page <span class="o">=</span> <span class="f">views/account_view</span> <span class="s">"/account"</span> problems
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Your account · Guestbook"</span> page
+  <span class="f">views/answer_as</span> req code framed
+
 <span class="c"># The sign-up form shows the name and address as typed and the problem with</span>
 <span class="c"># each field, if any. A password is never sent back.</span>
 <span class="k">fn</span> <span class="f">opened</span> req name email problems code
   heading <span class="o">=</span> <span class="s">"Make an account"</span>
-  to <span class="o">=</span> <span class="s">"/accounts"</span>
+  to <span class="o">=</span> <span class="s">"/account"</span>
   page <span class="o">=</span> <span class="f">views/door_view</span> heading to <span class="s">"Make it"</span> name email problems true false
   framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Make an account · Guestbook"</span> page
   <span class="f">views/answer_as</span> req code framed</code></pre>
@@ -221,17 +275,17 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
   back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
   welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
+  signing <span class="o">=</span> <span class="f">kept_if</span> welcomed remember
   home <span class="o">=</span> <span class="f">web/redirect</span> back
-  signed <span class="o">=</span> <span class="f">web/signed_in</span> req home entries/secret welcomed name a<span class="o">.</span><span class="f">digest</span>
-  <span class="f">effect</span> (<span class="f">kept_if</span> signed remember)
+  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret signing name a<span class="o">.</span>digest)
 
 <span class="c"># A visitor who ticked "Keep me signed in" keeps the sign-in after the</span>
 <span class="c"># browser closes.</span>
-<span class="k">fn</span> <span class="f">kept_if</span> r true
-  <span class="f">web/lasting</span> r
+<span class="k">fn</span> <span class="f">kept_if</span> s true
+  <span class="f">web/lasting</span> s
 
-<span class="k">fn</span> <span class="f">kept_if</span> r false
-  <span class="f">r</span>
+<span class="k">fn</span> <span class="f">kept_if</span> s false
+  <span class="f">s</span>
 
 <span class="c"># The right password for an address not yet confirmed: the link is sent</span>
 <span class="c"># again, and the visitor is told to follow it. Only the holder of the</span>
@@ -250,9 +304,9 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
   wait <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Too many tries. Try again in a few minutes."</span> }
   <span class="f">effect</span> (<span class="f">opened</span> req <span class="s">""</span> wait <span class="n">429</span>)
 
-<span class="c"># Signing out keeps the rest of the session and forgets the viewer.</span>
+<span class="c"># Signing out keeps the rest of the session and forgets the sign-in.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
-  s <span class="o">=</span> <span class="f">delete</span> (<span class="f">web/session</span> req entries/secret) <span class="s">"viewer"</span>
+  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req entries/secret)
   r <span class="o">=</span> <span class="f">web/redirect</span> <span class="s">"/"</span>
   <span class="f">effect</span> (<span class="f">web/kept</span> r entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Signed out."</span>))
 
@@ -289,8 +343,8 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account"</span>
 <span class="k">import</span> <span class="s">"./account_mailer"</span>
-<span class="k">import</span> <span class="s">"./accounts"</span>
 <span class="k">import</span> <span class="s">"./confirmations"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
@@ -301,12 +355,23 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
 <span class="k">import</span> <span class="s">"./signatures"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret session/signed_against</code></pre>
+<span class="c"># The components whose actions run on the server.</span>
+served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
+
+acting <span class="o">=</span> <span class="f">web/components</span> routes entries/secret served
+
+bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
+
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting entries/secret bound_of</code></pre>
 </div>
 
-<p><code>web/requiring_sign_in routes secret bound_of</code> wraps every action that is not open. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
+<p><code>web/requiring_sign_in routes secret bound_of</code> wraps every action in the table, and a component's action is one of them, so the table goes through <code>web/components</code> first. an action that is not open asks for a sign-in. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
 
-<p>a sign-in rests on something the account holds, which the guestbook takes to be the password's digest. <code>session/create</code> hands it to <code>web/signed_in</code>, which keeps an HMAC of it in the session beside the viewer's name. at each action that asks for a sign-in, <code>bound_of db name</code> reads what the account holds now, and the guestbook's <code>session/signed_against</code> reads the digest. a session whose HMAC does not match it is signed out and sent to the sign-in form. setting a new password changes the digest, so it ends every sign-in made before it, on every browser, as devise does. an app whose sign-ins rest on nothing passes <code>web/unbound</code> as <code>bound_of</code> and <code>""</code> to <code>web/signed_in</code>.</p>
+<p>a sign-in rests on something the account holds, which the guestbook takes to be the password's digest. <code>session/create</code> hands it to <code>web/signed_in</code>, which keeps an HMAC of it in the session beside the viewer's name. at every action, <code>bound_of db name</code> reads what the account holds now, and the guestbook's <code>session/signed_against</code> reads the digest. when the HMAC does not match it, the sign-in is over. an action that asks for a sign-in sends the visitor to the sign-in form. an open one, such as the book's front page or a component's remove button, runs as if nobody had signed in, and its answer tells the browser to forget the sign-in, so a stolen cookie cannot act through an open action either. setting a new password changes the digest, so it ends every sign-in made before it, on every browser, as devise does. an app whose sign-ins rest on nothing passes <code>web/unbound</code> as <code>bound_of</code> and <code>""</code> to <code>web/signed_in</code>.</p>
+
+<h2>changing a password</h2>
+
+<p>a signed-in visitor changes the password from the account page, as Devise's registrations edit lets them. <code>account/edit</code> answers GET /account/edit with a form that asks for the current password and a new one, and <code>account/update</code> answers PATCH /account. it checks the current password with <code>passwords/matches?</code>, ten tries in three minutes like signing in, and sets the new digest. that ends every sign-in that rested on the old digest. the browser that made the change is signed in again on the new digest, keeping whatever else its session held, so it stays signed in and the others do not.</p>
 
 <h2>sending mail</h2>
 
