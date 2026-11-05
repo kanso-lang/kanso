@@ -1,0 +1,31 @@
+import "std/text"
+
+# Two record types share a field name, and a note's body may be none.
+pub type letter
+  body
+
+pub type note
+  body
+
+pub fn noted s
+  note (text/to_int s)
+
+pub fn read n:note
+  shown n.body
+
+fn shown none
+  "no number"
+
+fn shown n
+  "{n}"
+
+fn as_bytes s:string
+  text/bytes s
+
+fn as_bytes b
+  b
+
+# A note's body may be none, and a note is what `n` is, so measuring it is
+# refused.
+pub fn measured n:note
+  length (as_bytes n.body)

@@ -1,0 +1,4 @@
+import "./letters"
+
+print (letters/written "ada")
+print (letters/read (letters/noted "7"))

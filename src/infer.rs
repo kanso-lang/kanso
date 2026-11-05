@@ -1369,8 +1369,12 @@ fn callee_first(program: &Program) -> (Vec<usize>, Vec<usize>, Vec<u32>) {
 /// twice and the search reads back to front. Lookup answers the same as
 /// the map did, and the vector cannot grow past the bind sites written in
 /// the declaration.
+///
+/// A name bound by an annotated parameter, `r:letter`, also carries the type
+/// it names, so a field read through it answers that type's field alone
+/// (kanso#2350).
 #[derive(Clone, Default)]
-struct Env<'a>(Vec<(&'a str, Set)>);
+struct Env<'a>(Vec<(&'a str, Set, Option<&'a str>)>);
 
 impl<'a> Env<'a> {
     fn clear(&mut self) {
@@ -1378,11 +1382,21 @@ impl<'a> Env<'a> {
     }
 
     fn insert(&mut self, name: &'a str, set: Set) {
-        self.0.push((name, set));
+        self.0.push((name, set, None));
+    }
+
+    fn insert_typed(&mut self, name: &'a str, set: Set, ty: &'a str) {
+        self.0.push((name, set, Some(ty)));
     }
 
     fn get(&self, name: &str) -> Option<Set> {
-        self.0.iter().rev().find(|(n, _)| *n == name).map(|&(_, s)| s)
+        self.0.iter().rev().find(|(n, _, _)| *n == name).map(|&(_, s, _)| s)
+    }
+
+    /// The record type a name was annotated with where it was bound, if the
+    /// latest binding of it was an annotated one.
+    fn pinned(&self, name: &str) -> Option<&'a str> {
+        self.0.iter().rev().find(|(n, _, _)| *n == name).and_then(|&(_, _, t)| t)
     }
 
     fn contains_key(&self, name: &str) -> bool {
@@ -1414,7 +1428,7 @@ fn bind_pattern<'a>(
         Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {
         }
         Pattern::Annotated { name, ty, .. } => {
-            env.insert(name, annotated_set(ty));
+            env.insert_typed(name, annotated_set(ty), ty);
         }
         // destructuring a declared type refines each field to the join of what
         // construction sites stored there — so `_parsed p v` gives p its real
@@ -2153,12 +2167,19 @@ fn eval_call<'a>(
             out |= (arg & FAIL) & !ctx.caught[caught_at + pos];
         }
         let folded = folded(args, arg_sets, ctx.lambda_answer);
+        let receiver = pinned_receiver(name, args, env);
         for k in start..end {
             let i = ctx.group_members[k];
             // An arm a literal argument cannot reach neither sees the call
             // nor answers it: `text/split s "\n"` never runs `split _ ""`,
             // so what that arm raises is not something this call can answer.
             if !arm_can_run(&ctx.program.fns[i].params, args, &ctx.consts) {
+                continue;
+            }
+            // A field read through a name annotated with its type runs that
+            // type's getter arm and no other, so another record's field of
+            // the same name, and the none it may hold, is not its answer.
+            if receiver.is_some_and(|ty| !reads_type(&ctx.program.fns[i].params, ty)) {
                 continue;
             }
             for (p, set) in arg_sets.iter().enumerate() {
@@ -2185,6 +2206,31 @@ fn eval_call<'a>(
         _ => 0,
     };
     builtin_set(name, arg_sets) | read | piped_bits
+}
+
+/// The record type a getter call reads, when its one argument is a name an
+/// annotated parameter bound: `r.body` inside `fn size r:letter` reads a
+/// `letter`.
+fn pinned_receiver<'a>(name: &str, args: &[Expr], env: &Env<'a>) -> Option<&'a str> {
+    crate::ast::getter_field(name)?;
+    match args {
+        [Expr::Ident(arg, _, _)] => env.pinned(arg.as_str()),
+        _ => None,
+    }
+}
+
+/// Whether a getter arm reads `ty`. Names are compared by their last segment,
+/// so a type spelled with its module and without is the same type, and two
+/// types of one name in different modules are never told apart here: the arm
+/// is kept, which is what reading every arm did before.
+fn reads_type(params: &[Pattern], ty: &str) -> bool {
+    fn last(t: &str) -> &str {
+        t.rsplit('/').next().unwrap_or(t)
+    }
+    match params.first() {
+        Some(Pattern::Ctor { ty: arm, .. }) => last(arm) == last(ty),
+        _ => true,
+    }
 }
 
 /// What a description's execution hands a bound continuation, syntactically:

@@ -1,0 +1,4 @@
+error[exhaustive]: this can be a none and `length` does not take one — resolve it here
+  --> another_types_none/letters/letters.kso:31:11
+  31 |   length (as_bytes n.body)
+                 ^
