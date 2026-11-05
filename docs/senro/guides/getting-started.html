@@ -39,6 +39,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
+<span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
 <span class="k">import</span> <span class="s">"./signatures"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
@@ -78,7 +79,7 @@ connected <span class="o">=</span> <span class="f">pg/connect</span> <span class
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -86,11 +87,16 @@ id <span class="o">=</span> <span class="f">models/column</span> <span class="s"
 
 joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
 
+<span class="c"># The address a reset link is sent to.</span>
+emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
 
-digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
+digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span>
+
+email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span></code></pre>
 </div>
 
 <h2>a model</h2>
