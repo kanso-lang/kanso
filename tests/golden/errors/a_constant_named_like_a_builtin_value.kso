@@ -1,0 +1,11 @@
+# `done` is the value an iterator answers once it has run out, as `none`,
+# `true` and `false` are values of their own. A library could declare a
+# constant of that name, and then an iterator in std/list that answered
+# `done` answered the constant instead, so a fold elsewhere in the program
+# found no arm for it (#2338). An entry already refused the name as a
+# binding.
+done = "delete from jobs where id = $1"
+
+none = 0
+
+pub play = print "{done} {none}"

@@ -2245,7 +2245,10 @@ fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> Has
         }
     }
     for decl in &program.fns {
+        // A declaration named for a nullary value would be read wherever
+        // the value is written, std/list's `done` among them (#2338).
         if AMBIENT.contains(&decl.name.as_str())
+            || NULLARY.contains(&decl.name.as_str())
             || program.types.iter().any(|t| t.name == decl.name)
         {
             diags.push(Diagnostic::new(
