@@ -112625,3 +112625,15 @@ showed one of the two lines the sample prints. book_check's write path now
 copies the example and error goldens into its scratch tree, so a rewrite
 there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
 go red.
+
+## 2026-10-29 — the interpreter's calls section moves into eval/calls.rs
+
+The cleanup owed after #2240 to #2244. `call` through `worded_step`, 888
+lines of the `Interp` impl, move into src/eval/calls.rs as an impl block of
+their own, read with include! where they stood, the way eval.rs already reads
+executor.rs and builtins.rs. eval.rs falls from 3,803 lines to 2,918. The
+removed lines are the body of calls.rs byte for byte. CI's cost-goldens job
+read every vein at main's values, compile_instructions among them, so no row
+moved. Sixteen ratchet mutations patched lines in the moved section by their
+text and now name calls.rs. One of them, the lambda called as a nested call,
+only checked for `closure_flow` there; the arms it deletes stayed in eval.rs.
