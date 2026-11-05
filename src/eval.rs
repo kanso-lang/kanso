@@ -1125,7 +1125,9 @@ impl<'a> Interp<'a> {
             }
         };
         if *piped && !args.is_empty() {
-            let piped_value = self.eval(&args[0], env, frame)?;
+            // A lazy binding handed on unread arrives as its cell, and is an
+            // effect only once forced, so the chain asks after forcing it.
+            let piped_value = self.force_thunk(self.eval(&args[0], env, frame)?)?;
             if is_failure(&piped_value) {
                 return Ok(Flow::Done(piped_value));
             }
@@ -1605,7 +1607,7 @@ impl<'a> Interp<'a> {
             }
             Expr::App { head, args, span, piped } => {
                 if *piped && !args.is_empty() {
-                    let piped_value = self.eval(&args[0], env, frame)?;
+                    let piped_value = self.force_thunk(self.eval(&args[0], env, frame)?)?;
                     if is_failure(&piped_value) {
                         return Ok(piped_value);
                     }

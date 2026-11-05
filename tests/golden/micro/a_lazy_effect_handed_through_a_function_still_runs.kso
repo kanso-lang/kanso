@@ -1,0 +1,28 @@
+import "std/os"
+
+# A binding of an effect is lazy, and a function that hands it back unread
+# answers the binding as it was given. It is still an effect: `.>` runs it,
+# whether it is the chain's subject or a callback's answer, and `.?` reaches
+# its failure.
+fn kept none _
+  effect "nothing"
+
+fn kept _ e
+  e
+
+fn noted n
+  print "ran {n}" .> (_ -> effect "row {n}")
+
+fn handed n
+  change = noted n
+  kept 1 change .> (w -> print w)
+
+fn answered n
+  change = noted n
+  effect 1 .> (r -> kept r change) .> (w -> print w)
+
+fn rescued path
+  read = os/read_file! path
+  kept 1 read .> (t -> print t) .? (e -> print "rescued: {e.reason}")
+
+pub play = handed 1 .> (_ -> answered 2) .> (_ -> rescued "/no/such/file")
