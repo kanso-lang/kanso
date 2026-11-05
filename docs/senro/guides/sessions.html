@@ -23,7 +23,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. an action reads it with <code>web/session req secret</code> and keeps a changed one by answering <code>web/kept response secret session</code>. the guestbook carries its notices this way: an action puts a <code>flash</code> in the session before it redirects, and the page that shows the notice clears it.</p>
 
-<p><code>web/signed_in req response secret session id</code> keeps the session with <code>id</code> as its viewer, and <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
+<p><code>web/signed_in req response secret session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
 <p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. <code>web/lasting response</code> keeps the session cookie the response sets for those fourteen days instead, which is Devise's "remember me". the guestbook's sign-in form has a "Keep me signed in" box, and <code>entered</code> below wraps the response in <code>web/lasting</code> when it is ticked.</p>
 
@@ -172,6 +172,21 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
 
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
 
+<span class="c"># What a sign-in rests on: the digest the account keeps now. A new password</span>
+<span class="c"># changes it, so a password reset signs out every session made before it.</span>
+<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (<span class="f">db</span> name <span class="o">-&gt;</span> <span class="f">pg/query</span> db digest_by [name] <span class="o">.&gt;</span> kept_of)
+
+digest_by <span class="o">=</span> <span class="s">"select digest from accounts where name = $1"</span>
+
+<span class="k">fn</span> <span class="f">kept_of</span> r
+  <span class="f">effect</span> (<span class="f">digest_in</span> (<span class="f">list/first</span> r<span class="o">.</span>rows))
+
+<span class="k">fn</span> <span class="f">digest_in</span> none
+  <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">digest_in</span> row
+  <span class="f">models/cell</span> row <span class="s">"digest"</span>
+
 <span class="c"># Signing in and out. The session is the signed cookie `web` keeps, and</span>
 <span class="c"># signing in writes the account's name into it as the viewer.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
@@ -207,7 +222,7 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
   back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
   welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
   home <span class="o">=</span> <span class="f">web/redirect</span> back
-  signed <span class="o">=</span> <span class="f">web/signed_in</span> req home entries/secret welcomed name
+  signed <span class="o">=</span> <span class="f">web/signed_in</span> req home entries/secret welcomed name a<span class="o">.</span><span class="f">digest</span>
   <span class="f">effect</span> (<span class="f">kept_if</span> signed remember)
 
 <span class="c"># A visitor who ticked "Keep me signed in" keeps the sign-in after the</span>
@@ -286,10 +301,13 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
 <span class="k">import</span> <span class="s">"./signatures"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret</code></pre>
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret session/signed_against</code></pre>
 </div>
 
-<p><code>web/requiring_sign_in routes secret</code> wraps every action that is not open. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
+<p><code>web/requiring_sign_in routes secret bound_of</code> wraps every action that is not open. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
+
+<p>a sign-in rests on something the account holds, which the guestbook takes to be the password's digest. <code>session/create</code> hands it to <code>web/signed_in</code>, which keeps an HMAC of it in the session beside the viewer's name. at each action that asks for a sign-in, <code>bound_of db name</code> reads what the account holds now, and the guestbook's <code>session/signed_against</code> reads the digest. a session whose HMAC does not match it is signed out and sent to the sign-in form. setting a new password changes the digest, so it ends every sign-in made before it, on every browser, as devise does. an app whose sign-ins rest on nothing passes <code>web/unbound</code> as <code>bound_of</code> and <code>""</code> to <code>web/signed_in</code>.</p>
+
 <h2>sending mail</h2>
 
 <p>senro's <code>mail</code> module sends plain-text mail. <code>mail/composed from to subject body</code> makes a message, and <code>mail/delivered message</code> sends it the way the <code>SENRO_MAIL</code> environment variable says:</p>
