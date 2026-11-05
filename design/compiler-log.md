@@ -20,27 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — book_panels reads output panels by their source, and golden paths
-
-Items 1 and 2 of #2213. The landing page titles its outputs `output`, and
-book_panels matched only titles that start with `kanso`, so those panels were
-copied by hand. An `output` panel now answers to the source panel it sits
-under: the pair is matched once, and the output becomes the match a panel
-titled with that source's run would have been. On the site pages, a run
-resolves to tests/golden/examples/<name>.stdout and a `--plan` run to
-<name>.plan, so about.html's two effects panels are compared too. A panel
-titled with a golden's path, such as about.html's three
-tests/golden/errors/*.stderr panels, shows that file, compared after its
-markup is stripped and rewritten from it under `--write`. The three shapes
-are sorted into one list by position before the rewrite, which replaces the
-two-list merge.
-
-The wider reading found one drifted panel in the book: ch03's reading.kso
-showed one of the two lines the sample prints. book_check's write path now
-copies the example and error goldens into its scratch tree, so a rewrite
-there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
-go red.
-
 ## 2026-10-29 — the interpreter's calls section moves into eval/calls.rs
 
 The cleanup owed after #2240 to #2244. `call` through `worded_step`, 888
@@ -1590,10 +1569,34 @@ with the code it emits: `codegen_instructions_release` 58,837 to 372,025,872,
 `codegen_instructions_dev` 3,473 to 116,855,724 and `emit_instructions` 582
 to 5,613,397. The interpreter forces where it did not, and
 `interp_instructions` rose 92,078 to 622,558,315. In the tab,
-`browser_compile_instructions` rose 6,395 to 350,293,758 and
+`browser_compile_instructions` rose 6,395 to 350,297,580 and
 `browser_run_instructions` 8,001 to 78,426,179.
 
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
 with a failure from std. Before the change both engines printed `<io>` for
 each; after it they print what each effect does.
+
+## 2026-11-05 — a declaration cannot take a nullary value's name
+
+A library could declare a constant named `done`. std/list's iterators answer
+`done` when they run out, and with the constant declared that answer read
+the constant, so a fold elsewhere in the program found no arm for it and
+failed at run time (#2338). senro's jobs module found it with a SQL string
+named `done`. An entry already refused the name, because there it is a
+binding and the shadow check holds the nullary values as globals; a library
+declares it instead, and `collect_globals` checked declarations against the
+ambient names and the types only.
+
+A declaration named `done`, `none`, `true` or `false` is now refused as a
+name already taken. The one program in the tree that declared one was
+`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
+`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
+declares `done` and `none`, and checked clean before the change.
+
+Rows: the new check costs every compile a little. `compile_instructions`
+rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
+`library_instructions` 1,497 to 73,495,778 and
+`browser_compile_instructions` 3,822 to 350,291,185, and
+`browser_run_instructions` did not move. The rule is part of the language,
+so the welfare floor moves down by exactly the check's cost.
