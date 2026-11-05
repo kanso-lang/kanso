@@ -112592,3 +112592,15 @@ a_split_stops_where_the_separator_does_evac_bytes 224 -> 272,
 a_split_stops_where_the_separator_does_perm_allocs 22 -> 23 and
 a_split_stops_where_the_separator_does_sh_rec 1,168 -> 1,232. Welfare rises,
 and the floor is banked at the new score.
+
+## 2026-10-29 — prose_check pairs each page's div tags
+
+Item 3 of #2213. ch07 shipped with a stray `</div>` that the browser forgave
+and every gate passed over. prose_check now walks the `<div>` and `</div>`
+tags of every page it reads and reports a close with nothing open, or an open
+never closed, at its line. On main it found two more, in appendix a after the
+type-order panel, and this change deletes them. No page puts a div inside a
+comment, so the walk reads the raw page. A ratchet row puts a stray close back
+after ch07's first panel and the gate goes red. The summary line counts
+findings rather than tells, and the advice about the slop families prints only
+when one of them was found.
