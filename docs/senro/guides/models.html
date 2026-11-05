@@ -29,7 +29,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -40,13 +40,18 @@ joined <span class="o">=</span> <span class="f">models/create_table</span> <span
 <span class="c"># The address a reset link is sent to.</span>
 emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
 
+<span class="c"># When the address was confirmed, or empty until it is.</span>
+confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
 
 digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span>
 
-email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span></code></pre>
+email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
+
+confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span></code></pre>
 </div>
 
 <p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/made schema</code> as it starts, which creates each table that is missing, and then <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>

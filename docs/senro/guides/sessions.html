@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, and how a visitor who has lost a password chooses a new one.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, how a visitor who has lost a password chooses a new one, how an account confirms its address, and how senro refuses a request another site sent.</p>
 
 <h2>the session</h2>
 
@@ -29,7 +29,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <h2>making an account</h2>
 
-<p>an account is a model like any other: a name, a digest of the password, and an email address, which is where a reset link goes. its <code>create</code> action looks up the name and the address and checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing.</p>
+<p>an account is a model like any other: a name, a digest of the password, an email address, and when that address was confirmed. its <code>create</code> action looks up the name and the address and checks the form with rules before it does any expensive work, so a sign-up that cannot succeed costs no hashing. a new account is not signed in: it is mailed a link that confirms its address first, as described under confirming an address below.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/accounts.kso</div>
@@ -37,8 +37,10 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="k">import</span> <span class="s">"../../passwords"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/io"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="c"># What a sign-up form asked for.</span>
@@ -48,13 +50,14 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
   <span class="f">password</span>
 
 <span class="c"># An account, as the `accounts` table stores it: the name its holder signs</span>
-<span class="c"># with, a digest of the password, and the address a reset link goes to. The</span>
-<span class="c"># password itself is never stored.</span>
+<span class="c"># with, a digest of the password, the address its mail goes to, and when</span>
+<span class="c"># that address was confirmed. The password itself is never stored.</span>
 <span class="k">pub</span> <span class="k">type</span> account
   <span class="f">id</span>
   <span class="f">name</span>
   <span class="f">digest</span>
   <span class="f">email</span>
+  <span class="f">confirmed</span>
 
 <span class="c"># Anyone may make an account.</span>
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
@@ -103,11 +106,17 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
 <span class="k">fn</span> <span class="f">addressed?</span> email
   <span class="f">length</span> (<span class="f">text/split</span> email <span class="s">"@"</span>) <span class="o">==</span> <span class="n">2</span>
 
+<span class="c"># A new account is not signed in: its holder confirms the address first,</span>
+<span class="c"># through the link the mail carries, as Devise's `confirmable` asks. A mail</span>
+<span class="c"># that cannot be sent is logged, and the account can ask again by signing</span>
+<span class="c"># in.</span>
 <span class="k">fn</span> <span class="f">made</span> req kept:account
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
-  welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> <span class="s">"Welcome, <span class="i">{kept.name}</span>. Your account is made."</span>
-  home <span class="o">=</span> <span class="f">web/redirect</span> <span class="s">"/"</span>
-  <span class="f">effect</span> (<span class="f">web/signed_in</span> req home entries/secret welcomed kept<span class="o">.</span>name)
+  told <span class="o">=</span> <span class="s">"Welcome, <span class="i">{kept.name}</span>. Confirm your address with the link we sent."</span>
+  welcomed <span class="o">=</span> <span class="f">put</span> s <span class="s">"flash"</span> told
+  <span class="f">account_mailer/confirmation</span> kept<span class="o">.</span><span class="f">id</span> kept<span class="o">.</span><span class="f">email</span>
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: <span class="i">{u.reason}</span>\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret welcomed))
 
 <span class="k">fn</span> <span class="f">made</span> _ _
   <span class="f">effect</span> web/denied
@@ -141,9 +150,20 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
 <span class="k">import</span> <span class="s">"../../passwords"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># What a sign-in checks of the account a name holds. A name with no account</span>
+<span class="c"># holds the stand-in digest, which no password matches.</span>
+<span class="k">type</span> holder
+  <span class="f">id</span>
+  <span class="f">digest</span>
+  <span class="f">email</span>
+  <span class="f">confirmed</span>
 
 <span class="c"># One address may try to sign in ten times in three minutes, as Rails 8's</span>
 <span class="c"># generated sessions controller allows. Past that, `over_limit` answers the</span>
@@ -165,18 +185,24 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
   name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
   password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
   remember <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"remember"</span> <span class="o">==</span> <span class="s">"yes"</span>
-  <span class="f">pg/query</span> db digest_of [name]
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">kept_digest</span> r<span class="o">.</span>rows)
-    <span class="o">.&gt;</span> (kept <span class="o">-&gt;</span> <span class="f">entered</span> req name kept password remember)
+  <span class="f">pg/query</span> db held_by [name]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">held</span> (<span class="f">list/first</span> r<span class="o">.</span>rows))
+    <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">entered</span> req name a password remember)
 
-digest_of <span class="o">=</span> <span class="s">"select digest from accounts where name = $1"</span>
+held_by <span class="o">=</span> <span class="s">"select id, digest, email, confirmed from accounts where name = $1"</span>
 
-<span class="k">fn</span> <span class="f">kept_digest</span> rows
-  <span class="f">return</span> passwords/stand_in if length rows <span class="o">==</span> <span class="n">0</span>
-  <span class="f">effect</span> (<span class="f">models/cell</span> rows[<span class="n">1</span>] <span class="s">"digest"</span>)
+<span class="k">fn</span> <span class="f">held</span> none
+  <span class="f">passwords/stand_in</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">holder</span> <span class="s">""</span> d <span class="s">""</span> <span class="s">""</span>))
 
-<span class="k">fn</span> <span class="f">entered</span> req name kept password remember
-  <span class="f">return</span> refused req name if not passwords/matches? password kept
+<span class="k">fn</span> <span class="f">held</span> row
+  id <span class="o">=</span> <span class="s">"<span class="i">{models/cell row </span>"</span>id<span class="s">"}"</span>
+  kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
+  email <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"email"</span>
+  <span class="f">effect</span> (<span class="f">holder</span> id kept email (<span class="f">models/cell</span> row <span class="s">"confirmed"</span>))
+
+<span class="k">fn</span> <span class="f">entered</span> req name a password remember
+  <span class="f">return</span> refused req name if not passwords/matches? password a<span class="o">.</span><span class="f">digest</span>
+  <span class="f">return</span> unconfirmed req name a if a<span class="o">.</span>confirmed <span class="o">==</span> <span class="s">""</span>
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
   back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
   welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
@@ -191,6 +217,15 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 
 <span class="k">fn</span> <span class="f">kept_if</span> r false
   <span class="f">r</span>
+
+<span class="c"># The right password for an address not yet confirmed: the link is sent</span>
+<span class="c"># again, and the visitor is told to follow it. Only the holder of the</span>
+<span class="c"># password learns that the account exists.</span>
+<span class="k">fn</span> <span class="f">unconfirmed</span> req name a
+  first <span class="o">=</span> <span class="s">"Confirm your address first. We have sent the link again."</span>
+  <span class="f">account_mailer/confirmation</span> a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span>
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: <span class="i">{u.reason}</span>\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">opened</span> req name { <span class="s">"password"</span>:first } <span class="n">403</span>))
 
 <span class="k">fn</span> <span class="f">refused</span> req name
   wrong <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"That name and password do not match."</span> }
@@ -212,7 +247,7 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
   <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Sign in · Guestbook"</span> page)</code></pre>
 </div>
 
-<p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match.</p>
+<p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match. only after the password matches does the action look at whether the address is confirmed, so only the holder of the password learns that an unconfirmed account exists.</p>
 
 <h2>too many tries</h2>
 
@@ -239,7 +274,9 @@ digest_of <span class="o">=</span> <span class="s">"select digest from accounts 
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
 <span class="k">import</span> <span class="s">"./accounts"</span>
+<span class="k">import</span> <span class="s">"./confirmations"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
@@ -274,16 +311,15 @@ smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/resets.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../mail"</span>
-<span class="k">import</span> <span class="s">"../../models"</span>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"../../passwords"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/io"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
-<span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
@@ -322,39 +358,7 @@ on_its_way <span class="o">=</span> <span class="s">"If that address has an acco
 
 <span class="k">fn</span> <span class="f">sent</span> row email
   id <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"id"</span>
-  kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
-  <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">site</span> <span class="o">.&gt;</span> (base <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">linked</span> base id kept t)))
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">letter</span> email link))
-
-<span class="k">fn</span> <span class="f">linked</span> base id kept t
-  <span class="s">"<span class="i">{base}</span>/resets/<span class="i">{passwords/reset_token entries/secret id kept t}</span>/edit"</span>
-
-<span class="c"># Where a link in a mail points. It is configured, never read from the</span>
-<span class="c"># request's Host header: whoever sends a request chooses that header, and a</span>
-<span class="c"># reset link built from it would carry the token to a site of their choosing.</span>
-site <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_URL"</span> <span class="o">.&gt;</span> (u <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">base_of</span> u))
-
-<span class="k">fn</span> <span class="f">base_of</span> none
-  <span class="s">"http://127.0.0.1:3000"</span>
-
-<span class="k">fn</span> <span class="f">base_of</span> u
-  <span class="f">u</span>
-
-sender <span class="o">=</span> <span class="s">"Guestbook &lt;noreply@guestbook.test&gt;"</span>
-
-<span class="k">fn</span> <span class="f">letter</span> email link
-  lines <span class="o">=</span> [
-    <span class="s">"Someone asked to reset the password of your guestbook account."</span>
-    <span class="s">""</span>
-    <span class="s">"Choose a new one here, within fifteen minutes:"</span>
-    <span class="s">""</span>
-    <span class="f">link</span>
-    <span class="s">""</span>
-    <span class="s">"If it was not you, there is nothing to do: your password is unchanged."</span>
-  ]
-  body <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">"\n"</span>
-  <span class="f">mail/composed</span> sender email <span class="s">"Reset your guestbook password"</span> body
+  <span class="f">account_mailer/reset</span> id email (<span class="f">models/cell</span> row <span class="s">"digest"</span>)
 
 <span class="c"># The `id` a reset's member routes take is the token itself.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id
@@ -382,10 +386,16 @@ expired <span class="o">=</span> <span class="s">"That link has expired or was u
   <span class="f">return</span> effect (<span class="f">chosen</span> req token short <span class="n">422</span>) if length password <span class="o">&lt;</span> <span class="n">8</span>
   id <span class="o">=</span> <span class="f">id_of</span> (<span class="f">passwords/reset_id</span> token)
   <span class="f">passwords/digested</span> password
-    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">pg/query</span> db reset [d id])
+    <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">pg/query</span> db reset [d id <span class="s">"<span class="i">{t}</span>"</span>]))
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/"</span> changed))
 
-reset <span class="o">=</span> <span class="s">"update accounts set digest = $1 where id = $2"</span>
+<span class="c"># A reset link proves the address as well as a confirmation link does, so</span>
+<span class="c"># setting a password through one confirms an address that was not yet.</span>
+reset <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">update</span> accounts set digest <span class="o">=</span> $<span class="n">1</span>,
+    confirmed <span class="o">=</span> <span class="f">case</span> when coalesce(confirmed, '') <span class="o">=</span> '' then $<span class="n">3</span> else confirmed end
+  <span class="f">where</span> id <span class="o">=</span> $<span class="n">2</span>
+<span class="s">""</span>"
 
 changed <span class="o">=</span> <span class="s">"Your password is changed. Sign in with it."</span>
 
@@ -436,5 +446,167 @@ digest_by_id <span class="o">=</span> <span class="s">"select digest from accoun
 
 <p>the link carries a token from <code>passwords/reset_token</code>: the account's id, the moment the token stops working, and an HMAC-SHA-256 over both and the digest the account keeps now. it stands in the route as the member's <code>id</code>. nothing is stored. setting the new password changes the digest, so the link works once, and it stops working fifteen minutes after it was made. <code>passwords/reset_valid?</code> checks a token against the digest the account holds when the link is followed, comparing the signatures over every byte.</p>
 
-<p>the link starts with <code>SENRO_URL</code> and never with the request's Host header. whoever sends a request chooses that header, and a reset link built from it would carry the token to a site of their choosing.</p>
+<p>the guestbook's mail is written in <code>account_mailer.kso</code>, which holds each letter's text and builds its link with <code>mail/url_for</code>. a module whose name ends in <code>_mailer</code> makes the app's mail, as a Rails mailer does, and none of its functions is a route, so several resources can call it. the link starts with <code>SENRO_URL</code> and never with the request's Host header. whoever sends a request chooses that header, and a reset link built from it would carry the token to a site of their choosing.</p>
+<h2>confirming an address</h2>
+
+<p>a new account confirms its address before it can sign in, as devise's <code>confirmable</code> asks. sign-up mails a link and sends the visitor to the front page with a notice. signing in with the right password before following it is answered with a 403 and a request to confirm first, and the link is sent again.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/account_mailer.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../mail"</span>
+<span class="k">import</span> <span class="s">"../../passwords"</span>
+<span class="k">import</span> <span class="s">"../../tokens"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="c"># The guestbook's mail, as a Rails mailer holds it: what each letter says,</span>
+<span class="c"># and the signed link it carries, which starts with `mail/url_for`. First, a</span>
+<span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
+<span class="c"># it works once.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> id email kept
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/<span class="i">{reset_token id kept t}</span>/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">reset_letter</span> email link))
+
+<span class="k">fn</span> <span class="f">reset_token</span> id kept t
+  <span class="f">passwords/reset_token</span> entries/secret id kept t
+
+<span class="k">fn</span> <span class="f">reset_letter</span> email link
+  lines <span class="o">=</span> [
+    <span class="s">"Someone asked to reset the password of your guestbook account."</span>
+    <span class="s">""</span>
+    <span class="s">"Choose a new one here, within fifteen minutes:"</span>
+    <span class="s">""</span>
+    <span class="f">link</span>
+    <span class="s">""</span>
+    <span class="s">"If it was not you, there is nothing to do: your password is unchanged."</span>
+  ]
+  subject <span class="o">=</span> <span class="s">"Reset your guestbook password"</span>
+  <span class="f">mail/composed</span> entries/sender email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)
+
+<span class="c"># A link to confirm the address an account was made with. It is bound to the</span>
+<span class="c"># address and to the account's `confirmed` column, which is empty until the</span>
+<span class="c"># link is followed, so it works once, and not at all once the address</span>
+<span class="c"># changes. It lasts a day.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> id email
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/confirmations/<span class="i">{confirm_token id email t}</span>/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">confirm_letter</span> email link))
+
+<span class="k">fn</span> <span class="f">confirm_token</span> id email t
+  <span class="f">tokens/made</span> <span class="s">"confirm"</span> entries/secret id (<span class="f">bound</span> email <span class="s">""</span>) t <span class="n">1440</span>
+
+<span class="c"># Whether `token` confirms the account that holds `email` and `confirmed`</span>
+<span class="c"># now, at `t`.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirms?</span> token email confirmed t
+  <span class="f">tokens/valid?</span> <span class="s">"confirm"</span> entries/secret token (<span class="f">bound</span> email confirmed) t
+
+<span class="k">fn</span> <span class="f">bound</span> email confirmed
+  <span class="s">"<span class="i">{email}</span> <span class="i">{confirmed}</span>"</span>
+
+<span class="k">fn</span> <span class="f">confirm_letter</span> email link
+  lines <span class="o">=</span> [
+    <span class="s">"Welcome to the guestbook."</span>
+    <span class="s">""</span>
+    <span class="s">"Confirm your address here, within a day, and then sign in:"</span>
+    <span class="s">""</span>
+    <span class="f">link</span>
+    <span class="s">""</span>
+    <span class="s">"If you did not make an account, there is nothing to do."</span>
+  ]
+  subject <span class="o">=</span> <span class="s">"Confirm your guestbook address"</span>
+  <span class="f">mail/composed</span> entries/sender email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)</code></pre>
+</div>
+
+<p>the link leads to <code>confirmations/edit</code>, which shows a button and changes nothing. mail scanners fetch every link in a message to check it, and a link that confirmed on a GET would be confirmed by the scanner. the button sends <code>confirmations/update</code>, which stamps the account's <code>confirmed</code> column.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/confirmations.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../tokens"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="c"># An account whose address a good token would confirm.</span>
+<span class="k">type</span> unconfirmed
+  <span class="f">id</span>
+  <span class="f">email</span>
+
+<span class="c"># The link in a confirmation mail leads here. Following it shows a button,</span>
+<span class="c"># and the button confirms the address: a GET changes nothing, so a mail</span>
+<span class="c"># scanner that fetches every link it sees confirms nobody. The `id` the</span>
+<span class="c"># member routes take is the token `account_mailer/confirmation` signed.</span>
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"edit"</span> <span class="s">"update"</span>]
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id
+  <span class="f">held</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">offered</span> req id a)
+
+<span class="k">fn</span> <span class="f">offered</span> req _ none
+  <span class="f">effect</span> (<span class="f">told</span> req stale)
+
+<span class="k">fn</span> <span class="f">offered</span> req id a
+  <span class="f">effect</span> (<span class="f">shown</span> req id a<span class="o">.</span>email)
+
+stale <span class="o">=</span> <span class="s">"That link has expired or was used. Sign in to have it sent again."</span>
+
+<span class="c"># Confirming stamps the account with the moment, which also retires the link:</span>
+<span class="c"># it was bound to the column being empty.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
+  <span class="f">held</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">confirmed</span> req db a)
+
+<span class="k">fn</span> <span class="f">confirmed</span> req _ none
+  <span class="f">effect</span> (<span class="f">told</span> req stale)
+
+<span class="k">fn</span> <span class="f">confirmed</span> req db a
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">pg/query</span> db stamped [<span class="s">"<span class="i">{t}</span>"</span> a<span class="o">.</span>id])
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"Your address is confirmed. Sign in with it."</span>))
+
+stamped <span class="o">=</span> <span class="s">"update accounts set confirmed = $1 where id = $2"</span>
+
+<span class="c"># The account a token confirms now, or none when the token is no good for</span>
+<span class="c"># the account it names.</span>
+<span class="k">fn</span> <span class="f">held</span> db token
+  id <span class="o">=</span> <span class="f">id_text</span> (<span class="f">tokens/id_of</span> token)
+  <span class="f">pg/query</span> db looked [id]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">checked</span> token id (<span class="f">list/first</span> r<span class="o">.</span>rows) t)))
+
+looked <span class="o">=</span> <span class="s">"select email, confirmed from accounts where id = $1"</span>
+
+<span class="k">fn</span> <span class="f">checked</span> _ _ none _
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">checked</span> token id row t
+  email <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"email"</span>
+  was <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"confirmed"</span>
+  good <span class="o">=</span> <span class="f">account_mailer/confirms?</span> token email was t
+  <span class="f">if</span> good (<span class="f">unconfirmed</span> id email) none
+
+<span class="k">fn</span> <span class="f">id_text</span> none
+  <span class="s">"0"</span>
+
+<span class="k">fn</span> <span class="f">id_text</span> n
+  <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">told</span> req notice
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  <span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> notice)
+
+<span class="k">fn</span> <span class="f">shown</span> req id email
+  page <span class="o">=</span> <span class="f">views/confirm_offered_view</span> <span class="s">"/confirmations/<span class="i">{id}</span>"</span> email
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Confirm your address · Guestbook"</span> page
+  <span class="f">views/answer_as</span> req <span class="n">200</span> framed</code></pre>
+</div>
+
+<p>the token is made by <code>tokens/made</code>, the signing a reset token uses too, for the purpose "confirm" and bound to the address and to the <code>confirmed</code> column being empty. so it works once, it stops working if the address changes, and it lasts a day. a token made for one purpose opens nothing else. a password set through a reset link confirms the address as well, since following that link proves the visitor reads its mail.</p>
+
+<h2>requests from other sites</h2>
+
+<p>a page on another site can hold a form that posts to the app, and a visitor's browser would send it with their session. senro refuses such a request before any action sees it. any request but a GET or a HEAD is answered with a 403 when the browser says another site sent it: its <code>Sec-Fetch-Site</code> header is anything but <code>same-origin</code> or <code>none</code>, or, from a browser too old to send that header, its <code>Origin</code> is not the app's own. the session cookie is also <code>SameSite=Lax</code>, so a browser should not carry it on such a request at all. this is the check Rails' <code>protect_from_forgery</code> makes, done with the headers a browser sets instead of a token in every form. a request with neither header comes from a program, which has no visitor's cookie to borrow, and is let through.</p>
 </article>
