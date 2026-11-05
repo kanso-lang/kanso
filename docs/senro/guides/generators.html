@@ -1,0 +1,250 @@
+---
+layout: default
+title: "generators in senro"
+description: "how senro's generators write an app and a resource, and what each file they write holds."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>generators</h1>
+
+<p>senro's generators write the files an app starts from, as Rails' do. <code>new</code> writes an app that serves a home page, and <code>scaffold</code> adds a resource to it: a table, a model, the seven actions and three views. this guide runs both and reads what they write. the result is <code>examples/notebook</code> in senro's repository. senro's specs write it again on every run and compare the two, and they serve it on both engines and make, change and remove a note through it, so the files on this page are what the generators write today.</p>
+
+<h2>running them</h2>
+
+<p>the generators run from senro's own directory, and take the app's path relative to it. the files they write import senro by climbing back up that path, one <code>..</code> for each directory it names, so an app two directories down imports <code>../../models</code>. an app kept outside senro's repository names senro by its repository instead, as in <code>import "kanso-lang/senro/models"</code>, and <code>kanso install</code> fetches it.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ kanso run generate -- new examples/notebook
+  create examples/notebook/main.kso
+  create examples/notebook/home.kso
+  create examples/notebook/migrations.kso
+  create examples/notebook/views/layout.kata
+  create examples/notebook/views/home.kata
+$ kanso run generate -- scaffold examples/notebook note title:text pages:int
+  create examples/notebook/notes.kso
+  create examples/notebook/views/notes_index.kata
+  create examples/notebook/views/note_shown.kata
+  create examples/notebook/views/note_form.kata
+  change examples/notebook/migrations.kso
+  change examples/notebook/main.kso</code></pre>
+</div>
+
+<p>each line names a file and what happened to it. <code>scaffold</code> changes two files that <code>new</code> wrote: it adds the migration to the end of the migrations list, and the resource's import to the entry. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ kanso run generate -- scaffold examples/notebook note title:text
+generate: examples/notebook/notes.kso is there already
+$ kanso run generate -- scaffold examples/notebook book title:words
+generate: cannot read `title:words`: a field is name:text or name:int</code></pre>
+</div>
+
+<p>a field is <code>name:text</code> or <code>name:int</code>. those are the two kinds a posted form's value reads back as without a parser of its own. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
+
+<h2>the entry</h2>
+
+<p><code>new</code> writes an entry that connects, migrates and serves. it reads the database from the environment as libpq does, so the same app runs on a laptop and on a host that sets <code>PGHOST</code> and the rest. its migrations are recorded under the app's name, which is the last part of its path.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../kata"</span>
+<span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./home"</span>
+<span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./notes"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+
+<span class="k">derive</span> kata/views
+<span class="k">derive</span> models/tables
+<span class="k">derive</span> routes/rest
+
+<span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
+<span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
+<span class="c"># sets them.</span>
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="f">connected</span>
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> migrations/all)
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> routes connected)</code></pre>
+</div>
+
+<p><code>import "./notes"</code> is the line <code>scaffold</code> added. it puts the import among the app's own, in order, so the entry reads as if it had been written by hand.</p>
+
+<h2>the migration</h2>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/migrations.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+
+<span class="c"># The app's schema, as the changes that built it, oldest first.</span>
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made]
+
+notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [notes_id notes_title notes_pages]
+
+notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
+
+notes_title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>
+
+notes_pages <span class="o">=</span> <span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span></code></pre>
+</div>
+
+<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it; the models guide says how the list is run and recorded.</p>
+
+<h2>the resource</h2>
+
+<p>the resource is one module. its record names the table's columns, and the models derivation checks each against the schema the migrations fold into. the three policies let anyone write, which suits a first run and nothing after it. <code>problems</code> holds the model's rules; the scaffold writes one for each int field, and <code>models/whole_number</code> is broken by anything an <code>integer</code> column would refuse.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># A note as the `notes` table stores it. The models derivation checks each</span>
+<span class="c"># field against the table's columns, and writes `note_from`, which builds</span>
+<span class="c"># one from a row, and `note_model`, which the writes below go through.</span>
+<span class="k">pub</span> <span class="k">type</span> note
+  <span class="f">id</span>
+  <span class="f">title</span>
+  <span class="f">pages</span>
+
+<span class="c"># Anyone may make, change and remove a note. The models module asks these</span>
+<span class="c"># before it writes; narrow them to the visitors who should.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update?</span> _ _
+  <span class="f">true</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> _ _
+  <span class="f">true</span>
+
+<span class="c"># What makes a note fit to keep: each number is one its column takes.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> r
+  <span class="f">models/problems</span> [(<span class="f">models/whole_number</span> <span class="s">"pages"</span> r<span class="o">.</span>pages)]
+
+model <span class="o">=</span> <span class="f">note_model</span></code></pre>
+</div>
+
+<p>the seven actions are the ones a Rails scaffold writes, and the routing guide says how each name places it. reads go through two queries over the same columns, and writes go through the model, so the policies and the model's rules are asked before anything is written.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  <span class="f">pg/query</span> db listed [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req r<span class="o">.</span>rows))
+
+column_names <span class="o">=</span> [<span class="s">"id"</span> <span class="s">"title"</span> <span class="s">"pages"</span>]
+
+columns <span class="o">=</span> <span class="f">text/join</span> column_names <span class="s">", "</span>
+
+listed <span class="o">=</span> <span class="s">"select <span class="i">{columns}</span> from notes order by id"</span>
+
+found <span class="o">=</span> <span class="s">"select <span class="i">{columns}</span> from notes where id = $1::integer"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db id:int
+  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span>] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+  <span class="f">effect</span> (<span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} <span class="n">200</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  given <span class="o">=</span> <span class="f">picked</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
+  <span class="f">models/created</span> <span class="s">""</span> db model given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">made</span> req w))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
+  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span>]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">editing</span> req id (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
+  given <span class="o">=</span> <span class="f">picked</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
+  <span class="f">models/updated</span> <span class="s">""</span> db model <span class="s">"<span class="i">{id}</span>"</span> given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">changed</span> req id w))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
+  <span class="f">models/destroyed</span> <span class="s">""</span> db model <span class="s">"<span class="i">{id}</span>"</span> <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">gone</span> w))</code></pre>
+</div>
+
+<p>what each write answers decides the response. a record that breaks a rule comes back as <code>models/invalid</code>, and the form is shown again with what was typed and a 422. a write a policy refuses is a <code>web/denied</code>, and a row that is not there is a <code>web/absent</code>; <code>web/refusal</code> answers them with a 403 and a 404. anything else is the written row, and the action redirects to it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">made</span> req w:models/invalid
+  <span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> (<span class="f">filled</span> w<span class="o">.</span>record) w<span class="o">.</span><span class="f">problems</span> <span class="n">422</span>
+
+<span class="k">fn</span> <span class="f">made</span> _ w:web/denied
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">made</span> _ w
+  <span class="f">web/redirect</span> <span class="s">"/notes/<span class="i">{w.id}</span>"</span>
+
+<span class="k">fn</span> <span class="f">changed</span> req id w:models/invalid
+  <span class="f">form</span> req <span class="s">"/notes/<span class="i">{id}</span>"</span> <span class="s">"PATCH"</span> (<span class="f">filled</span> w<span class="o">.</span>record) w<span class="o">.</span><span class="f">problems</span> <span class="n">422</span>
+
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:web/denied
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:web/absent
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">changed</span> _ id _
+  <span class="f">web/redirect</span> <span class="s">"/notes/<span class="i">{id}</span>"</span>
+
+<span class="k">fn</span> <span class="f">gone</span> w:web/denied
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">gone</span> w:web/absent
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">gone</span> _
+  <span class="f">web/redirect</span> <span class="s">"/notes"</span></code></pre>
+</div>
+
+<h2>the views</h2>
+
+<p>three templates: the list, a note, and the form that makes and changes one. the form takes the path it is sent to and the method, so <code>new</code> sends it to <code>/notes</code> as a POST and <code>edit</code> to the note's own path as a PATCH, which the hidden <code>_method</code> field carries. each field shows the problem a rule found with it, if there was one.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/views/note_form.kata</div>
+  <pre><code>takes path method fields problems
+header
+  h1 Note
+  p.lede
+    a href="/notes" All notes
+form method="post" action=path
+  input type="hidden" name="_method" value=method
+  label
+    | title
+    input name="title" value=fields["title"]
+  if problems["title"] != none
+    p.problem = problems["title"]
+  label
+    | pages
+    input name="pages" value=fields["pages"]
+  if problems["pages"] != none
+    p.problem = problems["pages"]
+  button Save</code></pre>
+</div>
+
+<h2>after generating</h2>
+
+<p>three things are worth doing before an app goes anywhere. narrow the policies to the visitors who should write (the sessions guide shows how to ask for a sign-in). add the model's other rules to <code>problems</code>, as the models guide describes, such as a title that may not be blank. and replace the home page, which says only that the app exists.</p>
+</article>

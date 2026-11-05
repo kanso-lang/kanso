@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "routing in senro"
-description: "how senro places an app's routes: a resource's seven actions, ids, singular resources, path_to, and legacy aliases."
+description: "how senro places an app's routes: a resource's seven actions, ids, singular and nested resources, path_to, and legacy aliases."
 ---
 <style>
 .senro-hero .hero-kanji { letter-spacing: 0.2em; }
@@ -17,7 +17,7 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 <span class="eyebrow">senro guides</span>
 <h1>routing</h1>
 
-<p>a senro app declares no routes. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide covers the seven actions, how an id reaches an action, singular resources, naming a route from code, and keeping an old URL working.</p>
+<p>a senro app declares no routes. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide covers the seven actions, how an id reaches an action, singular resources, resources nested under another, naming a route from code, and keeping an old URL working.</p>
 
 <h2>the seven actions</h2>
 
@@ -98,6 +98,54 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 </div>
 
 <p>the guestbook's sign-in is one: <code>session/new</code> is the form at <code>GET /session/new</code>, <code>session/create</code> signs in at <code>POST /session</code>, and <code>session/destroy</code> signs out at <code>DELETE /session</code>.</p>
+
+<h2>nested resources</h2>
+
+<p>a comment belongs to a post, and its URL can say so. a module whose actions each take the parent's id right after the request and the database is nested under the parent: <code>comments/index req db post_id</code> answers <code>GET /posts/:post_id/comments</code>, and <code>comments/show req db post_id id</code> answers <code>GET /posts/:post_id/comments/:id</code>. the parameter's name places the route, as the action's name does: <code>post_id</code> puts it under <code>/posts</code>. an annotation reads the same way as it does for <code>id</code>, so a <code>post_id:int</code> that is not a number is no route.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/nested_routes/comments.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/net/http"</span>
+
+<span class="c"># Each action takes the post's id, so the routes nest under it:</span>
+<span class="c"># `comments/index` answers GET /posts/:post_id/comments. Removing one needs a</span>
+<span class="c"># sign-in, so the server sends that request to sign in first.</span>
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"index"</span> <span class="s">"create"</span> <span class="s">"show"</span>]
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
+  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"the comments on post <span class="i">{post_id}</span>"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> _ _ post_id:int
+  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"a comment made on post <span class="i">{post_id}</span>"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ post_id:int id:int
+  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"comment <span class="i">{id}</span> on post <span class="i">{post_id}</span>"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ _ post_id:int id:int
+  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"comment <span class="i">{id}</span> gone from post <span class="i">{post_id}</span>"</span>)</code></pre>
+</div>
+
+<p>the server hands the action the parent's id first and its own id second. every action of a nested module takes the parent's id in that place, and one that does not is refused where it is declared. nesting goes one level deep, which is what Rails' guides advise: a comment's URL needs its post and nothing above it, so a module nested under <code>comments</code> answers under <code>/comments/:comment_id</code>.</p>
+
+<p>a nested route named from code takes the parent's id before its own: <code>path_to "comments/show" 3 4</code> is <code>/posts/3/comments/4</code>, and a call that leaves the parent out is refused with the form it should take. <code>path_to comment</code> reads the parent's id from the record's own <code>post_id</code>, so a nested record has that field.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/nested_routes/comments.kso</div>
+  <pre><code><span class="c"># A comment, which names the post it is under, so its path can.</span>
+<span class="k">pub</span> <span class="k">type</span> comment
+  <span class="f">id</span>
+  <span class="f">post_id</span>
+  <span class="f">body</span>
+
+<span class="c"># The first comment on post 3, for the spec to place.</span>
+<span class="k">pub</span> <span class="f">first</span> <span class="o">=</span> <span class="f">comment</span> <span class="n">4</span> <span class="n">3</span> <span class="s">"first"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
+  <span class="s">"the comments on post <span class="i">{post_id}</span>"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ post_id:int id:int
+  <span class="s">"comment <span class="i">{id}</span> on post <span class="i">{post_id}</span>"</span></code></pre>
+</div>
 
 <h2>naming a route</h2>
 
