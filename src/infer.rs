@@ -2171,7 +2171,7 @@ fn eval_call<'a>(
                     *ctx.per_call_none.entry(*name_span).or_insert(false) |= here & NONE != 0;
                     here
                 }
-                None if is_shipped_fold(&ctx.program.fns[i]) => ctx.returns[i] & folded,
+                None if folds && is_shipped_fold(&ctx.program.fns[i]) => ctx.returns[i] & folded,
                 None => ctx.returns[i],
             };
         }
@@ -2428,8 +2428,8 @@ fn eval_fold_step<'a>(ctx: &mut Ctx<'a>, f: &'a Expr, init: Set, env: &mut Env<'
 /// which is what lets a call read its own answer from what it passes.
 fn is_shipped_fold(decl: &FnDecl) -> bool {
     decl.params.len() == 3
+        && (decl.name == "fold" || decl.name.ends_with("/fold"))
         && &*decl.file == "std/list/list.kso"
-        && decl.name.rsplit('/').next() == Some("fold")
 }
 
 /// What a call to the shipped `list/fold` can answer, given the sets it
