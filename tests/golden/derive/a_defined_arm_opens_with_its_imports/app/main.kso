@@ -1,0 +1,7 @@
+import "../senro/models"
+import "./posts"
+
+derive models/helpers
+
+print (posts/shouted ["hello" "again"])
+print (posts/joined ["hello" "again"])

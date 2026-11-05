@@ -14,7 +14,12 @@
 # written out as source, to the module `origin` names (`posts/post` puts it in
 # `posts`). The module compiles it as one more of its own files, so an arm may
 # claim the module's own types, the module's own code may use a type defined
-# there, and either is checked like code someone wrote there.
+# there, and either is checked like code someone wrote there. A file's
+# imports are its own, so a definition that calls another module opens with
+# the imports it needs; the module's definitions share one file, which opens
+# with every import they name, once each and in order. A relative path is
+# written from the derivation's own module, as that module's imports are, so
+# a convention reaches its own library however the app keeps it.
 # `refuse` makes a compile error at the item `origin` names, which is how a
 # convention reports a function it cannot place.
 #

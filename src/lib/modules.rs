@@ -394,24 +394,102 @@ thread_local! {
         std::cell::RefCell::new(crate::hash::Map::default());
 }
 
+/// The import lines a definition opens with, and the text after them and the
+/// blank lines that follow. A module's definitions share one derived file,
+/// and a file's imports open it, so they are gathered there.
+fn opening_imports(source: &str) -> (Vec<&str>, &str) {
+    let mut imports = Vec::new();
+    let mut rest = source;
+    while let Some(line) = rest.split_inclusive('\n').next() {
+        let text = line.trim_end();
+        if text.starts_with("import ") {
+            imports.push(text);
+        } else if !(text.is_empty() && !imports.is_empty()) {
+            break;
+        }
+        rest = &rest[line.len()..];
+    }
+    (imports, rest)
+}
+
+/// A definition's import line as the module it joins reads it. A relative
+/// path is written from the derivation's own module, as that module's own
+/// imports are, so a convention names its library however the app reached
+/// it; the path is rewritten from the module the definition joins. Any other
+/// import, `std/list` say, reads the same from anywhere.
+fn reread(line: &str, writer: Option<&std::path::Path>, joins: &std::path::Path) -> String {
+    let Some(path) = line.strip_prefix("import \"").and_then(|r| r.strip_suffix('"')) else {
+        return line.to_string();
+    };
+    let Some(writer) = writer.filter(|_| path.starts_with("./") || path.starts_with("../")) else {
+        return line.to_string();
+    };
+    let at = |p: &std::path::Path| match p.is_dir() {
+        true => std::fs::canonicalize(p).ok(),
+        false => p.parent().and_then(|d| std::fs::canonicalize(d).ok()),
+    };
+    let (Some(from), Some(to)) = (at(writer), at(joins)) else { return line.to_string() };
+    let mut named = from;
+    for part in std::path::Path::new(path).components() {
+        match part {
+            std::path::Component::ParentDir => {
+                named.pop();
+            }
+            std::path::Component::Normal(p) => named.push(p),
+            _ => {}
+        }
+    }
+    let shared = named.components().zip(to.components()).take_while(|(a, b)| a == b).count();
+    let ups = to.components().count() - shared;
+    let down: Vec<String> = named
+        .components()
+        .skip(shared)
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let lead = if ups == 0 { vec![".".to_string()] } else { vec!["..".to_string(); ups] };
+    format!("import \"{}\"", [lead, down].concat().join("/"))
+}
+
 /// Loads an entry's dependencies again with the arms its derivations
 /// defined, each joined to the module it was defined in as one more file.
 fn load_with_definitions(
     base: &std::path::Path,
     imports: &[ast::Import],
-    definitions: &[(String, String)],
+    definitions: &[(String, String, String)],
 ) -> Result<Loaded, String> {
-    let mut files: crate::hash::Map<String, String> = crate::hash::Map::default();
-    let mut texts: crate::hash::Map<String, String> = crate::hash::Map::default();
-    for (path, source) in definitions {
+    // Per module, in the order its first definition arrives: the imports its
+    // definitions open with, and the rest of their text.
+    let mut order: Vec<(String, String)> = Vec::new();
+    let mut parts: crate::hash::Map<String, (Vec<String>, String)> = crate::hash::Map::default();
+    for (path, source, from) in definitions {
         let dir = resolve_import(base, path)
             .unwrap_or_else(|_| std::path::PathBuf::from(path.strip_prefix("./").unwrap_or(path)));
-        let text = files.entry(derived_key(&dir)).or_default();
-        if !text.is_empty() {
-            text.push('\n');
+        let key = derived_key(&dir);
+        if !parts.contains_key(&key) {
+            order.push((key.clone(), derived_name(&dir)));
         }
-        text.push_str(source);
-        texts.insert(derived_name(&dir), text.clone());
+        let writer = resolve_import(base, from).ok();
+        let (imports, body) = parts.entry(key).or_default();
+        let (opened, rest) = opening_imports(source);
+        imports.extend(opened.into_iter().map(|line| reread(line, writer.as_deref(), &dir)));
+        if !body.is_empty() {
+            body.push('\n');
+        }
+        body.push_str(rest);
+    }
+    let mut files: crate::hash::Map<String, String> = crate::hash::Map::default();
+    let mut texts: crate::hash::Map<String, String> = crate::hash::Map::default();
+    for (key, name) in order {
+        let (mut imports, body) = parts.remove(&key).unwrap_or_default();
+        imports.sort_unstable();
+        imports.dedup();
+        let text = if imports.is_empty() {
+            body
+        } else {
+            format!("{}\n\n{body}", imports.join("\n"))
+        };
+        texts.insert(name, text.clone());
+        files.insert(key, text);
     }
     DERIVED_TEXT.with(|t| *t.borrow_mut() = texts);
     DERIVED_FILES.with(|d| *d.borrow_mut() = files);

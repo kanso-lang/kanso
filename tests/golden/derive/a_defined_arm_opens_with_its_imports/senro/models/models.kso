@@ -1,0 +1,27 @@
+import "std/derive"
+import "std/list"
+
+# Each definition opens with the imports it needs. `../loud` is written from
+# here, as this module's own imports are, and reaches the app's module from
+# wherever the app keeps it.
+pub fn helpers p
+  posts = list/select p.modules (m -> m.name == "posts")
+  list/fold posts [] (acc m -> list/concat acc (defined m))
+
+fn defined m
+  [(derive/define m.name shouted) (derive/define m.name joined)]
+
+shouted = """
+  import "../loud"
+
+  pub fn shouted ts
+    list/to_list (list/map ts loud/loud)
+"""
+
+joined = """
+  import "std/list"
+  import "std/text"
+
+  pub fn joined ts
+    text/join (list/to_list (list/map ts text/uppercase)) " "
+"""
