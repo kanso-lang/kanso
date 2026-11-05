@@ -1554,8 +1554,6 @@ declares `done` and `none`, and checked clean before the change.
 Rows: the new check costs every compile a little. `compile_instructions`
 rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
 `library_instructions` 1,497 to 73,495,778 and
-`browser_compile_instructions` 3,822 to 350,291,185. An earlier run of this
-branch, and one of #2336, read the browser rows lower, at 349,304,764 and
-78,403,189; with main merged, CI reads the compile row as above and the run
-row unmoved, and why the earlier runs differed is open. The rule is part of
-the language, so the welfare floor moves down by exactly the check's cost.
+`browser_compile_instructions` 3,822 to 350,291,185, and
+`browser_run_instructions` did not move. The rule is part of the language,
+so the welfare floor moves down by exactly the check's cost.
