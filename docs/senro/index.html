@@ -32,7 +32,19 @@ description: "senro (線路): a web framework for kanso in the tradition of Rail
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable counted lockable]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [
+  <span class="f">signed</span>
+  <span class="f">joined</span>
+  <span class="f">emailed</span>
+  <span class="f">confirmable</span>
+  <span class="f">counted</span>
+  <span class="f">lockable</span>
+  <span class="f">tracked</span>
+  <span class="f">arrived</span>
+  <span class="f">arrived_before</span>
+  <span class="f">arrived_from</span>
+  <span class="f">arrived_from_before</span>
+]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -52,6 +64,18 @@ counted <span class="o">=</span> <span class="f">models/add_column</span> <span 
 
 lockable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> locked
 
+<span class="c"># How many times the account has signed in, and when and from where the</span>
+<span class="c"># latest sign-in and the one before it came, as Devise's trackable keeps them.</span>
+tracked <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> sign_in_count
+
+arrived <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> current_sign_in_at
+
+arrived_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_at
+
+arrived_from <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> current_sign_in_ip
+
+arrived_from_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_ip
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -64,7 +88,19 @@ confirmed <span class="o">=</span> <span class="f">models/column</span> <span cl
 
 failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span>
 
-locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span></code></pre>
+locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span>
+
+sign_in_count <span class="o">=</span> <span class="f">models/column</span> <span class="s">"sign_in_count"</span> <span class="s">"integer not null default 0"</span>
+
+current_sign_in_at <span class="o">=</span> <span class="f">models/column</span> <span class="s">"current_sign_in_at"</span> blank_text
+
+last_sign_in_at <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_at"</span> blank_text
+
+current_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"current_sign_in_ip"</span> blank_text
+
+last_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_ip"</span> blank_text
+
+blank_text <span class="o">=</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
   </div>
 </section>

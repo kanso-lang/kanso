@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts, locks an account that too many wrong passwords reach, and asks for a signed-in visitor, how a visitor changes a password or chooses a new one after losing it, how an account confirms its address, and how senro refuses a request another site sent.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts, locks an account that too many wrong passwords reach, keeps where each sign-in came from, and asks for a signed-in visitor, how a visitor changes a password or chooses a new one after losing it, how an account confirms its address, and how senro refuses a request another site sent.</p>
 
 <h2>the session</h2>
 
@@ -129,8 +129,33 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
 <span class="c"># The account of whoever is signed in, as Devise's registrations edit it:</span>
 <span class="c"># a new password, given the current one. The account is a singular</span>
 <span class="c"># resource, since a visitor only ever edits their own.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req _
-  <span class="f">effect</span> (<span class="f">changing</span> req {} <span class="n">200</span>)
+<span class="c"># The page says how often the account has signed in and where the sign-in</span>
+<span class="c"># before this one came from, so a holder can see one that was not theirs.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db
+  name <span class="o">=</span> <span class="f">web/viewer</span> req entries/secret
+  <span class="f">pg/query</span> db tracked_by [name]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">changing</span> req {} <span class="n">200</span> (<span class="f">arrivals</span> (<span class="f">list/first</span> r<span class="o">.</span>rows))))
+
+tracked_by <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">select</span> sign_in_count, last_sign_in_at, last_sign_in_ip
+  <span class="f">from</span> accounts where name <span class="o">=</span> $<span class="n">1</span>
+<span class="s">""</span>"
+
+<span class="k">fn</span> <span class="f">arrivals</span> none
+  <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">arrivals</span> row
+  count <span class="o">=</span> <span class="f">times</span> <span class="s">"<span class="i">{models/cell row </span>"</span>sign_in_count<span class="s">"}"</span>
+  at <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"last_sign_in_at"</span>
+  <span class="f">return</span> <span class="s">"You have signed in <span class="i">{count}</span>."</span> if at <span class="o">==</span> <span class="s">""</span>
+  from <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"last_sign_in_ip"</span>
+  <span class="s">"You have signed in <span class="i">{count}</span>. The time before this one was <span class="i">{at}</span>, from <span class="i">{from}</span>."</span>
+
+<span class="k">fn</span> <span class="f">times</span> <span class="s">"1"</span>
+  <span class="s">"once"</span>
+
+<span class="k">fn</span> <span class="f">times</span> n
+  <span class="s">"<span class="i">{n}</span> times"</span>
 
 <span class="c"># The current password must match, and the new one is eight characters or</span>
 <span class="c"># more. Changing it ends every other sign-in, since a sign-in rests on the</span>
@@ -153,8 +178,9 @@ digest_by <span class="o">=</span> <span class="s">"select digest from accounts 
   wrong <span class="o">=</span> { <span class="s">"current"</span>:<span class="s">"That is not your password."</span> }
   short <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Use eight characters or more."</span> }
   kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
-  <span class="f">return</span> effect (<span class="f">changing</span> req wrong <span class="n">422</span>) if not passwords/matches? current kept
-  <span class="f">return</span> effect (<span class="f">changing</span> req short <span class="n">422</span>) if length password <span class="o">&lt;</span> <span class="n">8</span>
+  right <span class="o">=</span> <span class="f">passwords/matches?</span> current kept
+  <span class="f">return</span> effect (<span class="f">changing</span> req wrong <span class="n">422</span> <span class="s">""</span>) if not right
+  <span class="f">return</span> effect (<span class="f">changing</span> req short <span class="n">422</span> <span class="s">""</span>) if length password <span class="o">&lt;</span> <span class="n">8</span>
   <span class="f">passwords/digested</span> password
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">pg/query</span> db set_digest [d name] <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">kept_on</span> req name d))
 
@@ -168,10 +194,10 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">over_limit</span> req
   wait <span class="o">=</span> { <span class="s">"current"</span>:<span class="s">"Too many tries. Try again in a few minutes."</span> }
-  <span class="f">effect</span> (<span class="f">changing</span> req wait <span class="n">429</span>)
+  <span class="f">effect</span> (<span class="f">changing</span> req wait <span class="n">429</span> <span class="s">""</span>)
 
-<span class="k">fn</span> <span class="f">changing</span> req problems code
-  page <span class="o">=</span> <span class="f">views/account_view</span> <span class="s">"/account"</span> problems
+<span class="k">fn</span> <span class="f">changing</span> req problems code seen
+  page <span class="o">=</span> <span class="f">views/account_view</span> <span class="s">"/account"</span> problems seen
   framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Your account · Guestbook"</span> page
   <span class="f">views/answer_as</span> req code framed
 
@@ -289,9 +315,23 @@ held_by <span class="o">=</span> <span class="s">""</span>"
   <span class="f">return</span> shut req name right if locked? a t
   <span class="f">return</span> missed req db name a t if not right
   <span class="f">return</span> unconfirmed req name a if a<span class="o">.</span>confirmed <span class="o">==</span> <span class="s">""</span>
-  <span class="f">pg/query</span> db cleared [a<span class="o">.</span>id] <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">signed</span> req name a remember)
+  arrived <span class="o">=</span> [a<span class="o">.</span><span class="f">id</span> <span class="s">"<span class="i">{t}</span>"</span> (<span class="f">web/peer</span> req)]
+  <span class="f">pg/query</span> db cleared arrived <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">signed</span> req name a remember)
 
-cleared <span class="o">=</span> <span class="s">"update accounts set failures = 0, locked = '' where id = $1"</span>
+<span class="c"># The right password ends a run of wrong ones, and the sign-in is counted and</span>
+<span class="c"># stamped, the one before it kept beside it, in the same statement. The time</span>
+<span class="c"># is the app's clock, written as UTC to the minute.</span>
+cleared <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">update</span> accounts set failures <span class="o">=</span> <span class="n">0</span>, locked <span class="o">=</span> '',
+    sign_in_count <span class="o">=</span> sign_in_count <span class="o">+</span> <span class="n">1</span>,
+    last_sign_in_at <span class="o">=</span> current_sign_in_at,
+    current_sign_in_at <span class="o">=</span> <span class="f">to_char</span>(
+      <span class="f">to_timestamp</span>($<span class="n">2</span>::bigint <span class="o">/</span> <span class="n">1000</span>) at time zone 'UTC',
+      'YYYY<span class="o">-</span>MM<span class="o">-</span>DD HH<span class="n">24</span>:MI <span class="s">"UTC"</span>'),
+    last_sign_in_ip <span class="o">=</span> current_sign_in_ip,
+    current_sign_in_ip <span class="o">=</span> $<span class="n">3</span>
+  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>
+<span class="s">""</span>"
 
 <span class="k">fn</span> <span class="f">locked?</span> a t
   <span class="f">return</span> false if a<span class="o">.</span>locked <span class="o">==</span> <span class="s">""</span>
@@ -481,6 +521,12 @@ looked <span class="o">=</span> <span class="s">"select locked from accounts whe
   framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Unlock your account · Guestbook"</span> page
   <span class="f">views/answer_as</span> req <span class="n">200</span> framed</code></pre>
 </div>
+
+<h2>where sign-ins came from</h2>
+
+<p>the guestbook keeps what Devise's <code>trackable</code> keeps: how many times an account has signed in, and when and from which address the latest sign-in and the one before it came. five columns hold them, each added by a migration of its own. the statement that ends a run of wrong passwords also counts the sign-in, moves the latest time and address to the <code>last_</code> columns and stamps the new ones, so a sign-in is recorded in one write. the time is the app's clock, written as UTC to the minute. the address is <code>web/peer req</code>, the address the connection came from, which behind a proxy is the proxy's.</p>
+
+<p>the account page shows the count and, from the second sign-in on, when and from where the one before came. a holder who does not recognize that time or address has reason to change the password, which ends every other sign-in. <code>cleared</code> in the session panel above writes the columns, and <code>arrivals</code> in the account panel reads them.</p>
 
 <h2>pages that ask for a sign-in</h2>
 
