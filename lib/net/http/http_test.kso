@@ -39,6 +39,12 @@ test_parsed_reads_the_path = asked.path == "/report"
 
 test_parsed_keeps_the_body = asked.body == "the body"
 
+# A blank line ends the head and nothing else: a body may hold one, as a text
+# file posted whole does.
+spaced = parsed "POST /notes HTTP/1.1\r\nhost: x\r\n\r\none\r\n\r\ntwo"
+
+test_parsed_keeps_a_blank_line_in_the_body = spaced.body == "one\r\n\r\ntwo"
+
 fn contains? haystack needle
   length (text/split haystack needle) > 1
 
