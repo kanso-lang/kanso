@@ -163,7 +163,7 @@ plan:
 
 <h2>two engines, one meaning</h2>
 
-<p>kanso has two ways to run a program. the native compiler is behind <code>kanso run</code> and <code>kanso build</code>: <code>run</code> keeps compiles fast by building your code unoptimized against an already-optimized runtime, and <code>build --release</code> optimizes everything. the interpreter is behind <code>repl</code>, <code>--plan</code> and <code>run --interp</code>, and it is the reference: it defines what a program means.</p>
+<p>kanso has two ways to run a program. the native compiler is behind <code>kanso run</code> and <code>kanso build</code>: <code>run</code> keeps compiles fast by building your code unoptimized against an already-optimized runtime, and <code>build --release</code> optimizes everything. the interpreter is behind <code>repl</code>, <code>--plan</code> and <code>run --interp</code>, and it is the reference: it defines what a program means. a third engine runs in the browser: the <a href="../playground.html">playground</a> compiles a program to webassembly in the tab, through the native compiler's emitter.</p>
 
 <p>two engines are only useful if they agree, so ci runs every example in this book on both and requires byte-identical output. a one-byte difference fails the build. <a href="fast.html">chapter 15</a> looks at the compiler closely. until then, everything in this book runs under <code>kanso run</code>, and everything would produce the same bytes under <code>kanso build</code>.</p>
 

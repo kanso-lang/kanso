@@ -1,14 +1,14 @@
 ---
 layout: default
 title: "about kanso"
-description: "where kanso's taste comes from, how its two engines work, what it learned racing go, and why there is no formatter."
+description: "where kanso's taste comes from, how its three engines work, what it learned racing go, and why there is no formatter."
 ---
 <article class="spec-doc prose essay">
 
 <span class="eyebrow">about</span>
 <h1>about kanso</h1>
 
-<p>kanso ships two engines. its <code>print</code> returns a value instead of printing. it has no formatter, and no plans for one. those three choices come from one idea about where a language should put its opinions, and this page works through them in order.</p>
+<p>kanso ships three engines. its <code>print</code> returns a value instead of printing. it has no formatter, and no plans for one. those three choices come from one idea about where a language should put its opinions, and this page works through them in order.</p>
 
 <h2 id="p0"><span class="sec-num">prelude</span>on taste</h2>
 
@@ -16,9 +16,9 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>the positions are borrowed. kent beck: the four rules of simple design, and never trust a test you have not seen fail. sandi metz: duplication is cheaper than the wrong abstraction. avdi grimm: a raise is for the case you do <em>not</em> handle, and nil should never leak. martin fowler: refactoring means behaviour-preserving, and the word matters. rob mee, abhi hiremagalur and the pivotal school: the codebase belongs to everyone, so it should read as if one careful person wrote it. DHH: convention over configuration. kanso's contribution is to enforce these in the compiler rather than teach them.</p>
 
-<h2 id="p1"><span class="sec-num">part 01</span>two engines, one truth</h2>
+<h2 id="p1"><span class="sec-num">part 01</span>three engines, one truth</h2>
 
-<p>kanso ships two engines. <code>kanso run</code> compiles your program to a native binary cached by content hash. an unchanged program re-runs in about five milliseconds without invoking the compiler at all; a changed one rebuilds in tens of milliseconds against a runtime that is already optimized and already cached.</p>
+<p>kanso ships three engines: a native compiler, the interpreter it is checked against, and the browser engine the <a href="playground.html">playground</a> runs, which compiles a program to webassembly in the tab through the native compiler's own emitter. <code>kanso run</code> compiles your program to a native binary cached by content hash. an unchanged program re-runs in about five milliseconds without invoking the compiler at all; a changed one rebuilds in tens of milliseconds against a runtime that is already optimized and already cached.</p>
 
 <p><code>kanso build --release</code> is the shipping artifact. it lowers kanso straight to llvm ir — dispatch becomes branch chains, patterns become field offsets, every call in tail position is a guaranteed tail call, so ten million frames of mutual recursion run in constant stack — and hands the ir to clang.</p>
 
@@ -30,7 +30,7 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>the two paths exist so kanso does not have to choose between fast compiles and fast binaries. go compiles fast and produces slower binaries; rust produces fast binaries and compiles slowly. kanso keeps the optimizer out of the development loop and runs all of it when a release binary is built.</p>
 
-<p>this only works if both engines mean exactly the same thing, so ci builds every example native and requires byte-identical output against the interpreter — floats included, since both render the shortest round-trip. a one-bit disagreement fails the build.</p>
+<p>this only works if every engine means exactly the same thing, so ci builds every example native and requires byte-identical output against the interpreter, and runs the playground's examples on every engine — floats included, since every engine renders the shortest round-trip. a one-bit disagreement fails the build.</p>
 
 <p>go refused llvm because it was too big and too slow for the compile times they wanted. kanso uses llvm, but dev builds compile unoptimized against a cached runtime and answer in tens of milliseconds. <code>-O3 -flto</code> runs only when a release binary is being made.</p>
 
