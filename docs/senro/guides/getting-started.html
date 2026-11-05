@@ -44,13 +44,12 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
 <span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./unlocks"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
 <span class="k">derive</span> kata/views
 <span class="k">derive</span> models/tables
 <span class="k">derive</span> routes/rest
-
-made <span class="o">=</span> <span class="f">models/made</span> schema
 
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
@@ -64,7 +63,8 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
 <span class="f">connected</span>
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/run</span> db made <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema))
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"guestbook"</span> migrations/all)
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected)</code></pre>
 </div>
@@ -83,7 +83,7 @@ connected <span class="o">=</span> <span class="f">pg/connect</span> <span class
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable counted lockable]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -97,6 +97,12 @@ emailed <span class="o">=</span> <span class="f">models/add_column</span> <span 
 <span class="c"># When the address was confirmed, or empty until it is.</span>
 confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
 
+<span class="c"># How many wrong passwords in a row the account has had, and when too many</span>
+<span class="c"># of them locked it, or empty while it is open.</span>
+counted <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> failures
+
+lockable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> locked
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -105,7 +111,11 @@ digest <span class="o">=</span> <span class="f">models/column</span> <span class
 
 email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
 
-confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span></code></pre>
+confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span>
+
+failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span>
+
+locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
 
 <h2>a model</h2>

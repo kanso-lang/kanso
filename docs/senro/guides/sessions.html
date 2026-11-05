@@ -17,7 +17,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 <span class="eyebrow">senro guides</span>
 <h1>sessions and sign-in</h1>
 
-<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts and asks for a signed-in visitor, how a visitor changes a password or chooses a new one after losing it, how an account confirms its address, and how senro refuses a request another site sent.</p>
+<p>this guide covers how senro remembers a visitor between requests, how the guestbook makes accounts and signs people in, what senro does to keep a password safe, how it limits sign-in attempts, locks an account that too many wrong passwords reach, and asks for a signed-in visitor, how a visitor changes a password or chooses a new one after losing it, how an account confirms its address, and how senro refuses a request another site sent.</p>
 
 <h2>the session</h2>
 
@@ -210,6 +210,7 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
 <span class="k">import</span> <span class="s">"std/io"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
 
 <span class="c"># What a sign-in checks of the account a name holds. A name with no account</span>
 <span class="c"># holds the stand-in digest, which no password matches.</span>
@@ -218,6 +219,7 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
   <span class="f">digest</span>
   <span class="f">email</span>
   <span class="f">confirmed</span>
+  <span class="f">locked</span>
 
 <span class="c"># One address may try to sign in ten times in three minutes, as Rails 8's</span>
 <span class="c"># generated sessions controller allows. Past that, `over_limit` answers the</span>
@@ -225,6 +227,13 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
 <span class="k">pub</span> <span class="f">rate_limits</span> <span class="o">=</span> { <span class="s">"create"</span>:<span class="s">"10 per 3 minutes"</span> }
 
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
+
+<span class="c"># Three wrong passwords in a row lock an account, as Devise's `lockable`</span>
+<span class="c"># does, for an hour or until the link mailed to its address unlocks it. A</span>
+<span class="c"># right password ends the run of wrong ones.</span>
+<span class="k">pub</span> <span class="f">locks_after</span> <span class="o">=</span> <span class="n">3</span>
+
+<span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> <span class="n">60</span>
 
 <span class="c"># What a sign-in rests on: the digest the account keeps now. A new password</span>
 <span class="c"># changes it, so a password reset signs out every session made before it.</span>
@@ -256,22 +265,80 @@ digest_by <span class="o">=</span> <span class="s">"select digest from accounts 
   remember <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"remember"</span> <span class="o">==</span> <span class="s">"yes"</span>
   <span class="f">pg/query</span> db held_by [name]
     <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">held</span> (<span class="f">list/first</span> r<span class="o">.</span>rows))
-    <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">entered</span> req name a password remember)
+    <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">entered</span> req db name a password remember t))
 
-held_by <span class="o">=</span> <span class="s">"select id, digest, email, confirmed from accounts where name = $1"</span>
+held_by <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">select</span> id, digest, email, confirmed, locked
+  <span class="f">from</span> accounts where name <span class="o">=</span> $<span class="n">1</span>
+<span class="s">""</span>"
 
 <span class="k">fn</span> <span class="f">held</span> none
-  <span class="f">passwords/stand_in</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">holder</span> <span class="s">""</span> d <span class="s">""</span> <span class="s">""</span>))
+  <span class="f">passwords/stand_in</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">holder</span> <span class="s">""</span> d <span class="s">""</span> <span class="s">""</span> <span class="s">""</span>))
 
 <span class="k">fn</span> <span class="f">held</span> row
   id <span class="o">=</span> <span class="s">"<span class="i">{models/cell row </span>"</span>id<span class="s">"}"</span>
   kept <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"digest"</span>
   email <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"email"</span>
-  <span class="f">effect</span> (<span class="f">holder</span> id kept email (<span class="f">models/cell</span> row <span class="s">"confirmed"</span>))
+  locked <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"locked"</span>
+  <span class="f">effect</span> (<span class="f">holder</span> id kept email (<span class="f">models/cell</span> row <span class="s">"confirmed"</span>) locked)
 
-<span class="k">fn</span> <span class="f">entered</span> req name a password remember
-  <span class="f">return</span> refused req name if not passwords/matches? password a<span class="o">.</span><span class="f">digest</span>
+<span class="c"># A locked account answers a wrong password as any other wrong password is</span>
+<span class="c"># answered, and tells only the holder of the right one that it is locked.</span>
+<span class="k">fn</span> <span class="f">entered</span> req db name a password remember t
+  right <span class="o">=</span> <span class="f">passwords/matches?</span> password a<span class="o">.</span><span class="f">digest</span>
+  <span class="f">return</span> shut req name right if locked? a t
+  <span class="f">return</span> missed req db name a t if not right
   <span class="f">return</span> unconfirmed req name a if a<span class="o">.</span>confirmed <span class="o">==</span> <span class="s">""</span>
+  <span class="f">pg/query</span> db cleared [a<span class="o">.</span>id] <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">signed</span> req name a remember)
+
+cleared <span class="o">=</span> <span class="s">"update accounts set failures = 0, locked = '' where id = $1"</span>
+
+<span class="k">fn</span> <span class="f">locked?</span> a t
+  <span class="f">return</span> false if a<span class="o">.</span>locked <span class="o">==</span> <span class="s">""</span>
+  t <span class="o">&lt;</span> stamp_of (<span class="f">text/to_int</span> a<span class="o">.</span>locked) <span class="o">+</span> locked_minutes <span class="o">*</span> <span class="n">60</span> <span class="o">*</span> <span class="n">1000</span>
+
+<span class="k">fn</span> <span class="f">stamp_of</span> none
+  <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">stamp_of</span> n
+  <span class="f">n</span>
+
+<span class="k">fn</span> <span class="f">shut</span> req name true
+  told <span class="o">=</span> <span class="s">"This account is locked. Follow the link we mailed to unlock it."</span>
+  <span class="f">effect</span> (<span class="f">opened</span> req name { <span class="s">"password"</span>:told } <span class="n">403</span>)
+
+<span class="k">fn</span> <span class="f">shut</span> req name false
+  <span class="f">refused</span> req name
+
+<span class="c"># A wrong password for an account counts against it, and the one that makes</span>
+<span class="c"># the run long enough locks it and mails the link that unlocks it. A lock</span>
+<span class="c"># that has run out counts as none, so the count starts again.</span>
+<span class="k">fn</span> <span class="f">missed</span> req db name a t
+  <span class="f">return</span> refused req name if a<span class="o">.</span>id <span class="o">==</span> <span class="s">""</span>
+  <span class="f">pg/query</span> db counted [a<span class="o">.</span><span class="f">id</span> <span class="s">"<span class="i">{locks_after}</span>"</span> <span class="s">"<span class="i">{t}</span>"</span>]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">locking</span> req name a (<span class="f">list/first</span> r<span class="o">.</span>rows))
+
+counted <span class="o">=</span> <span class="s">""</span>"
+  <span class="f">update</span> accounts set
+    failures <span class="o">=</span> <span class="f">case</span> when locked <span class="o">=</span> '' then failures <span class="o">+</span> <span class="n">1</span> else <span class="n">1</span> end,
+    locked <span class="o">=</span> <span class="f">case</span>
+      <span class="f">when</span> (<span class="f">case</span> when locked <span class="o">=</span> '' then failures <span class="o">+</span> <span class="n">1</span> else <span class="n">1</span> end) <span class="o">&gt;=</span> $<span class="n">2</span>::int
+      then $<span class="n">3</span> else '' end
+  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>
+  <span class="f">returning</span> locked
+<span class="s">""</span>"
+
+<span class="k">fn</span> <span class="f">locking</span> req name _ none
+  <span class="f">refused</span> req name
+
+<span class="k">fn</span> <span class="f">locking</span> req name a row
+  stamp <span class="o">=</span> <span class="f">models/cell</span> row <span class="s">"locked"</span>
+  <span class="f">return</span> refused req name if stamp <span class="o">==</span> <span class="s">""</span>
+  <span class="f">account_mailer/unlock</span> a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span> stamp
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: <span class="i">{u.reason}</span>\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">refused</span> req name)
+
+<span class="k">fn</span> <span class="f">signed</span> req name a remember
   s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
   back <span class="o">=</span> <span class="f">web/return_to</span> req entries/secret <span class="s">"/"</span>
   welcomed <span class="o">=</span> <span class="f">put</span> (<span class="f">delete</span> s <span class="s">"return_to"</span>) <span class="s">"flash"</span> <span class="s">"Signed in as <span class="i">{name}</span>."</span>
@@ -332,6 +399,89 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
            ^</code></pre>
 </div>
 
+<h2>too many wrong passwords</h2>
+
+<p>the rate limit counts by address, so it does nothing against guesses spread over many addresses. the guestbook also locks an account after three wrong passwords in a row, as devise's <code>lockable</code> does (<code>session/locks_after</code>). two columns hold the state: <code>failures</code>, the length of the run, and <code>locked</code>, the moment the run became long enough. one <code>update</code> statement counts a wrong password and, on the third, stamps the lock and returns it, and the action then mails the account a link to unlock it.</p>
+
+<p>a locked account answers a wrong password the way every wrong password is answered, so a guesser learns nothing from it. only the right password is told that the account is locked, the same rule that keeps an unconfirmed account's existence to the holder of its password. the lock ends by itself after an hour (<code>session/locked_minutes</code>), and a right password, or a password reset, ends a run of wrong ones.</p>
+
+<p>the link leads to the <code>unlocks</code> resource, which follows <code>confirmations</code>: GET shows a button and changes nothing, and the button's PATCH clears the lock. the token is bound to the moment of the lock, so it works once.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/unlocks.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../pg"</span>
+<span class="k">import</span> <span class="s">"../../tokens"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./account_mailer"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="c"># The link in an unlock mail leads here. As with confirming an address,</span>
+<span class="c"># following it shows a button and the button does the work, so a mail</span>
+<span class="c"># scanner that fetches every link it sees unlocks nothing. The `id` the</span>
+<span class="c"># member routes take is the token `account_mailer/unlock` signed over the</span>
+<span class="c"># moment of the lock.</span>
+<span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"edit"</span> <span class="s">"update"</span>]
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id
+  <span class="f">held</span> db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> <span class="f">offered</span> req id good)
+
+<span class="k">fn</span> <span class="f">offered</span> req id true
+  <span class="f">effect</span> (<span class="f">shown</span> req id)
+
+<span class="k">fn</span> <span class="f">offered</span> req _ false
+  <span class="f">effect</span> (<span class="f">told</span> req stale)
+
+stale <span class="o">=</span> <span class="s">"That link has expired or was used."</span>
+
+<span class="c"># Unlocking clears the lock and the count of wrong passwords, which also</span>
+<span class="c"># retires the link: it was bound to the moment of the lock.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
+  <span class="f">held</span> db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> <span class="f">opened</span> req db id good)
+
+<span class="k">fn</span> <span class="f">opened</span> req _ _ false
+  <span class="f">effect</span> (<span class="f">told</span> req stale)
+
+<span class="k">fn</span> <span class="f">opened</span> req db token true
+  id <span class="o">=</span> <span class="f">id_text</span> (<span class="f">tokens/id_of</span> token)
+  <span class="f">pg/query</span> db cleared [id]
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"Your account is unlocked. Sign in."</span>))
+
+cleared <span class="o">=</span> <span class="s">"update accounts set failures = 0, locked = '' where id = $1"</span>
+
+<span class="c"># Whether `token` is good now for the account it names.</span>
+<span class="k">fn</span> <span class="f">held</span> db token
+  id <span class="o">=</span> <span class="f">id_text</span> (<span class="f">tokens/id_of</span> token)
+  <span class="f">pg/query</span> db looked [id]
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">good?</span> token (<span class="f">list/first</span> r<span class="o">.</span>rows) t)))
+
+looked <span class="o">=</span> <span class="s">"select locked from accounts where id = $1"</span>
+
+<span class="k">fn</span> <span class="f">good?</span> _ none _
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">good?</span> token row t
+  <span class="f">account_mailer/unlocks?</span> token (<span class="f">models/cell</span> row <span class="s">"locked"</span>) t
+
+<span class="k">fn</span> <span class="f">id_text</span> none
+  <span class="s">"0"</span>
+
+<span class="k">fn</span> <span class="f">id_text</span> n
+  <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">told</span> req notice
+  s <span class="o">=</span> <span class="f">web/session</span> req entries/secret
+  <span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) entries/secret (<span class="f">put</span> s <span class="s">"flash"</span> notice)
+
+<span class="k">fn</span> <span class="f">shown</span> req id
+  page <span class="o">=</span> <span class="f">views/unlock_offered_view</span> <span class="s">"/unlocks/<span class="i">{id}</span>"</span>
+  framed <span class="o">=</span> <span class="f">views/layout_view</span> <span class="s">"Unlock your account · Guestbook"</span> page
+  <span class="f">views/answer_as</span> req <span class="n">200</span> framed</code></pre>
+</div>
+
 <h2>pages that ask for a sign-in</h2>
 
 <p>every action asks for a signed-in visitor unless its module names it in <code>without_sign_in</code>, as devise's <code>authenticate_user!</code> does for a Rails controller. the guestbook opens its home page, its list of entries, and the forms for making an account and signing in; writing an entry needs a signed-in visitor, and its action no longer checks for one itself. the entry asks for this once, when it serves its routes:</p>
@@ -353,6 +503,7 @@ held_by <span class="o">=</span> <span class="s">"select id, digest, email, conf
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
 <span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./unlocks"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
 <span class="c"># The components whose actions run on the server.</span>
@@ -473,10 +624,12 @@ expired <span class="o">=</span> <span class="s">"That link has expired or was u
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">told</span> req <span class="s">"/"</span> changed))
 
 <span class="c"># A reset link proves the address as well as a confirmation link does, so</span>
-<span class="c"># setting a password through one confirms an address that was not yet.</span>
+<span class="c"># setting a password through one confirms an address that was not yet, and</span>
+<span class="c"># it unlocks an account that wrong passwords locked, as Devise's does.</span>
 reset <span class="o">=</span> <span class="s">""</span>"
   <span class="f">update</span> accounts set digest <span class="o">=</span> $<span class="n">1</span>,
-    confirmed <span class="o">=</span> <span class="f">case</span> when coalesce(confirmed, '') <span class="o">=</span> '' then $<span class="n">3</span> else confirmed end
+    confirmed <span class="o">=</span> <span class="f">case</span> when coalesce(confirmed, '') <span class="o">=</span> '' then $<span class="n">3</span> else confirmed end,
+    failures <span class="o">=</span> <span class="n">0</span>, locked <span class="o">=</span> ''
   <span class="f">where</span> id <span class="o">=</span> $<span class="n">2</span>
 <span class="s">""</span>"
 
@@ -599,6 +752,34 @@ digest_by_id <span class="o">=</span> <span class="s">"select digest from accoun
     <span class="s">"If you did not make an account, there is nothing to do."</span>
   ]
   subject <span class="o">=</span> <span class="s">"Confirm your guestbook address"</span>
+  <span class="f">mail/composed</span> entries/sender email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)
+
+<span class="c"># A link to unlock an account that too many wrong passwords locked. It is</span>
+<span class="c"># bound to the moment of the lock, so it works once, and not at all once the</span>
+<span class="c"># lock has ended.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> id email stamp
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/unlocks/<span class="i">{unlock_token id stamp t}</span>/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered</span> (<span class="f">unlock_letter</span> email link))
+
+<span class="k">fn</span> <span class="f">unlock_token</span> id stamp t
+  <span class="f">tokens/made</span> <span class="s">"unlock"</span> entries/secret id stamp t <span class="n">1440</span>
+
+<span class="c"># Whether `token` unlocks the account whose lock began at `stamp`, at `t`.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlocks?</span> token stamp t
+  <span class="f">tokens/valid?</span> <span class="s">"unlock"</span> entries/secret token stamp t
+
+<span class="k">fn</span> <span class="f">unlock_letter</span> email link
+  lines <span class="o">=</span> [
+    <span class="s">"Your guestbook account was locked after too many wrong passwords."</span>
+    <span class="s">""</span>
+    <span class="s">"It unlocks by itself within the hour, or at once here:"</span>
+    <span class="s">""</span>
+    <span class="f">link</span>
+    <span class="s">""</span>
+    <span class="s">"If the wrong passwords were not yours, someone may be guessing it."</span>
+  ]
+  subject <span class="o">=</span> <span class="s">"Unlock your guestbook account"</span>
   <span class="f">mail/composed</span> entries/sender email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)</code></pre>
 </div>
 

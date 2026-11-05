@@ -29,7 +29,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable counted lockable]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -43,6 +43,12 @@ emailed <span class="o">=</span> <span class="f">models/add_column</span> <span 
 <span class="c"># When the address was confirmed, or empty until it is.</span>
 confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
 
+<span class="c"># How many wrong passwords in a row the account has had, and when too many</span>
+<span class="c"># of them locked it, or empty while it is open.</span>
+counted <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> failures
+
+lockable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> locked
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -51,10 +57,14 @@ digest <span class="o">=</span> <span class="f">models/column</span> <span class
 
 email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
 
-confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span></code></pre>
+confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span>
+
+failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span>
+
+locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
 
-<p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/made schema</code> as it starts, which creates each table that is missing, and then <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
+<p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts. it runs the migrations the database has not yet run, in order, and records each in a <code>senro_migrations</code> table under the app's name and its place in the list, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change goes at the end of the list. each change does nothing when its work is already done, so a database made before migrations were recorded takes the list safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
 
 <p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
 
