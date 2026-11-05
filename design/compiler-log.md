@@ -1535,8 +1535,12 @@ silicon. runbench's work fell to 915,613,360 (-1,340,890) and its text to
 few fewer calls and branches. Some counters rose. work_basket rose to
 18,296,297 (+22). emitted_other_lines rose to 180,275 (+121) and runbench's
 emitted lines to 75,463 (+128) while its machine code shrank. interp_allocs
-rose to 810,150 (+13). In the run program, beat_iters rose to 196,398 (+500),
-cohort_frees fell to 11 and perm_peak_bytes rose to 1,883,425 (+8,208). The
+rose to 810,150 (+13). In the run program, run_beat_iters rose to 196,398
+(+500), cohort_frees fell to 11 and run_perm_peak_bytes rose to 1,883,425
+(+8,208). In the tab, browser_compile_instructions rose to 350,942,505
+(+1,637,741), browser_compile_peak_bytes to 856,131 (+136) and
+browser_run_instructions to 78,418,178 (+14,989); browser_run_peak_bytes fell
+to 1,572,864. The
 front end visits 7,388 declarations on the compile corpus, 9 fewer, and the
 module compile row fell on every count, to 1,163 lines, 109 calls, 80
 branches, 29 defines and 1,449 visits.
