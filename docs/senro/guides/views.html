@@ -42,15 +42,20 @@ else
 if flash != ""
   p.flash = flash
 if viewer != ""
-  form.sign method="post" action="/entries"
+  form.sign method="post" action="/entries" enctype="multipart/form-data"
     textarea name="message" placeholder="say something" required="required" = form.message
     if form.problems["message"] != none
       p.problem = form.problems["message"]
+    label
+      span A photo, if you like
+      input type="file" name="photo" accept="image/*"
     button Sign
 ol.entries
   for e in signatures
     li
       p.message = e.message
+      if e.photo != ""
+        img.photo src="/senro/blobs/{e.photo}" alt="a photo from {e.name}"
       p.who = e.name
       == removals["{e.id}"]</code></pre>
 </div>

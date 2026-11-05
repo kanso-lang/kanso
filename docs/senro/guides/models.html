@@ -41,6 +41,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
   <span class="f">arrived_before</span>
   <span class="f">arrived_from</span>
   <span class="f">arrived_from_before</span>
+  <span class="f">pictured</span>
 ]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
@@ -73,6 +74,9 @@ arrived_from <span class="o">=</span> <span class="f">models/add_column</span> <
 
 arrived_from_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_ip
 
+<span class="c"># The key of the photo a signer chose, or empty for an entry without one.</span>
+pictured <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"signatures"</span> photo
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -97,6 +101,8 @@ current_sign_in_ip <span class="o">=</span> <span class="f">models/column</span>
 
 last_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_ip"</span> blank_text
 
+photo <span class="o">=</span> <span class="f">models/column</span> <span class="s">"photo"</span> blank_text
+
 blank_text <span class="o">=</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
 
@@ -104,9 +110,21 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
 
-<h2>a model is a record type</h2>
+<h2>a model is a module named for its table</h2>
 
-<p>a record type in a module is a model when its name matches a table: <code>signature</code> reads <code>signatures</code>. every field must be a column. a misspelled field stops the build, with the error at the type.</p>
+<p>a module named for a table holds the table's model, as a Rails model is named for its table. the derivation declares the record in it, with a field for each column in the table's order: the guestbook's <code>signatures</code> module gets <code>signature</code>, and its functions read <code>s.name</code> and <code>s.message</code> as they read any record's fields. the record is checked like code someone wrote, so a field the table lacks is an error where it is read. <code>kanso derived</code> prints the declaration with the rest of what the derivation writes:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso derived examples/guestbook</div>
+  <pre><code># in signatures, by models/tables
+pub type signature
+  id
+  name
+  message
+  photo</code></pre>
+</div>
+
+<p>a module may declare the record itself, to leave a column out of it. every field it names must then be a column. a misspelled field stops the build, with the error at the type.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/errors/field_without_column/notes.kso</div>
@@ -135,14 +153,10 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A signature as the `signatures` table stores it. senro/models checks each</span>
-<span class="c"># field against the table's columns and writes `signature_from`, which builds</span>
-<span class="c"># one from a row.</span>
-<span class="k">pub</span> <span class="k">type</span> signature
-  <span class="f">id</span>
-  <span class="f">name</span>
-  <span class="f">message</span>
-
+<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
+<span class="c"># the table, so senro/models declares `signature` here with a field for each</span>
+<span class="c"># column, and writes `signature_from`, which builds one from a row.</span>
+<span class="c">#</span>
 <span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
 <span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
 <span class="c"># deletes anything, so there is no other way to remove a signature.</span>
@@ -243,6 +257,51 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 <span class="k">fn</span> <span class="f">said</span> db line
   <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
 </div>
+
+<h2>a page at a time</h2>
+
+<p>a list that may grow is read a page at a time, as Pagy reads one for a Rails app. <code>models/paged db sql params number per</code> runs the query with a limit and an offset after its <code>order by</code>, and answers a <code>models/page</code>: the rows on the page, its number, and whether another page follows. it asks for one row more than a page holds to answer that last question, and leaves that row off. <code>models/page_number</code> reads the page a query string asks for, and anything that is not a whole number of 1 or more is the first page, so a link that has been edited by hand still shows a list.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">models/models.kso</div>
+  <pre><code><span class="c"># Page `number` of what `sql` selects, `per` rows to a page, as Pagy reads</span>
+<span class="c"># one for a Rails app. The query is asked for one row more than a page</span>
+<span class="c"># holds, which says whether another page follows, and that row is not shown.</span>
+<span class="c"># `sql` ends where a limit may follow it, after its `order by`.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">paged</span> db sql params number per
+  n <span class="o">=</span> <span class="f">length</span> params
+  limited <span class="o">=</span> <span class="s">"<span class="i">{sql}</span> limit $<span class="i">{n + 1}</span> offset $<span class="i">{n + 2}</span>"</span>
+  asked <span class="o">=</span> <span class="f">list/concat</span> params [<span class="s">"<span class="i">{per + 1}</span>"</span> <span class="s">"<span class="i">{(number - 1) * per}</span>"</span>]
+  <span class="f">pg/query</span> db limited asked <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">page_of</span> r<span class="o">.</span><span class="f">rows</span> number per))
+
+<span class="k">fn</span> <span class="f">page_of</span> rows number per
+  on_it <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> rows per)
+  <span class="f">page</span> on_it number (<span class="f">length</span> rows <span class="o">&gt;</span> per)
+
+<span class="c"># The page a query string asks for: its whole number when that is 1 or</span>
+<span class="c"># more, and 1 for anything else, a missing `page` among them.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">page_number</span> asked
+  <span class="f">at_least_one</span> (<span class="f">text/to_int</span> asked)
+
+<span class="k">fn</span> <span class="f">at_least_one</span> none
+  <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">at_least_one</span> n
+  <span class="f">if</span> (n <span class="o">&lt;</span> <span class="n">1</span>) <span class="n">1</span> n</code></pre>
+</div>
+
+<p>senro's spec pages through five rows two at a time, asks for a page past the end, and reads six asked-for pages, of which only <code>2</code> is a page number:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/db/paged.out</div>
+  <pre><code>page 1: a b, more: true
+page 3: e, more: false
+page 4: , more: false
+page 2: d e, more: false
+asked 2,,x,0,-3,2.5: 2 1 1 1 1 1</code></pre>
+</div>
+
+<p>a scaffold's <code>index</code> lists its rows this way, 25 to a page, as the generators guide shows.</p>
 
 <p>a resource that lists another's records and one that shows its parent would import each other, and kanso refuses an import cycle. keeping each model in a module of its own, apart from the resource's actions, avoids it: both resources import both models, as the guestbook's <code>entries</code> imports its <code>signatures</code> model.</p>
 

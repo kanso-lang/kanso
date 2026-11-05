@@ -100,6 +100,7 @@ serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n
   <span class="f">arrived_before</span>
   <span class="f">arrived_from</span>
   <span class="f">arrived_from_before</span>
+  <span class="f">pictured</span>
 ]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
@@ -132,6 +133,9 @@ arrived_from <span class="o">=</span> <span class="f">models/add_column</span> <
 
 arrived_from_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_ip
 
+<span class="c"># The key of the photo a signer chose, or empty for an entry without one.</span>
+pictured <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"signatures"</span> photo
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -156,26 +160,24 @@ current_sign_in_ip <span class="o">=</span> <span class="f">models/column</span>
 
 last_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_ip"</span> blank_text
 
+photo <span class="o">=</span> <span class="f">models/column</span> <span class="s">"photo"</span> blank_text
+
 blank_text <span class="o">=</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
 
 <h2>a model</h2>
 
-<p>a model is a record type whose name matches a table: <code>signature</code> reads the <code>signatures</code> table. each field is checked against a column, so a field the table lacks stops the build. the functions beside the type are the model's policies and its rules.</p>
+<p>a model lives in a module named for its table. the models derivation declares the record in <code>signatures</code>, as <code>signature</code> with a field for each column of the <code>signatures</code> table, so the module never lists them, and a field the table lacks cannot be read. the functions in the module are the model's policies and its rules.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/signatures.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A signature as the `signatures` table stores it. senro/models checks each</span>
-<span class="c"># field against the table's columns and writes `signature_from`, which builds</span>
-<span class="c"># one from a row.</span>
-<span class="k">pub</span> <span class="k">type</span> signature
-  <span class="f">id</span>
-  <span class="f">name</span>
-  <span class="f">message</span>
-
+<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
+<span class="c"># the table, so senro/models declares `signature` here with a field for each</span>
+<span class="c"># column, and writes `signature_from`, which builds one from a row.</span>
+<span class="c">#</span>
 <span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
 <span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
 <span class="c"># deletes anything, so there is no other way to remove a signature.</span>
@@ -258,15 +260,20 @@ else
 if flash != ""
   p.flash = flash
 if viewer != ""
-  form.sign method="post" action="/entries"
+  form.sign method="post" action="/entries" enctype="multipart/form-data"
     textarea name="message" placeholder="say something" required="required" = form.message
     if form.problems["message"] != none
       p.problem = form.problems["message"]
+    label
+      span A photo, if you like
+      input type="file" name="photo" accept="image/*"
     button Sign
 ol.entries
   for e in signatures
     li
       p.message = e.message
+      if e.photo != ""
+        img.photo src="/senro/blobs/{e.photo}" alt="a photo from {e.name}"
       p.who = e.name
       == removals["{e.id}"]</code></pre>
 </div>
