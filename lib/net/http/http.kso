@@ -142,7 +142,7 @@ pub fn stop value
   stopped value
 
 # Parsing stops at the head because that is all a request line and its headers
-# are; the body is whatever the read brought with it.
+# are; the body is whatever the read brought with it, blank lines and all.
 pub fn parsed raw
   head = text/split raw "\r\n\r\n"
   return bad_request "an empty request" if length head < 1
@@ -154,7 +154,8 @@ pub fn parsed raw
   request start[1] start[2] (body_of head) (headers_of lines)
 
 fn body_of head
-  if (length head > 1) head[2] ""
+  rest = list/to_list (list/drop head 1)
+  text/join rest "\r\n\r\n"
 
 fn headers_of lines
   list/fold (list/drop lines 1) {} header
