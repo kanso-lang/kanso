@@ -2207,9 +2207,7 @@ static DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
     let mut o = 0;
     while at < text.len() {
         let end = find_in(text, at, text.len(), b"\n");
-        let cut = match starts_at(text, at, end, b"define ")
-            && !kept_inline_at_dev(text, at, end)
-        {
+        let cut = match starts_at(text, at, end, b"define ") && !kept_inline_at_dev(text, at, end) {
             true => find_in(text, at, end, INLINE_ATTR),
             false => end,
         };
@@ -2482,9 +2480,8 @@ mod the_dev_declares_are_the_release_ones_without_the_attribute {
     /// `define` line by a scan at run time, but for the two helpers a dev
     /// build still inlines.
     fn stripped(text: &str) -> String {
-        let kept = |l: &str| {
-            l.contains("@k_b_push_mut_known(") || l.contains("@k_b_append_mut_int(")
-        };
+        let kept =
+            |l: &str| l.contains("@k_b_push_mut_known(") || l.contains("@k_b_append_mut_int(");
         text.split('\n')
             .map(|l| match l.starts_with("define ") && !kept(l) {
                 true => l.replacen(" alwaysinline", "", 1),
