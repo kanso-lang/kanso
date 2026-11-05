@@ -112604,3 +112604,24 @@ comment, so the walk reads the raw page. A ratchet row puts a stray close back
 after ch07's first panel and the gate goes red. The summary line counts
 findings rather than tells, and the advice about the slop families prints only
 when one of them was found.
+
+## 2026-10-29 — book_panels reads output panels by their source, and golden paths
+
+Items 1 and 2 of #2213. The landing page titles its outputs `output`, and
+book_panels matched only titles that start with `kanso`, so those panels were
+copied by hand. An `output` panel now answers to the source panel it sits
+under: the pair is matched once, and the output becomes the match a panel
+titled with that source's run would have been. On the site pages, a run
+resolves to tests/golden/examples/<name>.stdout and a `--plan` run to
+<name>.plan, so about.html's two effects panels are compared too. A panel
+titled with a golden's path, such as about.html's three
+tests/golden/errors/*.stderr panels, shows that file, compared after its
+markup is stripped and rewritten from it under `--write`. The three shapes
+are sorted into one list by position before the rewrite, which replaces the
+two-list merge.
+
+The wider reading found one drifted panel in the book: ch03's reading.kso
+showed one of the two lines the sample prints. book_check's write path now
+copies the example and error goldens into its scratch tree, so a rewrite
+there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
+go red.

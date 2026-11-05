@@ -2076,6 +2076,13 @@ impl<'a> Backend<'a> {
         t.to_string()
     }
 
+    /// Whether a value may be a cell: the question `maybe_force` asks before
+    /// it emits a force.
+    fn may_hold_thunk(&self, f: &FnEmit, value: &str) -> bool {
+        (self.demand.lazy_bind_count() != 0 || self.defers_self_reference)
+            && f.set_of(value) & crate::infer::THUNK != 0
+    }
+
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
         // A deferred self-reference is a thunk that no lazy-bind count knows
         // about, so the cheap exit has to admit it too.

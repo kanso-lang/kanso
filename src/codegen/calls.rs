@@ -84,8 +84,14 @@ impl<'a> Backend<'a> {
                 };
                 let closure = self.emit_expr(f, &lambda)?;
                 let t = f.tmp();
+                // a value inference rules out as a cell skips the cell test
+                let bind = if self.may_hold_thunk(f, &piped_value) {
+                    "k_maybe_bind"
+                } else {
+                    "k_bind_settled"
+                };
                 f.line_fmt(format_args!(
-                    "{t} = call %KValue @k_maybe_bind(%KValue {piped_value}, %KValue {closure})"
+                    "{t} = call %KValue @{bind}(%KValue {piped_value}, %KValue {closure})"
                 ));
                 f.record(&t, TOP);
                 return Ok(t.to_string());
