@@ -1,0 +1,199 @@
+---
+layout: default
+title: "file uploads in senro"
+description: "senro reads a request as bytes, turns a multipart form into the form an action already reads, keeps each file on disk under a random key, and serves it back."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>file uploads</h1>
+
+<p>a form with a file input posts its fields as <code>multipart/form-data</code>, and the file arrives as bytes that are rarely text. senro reads every request as bytes, turns a multipart body into the same form an action already reads with <code>web/form</code>, writes each file to disk under a random key, and serves the file back by that key. this is what Active Storage's disk service does for a Rails app. this guide covers reading the request, the form an action sees, where the files go, and how they come back.</p>
+
+<h2>reading a request</h2>
+
+<p>a read from a socket answers whatever has arrived, and a browser often sends a request's head in one packet and its body in the next. the server reads until it has the head, works out from <code>content-length</code> how long the whole request is, and reads again until it has that many bytes or the client stops sending.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/uploads.kso</div>
+  <pre><code><span class="c"># A request read as bytes, and a form sent as multipart/form-data, which is how</span>
+<span class="c"># a browser sends a file. Each file is written to the app's storage directory</span>
+<span class="c"># under a key of 32 random hex digits, and the form the action reads holds</span>
+<span class="c"># the key where the file was, as Active Storage's disk service keeps a blob.</span>
+<span class="c"># /senro/blobs/&lt;key&gt; serves it back.</span>
+<span class="c">#</span>
+<span class="c"># The most a request's body may hold, 10 MiB. A request that promises more</span>
+<span class="c"># is answered 413 before its body is read.</span>
+body_limit <span class="o">=</span> <span class="n">10485760</span>
+
+<span class="c"># A read is one segment of what the client sent, and a browser often sends a</span>
+<span class="c"># request's head in one packet and its body in the next. The server reads</span>
+<span class="c"># again until the body has the bytes content-length promised, or the client</span>
+<span class="c"># stops sending. `wanted` is the whole request's length once its head is in,</span>
+<span class="c"># and -1 until then.</span>
+<span class="k">fn</span> <span class="f">gathered</span> c had wanted
+  <span class="f">net/read_bytes</span> c <span class="o">.&gt;</span> (more <span class="o">-&gt;</span> <span class="f">gathered_after</span> c had wanted more)
+
+<span class="k">fn</span> <span class="f">gathered_after</span> c had wanted more
+  <span class="f">return</span> effect had if length more <span class="o">==</span> <span class="n">0</span>
+  raw <span class="o">=</span> <span class="f">text/append</span> had more
+  want <span class="o">=</span> <span class="f">wanted_of</span> raw wanted
+  <span class="f">return</span> effect raw if whole? raw want
+  <span class="f">return</span> continued c raw want if wanted <span class="o">&lt;</span> <span class="n">0</span> and want <span class="o">&gt;=</span> <span class="n">0</span> and expects? raw
+  <span class="f">gathered</span> c raw want
+
+<span class="k">fn</span> <span class="f">wanted_of</span> raw <span class="o">-</span><span class="n">1</span>
+  <span class="f">head_end</span> raw (<span class="f">found</span> raw blank_line <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">wanted_of</span> _ w
+  <span class="f">w</span>
+
+<span class="k">fn</span> <span class="f">head_end</span> _ none
+  <span class="o">-</span><span class="n">1</span>
+
+<span class="c"># A body larger than the limit is not waited for: the request is whole at</span>
+<span class="c"># its head, and `opened` refuses it.</span>
+<span class="k">fn</span> <span class="f">head_end</span> raw at
+  head <span class="o">=</span> <span class="f">ascii_of</span> (<span class="f">some_bytes</span> (<span class="f">text/slice</span> raw <span class="n">1</span> (at <span class="o">-</span> <span class="n">1</span>)))
+  promised <span class="o">=</span> <span class="f">length_promised</span> (<span class="f">header_in</span> head <span class="s">"content-length"</span>)
+  <span class="f">return</span> at <span class="o">+</span> <span class="n">3</span> if promised <span class="o">&gt;</span> body_limit
+  at <span class="o">+</span> <span class="n">3</span> <span class="o">+</span> promised
+
+<span class="k">fn</span> <span class="f">whole?</span> raw w
+  w <span class="o">&gt;=</span> <span class="n">0</span> and length raw <span class="o">&gt;=</span> w</code></pre>
+</div>
+
+<p>a body longer than 10 MiB is not waited for. the request counts as whole once its head is in, and the server answers 413 Content Too Large without reading the body. curl and other HTTP clients send <code>Expect: 100-continue</code> before a large upload and wait to be told to go on, so the server says so once the head is in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/uploads.kso</div>
+  <pre><code><span class="c"># A client that sends `Expect: 100-continue` waits to hear that the server</span>
+<span class="c"># will take its body before it sends it, as curl does for a large upload.</span>
+<span class="k">fn</span> <span class="f">continued</span> c raw want
+  <span class="f">net/write</span> c <span class="s">"HTTP/1.1 100 Continue\r\n\r\n"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">gathered</span> c raw want)
+
+<span class="k">fn</span> <span class="f">expects?</span> raw
+  at <span class="o">=</span> <span class="f">found</span> raw blank_line <span class="n">1</span>
+  <span class="f">continue_asked?</span> raw at</code></pre>
+</div>
+
+<p>the head's <code>content-length</code> and <code>content-type</code> are read from its own lines, with each byte past ASCII read as a question mark, so a head that is not text is still measured rather than refused halfway through.</p>
+
+<h2>the form an action sees</h2>
+
+<p>a body that is not multipart is decoded as UTF-8, and one that is not UTF-8 is answered 400. a multipart body is cut along its boundary into parts. a part with no filename is a text field, and its value is its text. a part with a filename is a file: senro writes it to disk and the field's value becomes the key it was written under. a file input left empty sends a part with an empty filename, and its value is "".</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/uploads.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">stored_as</span> p none
+  <span class="f">text_or_blank</span> p<span class="o">.</span><span class="f">content</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) v])
+
+<span class="k">fn</span> <span class="f">stored_as</span> p <span class="s">""</span>
+  <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) <span class="s">""</span>]
+
+<span class="k">fn</span> <span class="f">stored_as</span> p filename
+  <span class="f">os/random_bytes</span> <span class="n">16</span>
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">written</span> (<span class="f">hexed</span> r) p filename)
+    <span class="o">.&gt;</span> (key <span class="o">-&gt;</span> <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) key])
+
+<span class="k">fn</span> <span class="f">written</span> key p filename
+  <span class="f">storage_dir</span>
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/make_dir</span> dir <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> dir))
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"<span class="i">{dir}</span>/<span class="i">{key}</span>"</span> p<span class="o">.</span><span class="f">content</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> dir))
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"<span class="i">{dir}</span>/<span class="i">{key}</span>.meta"</span> <span class="s">"<span class="i">{p.kind}</span>\n<span class="i">{filename}</span>"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> key)
+
+<span class="c"># Where files are kept: SENRO_STORAGE, or storage/ beside the app.</span>
+storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_STORAGE"</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">dir_or</span> d))</code></pre>
+</div>
+
+<p>the fields are then written out the way a browser writes an ordinary form, <code>title=a%20cat&amp;photo=4f1c…</code>, so an action reads them with <code>web/form</code> and <code>web/value</code> as it reads any other. it stores the key in a column the way it stores a title.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/uploaded/photo.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../web"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># What a form with two files and a title reads as: the title as typed, and</span>
+<span class="c"># each file as the key it was stored under.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
+  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  said <span class="o">=</span> <span class="f">list/map</span> [<span class="s">"title"</span> <span class="s">"photo"</span> <span class="s">"notes"</span>] (n <span class="o">-&gt;</span> <span class="f">web/value</span> f n)
+  <span class="f">effect</span> (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
+</div>
+
+<p>files go to <code>storage/</code> beside the app, or to the directory <code>SENRO_STORAGE</code> names. each key is 32 hex digits from 16 random bytes, and beside the file a <code>.meta</code> file keeps the content type and the filename the browser sent.</p>
+
+<h2>serving a file</h2>
+
+<p>a view links a stored file with <code>web/blob_path key</code>, which names <code>/senro/blobs/&lt;key&gt;</code>. a key that is not 32 hex digits is answered 404 without looking for a file. an image or a PDF is sent as its own type and shown in the page. anything else is sent as <code>application/octet-stream</code> and as a download, so an HTML file someone uploaded never runs as a page of the app. every answer carries <code>x-content-type-options: nosniff</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/uploads.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">blob_headers</span> kind filename
+  shown <span class="o">=</span> <span class="f">list/any?</span> inline_kinds (k <span class="o">-&gt;</span> k <span class="o">==</span> kind)
+  [
+    <span class="s">"content-type: <span class="i">{shown_kind shown kind}</span>"</span>
+    <span class="s">"content-disposition: <span class="i">{disposition shown filename}</span>"</span>
+    <span class="s">"x-content-type-options: nosniff"</span>
+    <span class="s">"cache-control: private, max-age=31536000, immutable"</span>
+  ]
+
+inline_kinds <span class="o">=</span> [
+  <span class="s">"image/png"</span>
+  <span class="s">"image/jpeg"</span>
+  <span class="s">"image/gif"</span>
+  <span class="s">"image/webp"</span>
+  <span class="s">"image/avif"</span>
+  <span class="s">"application/pdf"</span>
+]
+
+<span class="k">fn</span> <span class="f">shown_kind</span> true kind
+  <span class="f">kind</span>
+
+<span class="k">fn</span> <span class="f">shown_kind</span> false _
+  <span class="s">"application/octet-stream"</span>
+
+<span class="k">fn</span> <span class="f">disposition</span> true _
+  <span class="s">"inline"</span>
+
+<span class="k">fn</span> <span class="f">disposition</span> false filename
+  bare <span class="o">=</span> <span class="f">without</span> (<span class="f">without</span> filename <span class="s">"\""</span>) <span class="s">"\\"</span>
+  <span class="s">"attachment; filename=\"<span class="i">{bare}</span>\""</span></code></pre>
+</div>
+
+<p>a key is unguessable, so a file is as private as its link. an app that must keep a file from someone who has the link should serve it from an action that checks the viewer instead.</p>
+
+<h2>what the spec checks</h2>
+
+<p>senro's spec serves a small app and posts to it the way a browser does, the head first and the multipart body a moment later. the form holds a title, a PNG whose bytes include a NUL, a 255, a line break and the boundary's own dashes, and an HTML page. it then asks for each file by its key, sends a body that promises 20,000,000 bytes, asks for two paths that are not keys, and repeats the upload with <code>Expect: 100-continue</code>:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/serve/uploaded.out</div>
+  <pre><code>title: a cat &amp; a hat
+keys are 32 hex digits: true
+photo: HTTP/1.1 200 OK, content-type: image/png, content-disposition: inline, x-content-type-options: nosniff, same bytes: true
+notes: HTTP/1.1 200 OK, content-type: application/octet-stream, content-disposition: attachment; filename="x.html", x-content-type-options: nosniff, same bytes: true
+HTTP/1.1 413 Content Too Large
+HTTP/1.1 404 Not Found
+HTTP/1.1 404 Not Found
+asked to continue: HTTP/1.1 100 Continue, then HTTP/1.1 200 OK</code></pre>
+</div>
+
+<p>both engines print the same lines. the photo comes back byte for byte and inline, and the HTML page comes back as a download under its own name.</p>
+
+<h2>limits</h2>
+
+<p>files are kept on the server's disk only, and an app on more than one machine needs them somewhere shared. the boundary search is written in kanso: about 0.1 seconds a megabyte natively and about a second interpreted, which the 10 MiB limit keeps bounded.</p>
+</article>
