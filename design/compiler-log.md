@@ -20,39 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — prose_check pairs each page's div tags
-
-Item 3 of #2213. ch07 shipped with a stray `</div>` that the browser forgave
-and every gate passed over. prose_check now walks the `<div>` and `</div>`
-tags of every page it reads and reports a close with nothing open, or an open
-never closed, at its line. On main it found two more, in appendix a after the
-type-order panel, and this change deletes them. No page puts a div inside a
-comment, so the walk reads the raw page. A ratchet row puts a stray close back
-after ch07's first panel and the gate goes red. The summary line counts
-findings rather than tells, and the advice about the slop families prints only
-when one of them was found.
-
-## 2026-10-29 — book_panels reads output panels by their source, and golden paths
-
-Items 1 and 2 of #2213. The landing page titles its outputs `output`, and
-book_panels matched only titles that start with `kanso`, so those panels were
-copied by hand. An `output` panel now answers to the source panel it sits
-under: the pair is matched once, and the output becomes the match a panel
-titled with that source's run would have been. On the site pages, a run
-resolves to tests/golden/examples/<name>.stdout and a `--plan` run to
-<name>.plan, so about.html's two effects panels are compared too. A panel
-titled with a golden's path, such as about.html's three
-tests/golden/errors/*.stderr panels, shows that file, compared after its
-markup is stripped and rewritten from it under `--write`. The three shapes
-are sorted into one list by position before the rewrite, which replaces the
-two-list merge.
-
-The wider reading found one drifted panel in the book: ch03's reading.kso
-showed one of the two lines the sample prints. book_check's write path now
-copies the example and error goldens into its scratch tree, so a rewrite
-there reaches the new shapes. Two ratchet rows, one per shape, watch the gate
-go red.
-
 ## 2026-10-29 — the interpreter's calls section moves into eval/calls.rs
 
 The cleanup owed after #2240 to #2244. `call` through `worded_step`, 888
@@ -1545,3 +1512,91 @@ through the entry the micro corpus stages for a `pub play` library, and
 Goldens: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
 corpus, the senro shape reduced, which checked clean before this change;
 and the micro above, which prints `2` on every engine.
+
+## 2026-11-05 — a lazy binding of an effect, handed back unread, still runs
+
+A binding is lazy, so `change = models/updated ...` holds the call until
+something reads it. A function that takes the binding and answers it unread,
+as `fn owned _ write` does with `write`, answers the cell itself. Every place
+that asked whether a value is an effect asked before forcing it, so the cell
+read as a plain value: `owned row change .> (w -> ...)` handed `w` the
+effect's description instead of running it, and the write never happened.
+senro's nested scaffold found it, in an update guarded by a lookup of the
+parent.
+
+Both engines had the gap in the same three places:
+
+- the subject of `.>`: the interpreter's piped application, in value and in
+  tail position; natively `k_maybe_bind`, `k_b_bind`, and the two places
+  codegen builds a bind inline;
+- a callback's answer: the interpreter's `worded_step`, and natively the
+  chain walks in `k_exec_unmarked`, the executor's loop and `k_step`;
+- the subject of `.?` and `annotate` natively, in `k_sited_word`. The
+  interpreter's builtin path already forced it.
+
+Each now forces before it asks. The first version forced ahead of the
+description test, and CI read deepbench 2,180,005 instructions (1.1%)
+higher. Moving each test behind the description test left CI's reading
+where it was, at +2,179,642. A profile of deepbench in this container put
+the whole difference in two functions: `k_maybe_bind` (+1,308,003), where
+every bind of a plain value now paid the cell test, and the executor's
+loop (+871,637), which called `k_force` on every answer that was not a
+description.
+
+So the cell test now runs only where it can find something. Codegen calls
+`k_bind_settled`, which has no cell test, wherever inference rules a cell
+out, and `k_maybe_bind` only where the value's set holds a thunk. The inline
+tail bind tests for a cell under the same condition. The executor's loops
+test the tag before forcing, and the forcing sits in a cold helper out of
+line. In this container deepbench then reads 198,401,946 against main's
+197,862,309: +539,637 (0.27%), all in the executor's loop. That is one tag
+test for each callback answer that is not a description, and it stays,
+because whether a callback answers a cell is known only when it answers.
+`.?`'s entry still tests first, once per rescue built.
+
+Rows, from CI on the branch. The runtime's instructions rose with the cell
+tests: `work_deepbench` 539,637 to 198,295,366, `work_widebench` 15,990 to
+28,702,513, `work_runbench` 40,882 to 915,653,371, `work_encodebench` 496 to
+2,335,340,781, `work_oneshot` 181 to 9,980,271, `work_pendbench` 143 to
+154,125,066, `work_livebench` 90 to 938,655,701, `work_jsonbench` 7 to
+549,338,429, `work_readbench` 7 to 4,584,591 and `work_digestbench` 6 to
+3,288,947, while `work_runbench_dev` fell 34,240. The inline cell path adds
+code where a value's set holds a thunk: `emitted_other_defines` 2,367,
+`emitted_other_calls` 21,902, `emitted_other_branches` 19,043 and
+`emitted_other_lines` 180,685, and every binary's text grows 1,536 bytes for
+the runtime's new functions, `text` 5,877,065 in all. Compiling costs more
+with the code it emits: `codegen_instructions_release` 58,837 to 372,025,872,
+`codegen_instructions_dev` 3,473 to 116,855,724 and `emit_instructions` 582
+to 5,613,397. The interpreter forces where it did not, and
+`interp_instructions` rose 92,078 to 622,558,315. In the tab,
+`browser_compile_instructions` rose 6,395 to 350,297,580 and
+`browser_run_instructions` 8,001 to 78,426,179.
+
+`a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
+the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
+with a failure from std. Before the change both engines printed `<io>` for
+each; after it they print what each effect does.
+
+## 2026-11-05 — a declaration cannot take a nullary value's name
+
+A library could declare a constant named `done`. std/list's iterators answer
+`done` when they run out, and with the constant declared that answer read
+the constant, so a fold elsewhere in the program found no arm for it and
+failed at run time (#2338). senro's jobs module found it with a SQL string
+named `done`. An entry already refused the name, because there it is a
+binding and the shadow check holds the nullary values as globals; a library
+declares it instead, and `collect_globals` checked declarations against the
+ambient names and the types only.
+
+A declaration named `done`, `none`, `true` or `false` is now refused as a
+name already taken. The one program in the tree that declared one was
+`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
+`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
+declares `done` and `none`, and checked clean before the change.
+
+Rows: the new check costs every compile a little. `compile_instructions`
+rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
+`library_instructions` 1,497 to 73,495,778 and
+`browser_compile_instructions` 3,822 to 350,291,185, and
+`browser_run_instructions` did not move. The rule is part of the language,
+so the welfare floor moves down by exactly the check's cost.

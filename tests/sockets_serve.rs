@@ -143,7 +143,7 @@ fn tally _ 0 acc
 fn tally cs n acc
   tally cs (n - 1) (acc + length (text/split cs "\n"))
 
-fn done _
+fn reported _
   print "fetched"
 
 fn page body
@@ -156,7 +156,7 @@ asked = time/sleep 400 .> (_ -> os/read_file "port.txt") .> fetched
 
 fn fetched p
   url = "http://127.0.0.1:{p}/"
-  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] .> done
+  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] .> reported
 
 net/listen 0 .> (l -> net/port l .> (p -> serving_at l p))
 asked

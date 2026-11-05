@@ -17,10 +17,10 @@ basket defines=133 calls=1147 branches=1051 lines=9550
 widebench defines=161 calls=1372 branches=1008 lines=11605
 deepbench defines=50 calls=242 branches=250 lines=2376
 escapebench defines=20 calls=88 branches=92 lines=1027
-pendbench defines=72 calls=491 branches=414 lines=3984
+pendbench defines=74 calls=498 branches=417 lines=4024
 indexbench defines=22 calls=71 branches=42 lines=782
 scanbench defines=333 calls=3212 branches=3031 lines=26144
 digestbench defines=115 calls=836 branches=930 lines=8001
 readbench defines=22 calls=70 branches=44 lines=788
 livebench defines=179 calls=1645 branches=1385 lines=15227
-runbench defines=932 calls=9883 branches=8545 lines=75600
+runbench defines=936 calls=9906 branches=8567 lines=75788
