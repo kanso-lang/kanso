@@ -32,7 +32,7 @@ description: "senro (線路): a web framework for kanso in the tradition of Rail
 
 <span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
 <span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [signed joined emailed confirmable counted lockable]
 
 signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
 
@@ -46,6 +46,12 @@ emailed <span class="o">=</span> <span class="f">models/add_column</span> <span 
 <span class="c"># When the address was confirmed, or empty until it is.</span>
 confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
 
+<span class="c"># How many wrong passwords in a row the account has had, and when too many</span>
+<span class="c"># of them locked it, or empty while it is open.</span>
+counted <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> failures
+
+lockable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> locked
+
 name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
 
 message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
@@ -54,7 +60,11 @@ digest <span class="o">=</span> <span class="f">models/column</span> <span class
 
 email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
 
-confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span></code></pre>
+confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span>
+
+failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span>
+
+locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span></code></pre>
 </div>
   </div>
 </section>
