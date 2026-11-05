@@ -32,7 +32,7 @@
 //! that had nothing to do with what was being tested.
 //!
 //! So the question is asked where it can be answered: two files that must
-//! agree. `lib/*.kso` names its builtins through the `builtin_` door and
+//! agree. `lib/` names its builtins through the `builtin_` door and
 //! `src/eval/builtins.rs` dispatches them, and neither can move without the other.
 
 use std::path::Path;

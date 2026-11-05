@@ -1993,7 +1993,7 @@ impl<'a> Backend<'a> {
     /// Whether a rendered value goes through the ambient `render/to_string`
     /// group: a set carrying REC may hit a user arm, so it is routed there.
     /// Primitive-only sets keep the direct call — coherence proves no arm can
-    /// exist for them (design/render-plan.md).
+    /// exist for them (book appendix A, "render what you define").
     fn render_dispatchable(&self, f: &FnEmit, value: &str) -> bool {
         f.set_of(value) & (REC | NONE | infer::DONE | DESC) != 0 && self.declares(RENDER_GROUP)
     }

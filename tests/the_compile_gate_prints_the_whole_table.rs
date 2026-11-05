@@ -3,7 +3,7 @@
 //! On 2026-09-22 `compile_instructions` read 35,551,167 on main and
 //! 35,551,170 on a branch whose diff was `design/compiler-log.md` and
 //! `docs/compiler.html` — files no part of the compiler reads, since only
-//! `lib/*.kso` is `include_str!`'d into it. Localising those three meant
+//! `lib/` is `include_str!`'d into it. Localising those three meant
 //! comparing the two jobs' profiles, and the job log carried
 //! `--threshold=90 | head -40`: forty rows of the hundred and twenty-five that
 //! threshold has, and fifteen functions once the header lines were dropped.

@@ -3,7 +3,7 @@
 #
 # That sweep walks the runtime cost goldens. The compile side is its own set of
 # gates, two of their counters are welfare terms, and a change under lib/ moves
-# every one of them — `lib/*.kso` is `include_str!`'d into the compiler, so a
+# every one of them — `lib/` is `include_str!`'d into the compiler, so a
 # line added to the library is a line the compiler carries and compiles. On
 # 2026-09-05 a twelve-line library change read as a welfare RISE with these
 # veins stale and a FALL once they were regenerated, and nothing in the sweep
@@ -64,7 +64,7 @@ fi
 # script exists to prevent.
 #
 # `all_counters.sh` opens with `cargo build --release` for the same reason and
-# CLAUDE.md says why: `lib/*.kso` is `include_str!`'d into the compiler, so a
+# CLAUDE.md says why: `lib/` is `include_str!`'d into the compiler, so a
 # library edit does not reach a program until the compiler is rebuilt.
 # `build_benchmarks.sh` starts with that build and then compiles the benchmarks.
 sh scripts/gates/build_benchmarks.sh > /dev/null
