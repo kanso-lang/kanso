@@ -482,8 +482,8 @@ KValue k_desc_join(KValue a, KValue b) {
 /* A lazy binding handed on unread arrives as its cell, and is an effect only
    once forced, so each chain word forces what it is given before asking. */
 KValue k_maybe_bind(KValue piped, KValue closure) {
-    if (piped.tag == K_THUNK) piped = k_force(piped);
     if (piped.tag == K_DESC) return k_mkdesc(6, piped, closure);
+    if (piped.tag == K_THUNK) return k_maybe_bind(k_force(piped), closure);
     return k_call1(closure, piped);
 }
 
@@ -541,8 +541,8 @@ static inline __attribute__((always_inline)) KValue k_worded_step(long long dtag
    decides here, which is what makes a word mean the same thing called
    prefix-style outside a chain. */
 KValue k_b_bind(KValue subject, KValue callback) {
-    if (subject.tag == K_THUNK) subject = k_force(subject);
     if (subject.tag == K_DESC) return k_mkdesc(6, subject, callback);
+    if (subject.tag == K_THUNK) return k_b_bind(k_force(subject), callback);
     return k_worded_step(6, subject, callback);
 }
 
@@ -593,8 +593,8 @@ static KValue k_sited_word(KValue subject, KValue callback, const char* origin,
                            K_CLOSCC KValue (*wrap)(void*, KValue)) {
     KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
     KValue caps[2]; caps[0] = callback; caps[1] = site;
-    KValue wrapped = k_closure(wrap, 1, 2, caps, 0);
     if (subject.tag == K_THUNK) subject = k_force(subject);
+    KValue wrapped = k_closure(wrap, 1, 2, caps, 0);
     if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrapped);
     return k_worded_step(29, subject, wrapped);
 }
@@ -1054,8 +1054,11 @@ static __attribute__((noinline)) KValue k_exec_unmarked(KDesc* d) {
         if (dd->dtag != 6 && dd->dtag != 29) return k_beat_pop(k_exec(dd));
         KValue yielded = k_exec(k_as_desc(dd->x));
         KValue next = k_worded_step(dd->dtag, yielded, dd->y);
-        if (__builtin_expect(next.tag == K_THUNK, 0)) next = k_force(next);
-        if (next.tag != K_DESC) return k_beat_pop(next);
+        if (next.tag != K_DESC) {
+            /* a callback may answer a lazy binding it was handed */
+            next = k_force(next);
+            if (next.tag != K_DESC) return k_beat_pop(next);
+        }
         cur = next;
     }
 }
@@ -1572,9 +1575,9 @@ static KValue k_exec(KDesc* d) {
                 }
                 KValue yielded = k_exec(k_as_desc(dd->x));
                 KValue next = k_worded_step(dd->dtag, yielded, dd->y);
-                if (__builtin_expect(next.tag == K_THUNK, 0)) next = k_force(next);
                 if (next.tag != K_DESC) {
-                    return k_beat_pop(next);
+                    next = k_force(next);
+                    if (next.tag != K_DESC) return k_beat_pop(next);
                 }
                 /* A step whose region has not drifted far since the last
                    stage leaves its value where it is, and it decides that
@@ -1871,17 +1874,19 @@ static KStep k_step(KDesc* d) {
                 return in;
             }
             KValue next = k_worded_step(d->dtag, in.value, d->y);
-            if (__builtin_expect(next.tag == K_THUNK, 0)) next = k_force(next);
-            if (next.tag == K_DESC) {
-                if ((++k_step_links & 255) == 0 && k_sched_due()) {
-                    KStep s = {3, 0, next, k_none()};
+            if (next.tag != K_DESC) {
+                next = k_force(next);
+                if (next.tag != K_DESC) {
+                    KStep s = {0, 0, k_none(), next};
                     return s;
                 }
-                d = k_as_desc(next);
-                continue;
             }
-            KStep s = {0, 0, k_none(), next};
-            return s;
+            if ((++k_step_links & 255) == 0 && k_sched_due()) {
+                KStep s = {3, 0, next, k_none()};
+                return s;
+            }
+            d = k_as_desc(next);
+            continue;
         }
         case 7: {
             /* A join the fiber reaches is the scheduler's to run beside the

@@ -1557,8 +1557,11 @@ Both engines had the gap in the same three places:
 
 Each now forces before it asks. In codegen the force is `maybe_force`, which
 emits nothing where inference proves the value holds no thunk. In the
-runtime it is a tag test at a chain word's entry, which runs once per bind
-built, and one in each walk's loop, ahead of the test for a description.
+runtime it sits on the branch that has already found something other than
+a description, so a chain of descriptions runs the instructions it ran
+before. The first version tested for a thunk ahead of that branch, on every
+step, and CI read deepbench 2,180,005 instructions (1.1%) higher for it.
+`.?`'s entry still tests first, once per rescue built.
 
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
