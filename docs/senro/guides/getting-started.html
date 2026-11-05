@@ -55,7 +55,7 @@ made <span class="o">=</span> <span class="f">models/made</span> schema
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> removal/act removal/view) }
 
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes entries/secret session/signed_against
 
 served_routes <span class="o">=</span> <span class="f">web/components</span> signed entries/secret served
 
