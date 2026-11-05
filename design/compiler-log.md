@@ -1589,11 +1589,9 @@ the runtime's new functions, `text` 5,877,065 in all. Compiling costs more
 with the code it emits: `codegen_instructions_release` 58,837 to 372,025,872,
 `codegen_instructions_dev` 3,473 to 116,855,724 and `emit_instructions` 582
 to 5,613,397. The interpreter forces where it did not, and
-`interp_instructions` rose 92,078 to 622,558,315. The browser rows fell,
-`browser_compile_instructions` to 349,304,764 and `browser_run_instructions`
-to 78,403,189, by the same amounts #2339 read with no change in common, and
-the cause of that is open. Welfare still rose, because that fall outweighs
-the runtime's rise, and the rise is banked.
+`interp_instructions` rose 92,078 to 622,558,315. In the tab,
+`browser_compile_instructions` rose 6,395 to 350,293,758 and
+`browser_run_instructions` 8,001 to 78,426,179.
 
 `a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
