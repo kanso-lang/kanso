@@ -20,18 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — prose_check pairs each page's div tags
-
-Item 3 of #2213. ch07 shipped with a stray `</div>` that the browser forgave
-and every gate passed over. prose_check now walks the `<div>` and `</div>`
-tags of every page it reads and reports a close with nothing open, or an open
-never closed, at its line. On main it found two more, in appendix a after the
-type-order panel, and this change deletes them. No page puts a div inside a
-comment, so the walk reads the raw page. A ratchet row puts a stray close back
-after ch07's first panel and the gate goes red. The summary line counts
-findings rather than tells, and the advice about the slop families prints only
-when one of them was found.
-
 ## 2026-10-29 — book_panels reads output panels by their source, and golden paths
 
 Items 1 and 2 of #2213. The landing page titles its outputs `output`, and
@@ -1545,3 +1533,34 @@ through the entry the micro corpus stages for a `pub play` library, and
 Goldens: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
 corpus, the senro shape reduced, which checked clean before this change;
 and the micro above, which prints `2` on every engine.
+
+## 2026-11-05 — a lazy binding of an effect, handed back unread, still runs
+
+A binding is lazy, so `change = models/updated ...` holds the call until
+something reads it. A function that takes the binding and answers it unread,
+as `fn owned _ write` does with `write`, answers the cell itself. Every place
+that asked whether a value is an effect asked before forcing it, so the cell
+read as a plain value: `owned row change .> (w -> ...)` handed `w` the
+effect's description instead of running it, and the write never happened.
+senro's nested scaffold found it, in an update guarded by a lookup of the
+parent.
+
+Both engines had the gap in the same three places:
+
+- the subject of `.>`: the interpreter's piped application, in value and in
+  tail position; natively `k_maybe_bind`, `k_b_bind`, and the two places
+  codegen builds a bind inline;
+- a callback's answer: the interpreter's `worded_step`, and natively the
+  chain walks in `k_exec_unmarked`, the executor's loop and `k_step`;
+- the subject of `.?` and `annotate` natively, in `k_sited_word`. The
+  interpreter's builtin path already forced it.
+
+Each now forces before it asks. In codegen the force is `maybe_force`, which
+emits nothing where inference proves the value holds no thunk. In the
+runtime it is a tag test at a chain word's entry, which runs once per bind
+built, and one in each walk's loop, ahead of the test for a description.
+
+`a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
+the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
+with a failure from std. Before the change both engines printed `<io>` for
+each; after it they print what each effect does.

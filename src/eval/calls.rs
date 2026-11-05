@@ -855,9 +855,11 @@ impl<'a> Interp<'a> {
         raised: &Raised,
         span: Span,
     ) -> EvalResult {
+        // A callback may answer a lazy binding it was handed, which is an
+        // effect to run only once forced.
         let Value::ErrV(cause) = yielded.clone() else {
             return match word {
-                Word::Bind => self.call_decided(callee, yielded, span),
+                Word::Bind => self.force_thunk(self.call_decided(callee, yielded, span)?),
                 Word::Rescue | Word::Annotate => Ok(yielded),
             };
         };
@@ -870,9 +872,12 @@ impl<'a> Interp<'a> {
             Word::Rescue if own_failure(&cause, raised) => Ok(yielded),
             // the callback is handed the err out of its box, an ordinary
             // value from here on (#2087)
-            Word::Rescue => self.call_decided(callee, Value::Unboxed(cause), span),
+            Word::Rescue => {
+                self.force_thunk(self.call_decided(callee, Value::Unboxed(cause), span)?)
+            }
             Word::Annotate => {
-                match self.call_decided(callee, Value::Unboxed(cause.clone()), span)? {
+                let told = self.call_decided(callee, Value::Unboxed(cause.clone()), span)?;
+                match self.force_thunk(told)? {
                     // the callback failed on its own account, and that err
                     // already carries what it was told; wrapping it again would
                     // report the same failure twice

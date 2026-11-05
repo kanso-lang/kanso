@@ -1467,7 +1467,8 @@ impl<'a> Backend<'a> {
                 // the carry apply through the ordinary machinery
                 if let Expr::Lambda { params, body, .. } = head.as_ref() {
                     if params.len() == 1 && args.len() == 1 {
-                        let value = self.emit_expr(f, &args[0])?;
+                        let subject = self.emit_expr(f, &args[0])?;
+                        let value = self.maybe_force(f, subject);
                         // a description takes the executor's bind at runtime;
                         // anything else binds the parameter here and the
                         // lambda body becomes this function's own tail — the
