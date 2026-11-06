@@ -2624,8 +2624,15 @@ extern "C" {
 #[cfg(unix)]
 static RUNNING: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
+/// The signal the driver handed on, or 0 when it handed on none. A program
+/// that a signal from elsewhere ended is reported as ended by it; only one the
+/// driver was sent ends the driver the same way.
+#[cfg(unix)]
+static HANDED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
 #[cfg(unix)]
 extern "C" fn hand_on(sig: i32) {
+    HANDED.store(sig, std::sync::atomic::Ordering::SeqCst);
     let pid = RUNNING.load(std::sync::atomic::Ordering::SeqCst);
     if pid > 0 {
         unsafe {
@@ -2650,12 +2657,14 @@ fn handing_on_to(pid: u32) {
 #[cfg(not(unix))]
 fn handing_on_to(_pid: u32) {}
 
-/// A program ended by a signal the driver handed on ends the driver the same
-/// way, saying nothing, so whoever sent it sees what it asked for.
+/// A program ended by the signal the driver handed on ends the driver the
+/// same way, saying nothing, so whoever sent it sees what it asked for. One
+/// ended by a signal the driver was never sent is reported, as before.
 #[cfg(unix)]
 fn ended_as_asked(status: &std::process::ExitStatus) {
     use std::os::unix::process::ExitStatusExt;
-    if let Some(sig) = status.signal().filter(|s| HANDED_ON.contains(s)) {
+    let handed = HANDED.load(std::sync::atomic::Ordering::SeqCst);
+    if let Some(sig) = status.signal().filter(|s| *s == handed) {
         unsafe {
             raise(sig);
         }
