@@ -2630,26 +2630,37 @@ static RUNNING: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new
 #[cfg(unix)]
 static HANDED: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
+/// With a program running, the signal goes to it. With none, which is the
+/// driver's state once the program has ended, the signal does what it would
+/// have done had the driver never caught it, so the handler is installed once
+/// and never taken down.
 #[cfg(unix)]
 extern "C" fn hand_on(sig: i32) {
-    HANDED.store(sig, std::sync::atomic::Ordering::SeqCst);
     let pid = RUNNING.load(std::sync::atomic::Ordering::SeqCst);
     if pid > 0 {
+        HANDED.store(sig, std::sync::atomic::Ordering::SeqCst);
         unsafe {
             kill(pid, sig);
+        }
+    } else {
+        unsafe {
+            signal(sig, 0);
+            raise(sig);
         }
     }
 }
 
 /// From here on, a SIGTERM or SIGHUP the driver receives goes to `pid`; 0
-/// puts the default back.
+/// means no program is running.
 #[cfg(unix)]
 fn handing_on_to(pid: u32) {
     RUNNING.store(pid as i32, std::sync::atomic::Ordering::SeqCst);
-    let handler = if pid == 0 { 0 } else { hand_on as extern "C" fn(i32) as usize };
+    if pid == 0 {
+        return;
+    }
     for sig in HANDED_ON {
         unsafe {
-            signal(sig, handler);
+            signal(sig, hand_on as extern "C" fn(i32) as usize);
         }
     }
 }
