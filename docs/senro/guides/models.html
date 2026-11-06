@@ -197,7 +197,7 @@ pub type signature
 
 <h2>rules</h2>
 
-<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
+<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. senro writes the rules a Rails model reaches for first. <code>models/present field value</code> is <code>presence: true</code>, and a value of nothing but spaces is as blank as none. <code>models/at_most field n value</code> and <code>models/at_least field n value</code> bound a value's length in characters, as <code>length: { maximum:, minimum: }</code> does. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
