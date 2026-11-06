@@ -2574,12 +2574,19 @@ fn execute(
     binary: &std::path::Path,
     explain: impl FnOnce(&std::process::ExitStatus) -> String,
 ) -> ExitCode {
-    let status = std::process::Command::new(binary).args(program_args()).status();
+    let status =
+        std::process::Command::new(binary).args(program_args()).spawn().and_then(|mut child| {
+            handing_on_to(child.id());
+            let status = child.wait();
+            handing_on_to(0);
+            status
+        });
     match status {
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
                 ended_with_the_reader(&code);
+                ended_as_asked(&code);
                 eprintln!("{}", explain(&code));
                 ExitCode::FAILURE
             }
@@ -2594,11 +2601,69 @@ fn execute(
 #[cfg(unix)]
 const SIGPIPE: i32 = 13;
 
+/// The signals a supervisor sends to stop a program: `kill`'s default and a
+/// closed terminal's. The driver hands them to the program it runs, which
+/// would otherwise go on running, reparented, after the driver ended.
+#[cfg(unix)]
+const HANDED_ON: [i32; 2] = [SIGTERM, SIGHUP];
+
+#[cfg(unix)]
+const SIGTERM: i32 = 15;
+
+#[cfg(unix)]
+const SIGHUP: i32 = 1;
+
 #[cfg(unix)]
 extern "C" {
     fn signal(signum: i32, handler: usize) -> usize;
     fn raise(sig: i32) -> i32;
+    fn kill(pid: i32, sig: i32) -> i32;
 }
+
+/// The program the driver is waiting on, or 0 while there is none.
+#[cfg(unix)]
+static RUNNING: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+#[cfg(unix)]
+extern "C" fn hand_on(sig: i32) {
+    let pid = RUNNING.load(std::sync::atomic::Ordering::SeqCst);
+    if pid > 0 {
+        unsafe {
+            kill(pid, sig);
+        }
+    }
+}
+
+/// From here on, a SIGTERM or SIGHUP the driver receives goes to `pid`; 0
+/// puts the default back.
+#[cfg(unix)]
+fn handing_on_to(pid: u32) {
+    RUNNING.store(pid as i32, std::sync::atomic::Ordering::SeqCst);
+    let handler = if pid == 0 { 0 } else { hand_on as extern "C" fn(i32) as usize };
+    for sig in HANDED_ON {
+        unsafe {
+            signal(sig, handler);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn handing_on_to(_pid: u32) {}
+
+/// A program ended by a signal the driver handed on ends the driver the same
+/// way, saying nothing, so whoever sent it sees what it asked for.
+#[cfg(unix)]
+fn ended_as_asked(status: &std::process::ExitStatus) {
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(sig) = status.signal().filter(|s| HANDED_ON.contains(s)) {
+        unsafe {
+            raise(sig);
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn ended_as_asked(_status: &std::process::ExitStatus) {}
 
 /// A write to a pipe whose reader has gone, as `head` leaves it, ends the
 /// process by SIGPIPE and says nothing. That is what a built binary does. Rust
