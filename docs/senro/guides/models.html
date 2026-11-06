@@ -156,7 +156,7 @@ pub type signature
                 ^</code></pre>
 </div>
 
-<p>a type named after no table is refused the same way. for each model the derivation writes a reader into the model's module, <code>signature_from row</code>, which builds a record from a row a query answered and takes each field from the column of the same name.</p>
+<p>a type named after no table is refused the same way. for each model the derivation writes a reader into the model's module, <code>signature_from row</code>, which builds a record from a row a query answered and takes each field from the column of the same name. it writes <code>signature_attributes s</code> too, the record as a map from each field's name to its value, as Rails' <code>attributes</code> gives one. <code>web/json</code> writes that map as a JSON object. a module that declares <code>signature_attributes</code> itself keeps its own, so a model can leave a field out of what it shows.</p>
 
 <h2>policies</h2>
 

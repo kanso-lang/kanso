@@ -215,6 +215,29 @@ every post: /posts
 /search: q= page=</code></pre>
 </div>
 
+<h2>answering JSON</h2>
+
+<p>an action can answer JSON as well as a page, as Rails' <code>respond_to</code> lets one. <code>web/wants_json? req</code> says whether the request asks for it: its path ends <code>.json</code>, or its Accept header names <code>application/json</code>. the route is found by the path without the <code>.json</code>, so <code>/notes.json</code> and <code>/notes/3.json</code> reach the actions <code>/notes</code> and <code>/notes/3</code> do. <code>web/json status value</code> answers the value as JSON, as <code>render json:</code> does. the value is usually a map a model gives, or a list of them; the generators guide shows the scaffold's two actions that answer this way.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/web.kso</div>
+  <pre><code><span class="c"># `answer` as JSON with `status`, as Rails' `render json:` answers: a map or</span>
+<span class="c"># a list of maps, such as a model's `note_attributes` gives.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">json</span> status answer
+  <span class="f">http/respond</span> status [json_type] <span class="s">"<span class="i">{json/encode answer}</span>\n"</span>
+
+json_type <span class="o">=</span> <span class="s">"content-type: application/json; charset=utf-8"</span>
+
+<span class="c"># Whether the request asks for JSON, as Rails' `respond_to` reads `format`:</span>
+<span class="c"># its path ends `.json`, or its Accept header names `application/json`. The</span>
+<span class="c"># route is matched without the `.json`, so `/notes.json` and `/notes/3.json`</span>
+<span class="c"># reach the actions `/notes` and `/notes/3` do.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">wants_json?</span> req
+  accepted <span class="o">=</span> <span class="f">blank_if_none</span> req<span class="o">.</span>headers[<span class="s">"accept"</span>]
+  ends <span class="o">=</span> <span class="f">text/ends_with?</span> req<span class="o">.</span>path <span class="s">".json"</span>
+  ends <span class="k">or</span> <span class="f">length</span> (<span class="f">text/split</span> accepted <span class="s">"application/json"</span>) <span class="o">&gt;</span> <span class="n">1</span></code></pre>
+</div>
+
 <h2>what the derivation writes</h2>
 
 <p><code>derive routes/rest</code> writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
