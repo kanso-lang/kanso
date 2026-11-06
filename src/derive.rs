@@ -54,14 +54,16 @@ pub const MODULE: &str = "std/derive";
 pub struct Derived {
     pub constants: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,
-    pub definitions: Vec<(String, String)>,
+    /// Each definition's module, its source, and the module that wrote it,
+    /// each as the entry imports it.
+    pub definitions: Vec<(String, String, String)>,
 }
 
 /// One declaration a derivation listed, as the entry will hold it.
 enum Made {
     Constant(FnDecl),
     Type(TypeDecl),
-    Definition(String, String),
+    Definition(String, String, String),
 }
 
 /// What the derivations an entry names add to it, or the diagnostics a
@@ -87,8 +89,8 @@ pub fn derive(
                     match declared(&interp, entry, root, deps, d, &decl) {
                         Ok(Some(Made::Constant(c))) => made.constants.push(c),
                         Ok(Some(Made::Type(t))) => made.types.push(t),
-                        Ok(Some(Made::Definition(path, source))) => {
-                            made.definitions.push((path, source))
+                        Ok(Some(Made::Definition(path, source, from))) => {
+                            made.definitions.push((path, source, from))
                         }
                         Ok(None) => {}
                         Err(diag) => diags.push(diag),
@@ -527,6 +529,17 @@ fn declared(
 /// An arm a derivation defined, for the module its origin names. The module
 /// has to be one the derivation was shown, because it compiles the arm as one
 /// of its own files, and an arm there may claim the module's own types.
+/// The path the entry imports the derivation's own module by, which a
+/// definition's relative imports are read from.
+fn written_from(entry: &Program, d: &Derive) -> String {
+    let module = d.name.split_once('/').map_or(d.name.as_str(), |(m, _)| m);
+    let import = entry.imports.iter().find(|i| match &i.alias {
+        Some(alias) => alias == module,
+        None => i.path.rsplit('/').next() == Some(module),
+    });
+    import.map(|i| i.path.clone()).unwrap_or_default()
+}
+
 fn defined(
     interp: &Interp,
     entry: &Program,
@@ -557,7 +570,7 @@ fn defined(
             lines.extend(source.lines().map(str::to_string));
         }
     });
-    Ok(Made::Definition(import.path.clone(), source))
+    Ok(Made::Definition(import.path.clone(), source, written_from(entry, d)))
 }
 
 /// A refusal at one call a description listed, in the file of the function

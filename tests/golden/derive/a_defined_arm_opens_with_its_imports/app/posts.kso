@@ -1,0 +1,3 @@
+# The module imports nothing. Each arm models/helpers defines here opens with
+# the imports it needs, and the derived file opens with all of them.
+pub titles = ["hello"]

@@ -112666,3 +112666,28 @@ layout: browser_compile_instructions 343,289,560 -> 343,289,578,
 compile_instructions 24,096,621 -> 24,096,607, entry_instructions 86,700,059
 -> 86,700,038 and library_instructions 72,615,632 -> 72,615,607. Welfare
 rises by less than a hundredth and is banked.
+
+## 2026-10-29 — check.rs, values.c and lib.rs give up their separate sections
+
+#2249, from the weekly sweep. Three files past three thousand lines each held
+sections that share nothing but the file, and each moves without a change to
+what it says.
+
+- check.rs, 3,355 lines to 2,710: the literal-argument check moves to
+  check/literals.rs and the annotation-name check to check/annotations.rs,
+  read with include! where they stood.
+- runtime/values.c, 3,044 lines, becomes four parts that runtime.c lists in
+  order: bignum.c (ints past a machine word), values.c (strings, errors,
+  records, fields), ryu.c (the shortest float rendering and its tables) and
+  operators.c (subtypes, rendering, equality, arithmetic). The text build.rs
+  joins is main's byte for byte, so every compiled program links the same
+  runtime.
+- lib.rs, 3,004 lines to 2,739: the late rewrites (field reads to getters,
+  merges to constructor calls, `!=` to the negation of `==`) move to
+  lib/desugar.rs.
+
+Each Rust file rebuilt from its includes is main's file byte for byte.
+Twenty-two ratchet mutations patched lines in the moved sections by their
+text and now name the files that hold them. linear.rs, at 3,087 lines, is one
+analysis and its helpers and stays whole.
+CI's cost-goldens job read every vein at main's values, so no row moved.
