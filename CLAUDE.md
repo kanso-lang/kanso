@@ -74,16 +74,18 @@ request that finishes one says `Fixes #N`. An issue says what is open; the log
 says what happened. Read the queue with
 `gh api 'repos/kanso-lang/kanso/issues?state=open&labels=<label>'`.
 
-- **A decision for Clay is a `needs-clay` issue, and nowhere else.** It carries
-  the search behind it (the log, the archive, the docs, the tests), the options
-  and a recommendation, so a sitting can be a yes or a no. A question left in a
-  pull request body or a log paragraph is one nobody sees. A performance
-  question with no surface area is the implementer's and never goes to Clay,
-  and neither is the book's or the site's structure (chapter order, which page
-  holds what): the docs lane decides it and Clay edits later. Clay: "the book
-  order you can just take executive action on and do what makes sense because
-  I can always edit it later." A question already ruled is never re-asked:
-  cite the ruling and close the issue.
+- **A design decision is the language committee's, and nothing blocks on
+  Clay.** Clay, 2026-11-06: "nothing needs me you can just ask the language
+  committee like I said. I will give you feedback once I see what you've built
+  perhaps but you don't have to block anything for me." Cloud convenes the
+  committee and writes its reading and its decision on an issue, with the
+  search behind it (the log, the archive, the docs, the tests). The decision
+  goes in the log, and the work goes ahead. A question left in a pull request
+  body or a log paragraph is one nobody sees. Clay's later feedback overrides
+  a decision and is recorded as a ruling. A question already ruled is never
+  re-asked: cite the ruling and close the issue. `needs-clay` is kept for what
+  the committee cannot settle: a refusal from the harness, a permission, or a
+  question Clay has said he wants put to him.
 - **When Clay rules, whichever session heard it records it on the issue**: it
   closes the issue (nothing to build) or relabels it `ruled` and `lane:cloud`
   with what is owed as a checklist. When no `— gavel:` log entry has been
@@ -210,9 +212,8 @@ choice to report instead of continuing.
   kills an idea is a result; a note describing it is not.
 - **A correction is an interrupt.** Fix it, say what was wrong in a sentence,
   carry on.
-- **A decision that is Clay's goes to him the moment it is found**: a
-  `needs-clay` issue, a `PushNotification`, and the first line of the reply.
-  Then work something else while he reads.
+- **A decision is made where it is found.** The committee decides it, the
+  issue and the log record it, and the work goes on (see The tracker).
 - **The naming test.** Before ending a turn, try to write "next I will X". If
   the sentence forms, X can start now, so delete the sentence and do X. The
   turn ends only when no next action can be named: every thread is merged,
@@ -295,8 +296,8 @@ resembles it. Before an argument rests on one:
 
 - **CI is the only gate, and green means merge.** A Claude-authored pull
   request needs no human word to leave draft or to land. Clay: "stop asking me
-  for permission to merge things just merge them." What goes to him is a
-  decision, as a `needs-clay` issue. A permission prompt that reaches him is
+  for permission to merge things just merge them." Nothing goes to him for
+  approval; decisions are the committee's (see The tracker). A permission prompt that reaches him is
   the harness's classifier; the lever is the permission mode, not the allow
   list.
 - **No open pull request ages past a day.** Clay: "make sure that any of my PRs
@@ -363,9 +364,9 @@ resembles it. Before an argument rests on one:
   change that builds a ruled part of the language lowers the floor by exactly
   what it costs, records why in the floor's history, and carries on. That holds
   when the measured cost exceeds the estimate the ruling was given: the cost of
-  a required feature is never a question for Clay. What goes to him is a choice
-  about the language, such as narrowing what the ruling asked for, and only
-  when the full build is impossible or contradicts another ruling. Clay: "it
+  a required feature is never a question for Clay. A choice about the
+  language, such as narrowing what the ruling asked for, goes to the committee,
+  and only when the full build is impossible or contradicts another ruling. Clay: "it
   should never need to ask to lower the welfare for a feature implementation
   that's required."
 - **So is a measurement that stops reading outside state.** A change that only
@@ -498,14 +499,13 @@ in one.
 
 ### Design flow
 
-- Dialog before changes while Clay is designing. A decision that waits on him
-  goes where The tracker says. The ruling goes in the log and the issue is
-  relabelled or closed in the same change; implementation starts after the
-  gavel is recorded.
+- A design decision goes where The tracker says. It goes in the log, and the
+  issue is relabelled or closed in the same change; implementation starts
+  once it is recorded.
 - Docs present the settled design; chronology lives only in the log.
 - **senro's design is cloud's to make (#2280).** Its names, API and
   conventions are decided by cloud from the principles in senro's
   `PRINCIPLES.md`, with no question per decision, until Clay reviews the
   whole. Clay: "when you think it's gorgeous, only then do i step in and take
   the 5000 ft view and dictate any major rewrites." A question about kanso
-  the language still goes to him as a `needs-clay` issue.
+  the language goes to the committee, as The tracker says.

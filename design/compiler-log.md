@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — gavel: cloud closes its own issues, and the docs lane decides the book's structure
-
-Clay, on 2026-10-30: "nothing needs to be closed from the chat lane. that
-doesn't make any sense you can do whatever you want to and the book order you
-can just take executive action on and do what makes sense because I can
-always edit it later."
-
-- Cloud closes an issue when its work is done. #1856, the work-ahead engine,
-  had been built since 2026-10-14 and waited only on a close; it is closed.
-- Book and site structure is the docs lane's call. #2203 takes option A, the
-  reorder with redirects. #2232 takes option 1: failure-kinds.html becomes a
-  redirect to chapter 04, and its two proposals become issues of their own.
-  #2235 takes option 1, tagging kanso-json v0.1.0. That tag is blocked:
-  this session's tag push hung up at the remote, and the proxy refused the
-  API path (HTTP 403). The command is on the issue for Clay.
-
-Clay also answered #2191. senro is its own git repository, kanso-lang/senro,
-which an app imports by repository name, as kanso reads any hako. The issue
-had read as a design question when the only obstacle was an attach for push
-that the harness had refused. The attach went through when tried again, and
-kanso-lang/senro#1 moved routes, models, pg, web, kata and the guestbook into
-it, with specs CI runs against a pinned kanso. CLAUDE.md now says a refusal is
-reported as a refusal, and records both rulings above.
-
 ## 2026-10-30 — a derivation sees the calls the entry writes
 
 #2198's gavel refuses a `path_to` string that names no route "at the call
@@ -1648,3 +1624,30 @@ Rows: `entry_instructions` rose 12,540 to 87,930,129 and
 came with the binary and with four more comment lines in lib/derive, and
 nothing here isolates one from the other. It builds the derivations ruling
 (#2186), so the welfare floor moves down by exactly that.
+
+## 2026-11-06 — directive: the language committee decides, and nothing blocks on Clay
+
+Clay, on #2356: "nothing needs me you can just ask the language committee
+like I said. I will give you feedback once I see what you've built perhaps
+but you don't have to block anything for me."
+
+A design question, including one about kanso the language, is now decided
+by the committee and recorded on its issue and here. The work goes ahead on
+that decision. Clay's later feedback overrides it and is recorded as a
+ruling. `needs-clay` stays for what the committee cannot settle: a refusal
+from the harness, a permission, or a question Clay has said he wants put to
+him. CLAUDE.md states the rule under The tracker, and the places that sent
+decisions to him now point there.
+
+The first decision under it is #2356, whether an application model should
+get Go-style embedding. The committee chose no implicit delegation. A model
+is the record its table derives plus the functions in its module, and a
+delegator is an ordinary function. A field group that several models share,
+timestamps most likely, uses the `&` merge of the 2026-07-25 gavel, and its
+open parts (acceptance where the parent is expected, the collision rule,
+variance) are built when a second model shares one. Promotion was declined:
+it needs depth and ambiguity rules, and it lets a function match a type it
+was not written for by a rule the call site cannot see. #2356 is closed.
+
+#2284, how browser code calls a JavaScript library, stays parked until an
+app needs one, which is when the committee takes it up.
