@@ -57,7 +57,7 @@ $ kanso run generate -- scaffold examples/notebook book title:words
 generate: cannot read `title:words`: a field is name:text, name:int, name:references or name:attachment</code></pre>
 </div>
 
-<p>a field is <code>name:text</code>, <code>name:int</code>, <code>name:references</code> or <code>name:attachment</code>. the first two are the kinds a posted form's value reads back as without a parser of its own. the third nests the resource under another, as described below under a resource under another. the fourth is a file, kept as the uploads guide describes, and its column holds the key the file was kept under. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
+<p>a field is <code>name:text</code>, <code>name:int</code>, <code>name:references</code> or <code>name:attachment</code>. the first two are the kinds a posted form's value reads back as without a parser of its own. the third nests the resource under another, as described below under a resource under another. the fourth is a file, kept as the uploads guide describes, and its column holds the key the file was kept under. a text column takes the value as it was typed. Postgres reads an integer column's value from its digits and refuses any other, so the scaffold gives each int field a rule, below, that turns a value Postgres would refuse into a problem shown on the form. <code>:uniq</code> after a kind, as in <code>email:text:uniq</code>, adds a unique index on the column, as Rails' generator reads it, and the models guide describes what a write answers when a value is taken. a field's name is a lowercase letter and then letters, digits and underscores, at most 24 of them, so that every line the scaffold writes fits in 80 columns.</p>
 
 <h2>the entry</h2>
 
@@ -80,13 +80,15 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pr
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 
 <span class="c"># The app's schema, as the changes that built it, oldest first.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes users_made]
+<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes users_made users_email_unique]
 
 notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
   <span class="f">notes_id</span>
   <span class="f">notes_title</span>
   <span class="f">notes_pages</span>
   <span class="f">notes_cover</span>
+  <span class="f">models/created_at</span>
+  <span class="f">models/updated_at</span>
 ]
 
 notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
@@ -97,7 +99,13 @@ notes_pages <span class="o">=</span> <span class="f">models/column</span> <span 
 
 notes_cover <span class="o">=</span> <span class="f">models/column</span> <span class="s">"cover"</span> <span class="s">"text not null default ''"</span>
 
-pages_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [pages_id pages_body pages_note_id]
+pages_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [
+  <span class="f">pages_id</span>
+  <span class="f">pages_body</span>
+  <span class="f">pages_note_id</span>
+  <span class="f">models/created_at</span>
+  <span class="f">models/updated_at</span>
+]
 
 pages_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
 
@@ -107,7 +115,15 @@ pages_body <span class="o">=</span> <span class="f">models/column</span> <span c
 
 pages_note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>
 
-users_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"users"</span> [users_id users_email users_digest]
+users_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"users"</span> [
+  <span class="f">users_id</span>
+  <span class="f">users_email</span>
+  <span class="f">users_digest</span>
+  <span class="f">models/created_at</span>
+  <span class="f">models/updated_at</span>
+]
+
+users_email_unique <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"users"</span> <span class="s">"email"</span>
 
 users_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
 
@@ -116,7 +132,7 @@ users_email <span class="o">=</span> <span class="f">models/column</span> <span 
 users_digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
 </div>
 
-<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it, as <code>pages_made</code> and <code>users_made</code> do; the models guide says how the list is run and recorded.</p>
+<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it, as <code>pages_made</code> and <code>users_made</code> do; the models guide says how the list is run and recorded. each table ends with <code>models/created_at</code> and <code>models/updated_at</code>, as a Rails scaffold ends with <code>t.timestamps</code>, and <code>users_email_unique</code> is the index <code>email:text:uniq</code> asks for.</p>
 
 <h2>the resource</h2>
 
