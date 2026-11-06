@@ -20,31 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-29 — check.rs, values.c and lib.rs give up their separate sections
-
-#2249, from the weekly sweep. Three files past three thousand lines each held
-sections that share nothing but the file, and each moves without a change to
-what it says.
-
-- check.rs, 3,355 lines to 2,710: the literal-argument check moves to
-  check/literals.rs and the annotation-name check to check/annotations.rs,
-  read with include! where they stood.
-- runtime/values.c, 3,044 lines, becomes four parts that runtime.c lists in
-  order: bignum.c (ints past a machine word), values.c (strings, errors,
-  records, fields), ryu.c (the shortest float rendering and its tables) and
-  operators.c (subtypes, rendering, equality, arithmetic). The text build.rs
-  joins is main's byte for byte, so every compiled program links the same
-  runtime.
-- lib.rs, 3,004 lines to 2,739: the late rewrites (field reads to getters,
-  merges to constructor calls, `!=` to the negation of `==`) move to
-  lib/desugar.rs.
-
-Each Rust file rebuilt from its includes is main's file byte for byte.
-Twenty-two ratchet mutations patched lines in the moved sections by their
-text and now name the files that hold them. linear.rs, at 3,087 lines, is one
-analysis and its helpers and stays whole.
-CI's cost-goldens job read every vein at main's values, so no row moved.
-
 ## 2026-10-30 — gavel: cloud closes its own issues, and the docs lane decides the book's structure
 
 Clay, on 2026-10-30: "nothing needs to be closed from the chat lane. that
@@ -1641,3 +1616,35 @@ the side vector's first push is three more front-end allocations
 (`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
 (`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
 lets a correct program compile, so the floor moves down by that cost.
+
+## 2026-11-06 — a derived definition opens with the imports it needs
+
+**DONE.** A module's files share their declarations and not their imports, so
+an arm that `derive/define` added could call only what its own module
+happened to import. senro's next convenience is a reader each way for every
+foreign key, as Rails' `has_many` and `belongs_to` give, and those readers
+call senro's `models`. A definition may now open with `import` lines. The
+module's derived file opens with all of them, once each and sorted, since
+the parser refuses imports anywhere else or out of order.
+
+A relative path in a definition is written from the derivation's own
+module, as that module's own imports are, and the compiler rewrites it from
+the module the definition joins. senro writes `import "../models"` from
+`models/`; the notebook's `pages`, two directories away from senro, reads
+it as `../../models`. The derivation's path is the one the entry imports it
+by (`written_from` in src/derive.rs), and the rewrite is `reread` in
+src/lib/modules.rs.
+
+`tests/golden/derive/a_defined_arm_opens_with_its_imports` gives a module
+that imports nothing two arms: one calls a sibling of the derivation's
+module through a path written from there, and one imports `std/list` and
+`std/text`. Both engines print `["HELLO!" "AGAIN!"]` and `HELLO AGAIN`. The
+compiler before the change refused it, at the import in the middle of the
+derived file.
+
+Rows: `entry_instructions` rose 12,540 to 87,930,129 and
+`emit_instructions` 270 to 5,613,493; `browser_compile_instructions` fell
+17 to 350,566,782. The compile and library rows did not move. The change
+came with the binary and with four more comment lines in lib/derive, and
+nothing here isolates one from the other. It builds the derivations ruling
+(#2186), so the welfare floor moves down by exactly that.
