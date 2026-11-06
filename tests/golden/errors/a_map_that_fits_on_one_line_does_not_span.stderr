@@ -1,0 +1,4 @@
+error[formatting]: this map fits on one line (80 characters) — a map spans lines only when it does not
+  --> a_map_that_fits_on_one_line_does_not_span.kso:4:5
+   4 | m = {
+           ^

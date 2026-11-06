@@ -217,7 +217,8 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             validate_spacing(&lexed_line, number, &mut diags);
             let span = gather_span(&raws, idx, indent, open, number, &mut diags);
             idx = span.next;
-            let one_line = indent + content.chars().count() + span.one_line.chars().count() + 1;
+            let one_line =
+                indent + content.chars().count() + span.one_line.chars().count() + 1 + braced(open);
             if span.whole && one_line <= MAX_WIDTH {
                 let what = if open == b'[' { "list" } else { "map" };
                 diags.push(Diagnostic::new(
@@ -484,6 +485,19 @@ fn gather_block(
     (body, at)
 }
 
+/// What a literal's one-line form adds beyond its elements joined by single
+/// spaces and its two brackets: a map is written `{ a b }`, with a space
+/// inside each brace, and a list `[a b]`, with none. Without the two, a map
+/// whose one-line form is 81 characters was measured at 79 and refused as
+/// fitting, while the line the refusal asked for was refused as too long.
+fn braced(open: u8) -> usize {
+    if open == b'{' {
+        2
+    } else {
+        0
+    }
+}
+
 /// The bracket a line ends by opening, when its last character outside a
 /// string or comment is `[` or `{`. Such a line opens a list or map that
 /// spans lines (ruled 2026-10-13, #1882). Bytes, for the reason
@@ -703,7 +717,11 @@ fn gather_span(
         if let Some(inner_open) = nested {
             let span = gather_span(raws, at, inner, inner_open, number, diags);
             at = span.next;
-            let fits = inner + content.chars().count() + span.one_line.chars().count() + 1;
+            let fits = inner
+                + content.chars().count()
+                + span.one_line.chars().count()
+                + 1
+                + braced(inner_open);
             if span.whole && fits <= MAX_WIDTH {
                 let what = if inner_open == b'[' { "list" } else { "map" };
                 diags.push(Diagnostic::new(
