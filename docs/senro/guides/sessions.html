@@ -218,7 +218,7 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
   <pre><code>pbkdf2-sha256$&lt;rounds&gt;$&lt;salt, base64&gt;$&lt;digest, base64&gt;</code></pre>
 </div>
 
-<p>because each digest names its own rounds, the default can rise without breaking the digests already kept. it is 100,000 rounds, a sixth of what OWASP asks, because a release build of kanso stretches 100,000 in about a fifth of a second and the full count would hold a sign-in for more than a second. <code>SENRO_PASSWORD_ROUNDS</code> lowers it for development, where the development tier is fourteen times slower.</p>
+<p>because each digest names its own rounds, the default can rise without breaking the digests already kept. it is 100,000 rounds, a sixth of what OWASP asks, because a release build of kanso stretches 100,000 in about a fifth of a second and the full count would hold a sign-in for more than a second. <code>SENRO_PASSWORD_ROUNDS</code> lowers it for development, where the development tier is about seven times slower.</p>
 
 <h2>signing in</h2>
 
