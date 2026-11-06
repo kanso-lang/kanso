@@ -155,7 +155,7 @@ users_digest <span class="o">=</span> <span class="f">models/column</span> <span
 model <span class="o">=</span> <span class="f">note_model</span></code></pre>
 </div>
 
-<p>the seven actions are the ones a Rails scaffold writes, and the routing guide says how each name places it. reads go through two queries over the same columns, and writes go through the model, so the policies and the model's rules are asked before anything is written.</p>
+<p>the seven actions are the ones a Rails scaffold writes, and the routing guide says how each name places it. reads go through two queries over the model's columns, <code>note_columns</code>, which the derivation declares from the table, so a column a later migration adds reaches both queries with no edit. writes go through the model, so the policies and the model's rules are asked before anything is written.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
@@ -167,9 +167,7 @@ model <span class="o">=</span> <span class="f">note_model</span></code></pre>
 <span class="c"># How many rows a page of the list shows.</span>
 per_page <span class="o">=</span> <span class="n">25</span>
 
-column_names <span class="o">=</span> [<span class="s">"id"</span> <span class="s">"title"</span> <span class="s">"pages"</span> <span class="s">"cover"</span>]
-
-columns <span class="o">=</span> <span class="f">text/join</span> column_names <span class="s">", "</span>
+columns <span class="o">=</span> <span class="f">text/join</span> note_columns <span class="s">", "</span>
 
 listed <span class="o">=</span> <span class="s">"select <span class="i">{columns}</span> from notes order by id"</span>
 
