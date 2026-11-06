@@ -108,6 +108,20 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts. it runs the migrations the database has not yet run, in order, and records each in a <code>senro_migrations</code> table under the app's name and its place in the list, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change goes at the end of the list. each change does nothing when its work is already done, so a database made before migrations were recorded takes the list safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
 
+<p>a table that lists <code>models/timestamps</code> among its columns gets <code>created_at</code> and <code>updated_at</code>, the two columns Rails' <code>t.timestamps</code> adds. each is <code>timestamptz not null default now()</code>, so Postgres sets both when a row is made. <code>models/updated</code> sets <code>updated_at</code> on every change it writes, and <code>models/created</code> and <code>models/updated</code> drop a form's value for either, so a request cannot backdate a row. the two are also <code>models/created_at</code> and <code>models/updated_at</code>, one at a time, which is how the scaffold ends every table it makes.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/stamped/migrations.kso</div>
+  <pre><code>notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> (<span class="f">list/concat</span> [id body] <span class="f">models/timestamps</span>)</code></pre>
+</div>
+
+<p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint over one column in <code>schema.sql</code>, and the model names the column. <code>models/created</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. <code>models/updated</code> asks before it writes.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/unique/migrations.kso</div>
+  <pre><code>accounts_handle <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"accounts"</span> <span class="s">"handle"</span></code></pre>
+</div>
+
 <p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
 
 <h2>a model is a module named for its table</h2>
