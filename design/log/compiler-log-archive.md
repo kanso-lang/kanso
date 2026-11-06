@@ -112715,3 +112715,37 @@ that the harness had refused. The attach went through when tried again, and
 kanso-lang/senro#1 moved routes, models, pg, web, kata and the guestbook into
 it, with specs CI runs against a pinned kanso. CLAUDE.md now says a refusal is
 reported as a refusal, and records both rulings above.
+
+## 2026-10-30 — a derivation sees the calls the entry writes
+
+#2198's gavel refuses a `path_to` string that names no route "at the call
+that writes it". senro's routing convention (kanso-lang/senro#3) found that a
+call written in the entry was never shown to it: the description listed the
+modules the entry imports and left the entry out, so `routes/path_to
+"posts/shwo"` in `main.kso` compiled and ran.
+
+The entry is now described first in `program.modules`, under its file's
+stem. An entry holds statements only and declares nothing, so its functions,
+constants and records are empty and it carries only its calls, each from the
+caller "". `derive/refuse_call` on one of them reports in the entry's file.
+A convention that checks calls covers the entry without asking for it, which
+a separate field on `program` would not have done.
+
+tests/golden/derive gains a link convention whose bad link is in the entry.
+Before the change it compiled and printed on both engines; after, both refuse
+it at `main.kso:7:8`. With the entry's calls left out of the description, the
+case and the calls golden go red again. Three goldens that list the modules
+or their calls now show the entry: the constants map has `"main":0`, the
+module list starts with `"main"`, and the call trace gains the entry's three
+calls.
+
+The page's play-cache paragraph still named `std/expect` as the one module
+the binary does not carry, which stopped being true when it shipped; it now
+says a module read from disk keeps the IR's key.
+
+bench/entry_corpus derives, so the entry row prices collecting the entry's
+calls: entry_instructions 86,700,038 -> 86,751,224 (+51,186). The tab
+compiles with the embedded `lib/derive`, whose comments grew, and
+browser_compile_instructions moved 343,289,578 -> 343,289,570 (-8). No other
+row moved, the library and module rows included. Welfare fell by less than a hundredth, and the floor
+follows under the rule for a feature a ruling requires.

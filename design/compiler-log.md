@@ -20,40 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — a derivation sees the calls the entry writes
-
-#2198's gavel refuses a `path_to` string that names no route "at the call
-that writes it". senro's routing convention (kanso-lang/senro#3) found that a
-call written in the entry was never shown to it: the description listed the
-modules the entry imports and left the entry out, so `routes/path_to
-"posts/shwo"` in `main.kso` compiled and ran.
-
-The entry is now described first in `program.modules`, under its file's
-stem. An entry holds statements only and declares nothing, so its functions,
-constants and records are empty and it carries only its calls, each from the
-caller "". `derive/refuse_call` on one of them reports in the entry's file.
-A convention that checks calls covers the entry without asking for it, which
-a separate field on `program` would not have done.
-
-tests/golden/derive gains a link convention whose bad link is in the entry.
-Before the change it compiled and printed on both engines; after, both refuse
-it at `main.kso:7:8`. With the entry's calls left out of the description, the
-case and the calls golden go red again. Three goldens that list the modules
-or their calls now show the entry: the constants map has `"main":0`, the
-module list starts with `"main"`, and the call trace gains the entry's three
-calls.
-
-The page's play-cache paragraph still named `std/expect` as the one module
-the binary does not carry, which stopped being true when it shipped; it now
-says a module read from disk keeps the IR's key.
-
-bench/entry_corpus derives, so the entry row prices collecting the entry's
-calls: entry_instructions 86,700,038 -> 86,751,224 (+51,186). The tab
-compiles with the embedded `lib/derive`, whose comments grew, and
-browser_compile_instructions moved 343,289,578 -> 343,289,570 (-8). No other
-row moved, the library and module rows included. Welfare fell by less than a hundredth, and the floor
-follows under the rule for a feature a ruling requires.
-
 ## 2026-10-30 — a derivation reads the files beside the entry
 
 #2186's models ruling makes `schema.sql` the opt-in for a migration that
@@ -1651,3 +1617,43 @@ was not written for by a rule the call site cannot see. #2356 is closed.
 
 #2284, how browser code calls a JavaScript library, stays parked until an
 app needs one, which is when the committee takes it up.
+
+## 2026-11-06 — `kanso run` hands SIGTERM and SIGHUP to its program
+
+**DONE.** `kanso run` builds a native binary and waits on it as a child. A
+SIGTERM sent to the driver, which is what `kill` and process supervisors
+send, ended the driver alone. The program went on running, reparented, and a
+server went on listening on its port. senro's specs start each app with
+`kanso run`, stop it with `kill`, and start the next on the same port, so a
+later spec could reach a server an earlier one left behind. Four orphaned
+servers were found on port 3000 in one container. They explain a
+password-reset mail delivered to an old server's outbox and a JSON request
+answered by a server built before the branch that added JSON.
+
+`execute` in src/main.rs now spawns the program and, while it waits, passes
+SIGTERM and SIGHUP on to it. SIGINT already reached the program, because a
+terminal sends it to the whole process group. When the program dies of a
+signal the driver handed on, the driver raises that signal on itself and
+prints nothing, so whoever sent it sees the driver end by it. A program
+killed by a signal the driver never received is reported as before; the
+first version re-raised any signal and turned `a_program_the_system_killed`
+red. The handlers are installed once. With no program running, the handler
+puts the default back and raises the signal itself, so the driver never
+resets them.
+
+`tests/a_stopped_run_stops_its_program.rs` runs a native program that
+writes `started`, sleeps three seconds and writes `finished`, and sends
+SIGTERM to the driver once `started` appears. Before the change it failed
+with "the program was still running after its driver was terminated"; after
+it, `finished` never appears, the driver ends by SIGTERM, and stderr is
+empty.
+
+Rows: `startup_instructions` rose 243 to 50,507, the two `signal()` calls
+the driver now makes on every run. The first version reset both handlers
+after the wait and read +489. `codegen_instructions_release` fell 124 to
+372,025,748 on both of CI's readings. Nothing in the diff reaches `kanso
+build`, and the cause is not isolated. Welfare fell by 0.00009. The
+committee decided on kanso#2370 that the change merges and the floor moves
+down by exactly that, as it did for #2350: a driver that leaves its program
+holding a port when it is stopped is the toolchain failing what `kanso run`
+promises.
