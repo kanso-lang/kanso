@@ -258,6 +258,40 @@ pub type signature
   <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
 </div>
 
+<h2>a foreign key reads both ways</h2>
+
+<p>a foreign key the migrations add writes that <code>models/where</code> for the app, once in each direction, as Rails' <code>has_many</code> and <code>belongs_to</code> do. when <code>pages.note_id</code> holds a row of <code>notes</code>, the <code>pages</code> module gets <code>of_note viewer db note</code>, the pages of a note that the viewer may see, and the <code>notes</code> module gets <code>of_page viewer db page</code>, the note a page belongs to. each reads the other record's field by name, <code>note.id</code> or <code>page.note_id</code>, so neither module imports the other, and an app can import either one into the other without a cycle. a module that already declares a function of that name keeps its own. so does one that declares a pub function or record named as the parameter. a schema read from <code>schema.sql</code> gives no readers, since the fold reads foreign keys from the migrations.</p>
+
+<p>the modules in <code>spec/db/associated</code> hold one helper each and nothing about the other table. the derivation writes the rest:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/associated/reading.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+<span class="k">import</span> <span class="s">"./notes"</span>
+<span class="k">import</span> <span class="s">"./pages"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">pages_of</span> db id
+  <span class="f">models/found</span> <span class="s">""</span> db notes/note_model id
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">pages/of_note</span> <span class="s">""</span> db n)
+    <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"note <span class="i">{id}</span>: <span class="i">{list/to_list (list/map ps pages/bodied)}</span>"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">note_of</span> db id
+  <span class="f">models/found</span> <span class="s">""</span> db pages/page_model id
+    <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">notes/of_page</span> <span class="s">""</span> db p)
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"page <span class="i">{id}</span>: <span class="i">{notes/titled n}</span>"</span>)
+
+<span class="k">fn</span> <span class="f">said</span> db line
+  <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso run spec/db/associated</div>
+  <pre><code>note 1: ["a" "b"]
+note 2: ["c"]
+page 2: note: second</code></pre>
+</div>
+
 <h2>a page at a time</h2>
 
 <p>a list that may grow is read a page at a time, as Pagy reads one for a Rails app. <code>models/paged db sql params number per</code> runs the query with a limit and an offset after its <code>order by</code>, and answers a <code>models/page</code>: the rows on the page, its number, and whether another page follows. it asks for one row more than a page holds to answer that last question, and leaves that row off. <code>models/page_number</code> reads the page a query string asks for, and anything that is not a whole number of 1 or more is the first page, so a link that has been edited by hand still shows a list.</p>
