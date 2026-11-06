@@ -1,0 +1,9 @@
+# A map is written with a space inside each brace, so its one-line form,
+# `m = { ... }`, would be 81 characters here, and the map spans lines.
+m = {
+  "alpha":"xxxxxxxxxxxxxx"
+  "beta":"yyyyyyyyyyyyyy"
+  "gamma":"zzzzzzzzzzzzzz"
+}
+
+pub play = print "{m["beta"]}"

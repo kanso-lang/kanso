@@ -1,0 +1,10 @@
+# A map spans lines only when it cannot fit on one (ruled 2026-10-13, #1882).
+# Written with a space inside each brace, `m = { ... }` is 80 characters
+# here, which fits, so the spanning form is a second way to write it.
+m = {
+  "alpha":"xxxxxxxxxxxxx"
+  "beta":"yyyyyyyyyyyyy"
+  "gamma":"zzzzzzzzzzzzzzz"
+}
+
+pub play = print "{m["beta"]}"
