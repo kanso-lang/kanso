@@ -112691,3 +112691,27 @@ Twenty-two ratchet mutations patched lines in the moved sections by their
 text and now name the files that hold them. linear.rs, at 3,087 lines, is one
 analysis and its helpers and stays whole.
 CI's cost-goldens job read every vein at main's values, so no row moved.
+
+## 2026-10-30 — gavel: cloud closes its own issues, and the docs lane decides the book's structure
+
+Clay, on 2026-10-30: "nothing needs to be closed from the chat lane. that
+doesn't make any sense you can do whatever you want to and the book order you
+can just take executive action on and do what makes sense because I can
+always edit it later."
+
+- Cloud closes an issue when its work is done. #1856, the work-ahead engine,
+  had been built since 2026-10-14 and waited only on a close; it is closed.
+- Book and site structure is the docs lane's call. #2203 takes option A, the
+  reorder with redirects. #2232 takes option 1: failure-kinds.html becomes a
+  redirect to chapter 04, and its two proposals become issues of their own.
+  #2235 takes option 1, tagging kanso-json v0.1.0. That tag is blocked:
+  this session's tag push hung up at the remote, and the proxy refused the
+  API path (HTTP 403). The command is on the issue for Clay.
+
+Clay also answered #2191. senro is its own git repository, kanso-lang/senro,
+which an app imports by repository name, as kanso reads any hako. The issue
+had read as a design question when the only obstacle was an attach for push
+that the harness had refused. The attach went through when tried again, and
+kanso-lang/senro#1 moved routes, models, pg, web, kata and the guestbook into
+it, with specs CI runs against a pinned kanso. CLAUDE.md now says a refusal is
+reported as a refusal, and records both rulings above.
