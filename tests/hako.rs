@@ -222,7 +222,7 @@ fn install_reads_an_import_that_names_its_qualifier() {
     );
 }
 
-/// The lock owns versions (design/hako.md): `install` fetches what it pins, and
+/// The lock owns versions (docs/book/packages.html): `install` fetches what it pins, and
 /// only `update` walks a release forward. Install used to keep a branch pin
 /// and re-resolve every release pin to the newest tag, so a fresh clone of a
 /// project locked at v0.1.0 installed v0.2.0 the day it was published.

@@ -1,4 +1,5 @@
-//! hako — packages, per design/hako.md.
+//! hako — packages, as docs/book/packages.html (chapter 12) specifies them;
+//! the unbuilt design is design/hako.md.
 //!
 //! Imports are the manifest: `install` reads them, resolves each hako's
 //! highest release tag, fetches it into the cache and writes `hako.lock`.
