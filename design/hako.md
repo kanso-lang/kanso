@@ -1,91 +1,65 @@
-# hako — the package manager
+# hako — the package manager, past what has shipped
 
-hako (箱, "box") is what a kanso package is called; several are hakos. There
-is no separate tool (Clay's ruling, 2026-07-20): package management is the
-kanso CLI itself — `kanso install`, `kanso update` — one binary, the go/cargo
-lesson, consistent with run/check/test/build/repl/play.
+hako (箱, "box") is what a kanso package is called; several are hakos.
+Package management is the kanso CLI itself, with no separate tool (Clay's
+ruling, 2026-07-20). What has shipped is specified in chapter 12 of the book,
+`docs/book/packages.html`: a hako's name is its GitHub path, the imports are
+the manifest, releases are `vX.Y.Z` tags, `hako.lock` holds one line per hako
+with its tag, sha and protocol, the cache is `~/.hako` or `KANSO_HAKO`, and
+`kanso install`, `kanso update`, `kanso list` and `--from owner/repo@branch`
+behave as that chapter shows. This note keeps what is designed and not yet
+built, and the reasons the built parts took their shape.
 
-## The design in six rules
+## Majors are paths
 
-1. **A hako's name is its GitHub path.** `kanso-lang/vse`. No registry
-   server, no namespace authority beyond GitHub's, no accounts. (Go's
-   import-path lesson, adopted whole.)
-2. **Imports are the manifest.** `import "kanso-lang/vse/methods"` in source
-   IS the dependency declaration. No hako.toml, no Gemfile. `kanso install`
-   scans imports, resolves, fetches. Knowledge lives where it is used.
-3. **The lockfile owns versions.** Source never names a version; `hako.lock`
-   records name, tag, commit sha and protocol per hako, one line each —
-   `acme/widgets v0.3.0 d9f5249e… git`. A line without a protocol reads as
-   git, which is what every line written before the field existed meant.
-   `hako update` walks tags forward and the test suite absorbs the change.
-   (The no-versions-in-Gemfile doctrine, made structural: the anti-pattern
-   is unrepresentable.)
-4. **Versions are git tags; majors are paths.** `v0.3.1` tags releases.
-   Breaking majors fork the path — `kanso-lang/vse/v2` — so two majors
-   coexist as distinct types (Go's mechanics; the visibility gavel's
-   versioned type identity rests on this).
-5. **Publishing is `git tag && git push`.** No server to run to publish,
-   ever. A registry, when one exists, is a source: a verified mirror and
-   metadata index — a cache, not a redesign (see Sources).
-6. **The cache is content-addressed and boring.** `~/.hako/` keyed by
-   path@sha; fetches are shallow; offline builds work from cache.
+A breaking major forks the path: `kanso-lang/vse/v2`. Two majors coexist in
+one build as distinct modules with distinct types (Go's mechanics), and the
+visibility gavel's versioned type identity rests on this. `src/hako.rs` reads
+the `/vN` segment as part of a name; nothing yet publishes a second major.
+
+## Version selection
+
+Within one major, one copy per build: the highest locked tag among all
+requirers, in the spirit of Go's minimal version selection. Across majors,
+coexistence through distinct paths. `hako.lock` is committed, and a build
+from it is byte-reproducible.
 
 ## Resolution, unified with the compiler
 
-The import resolver (the keystone) sees three path shapes, one rule each:
+The import resolver sees five path shapes, one rule each:
 
 | shape | resolves to |
 |---|---|
 | `std/...` | the toolchain's shipped stdlib |
 | leading `./` or `../` | relative to the importing file's directory |
 | bare single segment | a sibling subdirectory module |
-| first segment contains a dot | a domain-shaped hako name — the domain is (or publishes the binding to) its server |
-| `owner/repo[/vN]/module` | a GitHub-named hako, the cache (fetching if absent) |
+| first segment contains a dot | a domain-shaped hako name (not built: `hako/hako/install.kso` refuses it) |
+| `owner/repo[/vN]/module` | a GitHub-named hako, read from the cache |
 
-Nested local imports are dot-prefixed, always (Clay, 2026-07-27):
-`./lib/json` for your own subtree, never bare `lib/json` — so every
-bare multi-segment path is a hako name, every import's universe is
-readable in its spelling, and no shape is ambiguous between them.
-Locals and GitHub owners cannot contain a dot in first position, so
-domain-shaped names can never collide with either.
+Nested local imports are always dot-prefixed (Clay, 2026-07-27): `./lib/json`
+for your own subtree, never bare `lib/json`. Every bare multi-segment path is
+then a hako name, and no shape is ambiguous with another. A local name or a
+GitHub owner cannot begin with a dotted segment, so a domain-shaped name never
+collides with either.
 
 Cycles are compile errors at every layer. The compiler never talks to the
-network; `kanso install` populates the cache, `kanso build` reads it, and a
-missing hako is a build error naming the `kanso install` fix.
+network: `kanso install` fills the cache, `kanso build` reads it, and a
+missing hako is a build error that names the `kanso install` fix.
 
-## Version selection
+## Non-goals
 
-Minimal and honest: within one major, one copy per build — the highest
-locked tag among all requirers (MVS's spirit). Across majors, coexistence
-via distinct paths and distinct types. `hako.lock` is committed; CI builds
-are byte-reproducible from it.
+Private registries (git authentication already works), vendoring (the cache
+is enough), post-install scripts (never: a hako is inert source), and yanking
+(tags are immutable history, so a fix is a new release).
 
-## Commands (v1 surface, all of it)
-
-```
-kanso install                 resolve imports, fetch, write hako.lock
-kanso install --from n@branch pin one hako to an unreleased branch
-kanso update [hako]           walk tags forward (all, or one), rewrite lock
-kanso list                    what the lock pins, with staleness marks
-```
-
-Three subcommands on the one binary. `publish` does not exist because rule 5
-made it unnecessary; search is GitHub's search box.
-
-## Non-goals (v1)
-
-Private registries (git auth already works), vendoring (the cache is
-enough), post-install scripts (never — a hako is inert source), yanking
-(tags are immutable history; publish a fix).
-
-## Sources (drafted 2026-07-27, Clay-directed)
+## Sources (drafted 2026-07-27, Clay-directed; only `git` at GitHub is built)
 
 A hako's *name* is permanent identity — `kanso-lang/vse`, the GitHub
 path, versioned by tags, majors as path forks. A *source* is a strategy
 for turning name + version-request into verified content, and the two
 never mix: sources are interchangeable fetchers, and the lockfile's
-`path@sha` is what makes any of them trustworthy. Rule 5's framing
-("a server is a cache, not a redesign") becomes the definition.
+`path@sha` is what makes any of them trustworthy. Publishing is
+`git tag && git push`, so a server is a cache, never a redesign.
 
 **`git` — the v1 protocol, and what every name resolvable today speaks.**
 A protocol is how content is obtained; a host is where it lives, and the
@@ -146,7 +120,7 @@ fetched?" in exactly one place per shape:
 
 **An import never names a protocol — asking how it would is a
 layering violation.** The binding is resolved *from* the name, in
-Go's order of authority, which rule 2 forces anyway: (1) the name's
+Go's order of authority, which imports-as-manifest forces anyway: (1) the name's
 shape — `owner/repo` means git at GitHub, by convention; (2) later,
 for full-domain names (`corp.dev/team/hako`), metadata the name's
 owner publishes at the domain (Go's `go-import` meta-tag move,
@@ -184,4 +158,4 @@ source* (`std/` included); relative resolution is the one local path.
 - Monorepo hakos (several modules per repo) are parked. The path shape allows
   them, and the lock-granularity decision waits for a real case.
 
-A parked question becomes a `needs-clay` issue when a real case arrives.
+A parked question goes to the language committee when a real case arrives.
