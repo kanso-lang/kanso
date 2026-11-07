@@ -197,7 +197,7 @@ pub type signature
 
 <h2>rules</h2>
 
-<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. senro writes the rules a Rails model reaches for first. <code>models/present field value</code> is <code>presence: true</code>, and a value of nothing but spaces is as blank as none. <code>models/at_most field n value</code> and <code>models/at_least field n value</code> bound a value's length in characters, as <code>length: { maximum:, minimum: }</code> does. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
+<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. senro writes the rules a Rails model reaches for first. <code>models/present field value</code> is <code>presence: true</code>, and a value of nothing but spaces is as blank as none. <code>models/at_most field n value</code> and <code>models/at_least field n value</code> bound a value's length in characters, as <code>length: { maximum:, minimum: }</code> does. <code>models/one_of field choices value</code> is <code>inclusion: { in: choices }</code>, and the value must equal a choice whole, so a select can post only what the app knows. <code>models/email_address field value</code> asks for one @ with something on each side of it and no spaces. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
@@ -228,9 +228,8 @@ pub type signature
 
 <span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
 <span class="c"># reloading it does not sign the book again.</span>
-<span class="k">fn</span> <span class="f">signed</span> req _ _
-  thanked <span class="o">=</span> <span class="f">put</span> (<span class="f">web/session</span> req secret) <span class="s">"flash"</span> <span class="s">"Thank you for signing."</span>
-  <span class="f">effect</span> (<span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) secret thanked)</code></pre>
+<span class="k">fn</span> <span class="f">signed</span> _ _ _
+  <span class="f">effect</span> (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
 </div>
 
 <h2>queries</h2>
