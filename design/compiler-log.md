@@ -1636,8 +1636,12 @@ On CI, against the app-shaped entry corpus #2375 added for this change,
 `entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
 nothing to share pay for the cache's bookkeeping: `compile_instructions`
 rises 6,406, `library_instructions` 43,941, `compile_allocs` 16 and
-`compile_memory` 469 bytes. Compiling in the tab moves both ways, 3,466
-fewer instructions and 208 more peak bytes. A cheaper key, the path's bytes in place of a
+`compile_memory` 469 bytes, and the interpreter's run of its corpus, which
+loads modules too, 16 allocations and 344 peak bytes. Compiling in the tab
+moves both ways, 3,466 fewer instructions and 208 more peak bytes.
+`emit_instructions` falls 346 and the dev and release codegen rows move by
+677 and 108, which is the binary's layout: the shipped runtime object below
+made it larger. A cheaper key, the path's bytes in place of a
 `PathBuf`, and keeping a module only on its third request were both measured
 and dropped: neither brought those rows back, and the third request gave the
 pantry back 64 of its loads.
