@@ -228,9 +228,8 @@ pub type signature
 
 <span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
 <span class="c"># reloading it does not sign the book again.</span>
-<span class="k">fn</span> <span class="f">signed</span> req _ _
-  thanked <span class="o">=</span> <span class="f">put</span> (<span class="f">web/session</span> req secret) <span class="s">"flash"</span> <span class="s">"Thank you for signing."</span>
-  <span class="f">effect</span> (<span class="f">web/kept</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) secret thanked)</code></pre>
+<span class="k">fn</span> <span class="f">signed</span> _ _ _
+  <span class="f">effect</span> (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
 </div>
 
 <h2>queries</h2>
