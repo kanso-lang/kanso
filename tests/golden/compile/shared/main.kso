@@ -1,0 +1,4 @@
+import "./left"
+import "./right"
+
+print "{left/shout "ada"} {right/whisper "ADA"}"

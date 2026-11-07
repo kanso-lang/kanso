@@ -684,9 +684,25 @@ fn compile_module_inner(
     if std::env::var_os("KANSO_PHASES").is_some() {
         eprintln!("load {}", dir.display());
     }
+    MODULE_LOADS.with(|c| c.set(c.get() + 1));
     let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
     visited.remove(&canon);
     loaded
+}
+
+thread_local! {
+    static MODULE_LOADS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many modules this thread has compiled since `reset_module_loads`: one
+/// for each module read, lexed, parsed and checked. The compile-cost golden
+/// pins it per sample (kanso#2373).
+pub fn module_loads() -> u64 {
+    MODULE_LOADS.with(|c| c.get())
+}
+
+pub fn reset_module_loads() {
+    MODULE_LOADS.with(|c| c.set(0));
 }
 
 /// A module file's name as a diagnostic prints it. A test run from inside
