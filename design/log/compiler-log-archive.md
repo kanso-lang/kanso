@@ -112773,3 +112773,61 @@ bench/entry_corpus derives, so it now reads its directory, and the entry row
 prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
 row moved. Welfare fell by less than a hundredth, and the floor follows under
 the rule for a feature a ruling requires.
+
+## 2026-10-30 — a connection can be secured with TLS
+
+#2178 owes TLS through the runtime before the first hosted deploy: OpenSSL
+natively, a Rust TLS library in the interpreter, and no general way to call
+C. `net/secured c host` runs a TLS handshake on a connection already open and
+answers it, so reads, writes and close go through TLS from then on. It
+upgrades rather than dials because Postgres asks for TLS inside a plain
+connection: the client sends an SSLRequest, reads `S`, and starts the
+handshake on the same socket. `net/dial_tls host at` is a dial and then
+`secured`, for a protocol such as HTTPS that speaks TLS from its first byte.
+
+Both engines check the server's certificate for the host against the
+machine's trusted roots, and `SSL_CERT_FILE` replaces them on both: OpenSSL's
+default paths read it, and so does rustls-native-certs. A host written as an
+address is checked against the certificate's addresses and sent no server
+name, which is what rustls does and what OpenSSL does once it is told the
+host is an address. A refusal of any kind reads "cannot secure the
+connection to host", with nothing from either library in it.
+
+Native code opens libssl with `dlopen` the first time a program secures a
+connection and looks up the sixteen calls it makes by name. Linking it would
+have put libssl in every binary's start-up and in its library list, and most
+programs never speak TLS. A machine with no OpenSSL 3 refuses the handshake
+with the same words. The interpreter keeps each connection's rustls session
+beside its stream. The runtime's wasm build and the tab have no sockets and
+refuse as they already did.
+
+tests/a_program_secures_a_connection.rs plays a server with rustls and a
+certificate for `localhost` signed by a test authority whose key was thrown
+away after signing (`tests/fixtures/tls`). Both engines dial it, secure the
+connection, say hello and print the answer. Trusting only the server's own
+certificate, and naming another host, are each refused with the same words
+on both engines. A server that closes without TLS's close_notify ends the
+conversation the way a plain close does, with an empty read on both engines;
+rustls reports that close as an error, and with the error passed through the
+interpreter's case failed. senro's `pg/connect_tls`, run against Postgres 16
+serving the same certificate, logged in over TLS 1.3 on both engines, and
+the server's `pg_stat_ssl` agreed.
+
+Every program links the runtime, so each benchmark's text grows by 2,544
+bytes and the text row sums to 5,705,712. No benchmark secures a connection,
+and the instruction rows move by about a thousand each where the larger
+runtime is loaded: work_basket 18,296,044, work_digestbench 4,104,967,
+work_encodebench 2,335,340,353, work_escapebench 40,309,372, work_indexbench
+1,888,158, work_jsonbench 549,338,235, work_livebench 938,654,972,
+work_oneshot 9,979,521, work_pendbench 154,124,736, work_readbench 4,584,375
+and work_scanbench 268,194. Three move further, by layout: deepbench
+198,242,376 -> 197,859,562, runbench 846,388,267 -> 846,337,653 and widebench
+28,700,882 -> 28,686,318. The compiler carries rustls and grows, and its rows move with
+the binary: compile_instructions 24,096,607 -> 24,097,537,
+entry_instructions 86,792,132 -> 86,793,470, library_instructions
+72,615,607 -> 72,618,778, emit_instructions 5,598,851 -> 5,598,399,
+codegen_instructions_dev 116,821,778 -> 116,926,477,
+codegen_instructions_release 371,573,350 -> 371,827,207, interp_instructions
+571,786,909 -> 571,683,168, browser_compile_instructions 343,289,570 ->
+343,307,533 and browser_run_instructions 64,598,060 -> 64,598,061. The
+floor follows under the rule for a feature a ruling requires.

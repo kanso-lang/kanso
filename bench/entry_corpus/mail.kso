@@ -1,0 +1,6 @@
+import "./shared"
+import "std/list"
+import "std/text"
+
+pub fn mail_line xs
+  shared/joined (list/map xs (x -> shared/title (text/trim x)))
