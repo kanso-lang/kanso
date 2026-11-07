@@ -1632,6 +1632,16 @@ module once, so it paid every clone and used none. Keeping a module only on
 its second request costs a set of keys. Locally, callgrind reads `kanso check
 bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
 
+On CI, against the app-shaped entry corpus #2375 added for this change,
+`entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
+nothing to share pay for the cache's bookkeeping: `compile_instructions`
+rises 6,406, `library_instructions` 43,941, `compile_allocs` 16 and
+`compile_memory` 469 bytes. Compiling in the tab moves both ways, 3,466
+fewer instructions and 208 more peak bytes. A cheaper key, the path's bytes in place of a
+`PathBuf`, and keeping a module only on its third request were both measured
+and dropped: neither brought those rows back, and the third request gave the
+pantry back 64 of its loads.
+
 The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
 1.94 s. Its IR is byte-identical, 2,314,435 bytes. `shared` still reads
 `loads=11`: each of its modules is asked for at most twice under one key, so
