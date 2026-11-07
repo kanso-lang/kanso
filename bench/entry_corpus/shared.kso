@@ -1,0 +1,11 @@
+import "std/list"
+import "std/text"
+
+# The helpers every part of the app reaches for, the way an app's modules
+# all import one module of its own: four modules below import this one, so
+# a loader that compiles a module once per import compiles it four times.
+pub fn title s
+  text/uppercase (text/trim s)
+
+pub fn joined xs
+  text/join (list/to_list xs) ", "
