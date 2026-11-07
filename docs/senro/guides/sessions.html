@@ -137,7 +137,7 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
   found <span class="o">=</span> <span class="f">models/problems</span> [
     (<span class="f">models/rule</span> <span class="s">"name"</span> (name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Choose a name."</span>)
     (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">length</span> by_name<span class="o">.</span>rows <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"That name is taken."</span>)
-    (<span class="f">models/rule</span> <span class="s">"email"</span> (<span class="f">not</span> addressed? email) <span class="s">"Give an email address."</span>)
+    (<span class="f">models/email_address</span> <span class="s">"email"</span> email)
     (<span class="f">models/rule</span> <span class="s">"email"</span> (<span class="f">length</span> by_email<span class="o">.</span>rows <span class="o">&gt;</span> <span class="n">0</span>) taken)
     (<span class="f">models/rule</span> <span class="s">"password"</span> (<span class="f">length</span> password <span class="o">&lt;</span> <span class="n">8</span>) short)
   ]
@@ -146,9 +146,6 @@ addressed <span class="o">=</span> <span class="s">"select id from accounts wher
   <span class="f">passwords/digested</span> password
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">models/created</span> <span class="s">""</span> db account_model (<span class="f">put</span> fields <span class="s">"digest"</span> d))
     <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">made</span> req db w)
-
-<span class="k">fn</span> <span class="f">addressed?</span> email
-  <span class="f">length</span> (<span class="f">text/split</span> email <span class="s">"@"</span>) <span class="o">==</span> <span class="n">2</span>
 
 <span class="c"># A new account is not signed in: its holder confirms the address first,</span>
 <span class="c"># through the link the mail carries, as Devise's `confirmable` asks. A mail</span>
