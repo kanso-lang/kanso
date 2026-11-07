@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — a derivation reads the files beside the entry
-
-#2186's models ruling makes `schema.sql` the opt-in for a migration that
-needs raw SQL the fold cannot interpret: the app checks in `pg_dump` output
-"and the compiler reads that file instead". A derivation reads only the
-description it is handed, and nothing in it carried a file.
-
-`derive/program` now has `files`, a map from the name of each file directly
-beside the entry that is not kanso source and reads as text to that text.
-senro's models convention reads `schema.sql` from it when the app keeps one
-and folds the migrations when it does not. The files are inputs like the
-source, so the same tree still derives the same declarations. The tab has no
-directory under its compile and hands none.
-
-tests/golden/derive gains a convention that declares the lines of a
-`tables.txt` beside its entry, on both engines. With the directory read
-pointed at a path that does not exist, it declares an empty list and the
-case fails.
-
-bench/entry_corpus derives, so it now reads its directory, and the entry row
-prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
-row moved. Welfare fell by less than a hundredth, and the floor follows under
-the rule for a feature a ruling requires.
-
 ## 2026-10-30 — a connection can be secured with TLS
 
 #2178 owes TLS through the runtime before the first hosted deploy: OpenSSL
@@ -1657,3 +1633,23 @@ committee decided on kanso#2370 that the change merges and the floor moves
 down by exactly that, as it did for #2350: a driver that leaves its program
 holding a port when it is stopped is the toolchain failing what `kanso run`
 promises.
+
+## 2026-11-07 — the entry corpus is shaped like an app (#2373)
+
+`kanso check` of senro's pantry compiled its 27 modules 1,094 times, because
+the loader compiled a module once for every import that reached it. No row
+welfare reads could see that. `compile_corpus` is one module whose imports
+each arrive once, and `bench/entry_corpus` imported std modules and two local
+files that import nothing from each other.
+
+This change gives `bench/entry_corpus` four local modules, models, views,
+routes and mail. Each imports the corpus's own `shared` module and std/text
+and std/list, the way a senro app's modules all import its models and pg.
+The entry calls one function from each. On the compiler of this tree,
+`KANSO_PHASES=1` prints 46 module loads for it.
+
+`entry_instructions` rises by the new modules' cost, from 87,930,129 to
+177,925,530 instructions on CI. It is a
+corpus change and not a compiler change, so welfare's `compile_instructions`
+baseline is scaled by the same ratio and the floor holds, as #2269 did for
+the forking shape. The fix this baselines for is kanso#2374.
