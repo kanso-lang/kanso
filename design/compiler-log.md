@@ -1648,7 +1648,8 @@ and std/list, the way a senro app's modules all import its models and pg.
 The entry calls one function from each. On the compiler of this tree,
 `KANSO_PHASES=1` prints 46 module loads for it.
 
-`entry_instructions` rises by the new modules' cost, ENTRY_ROW. It is a
+`entry_instructions` rises by the new modules' cost, from 87,930,129 to
+177,925,530 instructions on CI. It is a
 corpus change and not a compiler change, so welfare's `compile_instructions`
 baseline is scaled by the same ratio and the floor holds, as #2269 did for
 the forking shape. The fix this baselines for is kanso#2374.
