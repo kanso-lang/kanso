@@ -1675,6 +1675,19 @@ The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
 `loads=11`: each of its modules is asked for at most twice under one key, so
 nothing is handed out of the cache, and the rows match the corpus commit.
 
-Still open: a cold `kanso build` of the pantry takes 7.2 s, and 5.7 s of it
-is compiling `runtime.c` at the dev tier, which a build of kanso could do
-once and ship.
+A cold `kanso build` of the pantry took 7.2 s, and 5.7 s of it was clang
+compiling `runtime.c` for the dev tier into the temp directory, once per
+container. build.rs now compiles that object, 377 KB, and the binary carries
+it. When the key the compiler computes names the dev tier with no counters,
+on the convention build.rs's clang took, a cold build writes those bytes
+instead of running clang; any other recipe compiles as before. The dev tier's
+`-O2` moved into build.rs, which writes it out for the compiler, so the
+shipped object and a compiled one come from one list.
+`tests/a_cold_dev_build_ships_its_runtime.rs` builds a program against an
+empty temp directory behind a clang that logs its commands and counts compiles
+of the runtime: 1 with the shipped object turned off, 0 with it. The codegen
+gates warm the cache before they count, so no row they read moves.
+
+With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
+took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
+
