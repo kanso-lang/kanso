@@ -1652,21 +1652,28 @@ a `loads` column in `bench/compile_golden_modules.txt`, and the sample
 a third, all three importing std/text. Before the fix it read `loads=11` for 6
 modules, in CI run 42413285691.
 
-`compile_module_inner` now keeps each module it compiles and hands later
-importers a copy, keyed by the canonical path, `require_entry`, whether the
-sources came embedded, and the flags an importer sets around a compile. A
-shipped std module is pruned against the words the program has read so far,
-and that set only grows, so its key also holds the set's size; a module from
-disk is not pruned and its key does not. The outermost `load_dependencies`
-empties the cache when it returns, which bounds it to one compile whether the
-root is an entry file or a directory.
+`compile_module_inner` now keeps a module the second time an import asks for
+it and hands later importers a copy. The key is the canonical path,
+`require_entry`, whether the sources came embedded, and the flags an importer
+sets around a compile. A shipped std module is pruned against the words the
+program has read so far, and that set only grows, so its key also holds the
+set's size; a module from disk is not pruned and its key does not. The
+outermost `load_dependencies` empties the cache when it returns, which bounds
+it to one compile whether the root is an entry file or a directory.
 
-The pantry now loads 96 times and `kanso check .` takes 0.75 s. Its IR is
-byte-identical, 2,314,435 bytes. `shared` reads `loads=8`: its 6 modules
-plus 2 std compiles against a grown root set. Inference on it does less work,
-rounds 8 to 6 and visits 2,190 to 1,676, because a module imported twice no
-longer brings in a second, larger pruning of std whose extra declarations
-nothing calls. `bench/entry_corpus` loads 21 modules where it loaded 22.
+The first version kept every module on its first compile. That took the
+pantry to 96 loads and 0.75 s, but CI read `compile_instructions` at
+25,213,290 against 24,110,987 and `compile_memory` at 859,218 bytes against
+598,588. A module's program carries every declaration its imports brought in,
+so keeping one is a clone of its whole subtree, and `lib/json` imports each
+module once, so it paid every clone and used none. Keeping a module only on
+its second request costs a set of keys. Locally, callgrind reads `kanso check
+bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
+
+The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
+1.94 s. Its IR is byte-identical, 2,314,435 bytes. `shared` still reads
+`loads=11`: each of its modules is asked for at most twice under one key, so
+nothing is handed out of the cache, and the rows match the corpus commit.
 
 Still open: a cold `kanso build` of the pantry takes 7.2 s, and 5.7 s of it
 is compiling `runtime.c` at the dev tier, which a build of kanso could do
