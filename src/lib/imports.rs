@@ -12,6 +12,23 @@ fn load_dependencies(
     imports: &[ast::Import],
     visited: &mut crate::hash::Set<std::path::PathBuf>,
 ) -> Result<Loaded, String> {
+    LOAD_DEPTH.with(|d| d.set(d.get() + 1));
+    let loaded = load_dependencies_inner(base, imports, visited);
+    let outermost = LOAD_DEPTH.with(|d| {
+        d.set(d.get() - 1);
+        d.get() == 0
+    });
+    if outermost {
+        MODULE_CACHE.with(|c| c.borrow_mut().clear());
+    }
+    loaded
+}
+
+fn load_dependencies_inner(
+    base: &std::path::Path,
+    imports: &[ast::Import],
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
+) -> Result<Loaded, String> {
     let mut dep_program = ast::Program {
         fns: Vec::new(),
         types: Vec::new(),

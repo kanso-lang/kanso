@@ -112749,3 +112749,27 @@ compiles with the embedded `lib/derive`, whose comments grew, and
 browser_compile_instructions moved 343,289,578 -> 343,289,570 (-8). No other
 row moved, the library and module rows included. Welfare fell by less than a hundredth, and the floor
 follows under the rule for a feature a ruling requires.
+
+## 2026-10-30 — a derivation reads the files beside the entry
+
+#2186's models ruling makes `schema.sql` the opt-in for a migration that
+needs raw SQL the fold cannot interpret: the app checks in `pg_dump` output
+"and the compiler reads that file instead". A derivation reads only the
+description it is handed, and nothing in it carried a file.
+
+`derive/program` now has `files`, a map from the name of each file directly
+beside the entry that is not kanso source and reads as text to that text.
+senro's models convention reads `schema.sql` from it when the app keeps one
+and folds the migrations when it does not. The files are inputs like the
+source, so the same tree still derives the same declarations. The tab has no
+directory under its compile and hands none.
+
+tests/golden/derive gains a convention that declares the lines of a
+`tables.txt` beside its entry, on both engines. With the directory read
+pointed at a path that does not exist, it declares an empty list and the
+case fails.
+
+bench/entry_corpus derives, so it now reads its directory, and the entry row
+prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
+row moved. Welfare fell by less than a hundredth, and the floor follows under
+the rule for a feature a ruling requires.

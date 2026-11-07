@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — a derivation reads the files beside the entry
-
-#2186's models ruling makes `schema.sql` the opt-in for a migration that
-needs raw SQL the fold cannot interpret: the app checks in `pg_dump` output
-"and the compiler reads that file instead". A derivation reads only the
-description it is handed, and nothing in it carried a file.
-
-`derive/program` now has `files`, a map from the name of each file directly
-beside the entry that is not kanso source and reads as text to that text.
-senro's models convention reads `schema.sql` from it when the app keeps one
-and folds the migrations when it does not. The files are inputs like the
-source, so the same tree still derives the same declarations. The tab has no
-directory under its compile and hands none.
-
-tests/golden/derive gains a convention that declares the lines of a
-`tables.txt` beside its entry, on both engines. With the directory read
-pointed at a path that does not exist, it declares an empty list and the
-case fails.
-
-bench/entry_corpus derives, so it now reads its directory, and the entry row
-prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
-row moved. Welfare fell by less than a hundredth, and the floor follows under
-the rule for a feature a ruling requires.
-
 ## 2026-10-30 — a connection can be secured with TLS
 
 #2178 owes TLS through the runtime before the first hosted deploy: OpenSSL
@@ -1657,3 +1633,41 @@ committee decided on kanso#2370 that the change merges and the floor moves
 down by exactly that, as it did for #2350: a driver that leaves its program
 holding a port when it is stopped is the toolchain failing what `kanso run`
 promises.
+
+## 2026-11-07 — each module is compiled once per load (#2373)
+
+`kanso run` of senro's pantry took 8.4 s to answer its first request after a
+container restart. `kanso check .` alone took 2.0 s and 8,741,148,257
+instructions. `load_dependencies` compiled a module for every import that
+reached it, and every import inside that module the same way, so a module
+cost one compile per path through the import graph. `KANSO_PHASES=1` printed
+1,094 `load` lines for the pantry's 27 modules: std/text 235 times, std/list
+212, std/bits 144, senro's pg 36.
+
+The corpus could not see it. Every compile sample was one file, the module
+sample imports one module, and `compile_instructions` checks `lib/json`,
+which loads each module once. The first commit adds `kanso::module_loads()`,
+a `loads` column in `bench/compile_golden_modules.txt`, and the sample
+`tests/golden/compile/shared`: an entry importing two modules that both import
+a third, all three importing std/text. Before the fix it read `loads=11` for 6
+modules, in CI run 42413285691.
+
+`compile_module_inner` now keeps each module it compiles and hands later
+importers a copy, keyed by the canonical path, `require_entry`, whether the
+sources came embedded, and the flags an importer sets around a compile. A
+shipped std module is pruned against the words the program has read so far,
+and that set only grows, so its key also holds the set's size; a module from
+disk is not pruned and its key does not. The outermost `load_dependencies`
+empties the cache when it returns, which bounds it to one compile whether the
+root is an entry file or a directory.
+
+The pantry now loads 96 times and `kanso check .` takes 0.75 s. Its IR is
+byte-identical, 2,314,435 bytes. `shared` reads `loads=8`: its 6 modules
+plus 2 std compiles against a grown root set. Inference on it does less work,
+rounds 8 to 6 and visits 2,190 to 1,676, because a module imported twice no
+longer brings in a second, larger pruning of std whose extra declarations
+nothing calls. `bench/entry_corpus` loads 21 modules where it loaded 22.
+
+Still open: a cold `kanso build` of the pantry takes 7.2 s, and 5.7 s of it
+is compiling `runtime.c` at the dev tier, which a build of kanso could do
+once and ship.
