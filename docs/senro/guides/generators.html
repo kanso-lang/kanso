@@ -217,6 +217,8 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">listing</span> req p
   every <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p<span class="o">.</span><span class="f">rows</span> note_from)
+  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> every note_attributes)
+  <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/notes_index_view</span> every p<span class="o">.</span><span class="f">number</span> p<span class="o">.</span><span class="f">more</span>
   <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
 </div>
@@ -237,6 +239,26 @@ nav.pages
     a href="/notes?page={number - 1}" Previous page
   if more
     a href="/notes?page={number + 1}" Next page</code></pre>
+</div>
+
+<p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">shown</span> req row
+  record <span class="o">=</span> <span class="f">note_from</span> row
+  attributes <span class="o">=</span> <span class="f">note_attributes</span> record
+  <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
+  page <span class="o">=</span> <span class="f">views/note_shown_view</span> record
+  <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+</div>
+
+<p>senro's spec makes a note, asks for it as JSON, changes it, and asks for the list the same way. ids and times change from run to run, so the spec prints each id as N and each time as T:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/generate/served.out</div>
+  <pre><code>it as json: {"cover":"","created_at":"T","id":N,"pages":12,"title":"First","updated_at":"T"}
+the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renamed","updated_at":"T"}]</code></pre>
 </div>
 
 <p>a form with a file in it is sent as <code>multipart/form-data</code>, and senro keeps the file and hands the action its key in the field's place. a file input left empty sends an empty value, and <code>update</code> leaves it out of the change, so a note keeps its cover when it is edited without choosing another. <code>create</code> takes every field, an empty cover among them.</p>

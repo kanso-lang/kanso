@@ -21,7 +21,7 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <h2>the session</h2>
 
-<p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. an action reads it with <code>web/session req secret</code> and keeps a changed one by answering <code>web/kept response secret session</code>. the guestbook carries its notices this way: an action puts a <code>flash</code> in the session before it redirects, and the page that shows the notice clears it.</p>
+<p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. an action reads it with <code>web/session req secret</code> and keeps a changed one by answering <code>web/kept response secret session</code>. an answer that would set the session the request already carried sets none, so a page the server read before a sign-out cannot sign the visitor back in when its answer reaches the browser last. the guestbook carries its notices this way: an action puts a <code>flash</code> in the session before it redirects, and the page that shows the notice clears it.</p>
 
 <p><code>web/signed_in req response secret session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
@@ -218,7 +218,7 @@ set_digest <span class="o">=</span> <span class="s">"update accounts set digest 
   <pre><code>pbkdf2-sha256$&lt;rounds&gt;$&lt;salt, base64&gt;$&lt;digest, base64&gt;</code></pre>
 </div>
 
-<p>because each digest names its own rounds, the default can rise without breaking the digests already kept. it is 100,000 rounds, a sixth of what OWASP asks, because a release build of kanso stretches 100,000 in about a fifth of a second and the full count would hold a sign-in for more than a second. <code>SENRO_PASSWORD_ROUNDS</code> lowers it for development, where the development tier is fourteen times slower.</p>
+<p>because each digest names its own rounds, the default can rise without breaking the digests already kept. it is 100,000 rounds, a sixth of what OWASP asks, because a release build of kanso stretches 100,000 in about a fifth of a second and the full count would hold a sign-in for more than a second. <code>SENRO_PASSWORD_ROUNDS</code> lowers it for development, where the development tier is about seven times slower.</p>
 
 <h2>signing in</h2>
 

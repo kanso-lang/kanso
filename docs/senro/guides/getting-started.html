@@ -76,7 +76,7 @@ serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n
 
 <p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's reader, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
 
-<p>the last statement is the app: connect to Postgres, create the tables if they are missing and compare them with the schema, then serve on port 3000. <code>web/serve</code> answers each connection in a fiber of its own and lends each request a database session from a pool.</p>
+<p>the last statement is the app: connect to Postgres, create the tables if they are missing and compare them with the schema, then serve on port 3000. <code>web/serve</code> answers each connection in a fiber of its own and lends each request a database session from a pool. bytes that are not a request, such as a line without a method and a path, are answered 400 Bad Request and the connection is closed.</p>
 
 <h2>the schema</h2>
 
