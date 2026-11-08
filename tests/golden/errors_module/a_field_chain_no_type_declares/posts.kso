@@ -1,0 +1,7 @@
+pub type person
+  name
+
+pub type post
+  author
+
+pub one = post (person "Ada")

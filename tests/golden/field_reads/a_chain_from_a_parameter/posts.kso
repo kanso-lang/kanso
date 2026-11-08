@@ -1,0 +1,12 @@
+pub type person
+  name
+  email
+
+pub type post
+  title
+  author
+
+pub all = [
+  post "On tags" (person "Ada" "ada@x")
+  post "Second" (person "Bob" "bob@x")
+]

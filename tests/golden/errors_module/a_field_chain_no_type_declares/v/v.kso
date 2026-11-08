@@ -1,0 +1,3 @@
+# The chain starts at a parameter, and no type in the program has `nmae`.
+pub fn by p
+  p.author.nmae

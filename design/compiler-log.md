@@ -20,128 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — a request carries its headers
-
-`std/net/http`'s `request` gains a fourth field, `headers`: each header's
-name, lowercased, mapped to its value with the surrounding spaces trimmed. A
-colon inside a value stays part of it, and a name sent twice keeps the last
-value. The parser had already split the head into lines and discarded all
-but the first. A server could not read a cookie, so senro could not keep a
-session.
-
-A pattern on `request` takes four places now, so the teashop's `handle` arms
-in the web chapter end in `_`, and the chapter says what the last two places
-hold. Three tests in http_test.kso pin it: a name read in lowercase with its
-value trimmed and its inner colon kept, the host header, and a request with
-no headers answering none. Breaking the lowercasing turns two of them red.
-
-## 2026-11-01 — the corpus forks
-
-Corpus first, before #2268. #2268 makes a server's loop hold what one
-request holds, and with CI's rows its welfare read just under the floor: no
-benchmark forked, so the objective saw the cost of the new runtime code and
-none of the memory the change saves. This adds that shape on main, so the
-fix is measured against it.
-
-`bench/runbench/runbench/forked` runs 16,000 passes of a loop that forks a
-small handler beside the rest of the loop, the way a server forks per
-accept. `bench/interp_corpus` runs the same loop for 2,000 passes before it
-prints. Neither printed line moves.
-
-Rows, from CI where they are instructions. runbench rose to work_runbench
-892,161,749, the shape's 45,830,571 instructions or 5.14% of the program,
-and its text row to 849,809. Its arena grew from 4 blocks to 15:
-arena_peak_bytes 14,680,064, and spare_peak_bytes 14,155,792. The
-interpreted corpus rose to interp_instructions 622,671,293, interp_allocs
-814,155 and interp_peak_bytes 1,953,942. In the tab, the corpus reads
-browser_compile_instructions 349,229,303, browser_compile_peak_bytes
-855,995, browser_run_instructions 79,318,152 and browser_run_peak_bytes
-3,801,088, measured with the rustc 1.98.1 the golden names. runbench's
-emitted rows grew by the shape's 15 functions. The floor is re-based to what
-these rows score, since the change is only to what is measured.
-
-The run program's other counters move with the 16,000 groups and the
-handlers' pages: run_allocs 1,930,504, run_alloc_bytes 237,915,969,
-run_arena_blocks 15, run_arena_peak_bytes 14,680,064, run_perm_allocs 131,
-run_beat_iters 211,300, run_survive_slots 4,703, run_push_mut_fast
-1,195,311, run_push_mut_slow 1,645,465, run_bytes_malloc 7,868,
-run_str_scans 19,402, run_str_scan_bytes 18,667,266, run_buf_reuse 157,
-run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
-92,421,040 and run_spare_peak_bytes 14,155,792. runbench's 15 new functions
-take the emitted rows of the other benchmarks to emitted_other_defines
-2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
-emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
-
-## 2026-11-01 — a server's loop holds what one request holds
-
-The second half of #2263. A server forks each request's handler beside the
-rest of its loop, so every pass is a group the next pass is a member of, and
-the groups nest as deep as the server has run. Both engines kept every one.
-tests/golden/mem/a_server_loop_holds_what_one_request_holds.kso is that
-shape without the network: natively 4,000 passes held 4 arena blocks and
-16,000 held 13; interpreted, the peaks were 1,420,281 and 5,581,819 bytes.
-
-Three things held the memory, and each fix was watched red on its own
-before the spec passed.
-
-A group whose other members have finished cleanly, and whose join was all
-its fiber had left, will yield exactly what its last member yields. The
-scheduler now hands that member to the parent group and frees the group's
-slot; the next join takes it. Nothing observable moves. The settled node the
-group would have handed back ran next in any case, at the same position,
-because every fiber ahead of it waits until later, so a failure lands in
-the parent at the same point in the order it did before. The interpreter
-learns that the join was the fiber's whole work from a rejoin that is
-absent; the runtime learns it from a continuation that is its settled node.
-
-Natively, the scheduler ran under one beat, so everything its fibers
-allocated stayed in the arena until it returned. It now stages the way the
-bind chain does. Once the arena has drifted a quarter megabyte past the last
-stage (or twice what that stage copied), the fibers' work and the live
-groups' continuations and results go out through the carry pair as one list,
-and the beat is rewound. A continuation's settled node is found again by
-walking the copy, since binds and rescues keep what they wrap in `x`, rather
-than carried as a root of its own; two roots could be copied apart, and the
-group's result would then be written into a node its continuation no longer
-holds.
-
-In the interpreter, a global's resolution slot was keyed by the syntax node.
-The pipe builds its callback's body by cloning the head on every evaluation,
-so each pass's clone took a new slot until the table reached its cap of
-65,535, after which every new node resolved by name. A name now keeps the
-slot it first took. An effect chain of 16,000 links peaked at 1,134,478
-bytes and now at 21,608, one byte more than at 4,000.
-
-After: one arena block at either size natively, each stage copying about
-350 bytes (beat_iters 49 and evac_bytes 17,488 in the mem golden), and
-interpreted peaks of 41,986 and 41,987 bytes.
-tests/a_server_loop_holds_no_more_the_longer_it_runs.rs compares the two
-sizes on both engines. #2263 is done.
-
-Rows, from CI, against the corpus with the forking shape. runbench's arena
-falls from 15 blocks to run_arena_blocks 4, run_arena_peak_bytes 4,718,608
-and run_spare_peak_bytes 2,621,456. The stages that buy that copy a little:
-run_beat_iters 211,349, run_evac_allocs 2,156, run_evac_bytes 4,599,264,
-run_allocs 1,930,602, run_alloc_bytes 237,920,257 and run_sh_buf
-92,424,544. The interpreted corpus peaks at interp_peak_bytes 1,366,143
-against 1,953,942, with interp_instructions 621,869,223 and interp_allocs
-810,137, and the tab runs it in browser_run_instructions 78,361,551 with
-browser_run_peak_bytes 2,621,440.
-
-The runtime gains the stage and the group bookkeeping, 1,792 bytes of text
-in each benchmark (runbench's text row 851,601, and the text rows sum to
-text 5,755,168). runbench itself falls to work_runbench 891,782,287. No
-other benchmark forks, so none runs the new code, and their work rows move
-by layout: work_deepbench rose to 199,830,851, work_widebench to
-28,766,254, work_encodebench to 2,335,341,102, work_pendbench to
-154,125,558, work_oneshot to 9,980,977, work_livebench to 938,655,609,
-work_jsonbench to 549,338,202, work_digestbench to 4,104,932,
-work_readbench to 4,584,342, work_escapebench to 40,309,377, work_basket to
-18,296,047, work_indexbench to 1,888,161 and work_scanbench to 268,197.
-clang compiles the larger runtime in codegen_instructions_dev 116,951,400
-and codegen_instructions_release 371,843,999, and entry_instructions reads
-86,797,006.
-
 ## 2026-11-01 — a module may name a function a derivation writes into it
 
 #2265. An entry that derives loads its dependencies twice: once to describe
@@ -1725,6 +1603,49 @@ code grows where the inline bitwise path now takes an operand that may be a
 word behind a tag test: `emitted_other_branches` reads 19,444 and
 `emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
 Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-08 — patterns and operators move out of emit.rs (#2377)
+
+`src/codegen/emit.rs` had grown to 3,055 lines in one `impl Backend` block.
+Two runs of methods in it shared nothing with the rest, so they moved to files
+of their own, read with `include!` right after emit.rs as calls.rs already
+is:
+
+- `patterns.rs`, 444 lines: matching a pattern against a parameter, the
+  `%parsed` returns and constructions, packed constructor arguments and the
+  type-set checks.
+- `operators.rs`, 471 lines: word runs, the general arithmetic they fall back
+  to, `emit_binop` and the builtin operators.
+
+emit.rs keeps bodies, binds, conditions and indexing, at 2,153 lines. The move
+changes no text: the dev and release IR of `bench/runbench` are byte-identical
+before and after. Five ratchet mutations patched lines that moved, and each
+now names the file its line lives in. `tests/native_layout_on_wasm32.rs`
+reads the two new files when it looks for the lines the wasm32 table
+rewrites.
+
+## 2026-11-08 — a module reads through a record it was handed
+
+A library may read a field that no type it can see declares, as long as the
+read's base is a parameter: the value came from the caller, and the program
+that imports the library answers for the field (the 2026-10-12 gavel on
+#1894). The check looked only one step back, so `p.author.name` was refused
+in the module that wrote it. `p.author` is not a parameter, and nothing in
+the module declares `name`. senro's kata hit this: a template could not show
+a post's author's name, and its README listed that as a limit.
+
+The check now follows a chain of field reads and indexes back to where it
+starts. `p.author.name` and `ps[1].author.name` are both left to the program,
+and the program still refuses a field no type in it declares, at the end of
+a chain as anywhere else. `tests/golden/field_reads/a_chain_from_a_parameter`
+runs on both engines, and `errors_module/a_field_chain_no_type_declares` pins
+the refusal of a misspelled last field. Main's binary refuses the first
+fixture with "no record type has a field `name`" on both engines.
+
+kata needed nothing of its own. The page as data already kept the inner
+record's fields that a template reads, so senro's `spec/runs/nested_reads`
+prints the same page three ways: rendered from the records, as data, and
+rendered from the data.
 
 ## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
 

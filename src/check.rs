@@ -1541,9 +1541,14 @@ fn is_param(name: &str, params: &[Pattern]) -> bool {
     params.iter().any(|p| matches!(p, Pattern::Var(n, _) if n == name))
 }
 
-/// Whether a field read's base is a value the function was handed.
+/// Whether a field read's base is a value the function was handed, or a field
+/// or element of one: `p`, `p.author` and `ps[1]` all came from the caller.
 fn handed(base: &Expr, params: &[Pattern]) -> bool {
-    matches!(base, Expr::Ident(n, _, _) if is_param(n, params))
+    match base {
+        Expr::Ident(n, _, _) => is_param(n, params),
+        Expr::Field { base, .. } | Expr::Index { base, .. } => handed(base, params),
+        _ => false,
+    }
 }
 
 /// A field read, asked of one node. The walk that carries it decides whether
