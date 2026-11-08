@@ -409,7 +409,7 @@ fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
     }
     program.fns.extend(arms);
     forget_shades(&mut program.fns);
-    let mut rendered = String::new();
+    let mut unwritten = Vec::new();
     for (group, span, file) in &calls {
         if filled.contains(group.as_str()) {
             continue;
@@ -423,12 +423,11 @@ fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
             ),
             *span,
         );
-        let source = std::fs::read_to_string(&**file).unwrap_or_default();
-        rendered.push_str(&diag::render(&[d], file, &source));
+        unwritten.push(d.about(file));
     }
-    match rendered.is_empty() {
+    match unwritten.is_empty() {
         true => Ok(()),
-        false => Err(rendered),
+        false => Err(render_merged(&unwritten, "", "")),
     }
 }
 

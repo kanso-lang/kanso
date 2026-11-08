@@ -1,0 +1,7 @@
+import "./geo"
+import "./templates"
+import "./views"
+
+derive templates/views
+
+print (views/one (geo/make 2))

@@ -1,0 +1,8 @@
+pub type circle
+  r
+
+pub fn make r
+  circle r
+
+pub fn area (circle r)
+  r * r * 3
