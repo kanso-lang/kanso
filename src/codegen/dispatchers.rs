@@ -515,6 +515,7 @@ impl<'a> Backend<'a> {
             }
         }
         let text = f.body();
+        let header = self.folded_at_dev(header, &params, &text);
         self.room(header.len() + text.len() + 4);
         let _ = writeln!(
             self.body,
@@ -880,6 +881,7 @@ impl<'a> Backend<'a> {
         f.lazy_cells.truncate(cells_before);
         if !open {
             let text = f.body();
+            let header = self.folded_at_dev(header, &params, &text);
             self.room(header.len() + text.len() + 4);
             let _ = writeln!(self.body, "{header}\n{text}}}\n");
             return Ok(());
@@ -929,8 +931,65 @@ impl<'a> Backend<'a> {
         }
         f.line("unreachable");
         let text = f.body();
+        let header = self.folded_at_dev(header, &params, &text);
         self.room(header.len() + text.len() + 4);
         let _ = writeln!(self.body, "{header}\n{text}}}\n");
         Ok(())
     }
+
+    /// The header of a definition the dev tier folds into its callers, which
+    /// is the header with `alwaysinline` added; any other header unchanged.
+    ///
+    /// A dev build compiles at `-O0`, where nothing is inlined unless it is
+    /// marked, so a call to a three-line helper costs a frame, the moves of
+    /// every argument and the result's spills. The definitions folded here
+    /// take only words, call no other definition of the program, and are at
+    /// most `DEV_FOLD_LINES` lines long. All three conditions earn their place:
+    ///
+    /// - A parameter that is a `%KValue` brings its unpacking into every
+    ///   caller, and those `extractvalue`s are what sends clang's fast
+    ///   selector to the slow one for the rest of a block (see
+    ///   `literal_word`). Folding every small leaf, these included, bought
+    ///   runbench's dev run 2.0% and cost the dev codegen row 4.5%, which
+    ///   welfare scores as a fall. Two leaves that take a `%KValue`,
+    ///   `list/next` and `render/to_string`, were the whole of that cost.
+    /// - A definition that calls another one is the start of a chain the
+    ///   always-inliner would copy whole into every caller.
+    /// - At 40 lines the fold misses `sha256`'s rotate, which is about 50, and
+    ///   PBKDF2 keeps the whole cost.
+    ///
+    /// The release tier does not need this: its inliner decides for itself.
+    fn folded_at_dev(&self, header: String, params: &[String], text: &str) -> String {
+        let folded = !self.inline_helpers
+            && !params.is_empty()
+            && params.iter().all(|p| p.starts_with("i64 "))
+            && !header.contains(" noinline")
+            && text.lines().count() <= DEV_FOLD_LINES
+            && text.lines().all(calls_only_the_runtime);
+        match (folded, header.strip_suffix(" {")) {
+            (true, Some(head)) => format!("{head} alwaysinline {{"),
+            _ => header,
+        }
+    }
+}
+
+/// The longest body, in lines, a dev build folds into its callers. See
+/// `Backend::folded_at_dev`.
+const DEV_FOLD_LINES: usize = 80;
+
+/// Whether a line of IR calls nothing but the runtime and LLVM's intrinsics:
+/// no definition of the program, no lambda and no `musttail` hop.
+fn calls_only_the_runtime(line: &str) -> bool {
+    let Some(at) = line.find("call ") else {
+        return true;
+    };
+    let rest = &line[at..];
+    let Some(sym) = rest.find('@') else {
+        return false;
+    };
+    let callee = rest[sym + 1..].trim_start_matches('"');
+    let closure = callee.starts_with("k_call") || callee.starts_with("k_tcall");
+    !line.contains("musttail")
+        && !closure
+        && (callee.starts_with("k_") || callee.starts_with("llvm."))
 }
