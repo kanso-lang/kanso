@@ -2787,6 +2787,8 @@ impl<'a> Backend<'a> {
 include!("codegen/dispatchers.rs");
 
 include!("codegen/emit.rs");
+include!("codegen/patterns.rs");
+include!("codegen/operators.rs");
 include!("codegen/calls.rs");
 
 impl<'a> Backend<'a> {
