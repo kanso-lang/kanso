@@ -20,19 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — the emitter's word helpers move into codegen/words.rs
-
-The cleanup owed after #2251 to #2258. The free functions between ir_scan.rs
-and the `Backend` impl move into src/codegen/words.rs, read with include!
-where they stood: the symbol names (`wsym` and its kin), `literal_word`, the
-lift around a call that may fail, word arithmetic, and the readers and
-writers of a value's inline tag and payload. codegen.rs falls from 3,447
-lines to 2,911. Putting words.rs back in place of its include! gives main's
-codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
-section by their text and now name words.rs; each still applies to the line
-it did before. CI's cost-goldens job read every vein at main's values,
-compile_instructions among them, so no row moved.
-
 ## 2026-11-01 — a join a fiber reaches runs beside the fibers already running
 
 #2263. A join that a fiber reached while it ran, rather than one its group
@@ -1595,6 +1582,80 @@ The entry calls one function from each. On the compiler of this tree,
 corpus change and not a compiler change, so welfare's `compile_instructions`
 baseline is scaled by the same ratio and the floor holds, as #2269 did for
 the forking shape. The fix this baselines for is kanso#2374.
+
+## 2026-11-07 — each module is compiled once per load (#2373)
+
+`kanso run` of senro's pantry took 8.4 s to answer its first request after a
+container restart. `kanso check .` alone took 2.0 s and 8,741,148,257
+instructions. `load_dependencies` compiled a module for every import that
+reached it, and every import inside that module the same way, so a module
+cost one compile per path through the import graph. `KANSO_PHASES=1` printed
+1,094 `load` lines for the pantry's 27 modules: std/text 235 times, std/list
+212, std/bits 144, senro's pg 36.
+
+The corpus could not see it. Every compile sample was one file, the module
+sample imports one module, and `compile_instructions` checks `lib/json`,
+which loads each module once. The first commit adds `kanso::module_loads()`,
+a `loads` column in `bench/compile_golden_modules.txt`, and the sample
+`tests/golden/compile/shared`: an entry importing two modules that both import
+a third, all three importing std/text. Before the fix it read `loads=11` for 6
+modules, in CI run 42413285691.
+
+`compile_module_inner` now keeps a module the second time an import asks for
+it and hands later importers a copy. The key is the canonical path,
+`require_entry`, whether the sources came embedded, and the flags an importer
+sets around a compile. A shipped std module is pruned against the words the
+program has read so far, and that set only grows, so its key also holds the
+set's size; a module from disk is not pruned and its key does not. The
+outermost `load_dependencies` empties the cache when it returns, which bounds
+it to one compile whether the root is an entry file or a directory.
+
+The first version kept every module on its first compile. That took the
+pantry to 96 loads and 0.75 s, but CI read `compile_instructions` at
+25,213,290 against 24,110,987 and `compile_memory` at 859,218 bytes against
+598,588. A module's program carries every declaration its imports brought in,
+so keeping one is a clone of its whole subtree, and `lib/json` imports each
+module once, so it paid every clone and used none. Keeping a module only on
+its second request costs a set of keys. Locally, callgrind reads `kanso check
+bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
+
+On CI, against the app-shaped entry corpus #2375 added for this change,
+`entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
+nothing to share pay for the cache's bookkeeping: `compile_instructions`
+rises 6,406 to 24,117,393, `library_instructions` 43,941 to 73,505,059,
+`compile_allocs` 16 to 13,956 and `compile_peak_bytes` 469 to 599,057. The
+interpreter's run of its corpus loads modules too: `interp_allocs` rises 16
+to 810,162 and `interp_peak_bytes` 344 to 1,366,487. Compiling in the tab
+moves both ways, 3,466 fewer instructions and
+`browser_compile_peak_bytes` up 208 to 856,339. `emit_instructions` falls
+346, `codegen_instructions_dev` falls 677 and
+`codegen_instructions_release` rises 108 to 372,025,856, which is the
+binary's layout: the shipped runtime object below made it larger. The
+module corpus mints `module_loads`, which reads 3. A cheaper key, the path's bytes in place of a
+`PathBuf`, and keeping a module only on its third request were both measured
+and dropped: neither brought those rows back, and the third request gave the
+pantry back 64 of its loads.
+
+The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
+1.94 s. Its IR is byte-identical, 2,314,435 bytes. `shared` still reads
+`loads=11`: each of its modules is asked for at most twice under one key, so
+nothing is handed out of the cache, and the rows match the corpus commit.
+
+A cold `kanso build` of the pantry took 7.2 s, and 5.7 s of it was clang
+compiling `runtime.c` for the dev tier into the temp directory, once per
+container. build.rs now compiles that object, 377 KB, and the binary carries
+it. When the key the compiler computes names the dev tier with no counters,
+on the convention build.rs's clang took, a cold build writes those bytes
+instead of running clang; any other recipe compiles as before. The dev tier's
+`-O2` moved into build.rs, which writes it out for the compiler, so the
+shipped object and a compiled one come from one list.
+`tests/a_cold_dev_build_ships_its_runtime.rs` builds a program against an
+empty temp directory behind a clang that logs its commands and counts compiles
+of the runtime: 1 with the shipped object turned off, 0 with it. The codegen
+gates warm the cache before they count, so no row they read moves.
+
+With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
+took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
 
 ## 2026-11-07 — a mask bounds an int, and a bounded sum needs no overflow test (#2304)
 

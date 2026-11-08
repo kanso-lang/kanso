@@ -681,12 +681,83 @@ fn compile_module_inner(
     if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
+    let key = module_key(&canon, require_entry, embedded.is_some());
+    if let Some(done) = MODULE_CACHE.with(|c| c.borrow().get(&key).cloned()) {
+        visited.remove(&canon);
+        return Ok(done);
+    }
+    // A module is kept only once a second import asks for it. Keeping the
+    // first compile of every module cloned each one, and a program whose
+    // modules are each imported once paid the clones and the memory for
+    // nothing: compile_corpus's front end rose 43% in what it held.
+    let again = MODULE_SEEN.with(|s| !s.borrow_mut().insert(key.clone()));
     if std::env::var_os("KANSO_PHASES").is_some() {
         eprintln!("load {}", dir.display());
     }
+    MODULE_LOADS.with(|c| c.set(c.get() + 1));
     let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
     visited.remove(&canon);
+    if let (true, Ok(program)) = (again, &loaded) {
+        MODULE_CACHE.with(|c| c.borrow_mut().insert(key, program.clone()));
+    }
     loaded
+}
+
+/// What a module's compile depends on besides its own sources, which no
+/// compile in one load changes: where the module is, whether it must be an
+/// entry, where its sources came from, the flags its importer sets around
+/// it, and, for a shipped module, how many words it is pruned against. The
+/// root set only grows, so a module compiled against as many roots as before
+/// was pruned against the same ones.
+type ModuleKey = (std::path::PathBuf, bool, bool, bool, bool, bool, bool, usize);
+
+fn module_key(canon: &std::path::Path, require_entry: bool, embedded: bool) -> ModuleKey {
+    // Only a shipped module is pruned against the roots (see
+    // `compile_module_loaded`); any other compiles the same against any.
+    let pruned = SHIPPED_STD.with(|c| c.get()) && embedded && !CHECK_SHIPPED.with(|c| c.get());
+    let roots = match pruned {
+        true => REACH.with(|r| r.borrow().as_ref().map_or(usize::MAX, |s| s.len())),
+        false => 0,
+    };
+    (
+        canon.to_path_buf(),
+        require_entry,
+        embedded,
+        SHIPPED_STD.with(|c| c.get()),
+        CHECK_SHIPPED.with(|c| c.get()),
+        ENTRY_COMPILE.with(|c| c.get()),
+        HAKO_EMBEDDED.with(|c| c.get()),
+        roots,
+    )
+}
+
+thread_local! {
+    /// Each module compiled once per load (kanso#2373). An import used to
+    /// compile its module afresh, and so did every import inside it, so a
+    /// module cost one compile per path that reached it: the pantry loaded
+    /// its 27 modules 1,094 times. A module compiled a second time under the
+    /// same key is kept and handed out after that; the outermost load empties
+    /// both maps when it ends.
+    static MODULE_CACHE: std::cell::RefCell<crate::hash::Map<ModuleKey, ast::Program>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    static MODULE_SEEN: std::cell::RefCell<crate::hash::Set<ModuleKey>> =
+        std::cell::RefCell::new(crate::hash::Set::default());
+    static LOAD_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+thread_local! {
+    static MODULE_LOADS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many modules this thread has compiled since `reset_module_loads`: one
+/// for each module read, lexed, parsed and checked. The compile-cost golden
+/// pins it per sample (kanso#2373).
+pub fn module_loads() -> u64 {
+    MODULE_LOADS.with(|c| c.get())
+}
+
+pub fn reset_module_loads() {
+    MODULE_LOADS.with(|c| c.set(0));
 }
 
 /// A module file's name as a diagnostic prints it. A test run from inside

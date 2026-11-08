@@ -67,8 +67,17 @@ fn work_for_module(name: &str) -> (u64, u64) {
     kanso::infer::work::taken()
 }
 
+/// How many modules compiling the sample compiled. `shared` imports two
+/// modules that both import a third, and all three import `std/text`, so it
+/// counts every module a loader compiles more than once (kanso#2373).
+fn loads_for_module(name: &str) -> u64 {
+    kanso::reset_module_loads();
+    let _ = module_entry(name);
+    kanso::module_loads()
+}
+
 /// Directory samples, measured the same way and reported in the same file.
-const MODULES: &[&str] = &["module"];
+const MODULES: &[&str] = &["module", "shared"];
 
 /// Counts that move only when the emitter's output does.
 fn shape(ir: &str) -> (usize, usize, usize, usize) {
@@ -160,10 +169,11 @@ fn compile_cost_matches_the_golden() {
         let ir = ir_for_module(name);
         let (lines, calls, branches, defines) = shape(&ir);
         let (rounds, visits) = work_for_module(name);
+        let loads = loads_for_module(name);
         writeln!(
             modules,
             "{name} lines={lines} calls={calls} branches={branches} defines={defines} \
-             rounds={rounds} visits={visits}"
+             rounds={rounds} visits={visits} loads={loads}"
         )
         .expect("string write");
     }

@@ -52,6 +52,62 @@ fn main() {
     if target.contains("linux") {
         println!("cargo:rustc-link-arg-bin=kanso=-Wl,-z,norelro");
     }
+    dev_runtime(Path::new(&out), &target);
+}
+
+/// The dev tier's runtime object, compiled once here and shipped in the binary.
+///
+/// A dev build links the runtime as an object it keeps in the temp directory,
+/// and the first build in a fresh temp directory compiled it: 5.7 s of a
+/// 7.2 s cold `kanso build` of senro's pantry (kanso#2373). The compiler
+/// writes these bytes out instead when the key it computes names the same
+/// object, which is when the convention it probes matches the one compiled
+/// here (`prebuilt_preserve` says which) and no counters were asked for.
+///
+/// Compiling with `-DKANSO_PRESERVE_NONE` first is the probe: a clang without
+/// the attribute stops on `-Werror=unknown-attributes`, and the object is then
+/// compiled on the C convention. Without clang, or building for another
+/// machine, the file is empty and every build compiles the runtime as before.
+fn dev_runtime(out: &Path, target: &str) {
+    // The tier's flags live here, and the compiler reads them from what this
+    // writes, so the object shipped and the object a miss compiles agree.
+    const OPT: &str = "-O2";
+    std::fs::write(
+        out.join("runtime_dev_opt.rs"),
+        format!("/// The dev tier's runtime flags, from build.rs.\nconst DEV_RUNTIME_OPT: &[&str] = &[{OPT:?}];\n"),
+    )
+    .expect("the dev runtime's flags write");
+    let object = out.join("runtime_dev.o");
+    let preserve = out.join("runtime_dev_preserve");
+    let _ = std::fs::write(&object, b"");
+    let _ = std::fs::write(&preserve, b"0");
+    let host = std::env::var("HOST").unwrap_or_default();
+    if host != target || target.starts_with("wasm") {
+        return;
+    }
+    let source = out.join("runtime.c");
+    let ssse3: &[&str] = match target.starts_with("x86_64") {
+        true => &["-mssse3"],
+        false => &[],
+    };
+    let compile = |convention: &[&str]| {
+        std::process::Command::new("clang")
+            .arg(OPT)
+            .args(convention)
+            .args(ssse3)
+            .arg("-c")
+            .arg(&source)
+            .arg("-o")
+            .arg(&object)
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    if compile(&["-DKANSO_PRESERVE_NONE", "-Werror=unknown-attributes"]) {
+        let _ = std::fs::write(&preserve, b"1");
+    } else if !compile(&[]) {
+        let _ = std::fs::write(&object, b"");
+    }
 }
 
 /// The tags and doors of the runtime, as Rust.
