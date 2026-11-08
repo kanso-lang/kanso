@@ -15,9 +15,9 @@
 set -e
 old='                _ => (f.set_of(a) \& FAIL) | (f.set_of(b) \& FAIL) | infer::BOOL,'
 grep -qF '                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL,' \
-  src/codegen/emit.rs || {
+  src/codegen/operators.rs || {
   echo "the comparison phi's recorded set changed shape; this needs rewriting" >&2
   exit 1
 }
-sed -i "s@^$old\$@                _ => crate::infer::TOP,@" src/codegen/emit.rs
-grep -qF '                _ => crate::infer::TOP,' src/codegen/emit.rs
+sed -i "s@^$old\$@                _ => crate::infer::TOP,@" src/codegen/operators.rs
+grep -qF '                _ => crate::infer::TOP,' src/codegen/operators.rs
