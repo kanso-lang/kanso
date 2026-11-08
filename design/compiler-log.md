@@ -1635,13 +1635,16 @@ bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
 On CI, against the app-shaped entry corpus #2375 added for this change,
 `entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
 nothing to share pay for the cache's bookkeeping: `compile_instructions`
-rises 6,406, `library_instructions` 43,941, `compile_allocs` 16 and
-`compile_memory` 469 bytes, and the interpreter's run of its corpus, which
-loads modules too, 16 allocations and 344 peak bytes. Compiling in the tab
-moves both ways, 3,466 fewer instructions and 208 more peak bytes.
-`emit_instructions` falls 346 and the dev and release codegen rows move by
-677 and 108, which is the binary's layout: the shipped runtime object below
-made it larger. A cheaper key, the path's bytes in place of a
+rises 6,406 to 24,117,393, `library_instructions` 43,941 to 73,505,059,
+`compile_allocs` 16 to 13,956 and `compile_peak_bytes` 469 to 599,057. The
+interpreter's run of its corpus loads modules too: `interp_allocs` rises 16
+to 810,162 and `interp_peak_bytes` 344 to 1,366,487. Compiling in the tab
+moves both ways, 3,466 fewer instructions and
+`browser_compile_peak_bytes` up 208 to 856,339. `emit_instructions` falls
+346, `codegen_instructions_dev` falls 677 and
+`codegen_instructions_release` rises 108 to 372,025,856, which is the
+binary's layout: the shipped runtime object below made it larger. The
+module corpus mints `module_loads`, which reads 3. A cheaper key, the path's bytes in place of a
 `PathBuf`, and keeping a module only on its third request were both measured
 and dropped: neither brought those rows back, and the third request gave the
 pantry back 64 of its loads.
