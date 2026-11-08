@@ -1,0 +1,21 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# Each `.tpl` file becomes a function of its module, taking one value. geo
+# writes `area` for its circle, and nothing writes `perimeter`, so the call
+# the template makes is refused where the template wrote it.
+pub fn views p
+  list/fold p.modules [] (acc m -> list/concat acc (written m))
+
+fn written m
+  list/fold (keys m.files) [] (acc f -> added acc m.name f m.files[f])
+
+fn added acc _ _ none
+  acc
+
+fn added acc m f body
+  return acc if not text/ends_with? f ".tpl"
+  stem = text/join (text/split f ".tpl") ""
+  text = "# from {f}:1\npub fn {stem} c\n  \"{text/trim body}\"\n"
+  push acc (derive/define m text)
