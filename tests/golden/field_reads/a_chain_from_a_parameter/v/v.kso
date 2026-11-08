@@ -1,0 +1,6 @@
+# Reads a field of a record held in a record it was handed.
+pub fn by p
+  "{p.title} by {p.author.name}"
+
+pub fn first_by ps
+  ps[1].author.name

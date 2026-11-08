@@ -64,3 +64,24 @@ fn a_field_read_in_an_import_leaves_the_importers_names_its_own() {
         );
     }
 }
+
+/// A module reads a field of a record held in a record it was handed:
+/// `p.author.name`, and `ps[1].author.name` through an index. Only a read
+/// whose base was a parameter itself was left to the program, so the inner
+/// read was refused in the module that wrote it, and a kata template could
+/// not show a post's author's name. Watched red: "no record type has a field
+/// `name` (module a_chain_from_a_parameter/v)" on both engines.
+#[test]
+fn a_module_reads_through_a_record_it_was_handed() {
+    for engine in [&[][..], &["--interp"][..]] {
+        let mut args = vec!["run", "a_chain_from_a_parameter/main.kso"];
+        args.extend_from_slice(engine);
+        let done = kanso(&args);
+        assert_eq!(
+            String::from_utf8_lossy(&done.stdout),
+            "On tags by Ada\nSecond by Bob\nAda\n",
+            "{engine:?}: {}",
+            String::from_utf8_lossy(&done.stderr)
+        );
+    }
+}

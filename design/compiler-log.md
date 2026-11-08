@@ -1725,3 +1725,26 @@ code grows where the inline bitwise path now takes an operand that may be a
 word behind a tag test: `emitted_other_branches` reads 19,444 and
 `emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
 Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-08 — a module reads through a record it was handed
+
+A library may read a field that no type it can see declares, as long as the
+read's base is a parameter: the value came from the caller, and the program
+that imports the library answers for the field (the 2026-10-12 gavel on
+#1894). The check looked only one step back, so `p.author.name` was refused
+in the module that wrote it. `p.author` is not a parameter, and nothing in
+the module declares `name`. senro's kata hit this: a template could not show
+a post's author's name, and its README listed that as a limit.
+
+The check now follows a chain of field reads and indexes back to where it
+starts. `p.author.name` and `ps[1].author.name` are both left to the program,
+and the program still refuses a field no type in it declares, at the end of
+a chain as anywhere else. `tests/golden/field_reads/a_chain_from_a_parameter`
+runs on both engines, and `errors_module/a_field_chain_no_type_declares` pins
+the refusal of a misspelled last field. Main's binary refuses the first
+fixture with "no record type has a field `name`" on both engines.
+
+kata needed nothing of its own. The page as data already kept the inner
+record's fields that a template reads, so senro's `spec/runs/nested_reads`
+prints the same page three ways: rendered from the records, as data, and
+rendered from the data.
