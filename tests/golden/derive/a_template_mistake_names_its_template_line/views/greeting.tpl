@@ -1,1 +1,1 @@
-hello, {shout name}
+hello, {nmae}

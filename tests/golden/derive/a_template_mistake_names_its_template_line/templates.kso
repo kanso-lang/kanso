@@ -3,7 +3,7 @@ import "std/list"
 import "std/text"
 
 # Each `.tpl` file becomes a function of its module. The line above its
-# string names the template line it was written from, so a mistake in the
+# function names the template line it was written from, so a mistake in the
 # template is reported there as well as in the derived source.
 pub fn views p
   list/fold p.modules [] (acc m -> list/concat acc (written m))
@@ -17,5 +17,5 @@ fn added acc _ _ none
 fn added acc m f body
   return acc if not text/ends_with? f ".tpl"
   stem = text/join (text/split f ".tpl") ""
-  text = "pub fn {stem} name\n  # from {f}:1\n  \"{text/trim body}\"\n"
+  text = "# from {f}:1\npub fn {stem} name\n  \"{text/trim body}\"\n"
   push acc (derive/define m text)

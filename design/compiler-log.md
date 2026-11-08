@@ -1664,21 +1664,20 @@ and the span type stay as they were, and a derivation that writes no such
 comment gets the message it got before. The quote of the derived line stays,
 because it shows what kanso read.
 
-One refusal could not quote derived source at all. A call to a name no
-module writes for a type it owns, the travelling-call check in
-`lib/travel.rs`, read the file it quoted from disk, and a derived file is
-not there. It now reads the text a derivation wrote first, as the merged
-check's refusals already did.
-
 `tests/golden/derive/a_template_mistake_names_its_template_line` writes a
-template that calls `shout`, which nothing defines, and its golden holds the
-quoted line and `= written from …/views/greeting.tpl:1` on both engines.
-Main's binary printed the header alone, with neither the quote nor the note.
+template that misspells `name`, under one `# from` comment above the
+function. Both of its refusals, the unused parameter at the header and the
+unknown name in the body, carry `= written from …/views/greeting.tpl:1` on
+both engines. Main's binary prints them without the note.
 
-The browser corpus has no diagnostics, so neither new path runs there, yet
-the first push read `browser_compile_instructions` at 352,264,417, two above
-main's 352,264,415. Reverting the travelling-call change alone restored 415.
-Inlined, the disk-or-derived lookup changed how rustc compiled the function
-around it, which runs on every compile. The lookup now sits in a cold,
-out-of-line `quoted_source`, and the row reads 352,264,411, four below main,
-measured here with the rustc the golden names.
+Tried and dropped: one refusal quotes nothing in derived source. The
+travelling-call check in `lib/travel.rs` ("no module in this program writes
+`shout` for a type it owns") reads the file it quotes from disk, and a
+derived file is not there. Reading the derivation's text first fixes it, but
+the change moved rows whose corpora never run that code. Inlined, it
+read `browser_compile_instructions` at 352,264,417 against main's
+352,264,415, and reverting it alone restored 415. Out of line in a cold
+helper, the browser row fell to 352,264,411 and `entry_instructions` rose
+from 156,082,962 to 156,082,993, which together read below the welfare
+floor. The fix waits for a change to that function that pays for its own
+layout.

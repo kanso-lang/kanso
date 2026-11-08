@@ -13,7 +13,7 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move.
 # measured-on rustc=1.98.1
-browser_compile_instructions=352264411
+browser_compile_instructions=352264415
 browser_compile_peak_bytes=856339
 browser_run_instructions=78426179
 browser_run_peak_bytes=1572864
