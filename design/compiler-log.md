@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — gavel: a pool is a channel without order
-
-#2264 asked how fibers hand each other a value, since a connection pool needs
-one fiber to wait for another to give a connection back. Clay ruled for a
-pool: "a generic structure similar to a channel which is basically just a
-channel without order and doesn't care particularly about connections or
-anything like that. it can be used on any arbitrary thing."
-
-- A pool holds up to n values of any kind. Taking waits while it is empty and
-  answers some value in it, with no order promised. Putting waits while it is
-  full. Both are effects, parked and woken by the scheduler that #2263
-  reworked.
-- No order is promised to the program, but the scheduler stays deterministic,
-  so a program takes values in the same order on every run and every engine.
-- FIFO channels are not added. A later need for them comes back as its own
-  question.
-- The public names go to Clay as one question before they ship: #2274, which
-  recommends `std/pool` with `make`, `take`, `give` and `with`.
-
-Owed: the pool on both engines and in the tab; goldens for a take waiting on
-an empty pool, a give waiting on a full one, the hand-out order on every
-engine, and a deadlock reported rather than hung; and senro's per-request
-connections moved onto a pool.
-
 ## 2026-11-01 — gavel: a server rescues its handler's failure in library code
 
 #2252 proposed endpoint policy as an ordinary function, `on_failure report`.
@@ -1668,3 +1644,27 @@ read the same. `tests/golden/micro/a_list_with_comments_spans_lines` holds a
 short list and a short map, each with a comment above every element, and
 prints `["<p>" "</p>"] { "a":1 "b":2 }` on every engine; main's binary
 refuses both literals. Appendix C says so beside the width rule.
+
+## 2026-11-08 — the travelling-call refusal quotes derived source
+
+#2380 rules that a diagnostic falling in a `.derived.kso` file carries
+`= written from <file>:<line>`. One refusal still missed it: the
+travelling-call check in `lib/travel.rs` ("no module in this program writes
+`perimeter` for a type it owns"). It read the file it quotes from disk, and a
+derived file is not there, so in derived source it printed the header alone.
+It now renders through `render_merged`, which every merged-check refusal
+already uses and which reads a derivation's text before the disk. The line is
+quoted and the note follows.
+
+`tests/golden/derive/a_traveling_call_in_a_template_names_its_template_line`
+writes a template that calls `perimeter` on a circle whose module writes only
+`area`. Both engines quote `views.derived.kso:3` and name `views/one.tpl:1`;
+main's binary prints the header alone.
+
+No corpus reaches this refusal, and the change still moves two rows through
+layout, as CI measured them: `browser_compile_instructions` rose from
+352,264,415 to 352,264,424 and `entry_instructions` from 156,082,962 to
+156,082,965. Every other row read as before. #2382 dropped the fix to keep
+the floor, and that was the wrong call: the refusal is part of what #2380
+ruled, and a ruled feature's cost lowers the floor by exactly what it
+measures. The floor moves by that amount here (#2383).

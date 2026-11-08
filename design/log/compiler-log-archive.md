@@ -113043,3 +113043,27 @@ rise by the set-aside check and the layout it moves: compile_instructions
 entry_instructions 1,961 to 86,798,967. Welfare falls 0.000004, and the
 floor is lowered by exactly that to 95.61270397: the feature is #2186's
 ruling that derived declarations join the program as if written.
+
+## 2026-11-01 — gavel: a pool is a channel without order
+
+#2264 asked how fibers hand each other a value, since a connection pool needs
+one fiber to wait for another to give a connection back. Clay ruled for a
+pool: "a generic structure similar to a channel which is basically just a
+channel without order and doesn't care particularly about connections or
+anything like that. it can be used on any arbitrary thing."
+
+- A pool holds up to n values of any kind. Taking waits while it is empty and
+  answers some value in it, with no order promised. Putting waits while it is
+  full. Both are effects, parked and woken by the scheduler that #2263
+  reworked.
+- No order is promised to the program, but the scheduler stays deterministic,
+  so a program takes values in the same order on every run and every engine.
+- FIFO channels are not added. A later need for them comes back as its own
+  question.
+- The public names go to Clay as one question before they ship: #2274, which
+  recommends `std/pool` with `make`, `take`, `give` and `with`.
+
+Owed: the pool on both engines and in the tab; goldens for a take waiting on
+an empty pool, a give waiting on a full one, the hand-out order on every
+engine, and a deadlock reported rather than hung; and senro's per-request
+connections moved onto a pool.
