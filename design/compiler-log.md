@@ -1684,3 +1684,7 @@ now the current directory. `tests/derivations_run_beside.rs` runs each case in
 run from the repository root, cannot; main's binary refuses
 `a_derived_arm_imports_beside_a_bare_module` with "cannot resolve import
 \"../words\"".
+
+`browser_compile_instructions` rose from 352,264,424 to 352,264,564. The
+browser corpus derives nothing, so the 140 instructions are the new code in
+the compiler the tab runs. Every other row is where it was.
