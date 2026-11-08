@@ -113011,3 +113011,35 @@ work_readbench to 4,584,342, work_escapebench to 40,309,377, work_basket to
 clang compiles the larger runtime in codegen_instructions_dev 116,951,400
 and codegen_instructions_release 371,843,999, and entry_instructions reads
 86,797,006.
+
+## 2026-11-01 — a module may name a function a derivation writes into it
+
+#2265. An entry that derives loads its dependencies twice: once to describe
+them to its derivations, and again with the arms those derivations defined,
+each joined to its module as one more file. The first load refused any name
+nothing had written yet. A module could still call such a name on an
+argument, because a call on a value a function was handed travels to the
+module that owns the value's type and is resolved later. Passed as a value,
+as in `list/map rows post_from`, the same name was refused. senro's
+guestbook hit it with a reader `models/tables` could have written for each
+model.
+
+The first load now sets an unknown name aside instead of refusing it, and
+records that it did. The second load runs whenever a name was set aside,
+even when no derivation defined anything, and refuses whatever is still
+unknown with the same words as before. An entry that derives nothing loads
+once, as it did.
+
+Two goldens in tests/golden/derive pin it on both engines:
+a_module_calls_a_name_its_derivation_defines prints `["hello" "again"]`,
+and a_module_calls_a_name_nothing_defines is refused at `post_form` with
+the message an unknown name always had. With the setting-aside turned off,
+the first goes red, refused as an unknown name at `post_from`.
+
+Rows, from CI on the tree merged with #2268. The tab compiles its corpus in
+browser_compile_instructions 349,228,936, 367 fewer. The compiler's own rows
+rise by the set-aside check and the layout it moves: compile_instructions
+1,098 to 24,098,635, library_instructions 1,097 to 72,619,875 and
+entry_instructions 1,961 to 86,798,967. Welfare falls 0.000004, and the
+floor is lowered by exactly that to 95.61270397: the feature is #2186's
+ruling that derived declarations join the program as if written.

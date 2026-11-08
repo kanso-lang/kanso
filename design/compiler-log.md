@@ -20,38 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — a module may name a function a derivation writes into it
-
-#2265. An entry that derives loads its dependencies twice: once to describe
-them to its derivations, and again with the arms those derivations defined,
-each joined to its module as one more file. The first load refused any name
-nothing had written yet. A module could still call such a name on an
-argument, because a call on a value a function was handed travels to the
-module that owns the value's type and is resolved later. Passed as a value,
-as in `list/map rows post_from`, the same name was refused. senro's
-guestbook hit it with a reader `models/tables` could have written for each
-model.
-
-The first load now sets an unknown name aside instead of refusing it, and
-records that it did. The second load runs whenever a name was set aside,
-even when no derivation defined anything, and refuses whatever is still
-unknown with the same words as before. An entry that derives nothing loads
-once, as it did.
-
-Two goldens in tests/golden/derive pin it on both engines:
-a_module_calls_a_name_its_derivation_defines prints `["hello" "again"]`,
-and a_module_calls_a_name_nothing_defines is refused at `post_form` with
-the message an unknown name always had. With the setting-aside turned off,
-the first goes red, refused as an unknown name at `post_from`.
-
-Rows, from CI on the tree merged with #2268. The tab compiles its corpus in
-browser_compile_instructions 349,228,936, 367 fewer. The compiler's own rows
-rise by the set-aside check and the layout it moves: compile_instructions
-1,098 to 24,098,635, library_instructions 1,097 to 72,619,875 and
-entry_instructions 1,961 to 86,798,967. Welfare falls 0.000004, and the
-floor is lowered by exactly that to 95.61270397: the feature is #2186's
-ruling that derived declarations join the program as if written.
-
 ## 2026-11-01 — gavel: a pool is a channel without order
 
 #2264 asked how fibers hand each other a value, since a connection pool needs
@@ -1681,3 +1649,22 @@ helper, the browser row fell to 352,264,411 and `entry_instructions` rose
 from 156,082,962 to 156,082,993, which together read below the welfare
 floor. The fix waits for a change to that function that pays for its own
 layout.
+
+## 2026-11-08 — a list with a comment among its elements spans lines
+
+A list or map spans lines only when it cannot fit on one (the 2026-10-13
+gavel on #1882). The width check measured a span with its comment lines
+dropped, so a short list with a comment above an element was refused as
+fitting on one line, and the line it asked for cannot be written: a comment
+runs to the end of its line. senro's kata hit this once each literal sat
+under its own `# from` comment (#2380). Two short literals in one `joined [ ]`
+were refused, and a template like that could not compile.
+
+The lexer now notes when a span holds a comment line, and such a span skips
+the fits-on-one-line refusal; a nested span's comment counts for the span
+around it. A span with no comment is judged as before, so the corpus's two
+refusals, `a_list_that_fits_on_one_line_does_not_span` and its map twin, still
+read the same. `tests/golden/micro/a_list_with_comments_spans_lines` holds a
+short list and a short map, each with a comment above every element, and
+prints `["<p>" "</p>"] { "a":1 "b":2 }` on every engine; main's binary
+refuses both literals. Appendix C says so beside the width rule.
