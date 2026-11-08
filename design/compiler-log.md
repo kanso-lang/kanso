@@ -20,43 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — the corpus forks
-
-Corpus first, before #2268. #2268 makes a server's loop hold what one
-request holds, and with CI's rows its welfare read just under the floor: no
-benchmark forked, so the objective saw the cost of the new runtime code and
-none of the memory the change saves. This adds that shape on main, so the
-fix is measured against it.
-
-`bench/runbench/runbench/forked` runs 16,000 passes of a loop that forks a
-small handler beside the rest of the loop, the way a server forks per
-accept. `bench/interp_corpus` runs the same loop for 2,000 passes before it
-prints. Neither printed line moves.
-
-Rows, from CI where they are instructions. runbench rose to work_runbench
-892,161,749, the shape's 45,830,571 instructions or 5.14% of the program,
-and its text row to 849,809. Its arena grew from 4 blocks to 15:
-arena_peak_bytes 14,680,064, and spare_peak_bytes 14,155,792. The
-interpreted corpus rose to interp_instructions 622,671,293, interp_allocs
-814,155 and interp_peak_bytes 1,953,942. In the tab, the corpus reads
-browser_compile_instructions 349,229,303, browser_compile_peak_bytes
-855,995, browser_run_instructions 79,318,152 and browser_run_peak_bytes
-3,801,088, measured with the rustc 1.98.1 the golden names. runbench's
-emitted rows grew by the shape's 15 functions. The floor is re-based to what
-these rows score, since the change is only to what is measured.
-
-The run program's other counters move with the 16,000 groups and the
-handlers' pages: run_allocs 1,930,504, run_alloc_bytes 237,915,969,
-run_arena_blocks 15, run_arena_peak_bytes 14,680,064, run_perm_allocs 131,
-run_beat_iters 211,300, run_survive_slots 4,703, run_push_mut_fast
-1,195,311, run_push_mut_slow 1,645,465, run_bytes_malloc 7,868,
-run_str_scans 19,402, run_str_scan_bytes 18,667,266, run_buf_reuse 157,
-run_ten_frees 0, run_ten_handups 0, run_sh_str 17,954,080, run_sh_buf
-92,421,040 and run_spare_peak_bytes 14,155,792. runbench's 15 new functions
-take the emitted rows of the other benchmarks to emitted_other_defines
-2,327, emitted_other_calls 21,198, emitted_other_branches 18,260 and
-emitted_other_lines 174,304, and the text rows sum to text 5,730,080.
-
 ## 2026-11-01 — a server's loop holds what one request holds
 
 The second half of #2263. A server forks each request's handler beside the
@@ -1730,3 +1693,26 @@ before and after. Five ratchet mutations patched lines that moved, and each
 now names the file its line lives in. `tests/native_layout_on_wasm32.rs`
 reads the two new files when it looks for the lines the wasm32 table
 rewrites.
+
+## 2026-11-08 — a module reads through a record it was handed
+
+A library may read a field that no type it can see declares, as long as the
+read's base is a parameter: the value came from the caller, and the program
+that imports the library answers for the field (the 2026-10-12 gavel on
+#1894). The check looked only one step back, so `p.author.name` was refused
+in the module that wrote it. `p.author` is not a parameter, and nothing in
+the module declares `name`. senro's kata hit this: a template could not show
+a post's author's name, and its README listed that as a limit.
+
+The check now follows a chain of field reads and indexes back to where it
+starts. `p.author.name` and `ps[1].author.name` are both left to the program,
+and the program still refuses a field no type in it declares, at the end of
+a chain as anywhere else. `tests/golden/field_reads/a_chain_from_a_parameter`
+runs on both engines, and `errors_module/a_field_chain_no_type_declares` pins
+the refusal of a misspelled last field. Main's binary refuses the first
+fixture with "no record type has a field `name`" on both engines.
+
+kata needed nothing of its own. The page as data already kept the inner
+record's fields that a template reads, so senro's `spec/runs/nested_reads`
+prints the same page three ways: rendered from the records, as data, and
+rendered from the data.

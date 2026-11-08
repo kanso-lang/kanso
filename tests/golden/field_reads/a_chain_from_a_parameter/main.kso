@@ -1,0 +1,7 @@
+import "./posts"
+import "./v"
+import "std/list"
+import "std/text"
+
+print (text/join (list/to_list (list/map posts/all v/by)) "\n")
+print (v/first_by posts/all)

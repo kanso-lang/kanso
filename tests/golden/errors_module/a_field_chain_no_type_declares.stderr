@@ -1,0 +1,4 @@
+error[name]: no record type has a field `nmae`
+  --> tests/golden/errors_module/a_field_chain_no_type_declares/v/v.kso:3:11
+   3 |   p.author.nmae
+                 ^
