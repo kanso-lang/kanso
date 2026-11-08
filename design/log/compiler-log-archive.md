@@ -113067,3 +113067,18 @@ Owed: the pool on both engines and in the tab; goldens for a take waiting on
 an empty pool, a give waiting on a full one, the hand-out order on every
 engine, and a deadlock reported rather than hung; and senro's per-request
 connections moved onto a pool.
+
+## 2026-11-01 — gavel: a server rescues its handler's failure in library code
+
+#2252 proposed endpoint policy as an ordinary function, `on_failure report`.
+Clay declined it as a language feature. senro and the application are
+separate hakos, and rescue works across hakos, so senro's serve loop can
+already rescue a handler's failure and answer 500. Clay: "if the server code
+itself needed to rescue, then you should have just been using some
+alternative to exceptions in the first place because you don't want to use
+exceptions for control flow." A failure a hako expects to handle itself is a
+value (`none` or a marker), not a boxed err. A plain program's top-level
+report is unchanged.
+
+Owed in senro: the serve loop rescues a handler's failure and answers 500,
+with a spec showing the server keeps serving afterwards.

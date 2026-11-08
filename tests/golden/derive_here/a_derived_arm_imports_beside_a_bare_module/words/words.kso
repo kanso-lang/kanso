@@ -1,0 +1,2 @@
+# A word the derived arm reads, in a module the entry does not import.
+pub word = "hello"

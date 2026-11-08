@@ -1,0 +1,3 @@
+# A module of one file beside the entry, which a derivation writes into.
+pub fn named x
+  "{x}"

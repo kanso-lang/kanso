@@ -1,0 +1,4 @@
+error[arity]: no 1-argument arm of `m/f` (arms take 2, 3) (module tests/golden/derive/a_module_calls_an_arm_no_derivation_writes/caller)
+  --> tests/golden/derive/a_module_calls_an_arm_no_derivation_writes/caller/caller.kso:4:3
+   4 |   m/f x
+         ^

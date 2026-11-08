@@ -1,0 +1,7 @@
+import "std/derive"
+
+# Writes a two-argument arm of `m/f`. The caller's module calls a
+# one-argument arm, which neither the module nor the derivation writes, so
+# the call is refused once the derivation's arms are in place.
+pub fn shorter _
+  [(derive/define "m" "pub fn f a b\n  \"short \{a} \{b}\"\n")]
