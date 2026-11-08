@@ -1674,3 +1674,11 @@ check's refusals already did.
 template that calls `shout`, which nothing defines, and its golden holds the
 quoted line and `= written from …/views/greeting.tpl:1` on both engines.
 Main's binary printed the header alone, with neither the quote nor the note.
+
+The browser corpus has no diagnostics, so neither new path runs there, yet
+the first push read `browser_compile_instructions` at 352,264,417, two above
+main's 352,264,415. Reverting the travelling-call change alone restored 415.
+Inlined, the disk-or-derived lookup changed how rustc compiled the function
+around it, which runs on every compile. The lookup now sits in a cold,
+out-of-line `quoted_source`, and the row reads 352,264,411, four below main,
+measured here with the rustc the golden names.

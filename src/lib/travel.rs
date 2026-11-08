@@ -423,16 +423,22 @@ fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
             ),
             *span,
         );
-        // A derived file is not on disk, and the text a derivation wrote is
-        // kept for its refusals to quote.
-        let source =
-            handed_text(file).or_else(|| std::fs::read_to_string(&**file).ok()).unwrap_or_default();
+        let source = quoted_source(file);
         rendered.push_str(&diag::render(&[d], file, &source));
     }
     match rendered.is_empty() {
         true => Ok(()),
         false => Err(rendered),
     }
+}
+
+/// The text a travelling-call refusal quotes. A derived file is not on disk,
+/// and the text a derivation wrote is kept for its refusals to quote. Kept out
+/// of line: only a refusal reads it, and inlined it moved the browser row.
+#[cold]
+#[inline(never)]
+fn quoted_source(file: &str) -> String {
+    handed_text(file).or_else(|| std::fs::read_to_string(file).ok()).unwrap_or_default()
 }
 
 /// Renames each shaded call sent to a group, visiting only the declarations
