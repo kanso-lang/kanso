@@ -1691,3 +1691,11 @@ Three variants were measured and declined.
   once boxed parameters were excluded.
 - A 40-line cap misses `spun`, which is about 50 lines, and PBKDF2 keeps
   the whole cost. 80 is the smallest cap measured that reaches it.
+
+On CI, `runbench_dev` falls from 2,822,091,163 to 2,774,662,240. The
+compile side pays a little: `emit_instructions` rises to 5,630,728 and
+`browser_compile_instructions` to 351,180,151. The tab compiles through the
+same dev emitter, so it runs the check, and its translator ignores the
+attribute, so its run gains nothing. That reading of the browser row has not
+been isolated. `codegen_instructions_dev` and `codegen_instructions_release`
+do not move. Welfare rises from 95.07 to 95.08 and is banked.
