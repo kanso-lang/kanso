@@ -219,7 +219,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             idx = span.next;
             let one_line =
                 indent + content.chars().count() + span.one_line.chars().count() + 1 + braced(open);
-            if span.whole && one_line <= MAX_WIDTH {
+            if span.whole && !span.commented && one_line <= MAX_WIDTH {
                 let what = if open == b'[' { "list" } else { "map" };
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -609,6 +609,9 @@ struct Spanned {
     /// False once the span was refused for its shape; its one-line form is
     /// then a guess and nobody should be told it fits.
     whole: bool,
+    /// True when a comment sits among the elements. A comment runs to the
+    /// end of its line, so such a span cannot be written on one line.
+    commented: bool,
 }
 
 fn gather_span(
@@ -627,6 +630,7 @@ fn gather_span(
     let mut tokens = Vec::new();
     let mut parts: Vec<String> = Vec::new();
     let mut whole = true;
+    let mut commented = false;
     let mut at = from;
     while at < raws.len() {
         let raw = raws[at];
@@ -660,7 +664,7 @@ fn gather_span(
         }
         if content == closer && found == indent {
             tokens.push((close, Span::at(number, found + 1), (found + 2) as u32));
-            return Spanned { tokens, next: at + 1, one_line: parts.join(" "), whole };
+            return Spanned { tokens, next: at + 1, one_line: parts.join(" "), whole, commented };
         }
         // Anything at or left of the opening indent ends the span, and so
         // does a closing bracket written deeper than it belongs.
@@ -674,7 +678,7 @@ fn gather_span(
                 Span::at(number, found + 1),
             ));
             let next = if found <= indent && !content.starts_with(closer) { at } else { at + 1 };
-            return Spanned { tokens, next, one_line: parts.join(" "), whole: false };
+            return Spanned { tokens, next, one_line: parts.join(" "), whole: false, commented };
         }
         at += 1;
         if found != inner {
@@ -689,6 +693,7 @@ fn gather_span(
             continue;
         }
         if content.starts_with('#') {
+            commented = true;
             continue;
         }
         if closes_early(content) {
@@ -700,7 +705,13 @@ fn gather_span(
                 ),
                 Span::at(number, found + content.chars().count()),
             ));
-            return Spanned { tokens, next: at, one_line: parts.join(" "), whole: false };
+            return Spanned {
+                tokens,
+                next: at,
+                one_line: parts.join(" "),
+                whole: false,
+                commented,
+            };
         }
         // An element line that itself ends by opening a bracket spans too.
         let nested = span_opener(content);
@@ -722,7 +733,7 @@ fn gather_span(
                 + span.one_line.chars().count()
                 + 1
                 + braced(inner_open);
-            if span.whole && fits <= MAX_WIDTH {
+            if span.whole && !span.commented && fits <= MAX_WIDTH {
                 let what = if inner_open == b'[' { "list" } else { "map" };
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -734,6 +745,7 @@ fn gather_span(
                 ));
             }
             whole &= span.whole;
+            commented |= span.commented;
             text.push_str(&span.one_line);
             text.push_str(if inner_open == b'[' { "]" } else { "}" });
             element.extend(span.tokens);
@@ -768,7 +780,7 @@ fn gather_span(
         ),
         Span::at(open_line, indent + 1),
     ));
-    Spanned { tokens, next: at, one_line: parts.join(" "), whole: false }
+    Spanned { tokens, next: at, one_line: parts.join(" "), whole: false, commented }
 }
 
 /// One meaning, one rendering: a statement split across `.` continuation

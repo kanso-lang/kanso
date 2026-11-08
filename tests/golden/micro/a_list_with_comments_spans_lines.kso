@@ -1,0 +1,19 @@
+# A list spans lines only when it cannot fit on one (ruled 2026-10-13,
+# #1882), and a list that holds a comment cannot: a comment runs to the end
+# of its line. These two are short enough for one line without their
+# comments, and each element keeps the comment above it.
+parts = [
+  # the opening tag
+  "<p>"
+  # the closing tag
+  "</p>"
+]
+
+pairs = {
+  # the first
+  "a":1
+  # the second
+  "b":2
+}
+
+pub play = print "{parts} {pairs}"
