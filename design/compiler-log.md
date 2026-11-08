@@ -1714,11 +1714,13 @@ written.
 
 On CI, against main after #2374, the run rows fall: `digestbench` from
 3,288,947 to 3,108,282 instructions, `runbench` from 915,653,371 to
-913,657,054 and `runbench_dev` from 2,822,091,163 to 2,811,021,533. The
+913,657,054 and `runbench_dev` from 2,822,091,163 to 2,811,021,533; with
+#2378's dev fold also on main, `runbench_dev` reads 2,763,752,866. The
 compile rows pay for the wider sets and the rules that read them:
 `compile_instructions` rises to 24,152,651, `entry_instructions` to
-156,082,962, `library_instructions` to 73,608,656, `emit_instructions` to
-5,624,872 and `browser_compile_instructions` to 351,647,580. The emitted
+156,082,962 and `library_instructions` to 73,608,656. On the tree merged with
+#2378, `emit_instructions` rises from 5,630,728 to 5,642,485 and
+`browser_compile_instructions` from 351,180,151 to 352,264,415. The emitted
 code grows where the inline bitwise path now takes an operand that may be a
 word behind a tag test: `emitted_other_branches` reads 19,444 and
 `emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
