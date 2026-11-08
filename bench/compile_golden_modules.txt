@@ -3,9 +3,15 @@
 # single file with no imports, which leaves the loader, enrollment and
 # qualification unmeasured there.
 #
+# `loads` counts the modules the compile compiled. `shared` imports two local
+# modules that both import a third, and all three import std/text, so a
+# loader that compiles a module once per import reads as more loads than
+# modules (kanso#2373).
+#
 # Kept apart from that file because the welfare index sums its rows, and a
 # sample added there would read as a regression the size of the sample.
 #
 # Regenerate with KANSO_REGEN_COMPILE_GOLDEN=1, which keeps this header, and
 # say in design/compiler-log.md which way each row went and why.
-module lines=1163 calls=109 branches=80 defines=29 rounds=4 visits=1449
+module lines=1163 calls=109 branches=80 defines=29 rounds=4 visits=1449 loads=3
+shared lines=1482 calls=168 branches=96 defines=35 rounds=8 visits=2190 loads=11

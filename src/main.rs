@@ -1678,7 +1678,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
 /// cached optimized runtime object, so the runtime's cost is paid once per
 /// runtime version, not per build.
 fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
-    let runtime_obj = cached_runtime_object("dev", &["-O2"])?;
+    let runtime_obj = cached_runtime_object("dev", DEV_RUNTIME_OPT)?;
     std::process::Command::new("clang")
         .arg("-O0")
         // Gold where it links, lld where it does not: `dev_link_args` has
@@ -2251,6 +2251,13 @@ fn cached_object(
     if object.exists() {
         return Ok(object);
     }
+    if let Some(bytes) = prebuilt(profile, recipe, opt, preserve, counting) {
+        let staging =
+            std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
+        std::fs::write(&staging, bytes)?;
+        std::fs::rename(&staging, &object)?;
+        return Ok(object);
+    }
     // The source is written under this process's name and renamed onto the
     // shared one. Writing the shared path directly truncated it under any
     // clang another build had reading it, and clang died of SIGBUS. A rename
@@ -2290,6 +2297,27 @@ fn cached_object(
     }
     std::fs::rename(&staging, &object)?;
     Ok(object)
+}
+
+include!(concat!(env!("OUT_DIR"), "/runtime_dev_opt.rs"));
+
+/// The dev runtime object build.rs compiled, when it is the one asked for.
+///
+/// It is the object `cached_object` would compile for the dev tier with no
+/// counters, on the convention build.rs's clang took, so it is handed out under
+/// the same key; any other recipe, or a probe that answered differently here,
+/// compiles as before. Empty when build.rs had no clang.
+fn prebuilt(
+    profile: &str,
+    recipe: Option<(u64, u64)>,
+    opt: &[&str],
+    preserve: bool,
+    counting: bool,
+) -> Option<&'static [u8]> {
+    const OBJECT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime_dev.o"));
+    const PRESERVE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/runtime_dev_preserve"));
+    let wanted = profile == "dev" && recipe.is_none() && opt == DEV_RUNTIME_OPT && !counting;
+    (wanted && !OBJECT.is_empty() && preserve == (PRESERVE == b"1")).then_some(OBJECT)
 }
 
 /// `kanso test <target>`: a test file, or a directory whose test files all

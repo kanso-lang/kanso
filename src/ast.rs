@@ -572,7 +572,7 @@ pub struct Derive {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Program {
     pub fns: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,

@@ -1,0 +1,7 @@
+import "std/list"
+import "std/text"
+
+# Two modules import this one, and each of the three imports std/text, so a
+# loader that compiles a module once per import compiles it more than once.
+pub fn framed s
+  text/join (list/to_list (list/map ["[" s "]"] (p -> p))) ""

@@ -20,64 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — a connection can be secured with TLS
-
-#2178 owes TLS through the runtime before the first hosted deploy: OpenSSL
-natively, a Rust TLS library in the interpreter, and no general way to call
-C. `net/secured c host` runs a TLS handshake on a connection already open and
-answers it, so reads, writes and close go through TLS from then on. It
-upgrades rather than dials because Postgres asks for TLS inside a plain
-connection: the client sends an SSLRequest, reads `S`, and starts the
-handshake on the same socket. `net/dial_tls host at` is a dial and then
-`secured`, for a protocol such as HTTPS that speaks TLS from its first byte.
-
-Both engines check the server's certificate for the host against the
-machine's trusted roots, and `SSL_CERT_FILE` replaces them on both: OpenSSL's
-default paths read it, and so does rustls-native-certs. A host written as an
-address is checked against the certificate's addresses and sent no server
-name, which is what rustls does and what OpenSSL does once it is told the
-host is an address. A refusal of any kind reads "cannot secure the
-connection to host", with nothing from either library in it.
-
-Native code opens libssl with `dlopen` the first time a program secures a
-connection and looks up the sixteen calls it makes by name. Linking it would
-have put libssl in every binary's start-up and in its library list, and most
-programs never speak TLS. A machine with no OpenSSL 3 refuses the handshake
-with the same words. The interpreter keeps each connection's rustls session
-beside its stream. The runtime's wasm build and the tab have no sockets and
-refuse as they already did.
-
-tests/a_program_secures_a_connection.rs plays a server with rustls and a
-certificate for `localhost` signed by a test authority whose key was thrown
-away after signing (`tests/fixtures/tls`). Both engines dial it, secure the
-connection, say hello and print the answer. Trusting only the server's own
-certificate, and naming another host, are each refused with the same words
-on both engines. A server that closes without TLS's close_notify ends the
-conversation the way a plain close does, with an empty read on both engines;
-rustls reports that close as an error, and with the error passed through the
-interpreter's case failed. senro's `pg/connect_tls`, run against Postgres 16
-serving the same certificate, logged in over TLS 1.3 on both engines, and
-the server's `pg_stat_ssl` agreed.
-
-Every program links the runtime, so each benchmark's text grows by 2,544
-bytes and the text row sums to 5,705,712. No benchmark secures a connection,
-and the instruction rows move by about a thousand each where the larger
-runtime is loaded: work_basket 18,296,044, work_digestbench 4,104,967,
-work_encodebench 2,335,340,353, work_escapebench 40,309,372, work_indexbench
-1,888,158, work_jsonbench 549,338,235, work_livebench 938,654,972,
-work_oneshot 9,979,521, work_pendbench 154,124,736, work_readbench 4,584,375
-and work_scanbench 268,194. Three move further, by layout: deepbench
-198,242,376 -> 197,859,562, runbench 846,388,267 -> 846,337,653 and widebench
-28,700,882 -> 28,686,318. The compiler carries rustls and grows, and its rows move with
-the binary: compile_instructions 24,096,607 -> 24,097,537,
-entry_instructions 86,792,132 -> 86,793,470, library_instructions
-72,615,607 -> 72,618,778, emit_instructions 5,598,851 -> 5,598,399,
-codegen_instructions_dev 116,821,778 -> 116,926,477,
-codegen_instructions_release 371,573,350 -> 371,827,207, interp_instructions
-571,786,909 -> 571,683,168, browser_compile_instructions 343,289,570 ->
-343,307,533 and browser_run_instructions 64,598,060 -> 64,598,061. The
-floor follows under the rule for a feature a ruling requires.
-
 ## 2026-10-30 — the emitter's word helpers move into codegen/words.rs
 
 The cleanup owed after #2251 to #2258. The free functions between ir_scan.rs
@@ -1653,3 +1595,78 @@ The entry calls one function from each. On the compiler of this tree,
 corpus change and not a compiler change, so welfare's `compile_instructions`
 baseline is scaled by the same ratio and the floor holds, as #2269 did for
 the forking shape. The fix this baselines for is kanso#2374.
+
+## 2026-11-07 — each module is compiled once per load (#2373)
+
+`kanso run` of senro's pantry took 8.4 s to answer its first request after a
+container restart. `kanso check .` alone took 2.0 s and 8,741,148,257
+instructions. `load_dependencies` compiled a module for every import that
+reached it, and every import inside that module the same way, so a module
+cost one compile per path through the import graph. `KANSO_PHASES=1` printed
+1,094 `load` lines for the pantry's 27 modules: std/text 235 times, std/list
+212, std/bits 144, senro's pg 36.
+
+The corpus could not see it. Every compile sample was one file, the module
+sample imports one module, and `compile_instructions` checks `lib/json`,
+which loads each module once. The first commit adds `kanso::module_loads()`,
+a `loads` column in `bench/compile_golden_modules.txt`, and the sample
+`tests/golden/compile/shared`: an entry importing two modules that both import
+a third, all three importing std/text. Before the fix it read `loads=11` for 6
+modules, in CI run 42413285691.
+
+`compile_module_inner` now keeps a module the second time an import asks for
+it and hands later importers a copy. The key is the canonical path,
+`require_entry`, whether the sources came embedded, and the flags an importer
+sets around a compile. A shipped std module is pruned against the words the
+program has read so far, and that set only grows, so its key also holds the
+set's size; a module from disk is not pruned and its key does not. The
+outermost `load_dependencies` empties the cache when it returns, which bounds
+it to one compile whether the root is an entry file or a directory.
+
+The first version kept every module on its first compile. That took the
+pantry to 96 loads and 0.75 s, but CI read `compile_instructions` at
+25,213,290 against 24,110,987 and `compile_memory` at 859,218 bytes against
+598,588. A module's program carries every declaration its imports brought in,
+so keeping one is a clone of its whole subtree, and `lib/json` imports each
+module once, so it paid every clone and used none. Keeping a module only on
+its second request costs a set of keys. Locally, callgrind reads `kanso check
+bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
+
+On CI, against the app-shaped entry corpus #2375 added for this change,
+`entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
+nothing to share pay for the cache's bookkeeping: `compile_instructions`
+rises 6,406 to 24,117,393, `library_instructions` 43,941 to 73,505,059,
+`compile_allocs` 16 to 13,956 and `compile_peak_bytes` 469 to 599,057. The
+interpreter's run of its corpus loads modules too: `interp_allocs` rises 16
+to 810,162 and `interp_peak_bytes` 344 to 1,366,487. Compiling in the tab
+moves both ways, 3,466 fewer instructions and
+`browser_compile_peak_bytes` up 208 to 856,339. `emit_instructions` falls
+346, `codegen_instructions_dev` falls 677 and
+`codegen_instructions_release` rises 108 to 372,025,856, which is the
+binary's layout: the shipped runtime object below made it larger. The
+module corpus mints `module_loads`, which reads 3. A cheaper key, the path's bytes in place of a
+`PathBuf`, and keeping a module only on its third request were both measured
+and dropped: neither brought those rows back, and the third request gave the
+pantry back 64 of its loads.
+
+The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
+1.94 s. Its IR is byte-identical, 2,314,435 bytes. `shared` still reads
+`loads=11`: each of its modules is asked for at most twice under one key, so
+nothing is handed out of the cache, and the rows match the corpus commit.
+
+A cold `kanso build` of the pantry took 7.2 s, and 5.7 s of it was clang
+compiling `runtime.c` for the dev tier into the temp directory, once per
+container. build.rs now compiles that object, 377 KB, and the binary carries
+it. When the key the compiler computes names the dev tier with no counters,
+on the convention build.rs's clang took, a cold build writes those bytes
+instead of running clang; any other recipe compiles as before. The dev tier's
+`-O2` moved into build.rs, which writes it out for the compiler, so the
+shipped object and a compiled one come from one list.
+`tests/a_cold_dev_build_ships_its_runtime.rs` builds a program against an
+empty temp directory behind a clang that logs its commands and counts compiles
+of the runtime: 1 with the shipped object turned off, 0 with it. The codegen
+gates warm the cache before they count, so no row they read moves.
+
+With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
+took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
+

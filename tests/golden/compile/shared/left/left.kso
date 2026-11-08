@@ -1,0 +1,5 @@
+import "../common"
+import "std/text"
+
+pub fn shout name
+  common/framed (text/uppercase name)
