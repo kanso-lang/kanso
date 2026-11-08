@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — a join a fiber reaches runs beside the fibers already running
-
-#2263. A join that a fiber reached while it ran, rather than one its group
-started with, went to `execute` from `step` (and to `k_exec` from `k_step`),
-and a join there started a second scheduler that returned only when its
-group was done. Every other fiber in the outer group waited for it. A server
-that forks per connection (after each accept, one bare line answers and the
-other accepts the next) is that shape: five concurrent requests to a handler
-that sleeps 300 ms got one answer and four timeouts, on both engines.
-
-Both schedulers now hold their fibers in spawn order, pick the earliest
-wake, and break ties by position. A join a fiber reaches hands its members
-to the running scheduler (`Step::Forked`, `blocked == 2` natively), which puts
-them where that fiber stood; the work bound after the join waits in the
-group and takes the place of the member that finishes last, with the
-group's failures as its value. A nested group that never waits therefore
-runs as it did inline. Natively the work after the join is built around a
-fresh settled node, and the group's result is written into it. The fiber
-arrays grow as they need to, so the 256-fiber cap is gone.
-
-tests/golden/joins pins two programs on both engines.
-`staggered_sleeps` printed `woke b`, `long done`, `woke a` and now prints the
-order its sleeps set: a at 100 ms, b at 130, the long sleep at 1030.
-`what_follows_a_join_waits_for_it` printed the sibling last and now prints
-it at 20 ms, between the group's quick and slow members, with `after the
-group` still after both. Five concurrent 300 ms requests to the fork-per-accept
-server finish in 0.31 s on both engines.
-
-The runtime's scheduler is larger, so each benchmark's text grows by 1,392
-bytes and the text row sums to 5,725,200; no benchmark reaches a join inside
-a fiber. CI's rows move by layout, both ways: work_basket 18,296,046,
-work_escapebench 40,309,374, work_indexbench 1,888,160, work_scanbench
-268,196, work_oneshot 9,980,369 and work_livebench 938,655,428 rose, and
-deepbench (197,807,203), runbench (846,331,178), jsonbench, encodebench,
-digestbench, pendbench, readbench and widebench fell. clang compiles the
-larger runtime at the dev tier in codegen_instructions_dev 116,928,442 and
-at the release tier in 371,713,655, fewer than before. The browser runs the
-corpus in browser_run_instructions 64,598,017, 44 fewer.
-
-Open: natively a group still runs under one beat, grow-only until the group
-ends, and a server's group never ends. A native fork-per-accept server held
-2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
-1.7 KB a request. Reclaiming at the scheduler's idle points, with the
-fibers' work as the roots, is the second half of #2263.
-
 ## 2026-11-01 — a request carries its headers
 
 `std/net/http`'s `request` gains a fourth field, `headers`: each header's
@@ -1656,6 +1611,49 @@ gates warm the cache before they count, so no row they read moves.
 
 With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
 took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
+
+## 2026-11-08 — a dev build folds small word functions into their callers (#2304)
+
+A dev build compiles the program at `-O0`, where clang inlines nothing that
+is not marked. PBKDF2's rounds call `sha256/spun`, a rotate, four times per
+message-schedule step and six times per round, and each call pays for a
+frame, the moves of its two words and the spills of its result. With #2376's
+width bits, a dev build of 10,000 rounds spent 32% of its instructions in
+`spun`.
+
+A definition now goes out `alwaysinline` in a dev build when it takes only
+words, calls no other definition of the program, and is at most 80 lines of
+IR. `Backend::folded_at_dev` holds the rule. In the PBKDF2 program it folds
+`spun`, `choice`, `majority` and `list/repeat`. The release tier is
+untouched, because its inliner already decides for itself. Measured here
+against main at 64f4c196, under callgrind:
+
+| | main | this branch |
+|---|---|---|
+| `runbench_dev` | 2,822,197,755 | 2,774,768,832 |
+| PBKDF2, 10,000 rounds, dev build | 2,379,121,527 | 1,651,368,753 |
+| `codegen_instructions_dev` | 116,687,950 | 116,687,950 |
+
+Three variants were measured and declined.
+
+- Every small leaf, boxed parameters included, bought runbench's dev run
+  2.0% and cost `codegen_instructions_dev` 4.5%, which welfare scores below
+  the floor. Two leaves that take a `%KValue`, `list/next` and
+  `render/to_string`, were the whole of that cost. Unpacking a `%KValue`
+  inside a caller is an `extractvalue`, and clang's fast instruction
+  selector at `-O0` hands the rest of that block to the slow one.
+- A budget on lines times call sites, from 150 to 3,000, changed no row
+  once boxed parameters were excluded.
+- A 40-line cap misses `spun`, which is about 50 lines, and PBKDF2 keeps
+  the whole cost. 80 is the smallest cap measured that reaches it.
+
+On CI, `runbench_dev` falls from 2,822,091,163 to 2,774,662,240. The
+compile side pays a little: `emit_instructions` rises to 5,630,728 and
+`browser_compile_instructions` to 351,180,151. The tab compiles through the
+same dev emitter, so it runs the check, and its translator ignores the
+attribute, so its run gains nothing. That reading of the browser row has not
+been isolated. `codegen_instructions_dev` and `codegen_instructions_release`
+do not move. Welfare rises from 95.07 to 95.08 and is banked.
 
 ## 2026-11-07 — a mask bounds an int, and a bounded sum needs no overflow test (#2304)
 
