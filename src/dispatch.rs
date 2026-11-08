@@ -40,7 +40,9 @@ pub fn byte_dispatched(
         let Some(disc) = switch_disc(&group) else {
             continue;
         };
-        if group_param_set(program, inference, &decl.name, decl.params.len(), disc) != (INT | NONE)
+        if group_param_set(program, inference, &decl.name, decl.params.len(), disc)
+            | crate::infer::WIDTHS
+            != (INT | NONE)
         {
             continue;
         }

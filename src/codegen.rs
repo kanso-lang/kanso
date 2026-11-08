@@ -213,6 +213,8 @@ fn covered(arms: &[&[Pattern]], sets: &[Set], records: &[Option<&str>], budget: 
         _ => false,
     };
     let mut groups: Vec<Vec<usize>> = Vec::new();
+    // A width bit says how large an int is, which no pattern asks.
+    let kinds = kinds & !infer::WIDTHS;
     for bit in (0..Set::BITS).map(|i| 1 << i).filter(|b| kinds & b != 0) {
         let taking: Vec<usize> = (0..arms.len()).filter(|&i| takes(&arms[i][0], bit)).collect();
         if taking.is_empty() {
@@ -1400,7 +1402,7 @@ impl<'a> Backend<'a> {
     /// dispatch, which hands them both values boxed, as escape analysis keeps
     /// them for the same reason.
     fn unboxed_param(&self, name: &str, arity: usize, param: usize) -> bool {
-        self.group_param_set(name, arity, param) == INT && !crate::is_operator(name)
+        infer::word(self.group_param_set(name, arity, param)) && !crate::is_operator(name)
     }
 
     /// What the body being emitted knows of a parameter: the group's set, or
@@ -1510,20 +1512,21 @@ impl<'a> Backend<'a> {
             let v = self.maybe_force(f, v);
             vals.push(self.as_value(f, &v));
         }
-        if vals.iter().any(|v| f.set_of(v) != INT) {
+        if vals.iter().any(|v| !infer::word(f.set_of(v))) {
             return Ok((self.emit_arith_general(f, arg, &vals, &mut 0)?, None));
         }
-        let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
+        let words: Vec<(String, Set)> =
+            vals.iter().map(|v| (inline_payload(f, v), f.set_of(v))).collect();
         let mut flags = Vec::new();
         // In a twin that has written nothing yet, an overflow here starts
         // the general body over instead of going back to the caller, and the
         // call this argument feeds can take the twin without asking. Each
         // operation branches there as it overflows.
         let bail = f.can_bail().then(|| f.label());
-        let r = word_run(f, arg, &words, &mut 0, &mut flags, bail.as_deref());
+        let (r, known) = word_run(f, arg, &words, &mut 0, &mut flags, bail.as_deref());
         let v = f.tmp();
         f.line_fmt(format_args!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
-        f.record(&v, INT);
+        f.record(&v, known);
         if let Some(out) = bail {
             if !flags.is_empty() {
                 let ok = f.label();
@@ -1559,7 +1562,7 @@ impl<'a> Backend<'a> {
             // the test reads the tag, so it is exact whatever the set says;
             // only a set that rules a word out sends the call straight on
             let s = f.set_of(&emitted[j]);
-            if s == INT {
+            if infer::word(s) {
                 continue;
             }
             if s != 0 && s & INT == 0 {

@@ -6,7 +6,23 @@ use crate::hash::Map as HashMap;
 /// one bit per runtime tag, records unrefined.
 pub type Set = u32;
 
-pub const INT: Set = 1 << 0;
+/// A machine-word int, with nothing said about its size. `INT` is this with
+/// every width bit, which is what an int with no bound is.
+pub const WORD: Set = 1 << 0;
+/// The width bits (kanso#2304). Each says that a word int in the set may lie
+/// outside `[0, 2^k)`; a set without one proves every word int in it is
+/// below `2^k` and not negative. The bits say what MAY be, like every other
+/// bit here, so the join stays a union: an int bounded on one path and not
+/// on another is not bounded. A mask makes a bound, `x & 4294967295` is
+/// below 2^32, and a sum of two bounded ints is bounded by the next bucket
+/// up, so it cannot overflow and never becomes a bignum.
+pub const PAST32: Set = 1 << 18;
+pub const PAST40: Set = 1 << 19;
+pub const PAST48: Set = 1 << 20;
+pub const PAST56: Set = 1 << 21;
+pub const PAST62: Set = 1 << 22;
+pub const WIDTHS: Set = PAST32 | PAST40 | PAST48 | PAST56 | PAST62;
+pub const INT: Set = WORD | WIDTHS;
 pub const FLOAT: Set = 1 << 1;
 pub const TRUE: Set = 1 << 2;
 pub const FALSE: Set = 1 << 3;
@@ -34,12 +50,88 @@ pub const ANY_INT: Set = INT | BIG;
 /// An err out of its box (#2087): what a rescue or an annotate hands its
 /// callback, an ordinary value that `(err r)` arms take. ERR is the box.
 pub const UNBOXED: Set = 1 << 17;
-pub const TOP: Set = ((1 << 15) - 1) | BIG | UNBOXED;
+pub const TOP: Set = ((1 << 15) - 1) | BIG | UNBOXED | WIDTHS;
 /// What propagates on its own. A none is a value and stays where it is put;
 /// only a failure, the box `err` makes (#2087), abandons the computation
 /// that produced it.
 pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
+
+/// A parameter's, a return's or a field's set with another arrival joined
+/// in, widened in the usual sense: a bound that would climb is given up at
+/// once. A word arriving with a bound above 2^32 is a sum, since a mask and a
+/// literal arrive below it, and a sum reaching a parameter is a counter fed
+/// by `n + 1`; before the width bits it read as an int or a bignum in its
+/// first round, and it does again. A word that grows wider than what is held
+/// is unbounded at once. Without the jumps a counter climbed one bucket a
+/// round, and the module sample's fixpoint took ten rounds where it took
+/// four. A bound survives where every arrival agrees, which is what a mask
+/// gives.
+pub fn joined(old: Set, new: Set) -> Set {
+    let climbing = new & WORD != 0 && new & PAST32 != 0 && new & PAST62 == 0;
+    let wider = old & WORD != 0 && new & WIDTHS & !old != 0;
+    match (climbing, wider) {
+        (true, _) => old | new | WIDTHS | BIG,
+        (false, true) => old | new | WIDTHS,
+        (false, false) => old | new,
+    }
+}
+
+/// Whether `s` is exactly a word int, of whatever width: an inline payload
+/// with nothing else beside it.
+pub fn word(s: Set) -> bool {
+    s & !WIDTHS == WORD
+}
+
+/// The width bits of the ints in `s`. Only a word int carries a bound: a
+/// bignum has none, and neither has anything else an operator may be handed,
+/// such as a subtype of int, so a set holding more than words and failures
+/// is unbounded.
+pub fn widths(s: Set) -> Set {
+    match s & !(WORD | WIDTHS | FAIL) {
+        0 => s & WIDTHS,
+        _ => WIDTHS,
+    }
+}
+
+/// The width bits of an int literal.
+pub fn literal_widths(n: i64) -> Set {
+    [(32, PAST32), (40, PAST40), (48, PAST48), (56, PAST56), (62, PAST62)]
+        .iter()
+        .filter(|&&(k, _)| n < 0 || n >= 1i64 << k)
+        .fold(0, |out, &(_, bit)| out | bit)
+}
+
+/// What a bitwise operator answers on two operands, as width bits. An `&`
+/// is no wider than its narrower side, since a non-negative operand bounds
+/// it whatever the other holds; `|` and `^` are no wider than the wider.
+pub fn bitwise_widths(op: &str, a: Set, b: Set) -> Set {
+    match op {
+        "&" => widths(a) & widths(b),
+        _ => widths(a) | widths(b),
+    }
+}
+
+/// The width bits of `a + b` when both are word ints below 2^62, so the sum
+/// cannot leave the word. The bits are closed downward, since an int past
+/// 2^48 is past 2^40 too, so a sum crosses only the tightest bound its
+/// operands had: two ints below 2^32 sum to one below 2^33, which the next
+/// bucket holds. A difference can be negative, which no bucket names, and a
+/// word it could not leave would only delay its bignum by a round of the
+/// fixpoint, so it keeps the overflow test.
+pub fn sum_widths(op: &str, a: Set, b: Set) -> Option<Set> {
+    let ints = |s: Set| s & WORD != 0 && s & !(WORD | WIDTHS | FAIL) == 0 && s & PAST62 == 0;
+    if !(ints(a) && ints(b)) {
+        return None;
+    }
+    let w = widths(a) | widths(b);
+    match op {
+        "+" => {
+            [PAST32, PAST40, PAST48, PAST56, PAST62].iter().find(|&&p| w & p == 0).map(|p| w | p)
+        }
+        _ => None,
+    }
+}
 
 pub struct Inference {
     /// Every declaration's argument sets, end to end, with `param_starts`
@@ -558,7 +650,7 @@ pub fn infer(program: &Program) -> Inference {
             ctx.facts.truncate(mark);
             let mut widened = false;
             if ret | ctx.returns[i] != ctx.returns[i] {
-                ctx.returns[i] |= ret;
+                ctx.returns[i] = joined(ctx.returns[i], ret);
                 ctx.changed = true;
                 widened = true;
             }
@@ -575,7 +667,7 @@ pub fn infer(program: &Program) -> Inference {
                 if let Some(Stmt::Expr(tail)) = decl.body.last() {
                     let y = desc_yield_of(&mut ctx, tail) & !FAIL;
                     if y | ctx.decl_yields[i] != ctx.decl_yields[i] {
-                        ctx.decl_yields[i] |= y;
+                        ctx.decl_yields[i] = joined(ctx.decl_yields[i], y);
                         ctx.changed = true;
                         widened = true;
                     }
@@ -1512,7 +1604,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     work::visit();
     match expr {
         Expr::Int(n, _) => match i64::try_from(n) {
-            Ok(_) => INT,
+            Ok(n) => WORD | literal_widths(n),
             Err(_) => BIG,
         },
         // A partial over a group hands the group out as a value, as a bare
@@ -1672,7 +1764,11 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             let builtin = match *op {
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
-                "+" | "-" | "*" => fails | numeric_result(op, a, b),
+                "+" | "-" => match sum_widths(op, a, b) {
+                    Some(w) => fails | WORD | w,
+                    None => fails | numeric_result(op, a, b),
+                },
+                "*" => fails | numeric_result(op, a, b),
                 // A zero divisor answers a value, not a failure (ruled
                 // 2026-08-10): `divide_by_zero` over a string where some arm
                 // names the math failure types, the bare string where none
@@ -1681,7 +1777,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                 "/" | "%" => fails | STR | REC | numeric_result(op, a, b),
                 // the bitwise three answer a whole number; every remaining
                 // operator compares, and a comparison answers true or false
-                "&" | "|" | "^" => fails | INT,
+                "&" | "|" | "^" => fails | WORD | bitwise_widths(op, a, b),
                 _ => BOOL | fails,
             };
             builtin | armed
@@ -2029,7 +2125,7 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
     let set = set & !ctx.shadow[at];
     if ctx.params[at] | set != ctx.params[at] {
-        ctx.params[at] |= set;
+        ctx.params[at] = joined(ctx.params[at], set);
         ctx.changed = true;
         ctx.dirty_next[decl] = true;
     }
@@ -2146,7 +2242,7 @@ fn eval_call<'a>(
         // field itself only ever holds the successful value's type)
         for (fi, argset) in arg_sets.iter().enumerate() {
             if let Some(slot) = ctx.type_fields[idx].get_mut(fi) {
-                let refined = *slot | (*argset & !FAIL);
+                let refined = joined(*slot, *argset & !FAIL);
                 if refined != *slot {
                     *slot = refined;
                     ctx.changed = true;
@@ -2530,6 +2626,7 @@ pub fn annotated_set(ty: &str) -> Set {
 pub fn builtin_set(name: &str, args: &[Set]) -> Set {
     let name = name.strip_prefix("builtin_").unwrap_or(name);
     let fails: Set = args.iter().fold(0, |acc, s| acc | (s & FAIL));
+    let arg = |at: usize| args.get(at).copied().unwrap_or(TOP);
     match name {
         // the box built by hand. What goes in is the box's content, value or
         // err, so the argument's failure bits are held rather than carried
@@ -2605,7 +2702,12 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => ANY_INT | fails,
-        "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
+        // A right shift by the zero to sixty-three places the runtime allows
+        // makes a non-negative word no larger, so it keeps its bound.
+        "bit_shr" => WORD | widths(arg(0)) | fails,
+        "bit_and" => WORD | bitwise_widths("&", arg(0), arg(1)) | fails,
+        "bit_or" | "bit_xor" => WORD | bitwise_widths("|", arg(0), arg(1)) | fails,
+        "bit_not" | "bit_shl" => INT | fails,
         "sqrt" => FLOAT | fails,
         // a float may be NaN or infinite, which rounds to `none`; an int
         // passes through as itself

@@ -3,10 +3,10 @@
 # This mutation sends it through the twin again. The answers are the same;
 # the work vein is the witness.
 set -e
-line='        if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {'
+line='        if !strict && f.set_of(container) == LIST && infer::word(f.set_of(key)) {'
 [ "$(grep -cxF "$line" src/codegen/emit.rs)" -eq 1 ] || {
   echo "the proven list's index moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {$/        if false \&\& !strict \&\& f.set_of(container) == LIST \&\& f.set_of(key) == INT {/' src/codegen/emit.rs
+sed -i 's/^        if !strict && f.set_of(container) == LIST && infer::word(f.set_of(key)) {$/        if false \&\& !strict \&\& f.set_of(container) == LIST \&\& infer::word(f.set_of(key)) {/' src/codegen/emit.rs
 if grep -qxF "$line" src/codegen/emit.rs; then exit 1; fi

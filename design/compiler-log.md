@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — a join a fiber reaches runs beside the fibers already running
-
-#2263. A join that a fiber reached while it ran, rather than one its group
-started with, went to `execute` from `step` (and to `k_exec` from `k_step`),
-and a join there started a second scheduler that returned only when its
-group was done. Every other fiber in the outer group waited for it. A server
-that forks per connection (after each accept, one bare line answers and the
-other accepts the next) is that shape: five concurrent requests to a handler
-that sleeps 300 ms got one answer and four timeouts, on both engines.
-
-Both schedulers now hold their fibers in spawn order, pick the earliest
-wake, and break ties by position. A join a fiber reaches hands its members
-to the running scheduler (`Step::Forked`, `blocked == 2` natively), which puts
-them where that fiber stood; the work bound after the join waits in the
-group and takes the place of the member that finishes last, with the
-group's failures as its value. A nested group that never waits therefore
-runs as it did inline. Natively the work after the join is built around a
-fresh settled node, and the group's result is written into it. The fiber
-arrays grow as they need to, so the 256-fiber cap is gone.
-
-tests/golden/joins pins two programs on both engines.
-`staggered_sleeps` printed `woke b`, `long done`, `woke a` and now prints the
-order its sleeps set: a at 100 ms, b at 130, the long sleep at 1030.
-`what_follows_a_join_waits_for_it` printed the sibling last and now prints
-it at 20 ms, between the group's quick and slow members, with `after the
-group` still after both. Five concurrent 300 ms requests to the fork-per-accept
-server finish in 0.31 s on both engines.
-
-The runtime's scheduler is larger, so each benchmark's text grows by 1,392
-bytes and the text row sums to 5,725,200; no benchmark reaches a join inside
-a fiber. CI's rows move by layout, both ways: work_basket 18,296,046,
-work_escapebench 40,309,374, work_indexbench 1,888,160, work_scanbench
-268,196, work_oneshot 9,980,369 and work_livebench 938,655,428 rose, and
-deepbench (197,807,203), runbench (846,331,178), jsonbench, encodebench,
-digestbench, pendbench, readbench and widebench fell. clang compiles the
-larger runtime at the dev tier in codegen_instructions_dev 116,928,442 and
-at the release tier in 371,713,655, fewer than before. The browser runs the
-corpus in browser_run_instructions 64,598,017, 44 fewer.
-
-Open: natively a group still runs under one beat, grow-only until the group
-ends, and a server's group never ends. A native fork-per-accept server held
-2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
-1.7 KB a request. Reclaiming at the scheduler's idle points, with the
-fibers' work as the roots, is the second half of #2263.
-
 ## 2026-11-01 — a request carries its headers
 
 `std/net/http`'s `request` gains a fourth field, `headers`: each header's
@@ -1699,3 +1654,74 @@ same dev emitter, so it runs the check, and its translator ignores the
 attribute, so its run gains nothing. That reading of the browser row has not
 been isolated. `codegen_instructions_dev` and `codegen_instructions_release`
 do not move. Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-07 — a mask bounds an int, and a bounded sum needs no overflow test (#2304)
+
+PBKDF2's rounds spent most of their time on adds that could not overflow.
+`h + mixed + fed & whole` masks to 32 bits, but inference knew each operand
+only as an int, so every add carried an overflow branch to a bignum and the
+result stayed boxed as int-or-bignum.
+
+Inference now carries five width bits beside `INT`. Each says a word int in
+the set may lie outside `[0, 2^k)`, for k of 32, 40, 48, 56 and 62. They say
+what may be, like every other bit, so the join stays a union and an int
+bounded on one path and not another is unbounded. `INT` is the word with all
+five, so everything that produced an int before still produces an unbounded
+one. Three rules remove bits:
+
+- a literal carries the bits its value needs;
+- `x & y` is no wider than its narrower operand, since a non-negative mask
+  bounds the answer whatever the other side held, a negative word included;
+  `|`, `^` and `bits/shr` are no wider than their wider operand;
+- `a + b` of two words below 2^62 crosses only the tightest bound its
+  operands had, so it moves up one bucket and cannot leave the word.
+
+A bound that can climb has to be given up, or the fixpoint climbs with it.
+The first build let a counter fed by `n + 1` widen one bucket a round, and
+the module sample took ten rounds where it took four. Parameters, returns,
+record fields and yields now join through `infer::joined`. A word arriving
+with a bound above 2^32 is a sum, since masks and literals arrive below it,
+and it widens at once to an int or a bignum, which is what it read before the
+width bits. A word that grows wider than what is held loses its bound. Every
+`compile_golden.txt` row reads what it read before. A rule for `a - b`, which
+cannot leave the word either, went too: its answer had no bignum yet and the
+next sum gave it one, a round later.
+
+Codegen reads the same rules. A sum the rules bound is `add nsw` with no
+overflow test and no bignum behind it, in the binop path and in the word
+runs that chain arithmetic. Eight checks that asked whether a set was exactly
+`INT` now ask whether it holds only a word, whatever its width.
+
+`tests/golden/micro/a_masked_sum_stays_a_word.kso` holds the edges: masked
+negative operands, sums at each bound, a sum of two words just under 2^62,
+and a quadrupled one that must become a bignum. With the sum rule changed to
+keep its operands' bound instead of moving up a bucket, the native engine
+printed -4 for 18446744073709551612 while the interpreter printed the
+bignum.
+
+Measured here under callgrind, PBKDF2 at 10,000 rounds read 380,173,992
+instructions and reads 347,030,678, with the same digest. Compiling costs a
+little more: `kanso check` of `compile_corpus` read 24,629,306 and reads
+24,664,277, and of `entry_corpus` 88,645,583 and 88,780,655. `sha256/compress`
+fell from 212,561,254 to 179,417,940; `sha256/schedule` did not move, since
+its adds read list elements, which carry no bound.
+
+Tried and dropped, again: masking the four list reads in the rounds and the
+schedule, `(ks[at] & whole) + (w[at] & whole)`. With the inline `&` path now
+taking any operand that may be a word, the run read 366,492,605, worse than
+without the masks. The inline path stays: it costs nothing where no mask is
+written.
+
+On CI, against main after #2374, the run rows fall: `digestbench` from
+3,288,947 to 3,108,282 instructions, `runbench` from 915,653,371 to
+913,657,054 and `runbench_dev` from 2,822,091,163 to 2,811,021,533; with
+#2378's dev fold also on main, `runbench_dev` reads 2,763,752,866. The
+compile rows pay for the wider sets and the rules that read them:
+`compile_instructions` rises to 24,152,651, `entry_instructions` to
+156,082,962 and `library_instructions` to 73,608,656. On the tree merged with
+#2378, `emit_instructions` rises from 5,630,728 to 5,642,485 and
+`browser_compile_instructions` from 351,180,151 to 352,264,415. The emitted
+code grows where the inline bitwise path now takes an operand that may be a
+word behind a tag test: `emitted_other_branches` reads 19,444 and
+`emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
+Welfare rises from 95.07 to 95.08 and is banked.

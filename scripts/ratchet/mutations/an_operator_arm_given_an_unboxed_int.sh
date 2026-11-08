@@ -10,10 +10,10 @@
 set -e
 f=src/codegen.rs
 grep -q "fn unboxed_param" src/codegen.rs
-line='        self.group_param_set(name, arity, param) == INT && !crate::is_operator(name)'
+line='        infer::word(self.group_param_set(name, arity, param)) && !crate::is_operator(name)'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the operator exclusion in unboxed_param moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        self\.group_param_set(name, arity, param) == INT \&\& !crate::is_operator(name)$/        self.group_param_set(name, arity, param) == INT/' "$f"
-grep -qxF '        self.group_param_set(name, arity, param) == INT' "$f"
+sed -i 's/^        infer::word(self\.group_param_set(name, arity, param)) \&\& !crate::is_operator(name)$/        infer::word(self.group_param_set(name, arity, param))/' "$f"
+grep -qxF '        infer::word(self.group_param_set(name, arity, param))' "$f"

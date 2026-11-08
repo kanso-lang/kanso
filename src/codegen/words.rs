@@ -326,14 +326,18 @@ fn arith_leaves<'e>(e: &'e Expr, out: &mut Vec<&'e Expr>) {
 /// operation stands. An `or` of the flags made x86 keep each one in a
 /// register with `seto` and test the `or` at the end; a branch after each
 /// operation is a `jo` on the flag the operation already set.
+///
+/// Each leaf's set rides beside its word, and the run answers the set of
+/// what it computed: a sum of two bounded ints is bounded one size up and
+/// needs no flag at all (see `infer::sum_widths`).
 fn word_run(
     f: &mut FnEmit,
     e: &Expr,
-    words: &[String],
+    words: &[(String, Set)],
     at: &mut usize,
     flags: &mut Vec<String>,
     slow: Option<&str>,
-) -> String {
+) -> (String, Set) {
     let Expr::BinOp { op, lhs, rhs, .. } = e else {
         *at += 1;
         return words[*at - 1].clone();
@@ -342,10 +346,16 @@ fn word_run(
         *at += 1;
         return words[*at - 1].clone();
     }
-    let a = word_run(f, lhs, words, at, flags, slow);
-    let b = word_run(f, rhs, words, at, flags, slow);
+    let (a, sa) = word_run(f, lhs, words, at, flags, slow);
+    let (b, sb) = word_run(f, rhs, words, at, flags, slow);
     let t = f.tmp();
     match *op {
+        "+" | "-" if infer::sum_widths(op, sa, sb).is_some() => {
+            let bound = infer::sum_widths(op, sa, sb).unwrap_or(infer::WIDTHS);
+            let insn = if *op == "+" { "add" } else { "sub" };
+            f.line_fmt(format_args!("{t} = {insn} nsw i64 {a}, {b}"));
+            return (t.to_string(), infer::WORD | bound);
+        }
         "+" | "-" | "*" => {
             let intrinsic = match *op {
                 "+" => "llvm.sadd.with.overflow.i64",
@@ -373,13 +383,13 @@ fn word_run(
                 f.line_fmt(format_args!("{safe} = select i1 {edge}, i64 1, i64 {b}"));
                 let insn = if *op == "%" { "srem" } else { "sdiv" };
                 f.line_fmt(format_args!("{t} = {insn} i64 {a}, {safe}"));
-                return t.to_string();
+                return (t.to_string(), INT);
             }
             let insn = if *op == "%" { "srem" } else { "sdiv" };
             f.line_fmt(format_args!("{t} = {insn} i64 {a}, {b}"));
         }
     }
-    t.to_string()
+    (t.to_string(), INT)
 }
 
 /// A word run's flag: kept for the caller, or a branch to `slow` here.
@@ -441,10 +451,23 @@ fn direct_bit_op(
         "bit_shr" => "ashr",
         _ => return None,
     };
-    let ints = |s: Set| s & infer::INT != 0 && s & !(infer::INT | infer::BIG) == 0;
-    if !args.iter().all(|a| ints(f.set_of(a))) {
+    // Any operand that may be a word takes the instruction behind a test of
+    // its tag; whatever else it may be, a bignum, a subtype or a failure,
+    // goes to the call, which answers or dies the way it always has.
+    if !args.iter().all(|a| f.set_of(a) & infer::WORD != 0) {
         return None;
     }
+    let fails = args.iter().fold(0, |acc, a| acc | (f.set_of(a) & FAIL));
+    // What the answer is known to be: a word, and for the three that cannot
+    // widen their operands, no wider than they say (see `bitwise_widths`).
+    let known = match (name, args) {
+        ("bit_and", [a, b]) => infer::WORD | infer::bitwise_widths("&", f.set_of(a), f.set_of(b)),
+        ("bit_or" | "bit_xor", [a, b]) => {
+            infer::WORD | infer::bitwise_widths("|", f.set_of(a), f.set_of(b))
+        }
+        ("bit_shr", [a, _]) => infer::WORD | infer::widths(f.set_of(a)),
+        _ => INT,
+    } | fails;
     let shifts = matches!(name, "bit_shl" | "bit_shr");
     let pa = inline_payload(f, &args[0]);
     let pb = match name {
@@ -463,7 +486,7 @@ fn direct_bit_op(
         Err(_) => {}
     }
     for a in args {
-        if f.set_of(a) != INT {
+        if !infer::word(f.set_of(a)) {
             let tag = inline_tag(f, a);
             let word = f.tmp();
             f.line_fmt(format_args!("{word} = icmp eq i64 {tag}, 0"));
@@ -473,7 +496,9 @@ fn direct_bit_op(
     let Some(first) = tests.first().cloned() else {
         let r = f.tmp();
         f.line_fmt(format_args!("{r} = {insn} i64 {pa}, {pb}"));
-        return Some(boxed_word(f, &r));
+        let v = boxed_word(f, &r);
+        f.record(&v, known);
+        return Some(v);
     };
     let pass = tests[1..].iter().fold(first, |acc, t| {
         let both = f.tmp();
@@ -502,7 +527,7 @@ fn direct_bit_op(
     f.start_block(&merge);
     let t = f.tmp();
     f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
-    f.record(&t, INT);
+    f.record(&t, known);
     Some(t.to_string())
 }
 
