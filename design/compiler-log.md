@@ -20,21 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — a request carries its headers
-
-`std/net/http`'s `request` gains a fourth field, `headers`: each header's
-name, lowercased, mapped to its value with the surrounding spaces trimmed. A
-colon inside a value stays part of it, and a name sent twice keeps the last
-value. The parser had already split the head into lines and discarded all
-but the first. A server could not read a cookie, so senro could not keep a
-session.
-
-A pattern on `request` takes four places now, so the teashop's `handle` arms
-in the web chapter end in `_`, and the chapter says what the last two places
-hold. Three tests in http_test.kso pin it: a name read in lowercase with its
-value trimmed and its inner colon kept, the host header, and a request with
-no headers answering none. Breaking the lowercasing turns two of them red.
-
 ## 2026-11-01 — the corpus forks
 
 Corpus first, before #2268. #2268 makes a server's loop hold what one
@@ -1725,3 +1710,23 @@ code grows where the inline bitwise path now takes an operand that may be a
 word behind a tag test: `emitted_other_branches` reads 19,444 and
 `emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
 Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-08 — patterns and operators move out of emit.rs (#2377)
+
+`src/codegen/emit.rs` had grown to 3,055 lines in one `impl Backend` block.
+Two runs of methods in it shared nothing with the rest, so they moved to files
+of their own, read with `include!` right after emit.rs as calls.rs already
+is:
+
+- `patterns.rs`, 444 lines: matching a pattern against a parameter, the
+  `%parsed` returns and constructions, packed constructor arguments and the
+  type-set checks.
+- `operators.rs`, 471 lines: word runs, the general arithmetic they fall back
+  to, `emit_binop` and the builtin operators.
+
+emit.rs keeps bodies, binds, conditions and indexing, at 2,153 lines. The move
+changes no text: the dev and release IR of `bench/runbench` are byte-identical
+before and after. Five ratchet mutations patched lines that moved, and each
+now names the file its line lives in. `tests/native_layout_on_wasm32.rs`
+reads the two new files when it looks for the lines the wasm32 table
+rewrites.

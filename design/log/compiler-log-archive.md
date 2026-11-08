@@ -112889,3 +112889,18 @@ ends, and a server's group never ends. A native fork-per-accept server held
 2.0 MB at start, 3.9 MB after 1,000 requests and 9.0 MB after 4,000, about
 1.7 KB a request. Reclaiming at the scheduler's idle points, with the
 fibers' work as the roots, is the second half of #2263.
+
+## 2026-11-01 — a request carries its headers
+
+`std/net/http`'s `request` gains a fourth field, `headers`: each header's
+name, lowercased, mapped to its value with the surrounding spaces trimmed. A
+colon inside a value stays part of it, and a name sent twice keeps the last
+value. The parser had already split the head into lines and discarded all
+but the first. A server could not read a cookie, so senro could not keep a
+session.
+
+A pattern on `request` takes four places now, so the teashop's `handle` arms
+in the web chapter end in `_`, and the chapter says what the last two places
+hold. Three tests in http_test.kso pin it: a name read in lowercase with its
+value trimmed and its inner colon kept, the host header, and a request with
+no headers answering none. Breaking the lowercasing turns two of them red.
