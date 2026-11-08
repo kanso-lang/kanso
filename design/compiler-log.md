@@ -20,19 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — the emitter's word helpers move into codegen/words.rs
-
-The cleanup owed after #2251 to #2258. The free functions between ir_scan.rs
-and the `Backend` impl move into src/codegen/words.rs, read with include!
-where they stood: the symbol names (`wsym` and its kin), `literal_word`, the
-lift around a call that may fail, word arithmetic, and the readers and
-writers of a value's inline tag and payload. codegen.rs falls from 3,447
-lines to 2,911. Putting words.rs back in place of its include! gives main's
-codegen.rs byte for byte. Six ratchet mutations patched lines in the moved
-section by their text and now name words.rs; each still applies to the line
-it did before. CI's cost-goldens job read every vein at main's values,
-compile_instructions among them, so no row moved.
-
 ## 2026-11-01 — a join a fiber reaches runs beside the fibers already running
 
 #2263. A join that a fiber reached while it ran, rather than one its group
@@ -1670,3 +1657,37 @@ gates warm the cache before they count, so no row they read moves.
 With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
 took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
 
+## 2026-11-08 — a dev build folds small word functions into their callers (#2304)
+
+A dev build compiles the program at `-O0`, where clang inlines nothing that
+is not marked. PBKDF2's rounds call `sha256/spun`, a rotate, four times per
+message-schedule step and six times per round, and each call pays for a
+frame, the moves of its two words and the spills of its result. With #2376's
+width bits, a dev build of 10,000 rounds spent 32% of its instructions in
+`spun`.
+
+A definition now goes out `alwaysinline` in a dev build when it takes only
+words, calls no other definition of the program, and is at most 80 lines of
+IR. `Backend::folded_at_dev` holds the rule. In the PBKDF2 program it folds
+`spun`, `choice`, `majority` and `list/repeat`. The release tier is
+untouched, because its inliner already decides for itself. Measured here
+against main at 64f4c196, under callgrind:
+
+| | main | this branch |
+|---|---|---|
+| `runbench_dev` | 2,822,197,755 | 2,774,768,832 |
+| PBKDF2, 10,000 rounds, dev build | 2,379,121,527 | 1,651,368,753 |
+| `codegen_instructions_dev` | 116,687,950 | 116,687,950 |
+
+Three variants were measured and declined.
+
+- Every small leaf, boxed parameters included, bought runbench's dev run
+  2.0% and cost `codegen_instructions_dev` 4.5%, which welfare scores below
+  the floor. Two leaves that take a `%KValue`, `list/next` and
+  `render/to_string`, were the whole of that cost. Unpacking a `%KValue`
+  inside a caller is an `extractvalue`, and clang's fast instruction
+  selector at `-O0` hands the rest of that block to the slow one.
+- A budget on lines times call sites, from 150 to 3,000, changed no row
+  once boxed parameters were excluded.
+- A 40-line cap misses `spun`, which is about 50 lines, and PBKDF2 keeps
+  the whole cost. 80 is the smallest cap measured that reaches it.
