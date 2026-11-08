@@ -1,0 +1,7 @@
+import "./conv"
+import "./m"
+
+derive conv/written
+
+print (m/hi "there")
+print (m/named 1)

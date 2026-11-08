@@ -1,0 +1,12 @@
+import "../words"
+import "std/derive"
+
+# Writes an arm into `m` that reads `words`, imported by a path written from
+# this module. The path is rewritten from `m`, a file named bare beside an
+# entry run from its own directory.
+pub fn written _
+  arm = "pub fn hi x\n  \"\{words/word} \{x}\"\n"
+  [(derive/define "m" "import \"../words\"\n\n{arm}")]
+
+pub fn unused _
+  words/word

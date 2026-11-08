@@ -1,0 +1,4 @@
+import "../m"
+
+pub fn g x
+  m/f x

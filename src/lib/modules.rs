@@ -136,7 +136,8 @@ fn load_to_describe(
 
 /// While an entry's modules load to be described, drops each refusal that a
 /// derivation may answer by writing into the module: a name, a type, or a
-/// field nothing declares yet. `DEFERRED` records that one was dropped, and
+/// field nothing declares yet, or a call at an arity no arm takes yet, which
+/// a derivation may write an arm of (#2389). `DEFERRED` records that one was dropped, and
 /// the second load, with what the derivations wrote, refuses whatever is
 /// still unknown.
 fn set_aside(diags: &mut Vec<crate::diag::Diagnostic>) {
@@ -147,6 +148,7 @@ fn set_aside(diags: &mut Vec<crate::diag::Diagnostic>) {
     diags.retain(|d| !(d.kind == "name" && d.message.starts_with("unknown name `")));
     diags.retain(|d| !(d.kind == "type" && unknown_type(&d.message)));
     diags.retain(|d| !(d.kind == "name" && unknown_field(&d.message)));
+    diags.retain(|d| !(d.kind == "arity" && d.message.contains("-argument arm of `")));
     if diags.len() < before {
         DEFERRED.with(|d| d.set(true));
     }
@@ -424,9 +426,14 @@ fn reread(line: &str, writer: Option<&std::path::Path>, joins: &std::path::Path)
     let Some(writer) = writer.filter(|_| path.starts_with("./") || path.starts_with("../")) else {
         return line.to_string();
     };
+    // A module file named bare, `stock.kso` beside an entry run from its own
+    // directory, has an empty parent, which is the current directory.
     let at = |p: &std::path::Path| match p.is_dir() {
         true => std::fs::canonicalize(p).ok(),
-        false => p.parent().and_then(|d| std::fs::canonicalize(d).ok()),
+        false => p
+            .parent()
+            .map(|d| if d.as_os_str().is_empty() { std::path::Path::new(".") } else { d })
+            .and_then(|d| std::fs::canonicalize(d).ok()),
     };
     let (Some(from), Some(to)) = (at(writer), at(joins)) else { return line.to_string() };
     let mut named = from;

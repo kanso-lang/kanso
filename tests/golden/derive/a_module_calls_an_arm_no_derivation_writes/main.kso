@@ -1,0 +1,8 @@
+import "./caller"
+import "./m"
+import "./writes"
+
+derive writes/shorter
+
+print (caller/g 1)
+print (m/f 1 2)

@@ -20,21 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — gavel: a server rescues its handler's failure in library code
-
-#2252 proposed endpoint policy as an ordinary function, `on_failure report`.
-Clay declined it as a language feature. senro and the application are
-separate hakos, and rescue works across hakos, so senro's serve loop can
-already rescue a handler's failure and answer 500. Clay: "if the server code
-itself needed to rescue, then you should have just been using some
-alternative to exceptions in the first place because you don't want to use
-exceptions for control flow." A failure a hako expects to handle itself is a
-value (`none` or a marker), not a boxed err. A plain program's top-level
-report is unchanged.
-
-Owed in senro: the serve loop rescues a handler's failure and answers 500,
-with a spec showing the server keeps serving afterwards.
-
 ## 2026-11-01 — gavel: an HTTP status is a value, never an err
 
 #2253 proposed classifying a failure by where it was born and a `retry n` on
@@ -1668,3 +1653,38 @@ layout, as CI measured them: `browser_compile_instructions` rose from
 the floor, and that was the wrong call: the refusal is part of what #2380
 ruled, and a ruled feature's cost lowers the floor by exactly what it
 measures. The floor moves by that amount here (#2383).
+
+## 2026-11-08 — a module calls an arm a derivation writes
+
+An entry that derives loads its modules twice: once to describe them to its
+derivations, with the refusals a derivation could answer set aside, and once
+with what the derivations wrote. A call to a name nothing defines yet waited
+for the second load, which is how a module calls kata's `views/...`. A call
+to a function that exists, at an arity only a derivation supplies, did not:
+the first load refused it before the derivation ran. senro's data providers
+hit this. A browser action calls `stock/low 3`, and a derivation writes the
+one-argument `low` beside the server's `low viewer db n` (#2389).
+
+The first load now sets aside a refusal of an arity no arm takes, as it does
+an unknown name, and the second load checks the call against every arm the
+module and the derivations wrote. `tests/golden/derive/a_module_calls_an_arm_a_derivation_writes`
+prints `short 1` on both engines, and main's binary refuses it.
+`a_module_calls_an_arm_no_derivation_writes` still refuses a call at an arity
+nothing writes, and the refusal names every arity the module has once the
+derivation's arm is in: `(arms take 2, 3)`.
+
+A second refusal stood behind it. A derived arm's import is written from the
+derivation's module and rewritten from the module it joins. When that module
+is a file named bare beside an entry run from its own directory, as `stock.kso`
+is when an app runs `kanso run .`, its parent is the empty path, which does not
+canonicalize, and the import was left as written: `../data` from senro's
+`data` module read from the app's directory found nothing. An empty parent is
+now the current directory. `tests/derivations_run_beside.rs` runs each case in
+`tests/golden/derive_here` from its own directory, which `tests/golden/derive`,
+run from the repository root, cannot; main's binary refuses
+`a_derived_arm_imports_beside_a_bare_module` with "cannot resolve import
+\"../words\"".
+
+`browser_compile_instructions` rose from 352,264,424 to 352,264,564. The
+browser corpus derives nothing, so the 140 instructions are the new code in
+the compiler the tab runs. Every other row is where it was.
