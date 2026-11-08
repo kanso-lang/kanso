@@ -423,7 +423,10 @@ fn enroll_travelers(program: &mut ast::Program) -> Result<(), String> {
             ),
             *span,
         );
-        let source = std::fs::read_to_string(&**file).unwrap_or_default();
+        // A derived file is not on disk, and the text a derivation wrote is
+        // kept for its refusals to quote.
+        let source =
+            handed_text(file).or_else(|| std::fs::read_to_string(&**file).ok()).unwrap_or_default();
         rendered.push_str(&diag::render(&[d], file, &source));
     }
     match rendered.is_empty() {

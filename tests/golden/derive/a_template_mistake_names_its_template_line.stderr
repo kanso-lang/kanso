@@ -1,0 +1,5 @@
+error[name]: unknown name `shout` — no module in this program writes `shout` for a type it owns, so no value carries it
+  --> tests/golden/derive/a_template_mistake_names_its_template_line/views.derived.kso:3:12
+   3 |   "hello, {shout name}"
+                  ^
+  = written from tests/golden/derive/a_template_mistake_names_its_template_line/views/greeting.tpl:1

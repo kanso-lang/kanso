@@ -1725,3 +1725,31 @@ code grows where the inline bitwise path now takes an operand that may be a
 word behind a tag test: `emitted_other_branches` reads 19,444 and
 `emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
 Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
+
+A compile error in code a derivation wrote named the module's derived file,
+`views.derived.kso`, which is not on disk. senro's kata listed this among
+what it does not do yet: a typo in `views/list.kata` was reported at a line
+of the derived source.
+
+The committee chose a comment convention over carrying positions through the
+derive API (#2380). A derivation may write `# from <file>:<line>` above what
+it writes, naming the file within the module. When a diagnostic falls in a
+derived file, the renderer looks up to the nearest such comment in the same
+definition, or among the comments right above its header, and adds
+`= written from <module>/<file>:<line>` under the quoted line. The derive API
+and the span type stay as they were, and a derivation that writes no such
+comment gets the message it got before. The quote of the derived line stays,
+because it shows what kanso read.
+
+One refusal could not quote derived source at all. A call to a name no
+module writes for a type it owns, the travelling-call check in
+`lib/travel.rs`, read the file it quoted from disk, and a derived file is
+not there. It now reads the text a derivation wrote first, as the merged
+check's refusals already did.
+
+`tests/golden/derive/a_template_mistake_names_its_template_line` writes a
+template that calls `shout`, which nothing defines, and its golden holds the
+quoted line and `= written from …/views/greeting.tpl:1` on both engines.
+Main's binary printed the header alone, with neither the quote nor the note.
