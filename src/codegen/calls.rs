@@ -755,7 +755,7 @@ impl<'a> Backend<'a> {
                 // sets already prove both tags -- a bytes accumulator and an
                 // int -- the twin's two opening tests are asked twice, so
                 // there is a second door that starts after them.
-                match f.set_of(&emitted[0]) == BYTES && f.set_of(&emitted[1]) == INT {
+                match f.set_of(&emitted[0]) == BYTES && infer::word(f.set_of(&emitted[1])) {
                     true => "append_mut_int",
                     false => "append_mut_byte",
                 }

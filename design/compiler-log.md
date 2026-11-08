@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-10-30 — a derivation reads the files beside the entry
-
-#2186's models ruling makes `schema.sql` the opt-in for a migration that
-needs raw SQL the fold cannot interpret: the app checks in `pg_dump` output
-"and the compiler reads that file instead". A derivation reads only the
-description it is handed, and nothing in it carried a file.
-
-`derive/program` now has `files`, a map from the name of each file directly
-beside the entry that is not kanso source and reads as text to that text.
-senro's models convention reads `schema.sql` from it when the app keeps one
-and folds the migrations when it does not. The files are inputs like the
-source, so the same tree still derives the same declarations. The tab has no
-directory under its compile and hands none.
-
-tests/golden/derive gains a convention that declares the lines of a
-`tables.txt` beside its entry, on both engines. With the directory read
-pointed at a path that does not exist, it declares an empty list and the
-case fails.
-
-bench/entry_corpus derives, so it now reads its directory, and the entry row
-prices that: entry_instructions 86,751,224 -> 86,792,132 (+40,908). No other
-row moved. Welfare fell by less than a hundredth, and the floor follows under
-the rule for a feature a ruling requires.
-
 ## 2026-10-30 — a connection can be secured with TLS
 
 #2178 owes TLS through the runtime before the first hosted deploy: OpenSSL
@@ -1657,3 +1633,60 @@ committee decided on kanso#2370 that the change merges and the floor moves
 down by exactly that, as it did for #2350: a driver that leaves its program
 holding a port when it is stopped is the toolchain failing what `kanso run`
 promises.
+
+## 2026-11-07 — a mask bounds an int, and a bounded sum needs no overflow test (#2304)
+
+PBKDF2's rounds spent most of their time on adds that could not overflow.
+`h + mixed + fed & whole` masks to 32 bits, but inference knew each operand
+only as an int, so every add carried an overflow branch to a bignum and the
+result stayed boxed as int-or-bignum.
+
+Inference now carries five width bits beside `INT`. Each says a word int in
+the set may lie outside `[0, 2^k)`, for k of 32, 40, 48, 56 and 62. They say
+what may be, like every other bit, so the join stays a union and an int
+bounded on one path and not another is unbounded. `INT` is the word with all
+five, so everything that produced an int before still produces an unbounded
+one. Three rules remove bits:
+
+- a literal carries the bits its value needs;
+- `x & y` is no wider than its narrower operand, since a non-negative mask
+  bounds the answer whatever the other side held, a negative word included;
+  `|`, `^` and `bits/shr` are no wider than their wider operand;
+- `a + b` of two words below 2^62 crosses only the tightest bound its
+  operands had, so it moves up one bucket and cannot leave the word.
+
+A bound that can climb has to be given up, or the fixpoint climbs with it.
+The first build let a counter fed by `n + 1` widen one bucket a round, and
+the module sample took ten rounds where it took four. Parameters, returns,
+record fields and yields now join through `infer::joined`. A word arriving
+with a bound above 2^32 is a sum, since masks and literals arrive below it,
+and it widens at once to an int or a bignum, which is what it read before the
+width bits. A word that grows wider than what is held loses its bound. Every
+`compile_golden.txt` row reads what it read before. A rule for `a - b`, which
+cannot leave the word either, went too: its answer had no bignum yet and the
+next sum gave it one, a round later.
+
+Codegen reads the same rules. A sum the rules bound is `add nsw` with no
+overflow test and no bignum behind it, in the binop path and in the word
+runs that chain arithmetic. Eight checks that asked whether a set was exactly
+`INT` now ask whether it holds only a word, whatever its width.
+
+`tests/golden/micro/a_masked_sum_stays_a_word.kso` holds the edges: masked
+negative operands, sums at each bound, a sum of two words just under 2^62,
+and a quadrupled one that must become a bignum. With the sum rule changed to
+keep its operands' bound instead of moving up a bucket, the native engine
+printed -4 for 18446744073709551612 while the interpreter printed the
+bignum.
+
+Measured here under callgrind, PBKDF2 at 10,000 rounds read 380,173,992
+instructions and reads 347,030,678, with the same digest. Compiling costs a
+little more: `kanso check` of `compile_corpus` read 24,629,306 and reads
+24,664,277, and of `entry_corpus` 88,645,583 and 88,780,655. `sha256/compress`
+fell from 212,561,254 to 179,417,940; `sha256/schedule` did not move, since
+its adds read list elements, which carry no bound.
+
+Tried and dropped, again: masking the four list reads in the rounds and the
+schedule, `(ks[at] & whole) + (w[at] & whole)`. With the inline `&` path now
+taking any operand that may be a word, the run read 366,492,605, worse than
+without the masks. The inline path stays: it costs nothing where no mask is
+written.

@@ -1,0 +1,42 @@
+import "std/bits"
+
+# A mask bounds an int: `x & whole` is below 2^32 whatever x was, a negative
+# x included, and a sum of two bounded ints is bounded one size up, so it is
+# added with no overflow test. These are the edges of each bound. The last
+# sum has no bound and must still become a bignum.
+whole = 4294967295
+
+half = 4611686018427387903
+
+negative = 0 - 1
+
+fn top x
+  x & whole
+
+fn twice x
+  top x + top x
+
+fn edge x
+  bits/shl x 62
+
+fn doubled x
+  x + x
+
+fn quad x
+  x + x + (x + x)
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + whole & whole)
+
+pub play = print "{top 12 + top 30}"
+  .> (_ -> print "{top negative + top negative}")
+  .> (_ -> print "{twice negative + twice negative}")
+  .> (_ -> print "{top 5 - top negative}")
+  .> (_ -> print "{bits/shr (top negative) 4 + top negative}")
+  .> (_ -> print "{(half & negative) + (half & negative)}")
+  .> (_ -> print "{quad (half & negative)}")
+  .> (_ -> print "{spin 1000 7}")
+  .> (_ -> print "{doubled (edge 1)}")

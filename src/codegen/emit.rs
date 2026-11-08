@@ -1969,7 +1969,9 @@ impl<'a> Backend<'a> {
         // A position that may have grown past the word is tested for its tag
         // beside the bounds, and a bignum takes the general arm.
         let p_set = f.set_of(&pv);
-        if f.set_of(&xv) != BYTES || (p_set != INT && p_set != INT | infer::BIG) {
+        if f.set_of(&xv) != BYTES
+            || (!infer::word(p_set) && p_set | infer::WIDTHS != INT | infer::BIG)
+        {
             return Ok(None);
         }
         let kmin = reads.iter().map(|r| r.0).min().unwrap_or(0);
@@ -1990,7 +1992,7 @@ impl<'a> Backend<'a> {
         f.line_fmt(format_args!("{hi} = icmp sle i64 {idx}, {top}"));
         let mut inside = f.tmp();
         f.line_fmt(format_args!("{inside} = and i1 {lo}, {hi}"));
-        if p_set != INT {
+        if !infer::word(p_set) {
             let tag = inline_tag(f, &pv);
             let word = f.tmp();
             f.line_fmt(format_args!("{word} = icmp eq i64 {tag}, 0"));
@@ -2296,7 +2298,7 @@ impl<'a> Backend<'a> {
             ">" => "sgt",
             _ => "sge",
         };
-        if f.set_of(a) == INT && f.set_of(b) == INT {
+        if infer::word(f.set_of(a)) && infer::word(f.set_of(b)) {
             let pa = inline_payload(f, a);
             let pb = inline_payload(f, b);
             let c = f.tmp();
@@ -2351,17 +2353,18 @@ impl<'a> Backend<'a> {
             let v = self.maybe_force(f, v);
             vals.push(self.as_value(f, &v));
         }
-        if vals.iter().any(|v| f.set_of(v) != INT) {
+        if vals.iter().any(|v| !infer::word(f.set_of(v))) {
             return self.emit_arith_general(f, e, &vals, &mut 0);
         }
         let mut flags = Vec::new();
-        let words: Vec<String> = vals.iter().map(|v| inline_payload(f, v)).collect();
+        let words: Vec<(String, Set)> =
+            vals.iter().map(|v| (inline_payload(f, v), f.set_of(v))).collect();
         let slow = f.label();
-        let r = word_run(f, e, &words, &mut 0, &mut flags, Some(&slow));
+        let (r, known) = word_run(f, e, &words, &mut 0, &mut flags, Some(&slow));
         let fv = f.tmp();
         f.line_fmt(format_args!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
         if flags.is_empty() {
-            f.record(&fv, INT);
+            f.record(&fv, known);
             return Ok(fv.to_string());
         }
         let fast = f.cur_label.clone();
@@ -2374,7 +2377,7 @@ impl<'a> Backend<'a> {
         f.start_block(&merge);
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow_from} ]"));
-        f.record(&t, INT | f.set_of(&sv));
+        f.record(&t, known | f.set_of(&sv));
         Ok(t.to_string())
     }
 
@@ -2525,10 +2528,11 @@ impl<'a> Backend<'a> {
         if matches!(op, "&" | "|" | "^") {
             let t = f.tmp();
             f.line_fmt(format_args!("{t} = {slow_call}"));
-            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
+            let bound = infer::bitwise_widths(op, f.set_of(a), f.set_of(b));
+            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::WORD | bound);
             return Ok(t.to_string());
         }
-        let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
+        let pure_int = infer::word(f.set_of(a)) && infer::word(f.set_of(b));
         // Ints of either kind, or a failure riding with one: the quotient
         // and remainder of two words take the same one instruction behind a
         // test that both tags say word, and the rest goes to the call.
@@ -2617,6 +2621,22 @@ impl<'a> Backend<'a> {
             let pa = inline_payload(f, a);
             let pb = inline_payload(f, b);
             let t = match op {
+                "+" | "-" if infer::sum_widths(op, f.set_of(a), f.set_of(b)).is_some() => {
+                    // Two ints with a bound below 2^62 cannot leave the word,
+                    // so the sum is the one instruction with no overflow test
+                    // and no bignum behind it (kanso#2304).
+                    let bound = infer::sum_widths(op, f.set_of(a), f.set_of(b)).unwrap_or(0);
+                    let insn = if op == "+" { "add" } else { "sub" };
+                    let r = f.tmp();
+                    f.line_fmt(format_args!("{r} = {insn} nsw i64 {pa}, {pb}"));
+                    let v = f.tmp();
+                    f.line_fmt(format_args!(
+                        "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"
+                    ));
+                    f.known_words.insert(v.to_string(), ("0".to_string(), r.to_string()));
+                    f.record(&v, infer::WORD | bound);
+                    v
+                }
                 "+" | "-" | "*" => {
                     let intrinsic = match op {
                         "+" => "llvm.sadd.with.overflow.i64",
@@ -2806,7 +2826,7 @@ impl<'a> Backend<'a> {
             true => format!(", {}", self.origin_arg(f, span)),
             false => String::new(),
         };
-        let proven = f.set_of(container) == BYTES && f.set_of(key) == INT;
+        let proven = f.set_of(container) == BYTES && infer::word(f.set_of(key));
         if proven {
             let bp = inline_payload(f, container);
             let bptr = f.tmp();
@@ -2877,7 +2897,7 @@ impl<'a> Backend<'a> {
         // out is whatever the list holds, so the result carries no set. The
         // strict form answers a box around the element, which is the runtime's
         // to build, so it keeps the general path.
-        if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {
+        if !strict && f.set_of(container) == LIST && infer::word(f.set_of(key)) {
             let lp = inline_payload(f, container);
             let lptr = f.tmp();
             f.line_fmt(format_args!("{lptr} = inttoptr i64 {lp} to ptr"));
@@ -2914,7 +2934,7 @@ impl<'a> Backend<'a> {
         // with the pointer and the position: no bytes test in front of it,
         // which a string never passes, and no tag tests behind it. The arm
         // answers a one-character string or `none`, and stops nothing.
-        if !strict && f.set_of(container) == STR && f.set_of(key) == INT {
+        if !strict && f.set_of(container) == STR && infer::word(f.set_of(key)) {
             let sp = inline_payload(f, container);
             let sptr = f.tmp();
             f.line_fmt(format_args!("{sptr} = inttoptr i64 {sp} to ptr"));

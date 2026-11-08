@@ -533,8 +533,11 @@ impl FnEmit {
     }
 
     fn set_of(&self, operand: &str) -> Set {
-        if operand.starts_with("{ i64 0,") {
-            return INT;
+        if let Some(word) = operand.strip_prefix("{ i64 0, i64 ") {
+            return match word.trim_end_matches(" }").parse::<i64>() {
+                Ok(n) => infer::WORD | infer::literal_widths(n),
+                Err(_) => INT,
+            };
         }
         if operand == "{ i64 2, i64 0 }" || operand == "{ i64 3, i64 0 }" {
             return infer::BOOL;
