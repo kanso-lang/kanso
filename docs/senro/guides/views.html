@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "views and components in senro"
-description: "senro's views are kata templates compiled to kanso; a component binds an action to a click, and a page can be rendered in the browser from data with the same functions the server uses."
+description: "senro's views are kata templates compiled to kanso; a component binds an action to a click, an action in the browser reads the database through a provider, and a page can be rendered in the browser from data with the same functions the server uses."
 ---
 <style>
 .senro-hero .hero-kanji { letter-spacing: 0.2em; }
@@ -17,7 +17,7 @@ description: "senro's views are kata templates compiled to kanso; a component bi
 <span class="eyebrow">senro guides</span>
 <h1>views and components</h1>
 
-<p>senro's view layer is kata. a view is a <code>.kata</code> file, compiled to a kanso function while the app compiles, so the compiler checks a template the way it checks any other code. this guide covers the format, layouts, components, and pages rendered in the browser.</p>
+<p>senro's view layer is kata. a view is a <code>.kata</code> file, compiled to a kanso function while the app compiles, so the compiler checks a template the way it checks any other code. this guide covers the format, layouts, components, data from the server, and pages rendered in the browser.</p>
 
 <h2>templates</h2>
 
@@ -86,27 +86,35 @@ html
 
 <h2>components</h2>
 
-<p>a template that binds an action is a component. <code>on-click=more</code> binds a click on an element to the function <code>more</code> in the template's module. a component takes one value, its state, and an action takes the state and answers the next one. the pantry's meal planner is a counter:</p>
+<p>a template that binds an action is a component. <code>on-click=more</code> binds a click on an element to the function <code>more</code> in the template's module. a component takes one value, its state, and an action takes the state and answers the next one. the pantry's meal planner counts the week's meals, and its state is a map holding the count:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/pantry/planner/view.kata</div>
-  <pre><code>takes meals
+  <pre><code>takes plan
 div.planner
   span.label Meals planned this week
   button.minus on-click=fewer aria-label="one fewer" −
-  span.count = meals
-  button.plus on-click=more aria-label="one more" +</code></pre>
+  span.count = plan["meals"]
+  button.plus on-click=more aria-label="one more" +
+  button.check on-click=checked Check the staples
+  case plan["note"]
+    when none
+    else
+      p.note = plan["note"]</code></pre>
 </div>
 <div class="code-panel">
   <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
-  <pre><code><span class="c"># The week's meal plan, counted in the browser. These are the component's</span>
-<span class="c"># actions: each takes the count and answers the next one, and the planner's</span>
-<span class="c"># template binds them to its buttons.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">more</span> meals
-  meals <span class="o">+</span> <span class="n">1</span>
+  <pre><code><span class="c"># The week's meal plan, counted in the browser, and the staples it would run</span>
+<span class="c"># short of. These are the component's actions: each takes the plan and</span>
+<span class="c"># answers the next one, and the planner's template binds them to its buttons.</span>
+<span class="c"># `more` and `fewer` count in the browser alone and clear the last check;</span>
+<span class="c"># `checked` asks the server.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">more</span> plan
+  <span class="f">planned</span> (<span class="f">meals_of</span> plan <span class="o">+</span> <span class="n">1</span>)
 
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">fewer</span> meals
-  <span class="f">if</span> (meals <span class="o">&gt;</span> <span class="n">0</span>) (meals <span class="o">-</span> <span class="n">1</span>) <span class="n">0</span></code></pre>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">fewer</span> plan
+  n <span class="o">=</span> <span class="f">meals_of</span> plan
+  <span class="f">planned</span> (<span class="f">if</span> (n <span class="o">&gt;</span> <span class="n">0</span>) (n <span class="o">-</span> <span class="n">1</span>) <span class="n">0</span>)</code></pre>
 </div>
 
 <p>where an action runs depends on what it asks for. an action that takes only the state runs in the browser, in the app's browser module, without asking the server. one that also asks for <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server: the click posts the state to <code>/senro/act/&lt;component&gt;</code>, and the page morphs the component's next rendering into place. the guestbook's remove button is that kind:</p>
@@ -134,6 +142,44 @@ button.remove on-click=removed aria-label="remove entry {id}" ×</code></pre>
 </div>
 
 <p>its state is the entry's id, which anyone can send, so the action removes the entry through the model, whose policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself: every write a component makes goes through a policy.</p>
+
+<h2>data from the server</h2>
+
+<p>an action that runs in the browser can still read what only the server holds, through a provider. a provider is a function whose first two parameters are the viewer and a database session. the planner's check button asks which staples the week would run short of, and the answer comes from the shelf in the database:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/stock.kso</div>
+  <pre><code><span class="c"># The staples the shelf holds fewer of than `meals`, by name. The planner asks</span>
+<span class="c"># for them as `stock/short meals`, and this body runs only on the server.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">short</span> viewer db meals
+  <span class="f">models/where</span> viewer db item_model <span class="s">"staple"</span> <span class="s">"t"</span>
+    <span class="o">.&gt;</span> (items <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">under</span> items meals))
+
+<span class="k">fn</span> <span class="f">under</span> items meals
+  low <span class="o">=</span> <span class="f">list/select</span> items (i <span class="o">-&gt;</span> i.quantity <span class="o">&lt;</span> meals)
+  <span class="f">list/to_list</span> (<span class="f">list/map</span> low (i <span class="o">-&gt;</span> i.name))</code></pre>
+</div>
+
+<p>the action calls the provider with two arguments fewer, as it calls any function. with <code>derive data/providers</code> in the entry, the derivation writes that shorter <code>short meals</code> into <code>stock.kso</code>, and called in the browser it asks the server for the answer:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">checked</span> plan
+  asked <span class="o">=</span> <span class="f">stock/short</span> (<span class="f">meals_of</span> plan)
+  <span class="f">data/then</span> asked (names <span class="o">-&gt;</span> <span class="f">put</span> plan <span class="s">"note"</span> (<span class="f">noted</span> names))</code></pre>
+</div>
+
+<p><code>checked</code> answers what it asks for instead of its next state. the page sends the call to <code>POST /senro/data</code>, runs the action again with the answer, and renders the plan it comes to: one click, one request. calls an action gathers with <code>data/all</code> go in one request however many there are, and a call inside <code>data/then</code> that needs an earlier answer waits a round. the server answers from the table the derivation writes beside the providers, <code>stock/provided</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/main.kso</div>
+  <pre><code><span class="c"># The planner asks the server for the staples the week runs short of, through</span>
+<span class="c"># the provider in stock.kso.</span>
+answering <span class="o">=</span> <span class="f">web/components</span> routes secret served
+served_with_data <span class="o">=</span> <span class="f">web/providers</span> answering secret stock/provided</code></pre>
+</div>
+
+<p>a page can reach only a provider the app's own code calls that way, and only from senro's page script. anyone with a session can still call one with arguments of their choosing, so a provider reads through a model, whose policy decides what the viewer may see. <code>routes/rest</code> gives a provider no route, so it can sit in a resource's module beside the actions. the browser module compiles the provider's body without running it, so the pantry's browser entry derives the models too.</p>
 
 <h2>pages in the browser</h2>
 
