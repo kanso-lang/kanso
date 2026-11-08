@@ -1713,3 +1713,15 @@ schedule, `(ks[at] & whole) + (w[at] & whole)`. With the inline `&` path now
 taking any operand that may be a word, the run read 366,492,605, worse than
 without the masks. The inline path stays: it costs nothing where no mask is
 written.
+
+On CI, against main after #2374, the run rows fall: `digestbench` from
+3,288,947 to 3,108,282 instructions, `runbench` from 915,653,371 to
+913,657,054 and `runbench_dev` from 2,822,091,163 to 2,811,021,533. The
+compile rows pay for the wider sets and the rules that read them:
+`compile_instructions` rises to 24,152,651, `entry_instructions` to
+156,082,962, `library_instructions` to 73,608,656, `emit_instructions` to
+5,624,872 and `browser_compile_instructions` to 351,647,580. The emitted
+code grows where the inline bitwise path now takes an operand that may be a
+word behind a tag test: `emitted_other_branches` reads 19,444 and
+`emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
+Welfare rises from 95.07 to 95.08 and is banked.
