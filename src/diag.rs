@@ -159,9 +159,38 @@ pub fn render_across(
             out.push_str(&format!("{} | {}\n", num, src_line));
             let pad = " ".repeat(num.len() + 3 + (d.span.col as usize).saturating_sub(1));
             out.push_str(&format!("{}^\n", pad));
+            if let Some(from) = written_from(name, &lines, line) {
+                out.push_str(&format!("  = written from {from}\n"));
+            }
         }
     }
     out
+}
+
+/// The source line a derived line was written from (#2380). A derivation
+/// may write `# from <file>:<line>` above what it writes, naming the file
+/// relative to the module. The nearest such comment above the line names
+/// where a mistake there came from, looking no further than the comments
+/// directly above the definition the line is in. A derived file is named
+/// `<module>.derived.kso`, so the file is joined onto the module's directory
+/// and the user is shown a path they can open.
+fn written_from(name: &str, lines: &[&str], line: usize) -> Option<String> {
+    let module = name.strip_suffix(".derived.kso")?;
+    let from = |l: &str| l.trim_start().strip_prefix("# from ").map(|f| f.trim_end().to_string());
+    let mut i = line;
+    while i > 0 {
+        i -= 1;
+        if let Some(f) = from(lines[i]) {
+            return Some(format!("{module}/{f}"));
+        }
+        let l = lines[i];
+        if !l.is_empty() && !l.starts_with(char::is_whitespace) && !l.starts_with('#') {
+            // The definition's header: only the comments right above it remain.
+            let above = lines[..i].iter().rev().take_while(|l| l.starts_with('#'));
+            return above.filter_map(|l| from(l)).next().map(|f| format!("{module}/{f}"));
+        }
+    }
+    None
 }
 
 /// A name with the article English gives it. "an int", "a string" — a

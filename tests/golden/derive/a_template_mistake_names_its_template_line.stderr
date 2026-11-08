@@ -1,0 +1,10 @@
+error[unused]: unused binding `name`
+  --> tests/golden/derive/a_template_mistake_names_its_template_line/views.derived.kso:2:17
+   2 | pub fn greeting name
+                       ^
+  = written from tests/golden/derive/a_template_mistake_names_its_template_line/views/greeting.tpl:1
+error[name]: unknown name `nmae`
+  --> tests/golden/derive/a_template_mistake_names_its_template_line/views.derived.kso:3:12
+   3 |   "hello, {nmae}"
+                  ^
+  = written from tests/golden/derive/a_template_mistake_names_its_template_line/views/greeting.tpl:1
