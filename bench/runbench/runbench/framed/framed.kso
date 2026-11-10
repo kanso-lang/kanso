@@ -1,0 +1,50 @@
+# A decoder a library exports. A stream holds numbers one after another, a
+# number under 128 as one byte and a larger one as two, and `at` answers the
+# number at a position together with the position after it. That answer is a
+# record of two fields, built once for every value read (#2421).
+import "std/bits"
+import "std/text"
+
+pub type read
+  value
+  next
+
+lost = read none 0
+
+pub fn add acc v
+  return text/append acc v if v < 128
+  text/append (text/append acc (128 + (v & 127))) (bits/shr v 7)
+
+pub fn at bs p
+  first bs[p] bs (p + 1)
+
+fn first none _ _
+  lost
+
+fn first b bs p
+  return read b p if b < 128
+  second (b - 128) bs[p] (p + 1)
+
+fn second _ none _
+  lost
+
+fn second low b p
+  read (low + 128 * b) p
+
+# The stream summed inside the library, which may take the record apart in
+# a parameter: the value first and the position second, as `read` declares
+# them.
+pub fn sum bs count
+  summed count bs (at bs 1) 0
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) (acc + weighed v)
+
+fn weighed none
+  0
+
+fn weighed v
+  v

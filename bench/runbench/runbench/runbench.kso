@@ -391,6 +391,7 @@ import "./sealed"
 import "./split"
 import "./stack"
 import "./stretched"
+import "./taken"
 import "./worded"
 import "std/io"
 import "std/json"
@@ -475,6 +476,8 @@ carried_hashes = 600
 
 sealed_passes = 800
 
+taken_passes = 1500
+
 fn decoded _ 0 sofar
   sofar
 
@@ -540,8 +543,9 @@ fn tally raw doc a b
   ported22 = ported21 + stretched/total stretched_iterations
   ported23 = ported22 + carried/total carried_hashes
   ported24 = ported23 + sealed/total sealed_passes
+  ported25 = ported24 + taken/total taken_passes
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported24 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported25 + rest))
   bulk .> on
 
 fn shaped raw doc a
