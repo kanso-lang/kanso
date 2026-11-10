@@ -681,6 +681,61 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Bytes(Rc::new(raw)))
             }
+            // `std/base64`'s two kernels. Spelling takes bytes or a list of
+            // byte values; a list that holds anything else is a mistake in
+            // the caller, as a value that is not a string is to `bytes`.
+            b"base64_spell" => {
+                let [held] = arity(args, name, span)?;
+                if is_failure(&held) {
+                    return Ok(held);
+                }
+                let refused = || RuntimeError {
+                    at: None,
+                    message: "base64/encode takes bytes".to_string(),
+                    span,
+                };
+                let raw: Vec<u8> = match &held {
+                    Value::Bytes(bytes) => bytes.to_vec(),
+                    Value::List(items) => {
+                        let mut raw = Vec::with_capacity(items.len());
+                        for item in items.iter() {
+                            if is_failure(item) {
+                                return Ok(item.clone());
+                            }
+                            match sub_base(item.clone()) {
+                                Value::Int(n) if u8::try_from(&n).is_ok() => {
+                                    raw.push(u8::try_from(&n).expect("asked"))
+                                }
+                                _ => return Err(refused()),
+                            }
+                        }
+                        raw
+                    }
+                    _ => return Err(refused()),
+                };
+                Ok(Value::Str(Text::from(crate::base64::spell(&raw))))
+            }
+            // Reading answers a list of byte values, as the library did when
+            // it was written in kanso, or none for text that is not base64.
+            b"base64_read" => {
+                let [text] = arity(args, name, span)?;
+                if is_failure(&text) {
+                    return Ok(text);
+                }
+                let Value::Str(text) = &text else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "base64/decode takes a string".to_string(),
+                        span,
+                    });
+                };
+                Ok(match crate::base64::read(text.as_bytes()) {
+                    Some(bytes) => {
+                        Value::List(Rc::new(bytes.into_iter().map(Value::int).collect()))
+                    }
+                    None => Value::NoneV,
+                })
+            }
             // `text/bytes` answers an int list (appendix b), and native code
             // reads a bytes value as the list of its byte values on either
             // side. The answer is a list either way.

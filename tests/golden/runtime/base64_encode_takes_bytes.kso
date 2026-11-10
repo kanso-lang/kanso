@@ -1,0 +1,9 @@
+# `base64/encode` takes bytes or a list of byte values. A list holding a
+# number that is not a byte is a mistake in the caller, and stops the program
+# as a value that is not a string stops `text/bytes`.
+import "std/base64"
+
+pub fn opaque v
+  v
+
+pub play = print (base64/encode (opaque [102 300]))
