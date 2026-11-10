@@ -113466,3 +113466,196 @@ Only a string in the driver changed. By CI's measure, on the tree merged
 with the language server, codegen_instructions_release fell to 371,872,995
 (-15) and no other row moved. The emitted IR is unchanged; the binary's
 layout is the likely cause, though nothing here isolates it.
+
+## 2026-11-04 — a password stretched and a digest carried join the run program
+
+`sha256/pbkdf2` peaked at 1,525,448 kB resident for 100,000 iterations
+(#2299). The issue reduced it to a tail loop that hands `sha256/digest`'s
+answer to its next iteration and carries a list it never reads, and that
+loop keeps every digest's garbage too. Under the 2026-09-05 corpus-first
+gavel both shapes join the run program here, measured on main before the
+fix.
+
+`stretched` runs `sha256/pbkdf2` for 200 iterations and `carried` runs the
+postcard for 600 digests. On this container the release-tier run program
+reads 1,045,660,009 with both. Without `stretched` (one iteration) it reads
+1,023,809,139, a column of 21,850,870 (2.09%); without `carried` (none) it
+reads 1,013,906,580, a column of 31,753,429 (3.04%). Each phase keeps its
+loop's work: `stretched` about ten kilobytes an iteration and `carried`
+about five. The counts are sized so the program's peak sees it: with both,
+arena_peak_bytes reads 6,815,760 where it read 4,718,608, and at 250
+digests `carried` stayed under the old peak and the objective could not see
+it.
+
+The mem vein takes the two fixtures, each at today's growth:
+`a_digest_hashed_again_round_a_loop` (600 digests, three arena blocks) and
+`a_password_stretched_three_hundred_times` (five). Their outputs agree with
+Python's `hashlib`.
+
+The issue's control row, the same loop without `p` at 2,296 kB, does not
+reproduce on this tree. `chain u left`, a public loop with no wrapper, and
+the wrapper with its unread list removed both keep every digest: five arena
+blocks at a thousand digests, like the postcard. The extra parameter is not
+the cause. `sha256/digest` answers through `list/fold`, and inference gives
+a library function one answer for every caller in the program, so the
+digest reads as any value. A loop slot that may hold any value is never
+carried across a rewind.
+
+CI's rows for the two phases: work_runbench 890,914,087 -> 947,406,395
+(+56,492,308, 6.0% of the new whole), run_allocs 1,930,602 -> 2,040,700,
+run_alloc_bytes 237,920,257 -> 245,492,129, run_arena_blocks 4 -> 7,
+run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
+-> 4,718,608, run_cohort_frees 11 -> 13, run_perm_allocs 131 -> 133,
+run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
+1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
+run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
+runbench's emitted lines 69,443 -> 71,622 and its text 856,929 -> 889,681,
+which take the totals emitted_other_branches 18,260 -> 18,498,
+emitted_other_calls 21,198 -> 21,507, emitted_other_defines 2,327 -> 2,359,
+emitted_other_lines 174,304 -> 176,483 and text 5,829,760 -> 5,862,512.
+run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
+container reads 195,099 with the phases present as well. Inference is
+whole-program, so new callers of the shared library functions can change
+another phase's beat verdicts; that is a likely cause, and nothing here
+isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
+-> 8,939,665), each keeping its ratio to its baseline, and the floor moves
+only by the rounding of the two baselines.
+
+## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
+
+#2299. Both shapes joined the run program in #2301, measured before this.
+
+**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
+and the running XOR. A list built in one iteration and read in the next is
+a value that crosses a rewind, and the carry tier that could copy it out is
+closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
+loop kept everything every HMAC built. It now carries the sixteen words as
+arguments, as `compress` has carried its eight since 2026-09-23, and the
+beat report reads "rewinds every iteration". Each word read out of a list
+is masked with `whole`: an item of a list could be anything to inference,
+and the mask, a no-op on a word, makes the argument a number. Without the
+mask the loop kept its grow-only verdict, "argument 2 may carry heap".
+`paired_xor` had no other caller and is gone.
+
+**The postcard.** The issue's shape is a loop that hands
+`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
+bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
+is the digest's answer. It spelled its words as bytes through `list/fold`,
+and inference gives a library function one return set for every caller in
+the program, so the fold answers anything and so does the digest. `bytes_of`
+is now a push loop of its own, the slot reads `0x220` (a list or an err),
+and the loop carries it. The general case, any function answering through a
+shared driver, is #2302.
+
+A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
+hand the slot. It changed nothing, because the handed set was the digest's
+TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
+could not have told a builtin from a library function anyway. It was
+reverted before commit.
+
+**Measured on this container**, the same box before and after:
+
+| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
+|---|---:|---:|
+| wall | 4.24 s | 0.68 s |
+| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
+| peak resident | 1,523,724 kB | 2,300 kB |
+
+Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
+vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
+interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
+after. The mem fixtures read one arena block each, where they read three
+and five.
+
+Their other rows move with the loop that now rewinds:
+a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
+a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
+a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
+a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
+a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
+a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
+a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
+a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
+A loop that gives its arena back each iteration copies what it carries out
+first, which fits the evacuations, and has no buffer of the last
+iteration's left to reuse; the byte loop's pushes replace the fold's. That
+reading fits the rows, and nothing here isolates each counter.
+
+**What an iteration costs now.** Callgrind on 2,000 iterations reads
+202,252,987 instructions, about 101,000 an iteration for two compressions.
+`digested`, with the rounds and the schedule inlined into it, is 50%;
+`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
+called rather than inlined; list pushes and the fold that spells the first
+HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
+compression, so this is roughly ten times that. **OPEN:** inlining the four
+mixing functions is the next lead.
+
+CI's rows, on the run program with both phases: work_runbench 947,406,395
+-> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
+5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
+2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
+run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
+run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
+run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
+1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
+96,452,880. The sixteen-argument loop and the byte loop are more code:
+runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
+which take the totals emitted_other_branches 18,498 -> 18,759,
+emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
+emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
+Compiling the longer library costs entry_instructions 86,832,572 ->
+87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
+(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
+-> 95.63 and is banked.
+
+## 2026-11-04 — bytes nobody can predict
+
+senro's sign-in needs random salts and tokens, and std had only
+`math/random`, which `KANSO_SEED` replays (#2298, under #2280).
+`os/random_bytes n` is a description that yields `n` bytes from the
+operating system's secure source. Native code calls `getentropy` in
+256-byte pieces, or `arc4random_buf` on macOS, as desc 40. The interpreter
+makes the same libc call from Rust. In the tab, wasi-libc's `getentropy` is
+WASI's `random_get`, which `kanso-engine.js` already answered with
+`crypto.getRandomValues`. The interpreter build, `kanso.wasm`, had no call
+out to the page: its seed and sources are pushed in through exports. A
+pushed buffer cannot know how many bytes a program will ask for, so it
+gained one import, `kanso_host.random_fill`, which the page fills from
+`crypto.getRandomValues` in 65,536-byte slices. The wasmi hosts in `tests/`
+define it through `wasm32::page_linker` and leave the zeros. The import is
+wasm32's alone: macOS refused to link the native library with it unresolved,
+which Linux had allowed. Off the page the browser executor takes the
+machine's bytes.
+
+Three specs, each seen red. `random_bytes_are_as_many_as_were_asked_for`
+in the micro corpus asks for 32, 1 and 0 bytes and appends `"ok"`, which only
+bytes accept, so it pins the length and the kind of value on every engine the
+corpus reaches. It went red at `31 ok` with native broken to one byte short.
+`random_bytes_takes_a_count` in the runtime corpus pins the refusal of a
+string on both engines. `tests/random_bytes_ignore_the_seed.rs` runs one
+program twice under `KANSO_SEED=7` and holds the dice equal and the bytes
+different. It went red when the interpreter drew from its seeded generator.
+Under node with the page's host function, the interpreter build replays the
+dice and not the bytes, and it fills a 70,000-byte ask.
+
+The rows are from a job on 0x19 model 0x11, on the tree merged with main.
+Before the merge, a job on model 0x1, the silicon the goldens were recorded
+on, read the same numbers as one on 0x11. Every binary's `.text` grew by 272 bytes, the new
+case and helper, so text across the fourteen benchmarks rose to 5,869,488
+(+3,808). The runtime instruction rows fell by 45 to 1,578, though no
+benchmark runs the new case, so layout is the likely cause; nothing here
+isolates it. codegen_instructions_release rose to 371,998,504 (+125,509) and
+codegen_instructions_dev to 117,050,653 (+18,303), likely clang compiling the
+larger runtime. The front end moved too, and its code changed only by the
+table entries, so again layout is the likely cause:
+compile_instructions to 24,100,614 (+1,169), entry_instructions to 87,192,183
+(+3,765), library_instructions to 72,964,207 (+2,990) and emit_instructions
+to 5,601,693 (+811). interp_instructions fell to 622,464,159 (-35,790). In
+the tab, browser_compile_instructions rose to 349,357,398 (+18,068) and
+browser_run_instructions to 78,344,393 (+6,012). Welfare fell by less than 0.0001. A secure source of randomness is required
+for the sign-in the senro mandate asks for, so the floor drops by exactly
+that cost.
+
+The page's sections for `kanso build --wasm` and the language server were
+owed, and this change was the fourth entry since the page last moved, so
+docs/compiler.html gains all three as sections 281 to 283.
