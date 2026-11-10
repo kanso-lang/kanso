@@ -1056,9 +1056,17 @@ static ssize_t k_conn_give_some(long long h, int fd, const char* buf, size_t n) 
             if (r <= 0) r = -1;
         }
     } else {
-        do r = send(fd, buf, n, MSG_DONTWAIT);
+        /* `send` with MSG_DONTWAIT says this in one call, and would be one
+           more name for the loader to find at every program's start, 443
+           instructions whether or not the program opens a socket. `fcntl`
+           and `write` are here already. */
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        do r = write(fd, buf, n);
         while (r < 0 && errno == EINTR);
-        if (r < 0) r = errno == EAGAIN || errno == EWOULDBLOCK ? 0 : -1;
+        int said = errno;
+        fcntl(fd, F_SETFL, flags);
+        if (r < 0) r = said == EAGAIN || said == EWOULDBLOCK ? 0 : -1;
         else if (r == 0) r = -1;
     }
     signal(SIGPIPE, was);
@@ -1312,19 +1320,23 @@ static KValue k_exec(KDesc* d) {
             return k_dial(d->x, d->y.payload);
         case 36:
             return k_secure(d->x.payload, d->y);
-        case 23:
-        case 42: {
-            /* Outside the scheduler there is no other fiber to run, so the
-               write waits where it stands, and one the scheduler began (42)
-               is finished the same way. */
-            KDesc* w = d->dtag == 42 ? k_as_desc(d->x) : d;
-            long long sent = d->dtag == 42 ? d->y.payload : 0;
-            int fd = k_socket_of(w->x.payload);
+        case 23: {
+            int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
+            const char* tdata;
             long long tlen;
-            const char* tdata = k_write_data(w->y, &tlen);
+            if (d->y.tag == K_BYTES) {
+                KBytes* b = k_as_bytes(d->y);
+                tdata = (const char*)b->data;
+                tlen = b->len;
+            } else {
+                KStr* t = k_as_str(d->y);
+                tdata = t->data;
+                tlen = t->len;
+            }
+            long long sent = 0;
             while (sent < tlen) {
-                ssize_t n = k_conn_give(w->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
+                ssize_t n = k_conn_give(d->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
                 if (n <= 0) return k_err(k_str("cannot write"), NULL);
                 sent += n;
             }
@@ -1844,6 +1856,46 @@ static KValue k_kill_kid(KValue handle) {
     return k_done();
 }
 
+/* A write inside the scheduler (23), or the rest of one (42). A write the
+   connection has no room for waits as a read with nothing arrived does. The
+   bytes it did take are counted in the description the fiber is left holding
+   (42: the write, and how much of it has gone), so the fiber picks up where
+   it stopped and no byte is copied to remember the rest.
+   Out of line, and `k_exec` is left as it was: a write outside the scheduler
+   has no other fiber to yield to and waits where it stands, and a part-done
+   one (42) never reaches it, because only the scheduler steps a fiber it
+   holds. Written into both switches this cost deepbench, which opens no
+   socket, 1.87 million instructions. 1.2 million of them were one `mov` at
+   `k_exec`'s entry, where a changed switch made clang keep its argument in
+   a second register. */
+static __attribute__((noinline)) KStep k_step_write(KDesc* d) {
+    KDesc* w = d->dtag == 42 ? k_as_desc(d->x) : d;
+    long long sent = d->dtag == 42 ? d->y.payload : 0;
+    int fd = k_socket_of(w->x.payload);
+    if (fd < 0) {
+        KStep s = {0, 0, k_none(), k_err(k_str("that is not a connection"), NULL)};
+        return s;
+    }
+    long long tlen;
+    const char* tdata = k_write_data(w->y, &tlen);
+    while (sent < tlen) {
+        ssize_t n = k_conn_give_some(w->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
+        if (n < 0) {
+            KStep s = {0, 0, k_none(), k_err(k_str("cannot write"), NULL)};
+            return s;
+        }
+        if (n == 0) {
+            k_sock_waiting = 1;
+            KValue whole = d->dtag == 42 ? d->x : k_mkdesc(23, d->x, d->y);
+            KStep s = {1, 1, k_mkdesc(42, whole, k_int(sent)), k_none()};
+            return s;
+        }
+        sent += n;
+    }
+    KStep s = {0, 0, k_none(), k_done()};
+    return s;
+}
+
 /* Links walked inside steps, so the drift test below runs on one link in 256:
    asked after every link it cost runbench 650,000 instructions, and a stage
    that comes 255 links late still keeps the region inside its budget. */
@@ -1905,38 +1957,8 @@ static KStep k_step(KDesc* d) {
             return s;
         }
         case 23:
-        case 42: {
-            /* A write the connection has no room for waits the same way. The
-               bytes it did take are counted in the description the fiber is
-               left holding (42: the write, and how much of it has gone), so
-               the fiber picks up where it stopped and no byte is copied to
-               remember the rest. */
-            KDesc* w = d->dtag == 42 ? k_as_desc(d->x) : d;
-            long long sent = d->dtag == 42 ? d->y.payload : 0;
-            int fd = k_socket_of(w->x.payload);
-            if (fd < 0) {
-                KStep s = {0, 0, k_none(), k_err(k_str("that is not a connection"), NULL)};
-                return s;
-            }
-            long long tlen;
-            const char* tdata = k_write_data(w->y, &tlen);
-            while (sent < tlen) {
-                ssize_t n = k_conn_give_some(w->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
-                if (n < 0) {
-                    KStep s = {0, 0, k_none(), k_err(k_str("cannot write"), NULL)};
-                    return s;
-                }
-                if (n == 0) {
-                    k_sock_waiting = 1;
-                    KValue whole = d->dtag == 42 ? d->x : k_mkdesc(23, d->x, d->y);
-                    KStep s = {1, 1, k_mkdesc(42, whole, k_int(sent)), k_none()};
-                    return s;
-                }
-                sent += n;
-            }
-            KStep s = {0, 0, k_none(), k_done()};
-            return s;
-        }
+        case 42:
+            return k_step_write(d);
         case 17: {
             /* Same shape for a process: start it, then wait by yielding, so
                the other statements of the group run while it does. */

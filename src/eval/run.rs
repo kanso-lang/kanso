@@ -513,6 +513,11 @@ impl<'a> Interp<'a> {
     /// the send and that count, so it picks up where it stopped and no byte
     /// is copied to remember the rest. The connection is asked at least
     /// once, so a send of nothing still learns that its handle names none.
+    ///
+    /// Kept out of line and cold, as `awaited` is: the interpreted corpus
+    /// opens no socket.
+    #[cold]
+    #[inline(never)]
     fn send_on(
         &self,
         whole: &Rc<Desc>,
