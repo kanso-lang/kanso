@@ -280,7 +280,14 @@ static KValue k_thunk_vnew(long long site, int argc, int pooled, va_list ap) {
     } else {
         t = (KThunk*)malloc(sizeof(KThunk));
     }
-    if (K_COUNTING && !pooled) k_stat_thunk_allocs++;
+    if (K_COUNTING && !pooled) {
+        k_stat_thunk_allocs++;
+        /* A cell is malloc'd, so it is held storage like a builder's buffer
+           or a map's view, and until this counted it the memory terms could
+           not see a cell nobody frees. */
+        k_stat_held_live += (long long)sizeof(KThunk);
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+    }
     t->rc = 1;
     t->site = site;
     t->forced = K_MEMO_NONE;
@@ -399,7 +406,10 @@ static void k_thunk_drop_args(KThunk* t);
 static void k_thunk_release_cell(KThunk* t) {
     if (--t->rc > 0) return;
     k_thunk_drop_args(t);
-    if (K_COUNTING && !t->pooled) k_stat_thunk_frees++;
+    if (K_COUNTING && !t->pooled) {
+        k_stat_thunk_frees++;
+        k_stat_held_live -= (long long)sizeof(KThunk);
+    }
     if (K_CELL_CHECKING) {
         t->site = K_SITE_LET_GO;
         t->forced = K_MEMO_NONE;

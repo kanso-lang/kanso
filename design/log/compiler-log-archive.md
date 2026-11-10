@@ -113356,3 +113356,53 @@ library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
 622,391,510 (+3).
 The ruling is a part of the language, so the welfare floor drops by exactly
 that cost, to 95.61456.
+
+## 2026-11-03 — a write to a peer that has gone is an err on both engines
+
+A senro server died without a word when a page that had been listening for
+changes closed. Native code wrote to the socket with `write()`, so the closed
+peer raised SIGPIPE, which the driver leaves at its default so that a program
+behind `head` ends quietly. The interpreter writes through Rust's std, which
+suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
+a wording the host supplies. The engines disagreed, and the interpreter is the
+oracle.
+
+The native write now ignores SIGPIPE for its duration and fails with EPIPE.
+The runtime runs one thread, so the handler it sets around the write is its
+own. Both engines say `cannot write`. The micro corpus's
+`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
+end and writes; before the fix the native run exited 141 with no output. The
+tab has no sockets, so the program is listed in the native route's known gaps.
+
+The two calls around the write cost code, by CI's measure. Every benchmark's
+machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
+fourteen. Clang does more work on the runtime: codegen_instructions_dev to
+117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
+moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
+890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
+to 938,655,381. Welfare falls by a sliver.
+Engines that agree are part of the language's specification, so the floor
+drops by exactly that cost.
+
+## 2026-11-03 — kanso build writes a module a browser can run
+
+`kanso build page.kso --wasm` writes `page.wasm`: the emitted module
+lowered by `ir_wasm` to a wasm side module, the one the playground links
+against `runtime.c` built for wasm32. A page needs two numbers before it can
+link the module, the data bytes and the table slots it asks for, and they
+ride in the module as a custom section named `kanso.link`, two
+little-endian u32s, so the file is all a page has to fetch. senro's views
+compiled for the browser are built this way (#2280).
+
+`tests/build_wasm.rs` builds a two-module program with the flag, reads the
+section back, links the module against the runtime under wasmi and checks
+that it prints. It failed on the unknown flag before the change.
+
+The flag is a branch in the driver, and the binary's layout moved with it, by
+CI's measure. Four front-end rows rose by a handful of instructions:
+compile_instructions to 24,102,382, entry_instructions to 86,840,310,
+library_instructions to 72,628,277 and startup_instructions to 50,267.
+codegen_instructions_release rose to 371,872,843. emit_instructions fell to
+5,599,243. Welfare falls by a sliver, and the
+browser build is part of the senro mandate, so the floor drops by exactly
+that cost.

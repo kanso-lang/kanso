@@ -20,57 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — a write to a peer that has gone is an err on both engines
-
-A senro server died without a word when a page that had been listening for
-changes closed. Native code wrote to the socket with `write()`, so the closed
-peer raised SIGPIPE, which the driver leaves at its default so that a program
-behind `head` ends quietly. The interpreter writes through Rust's std, which
-suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
-a wording the host supplies. The engines disagreed, and the interpreter is the
-oracle.
-
-The native write now ignores SIGPIPE for its duration and fails with EPIPE.
-The runtime runs one thread, so the handler it sets around the write is its
-own. Both engines say `cannot write`. The micro corpus's
-`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
-end and writes; before the fix the native run exited 141 with no output. The
-tab has no sockets, so the program is listed in the native route's known gaps.
-
-The two calls around the write cost code, by CI's measure. Every benchmark's
-machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
-fourteen. Clang does more work on the runtime: codegen_instructions_dev to
-117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
-moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
-890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
-to 938,655,381. Welfare falls by a sliver.
-Engines that agree are part of the language's specification, so the floor
-drops by exactly that cost.
-
-## 2026-11-03 — kanso build writes a module a browser can run
-
-`kanso build page.kso --wasm` writes `page.wasm`: the emitted module
-lowered by `ir_wasm` to a wasm side module, the one the playground links
-against `runtime.c` built for wasm32. A page needs two numbers before it can
-link the module, the data bytes and the table slots it asks for, and they
-ride in the module as a custom section named `kanso.link`, two
-little-endian u32s, so the file is all a page has to fetch. senro's views
-compiled for the browser are built this way (#2280).
-
-`tests/build_wasm.rs` builds a two-module program with the flag, reads the
-section back, links the module against the runtime under wasmi and checks
-that it prints. It failed on the unknown flag before the change.
-
-The flag is a branch in the driver, and the binary's layout moved with it, by
-CI's measure. Four front-end rows rose by a handful of instructions:
-compile_instructions to 24,102,382, entry_instructions to 86,840,310,
-library_instructions to 72,628,277 and startup_instructions to 50,267.
-codegen_instructions_release rose to 371,872,843. emit_instructions fell to
-5,599,243. Welfare falls by a sliver, and the
-browser build is part of the senro mandate, so the floor drops by exactly
-that cost.
-
-
 ## 2026-11-03 — an editor asks the compiler what a name is
 
 Clay asked for a language server that works in RubyMine and in the
@@ -1768,6 +1717,78 @@ rows and the interpreter's 9,993.
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
 
+## 2026-11-10 — senro's server logs its requests and lets its connections go
+
+Five senro pull requests and one here, all found by running the guestbook
+as a server for longer than a spec does. The site's pin moves to senro
+5b17eac with them.
+
+**A request log (senro#101).** The server writes a line to stdout for each
+request as it answers: `GET /entries/3 200 in 2ms`. The method is the one
+a form stands for, so a confirmation's button reads `PATCH`. The query
+string is left out. A path segment shaped like one of senro's signed
+tokens is written `:token`, and an uploaded file's key `:key`, so a kept
+log holds no link that confirms an address or resets a password.
+`/senro/live` gets no line. `spec/serve/logged` pins the lines, with the
+milliseconds masked.
+
+**Every accepted connection is closed (senro#102).** The server closed a
+connection after answering it and at no other time. A client that
+connected and hung up without a request left its socket open on the
+server for good, and about sixty of those ended a natively built app at
+the runtime's table of 64 (#2402, fixed here in #2404). The close now
+happens in one place, after whatever became of the connection. A
+connection that sent nothing closes silently and any other early ending
+is written to stderr. `spec/serve/hung_up` sends 320 such clients to a
+server limited to 256 open files and then asks it a question.
+
+**An action that answers no response (senro#102).** An action that
+answered a string ended the request with no reply and nothing in the log.
+The cause is a rule of the language working as written: a failure raised
+inside a package is not caught by a `.?` in that same package, so `web`
+could not rescue the err it raised itself, and the fiber's failure waited
+for a join the accept loop never reaches. `web` now answers a 500 and
+reports the value directly. `spec/serve/answered` pins the reply and the
+report.
+
+**One session listens for every page (senro#103).** Each open tab's
+`/senro/live` stream held a Postgres session of its own, and a tab that
+closed was noticed only when the next change was written to it. One fiber
+now listens on one session and passes each change to every open page.
+The server writes each page a line every fifteen seconds, and a page
+whose write fails twice is let go. `spec/live` opens twenty pages and
+reads the server's own descriptor count: twenty more files and no more
+sessions, and none more once they have left.
+
+**A lock that runs out (senro#100).** The guestbook locks an account
+after three wrong passwords and mails a link, and the lock lapses after
+an hour. Nothing had run the hour. `spec/lapsed` moves the lock's time
+back in the database and watches the right password work again.
+
+**The guides sat off the left edge (#2401).** Clay reported the views
+guide against the left edge of the window. The nine guide pages had
+`spec-doc`, which sets a column's width, and lacked `essay`, which
+centres it; they had lacked it since they were written. `prose_check`
+gained a family, "no reading column", that fails a page whose article has
+a width and no centring.
+
+**What I got wrong.**
+- senro#102's first CI run was red on its own spec. The script read the
+  server's log after stopping the server, and the log by then held the
+  line kanso prints for a program ended by a signal. It reads the log
+  first.
+- #2401's first commit message said the pages had been checked in a
+  narrow window, which I had not established. The message now says only
+  that the class was missing.
+- The spec for many callers stalled at eighty dials, and I put a pause
+  between dials before finding the cause. It was the listen queue of 16,
+  which #2404 isolated.
+
+**Open.** A native server's resident memory grew from 3,140 kB to 3,692 kB
+over 1,500 connections, and I have not found what holds it. The runtime
+never frees a pool, which is why the live streams reuse their seats.
+`net/write` blocks the whole program on a client that reads slowly.
+
 ## 2026-11-10 — a lazy binding a callback captured is not its frame's to free
 
 Fixes #2409.
@@ -1870,11 +1891,102 @@ read.
 
 **Rows.** No runtime counter moves and every benchmark's machine code is
 byte for byte what it was: no benchmark binds a lazy value in either
-shape. The compiler's own rows move with its binary.
-`compile_instructions` falls 18 to 24,152,633, `entry_instructions`
-falls 163 to 156,082,814 and `library_instructions` falls 86 to
-73,608,570.
+shape. clang reads the same programs, so the two codegen rows stay where
+they were. What moves is the front end, which asks two more questions of
+every lazy binding.
+- `browser_compile_instructions` rises 18,918 to 352,283,482: the tab
+  compiles its corpus through the same analysis.
+- `interp_instructions` rises 3,510 to 622,571,818. The row runs the
+  interpreted corpus from source, so it carries the front end too.
+- `compile_instructions` falls 18 to 24,152,633, `entry_instructions`
+  falls 163 to 156,082,814, `library_instructions` falls 86 to 73,608,570
+  and `emit_instructions` falls 62 to 5,642,423. These four move with the
+  compiler's binary. None of their corpora binds a lazy value.
+
+I set the three compile rows from a count here and CI agreed with them.
+I did not run the interpreter's sweep or the tab's before pushing, so
+CI found those two rows and the emitter's.
+
+**Welfare.** The sum falls by 0.0000166, from 95.09254193 to 95.09252535,
+and the floor follows it. `welfare.kso` weighs every change but one: a
+change that makes the engines agree ships at whatever it costs. The tool
+never lowers the floor itself, so the floor's value was set by hand and
+its history says why.
 
 **Open.** A cell its frame cannot free lives until the program exits,
 and these cells have joined that set. A server makes one for each
 request that binds one (#2408).
+
+## 2026-11-10 — a lazy binding a callback holds joins the corpus
+
+Corpus first, before #2408. A senro app built natively held 184 bytes more
+for every request it answered: 3,844 kB over 20,000 requests, where the
+same app interpreted held nothing. valgrind named the allocation, one lazy
+cell made in `web/text_at` for each request and never freed. `text_at`
+binds the request's body lazily and hands it to a callback, so the frame
+that made the cell cannot free it, and nothing else in the runtime did.
+The log has called these cells live to exit since 2026-07-23. A program
+that runs once pays for them once. A server pays for every request.
+
+The fix for #2408 has the beat that made such a cell free it at a rewind.
+With that fix the welfare sum read just under the floor, for two reasons
+that are both about what is measured.
+
+**Cells were not counted as held memory.** `held_peak_bytes` is the
+malloc'd storage a program holds at its fullest, and it counted builders'
+buffers and maps' views. A cell is malloc'd too and was left out, so
+`run_peak_bytes`, which sums the arena, held and permanent peaks, could
+not see a cell nobody frees. The counting build now adds a cell's 184
+bytes when it is made and takes them off when it is freed. A shipping
+build counts nothing, so no benchmark's instructions or machine code
+move for this.
+
+**No benchmark bound a lazy value that a callback holds.** runbench made
+50 cells in all. `bench/runbench/runbench/deferred` is the `forked` shape
+with the page a lazy binding: `sized` has an arm that never reads it, so
+the page is built only when the callback asks. It runs 16,000 passes
+after `forked`. `bench/interp_corpus` runs the same loop for 2,000 passes
+before it prints. Neither printed line moves.
+
+**Rows.** Only runbench and the interpreted corpus run the new loop.
+Instruction rows are counts from this machine set by their distance to
+main's reading here; the tab's rows are CI's.
+- runbench rises to `work_runbench` 955,363,291, the shape's 44,795,888
+  instructions or 4.69% of the program, and at the dev tier to
+  `work_runbench_dev` 2,807,447,887. Its machine code grows 7,792 bytes
+  and the text rows sum to `text` 5,883,353. Its 18 new functions take
+  the emitted rows of the other benchmarks to `emitted_other_defines`
+  2,384, `emitted_other_calls` 21,917, `emitted_other_branches` 19,483
+  and `emitted_other_lines` 182,766.
+- Held memory, which is what the shape is for: `run_held_peak_bytes`
+  rises from 248,688 to 3,201,888. That is 2,944,000 bytes for the
+  shape's 16,000 cells and 9,200 for the 50 the program already made and
+  never freed. `run_peak_bytes`, the welfare term, goes from 7,899,297
+  to 10,852,497.
+- The run program's other counters move with the 16,000 passes:
+  `run_allocs` 2,344,070, `run_alloc_bytes` 255,465,985,
+  `run_beat_iters` 196,448, `run_evac_allocs` 2,615, `run_evac_bytes`
+  4,625,312, `run_thunk_allocs` 16,050, `run_thunk_evals` 16,025,
+  `run_thunk_live_exit` 16,050, `run_str_scans` 35,402,
+  `run_str_scan_bytes` 18,976,160, `run_sh_str` 18,977,792 and
+  `run_sh_buf` 96,487,840.
+- The interpreted corpus rises to `interp_instructions` 680,814,132,
+  `interp_allocs` 984,852 and `interp_peak_bytes` 1,377,499. The
+  interpreter frees a cell when nothing holds it, so its peak moves by
+  the loop's own 11,012 bytes.
+- Counting cells alone moves ten goldens that run no new code.
+  pendbench's 200 cells read `pend_held_peak_bytes` 36,800. In
+  `tests/golden/mem`, `many_cells_held_peak_bytes` reads 7,360 for its
+  40 cells, and eight fixtures that hold one cell read 184:
+  `a_demanded_knot_allocates_one_cell_held_peak_bytes`,
+  `an_unasked_equality_stays_a_cell_held_peak_bytes`,
+  `builder_counts_once_held_peak_bytes`, `force_path_held_peak_bytes`,
+  `returned_thunk_held_peak_bytes`, `skip_unused_held_peak_bytes`,
+  `skipped_err_held_peak_bytes` and `unsafe_wrap_held_peak_bytes`.
+
+**The floor is re-based.** The change is only to what is measured, so
+each term it moves keeps its ratio to its baseline, as it did when the
+corpus first forked (2026-11-01). The baselines of the terms the two
+programs feed are scaled by the new reading over the old and rounded up.
+
+**Open.** #2408's fix, measured against this.
