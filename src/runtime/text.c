@@ -70,6 +70,127 @@ KValue k_b_to_bytes(KValue lv, const char* origin) {
     return k_bytes_view(data, l->len);
 }
 
+/* Base64, RFC 4648. `std/base64` was written in kanso and cost about 49,000
+   instructions to spell a sixty-byte cookie and read it back, which a server
+   pays on every request that carries a session (#2420). The two kernels below
+   are plain C over bytes, and tests/base64_agrees_with_its_reference.rs lifts
+   their text and holds them to a reference written apart from them.
+
+   Reading is as lenient as the kanso was and no more. Text comes in groups of
+   four. The first two characters of a group are letters. The third and fourth
+   are letters or `=`: an `=` third ends the group after one byte whatever the
+   fourth holds, and an `=` fourth ends it after two. More groups may follow a
+   padded one, and the bits a padded group leaves over need not be zero. */
+static const char k_base64_letters[64] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/* `n` bytes as base64 into `out`, which holds four characters for every three
+   bytes or part of three. Answers how many it wrote. */
+static long long k_base64_spell(const unsigned char* in, long long n, char* out) {
+    long long i = 0, o = 0;
+    for (; i + 2 < n; i += 3) {
+        unsigned v = (unsigned)in[i] << 16 | (unsigned)in[i + 1] << 8 | (unsigned)in[i + 2];
+        out[o++] = k_base64_letters[v >> 18];
+        out[o++] = k_base64_letters[v >> 12 & 63];
+        out[o++] = k_base64_letters[v >> 6 & 63];
+        out[o++] = k_base64_letters[v & 63];
+    }
+    if (i < n) {
+        unsigned v = (unsigned)in[i] << 16;
+        if (i + 1 < n) v |= (unsigned)in[i + 1] << 8;
+        out[o++] = k_base64_letters[v >> 18];
+        out[o++] = k_base64_letters[v >> 12 & 63];
+        out[o++] = i + 1 < n ? k_base64_letters[v >> 6 & 63] : '=';
+        out[o++] = '=';
+    }
+    return o;
+}
+
+/* A character's six bits, 64 for the `=` that pads, 255 for anything else. */
+static unsigned k_base64_place(unsigned char c) {
+    if (c >= 'A' && c <= 'Z') return (unsigned)(c - 'A');
+    if (c >= 'a' && c <= 'z') return (unsigned)(c - 'a') + 26;
+    if (c >= '0' && c <= '9') return (unsigned)(c - '0') + 52;
+    if (c == '+') return 62;
+    if (c == '/') return 63;
+    if (c == '=') return 64;
+    return 255;
+}
+
+/* The bytes `n` characters spell, into `out`, which holds three bytes for
+   every four characters. Answers how many it wrote, or -1 when the text is
+   not base64. */
+static long long k_base64_read(const unsigned char* in, long long n, unsigned char* out) {
+    if (n & 3) return -1;
+    long long o = 0;
+    for (long long i = 0; i < n; i += 4) {
+        unsigned a = k_base64_place(in[i]), b = k_base64_place(in[i + 1]);
+        unsigned c = k_base64_place(in[i + 2]), d = k_base64_place(in[i + 3]);
+        if (a > 63 || b > 63 || c > 64 || d > 64) return -1;
+        out[o++] = (unsigned char)(a << 2 | b >> 4);
+        if (c == 64) continue;
+        out[o++] = (unsigned char)(b << 4 | c >> 2);
+        if (d == 64) continue;
+        out[o++] = (unsigned char)(c << 6 | d);
+    }
+    return o;
+}
+
+/* `base64/encode`: bytes, or a list of byte values, as text. A list that
+   holds anything but byte values is a mistake in the caller, and dies as
+   `bytes` does for a value that is not a string. */
+KValue k_b_base64_spell(KValue v) {
+    if (!k_not_failure(v)) return v;
+    if (K_COUNTING) k_stat_base64++;
+    const unsigned char* data;
+    long long n;
+    if (v.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(v);
+        data = b->data;
+        n = b->len;
+    } else if (v.tag == K_LIST) {
+        KList* l = k_as_list(v);
+        n = l->len;
+        unsigned char* held = (unsigned char*)k_alloc((size_t)(n ? n : 1));
+        for (long long i = 0; i < n; i++) {
+            KValue item = l->items[i];
+            if (!k_not_failure(item)) return item;
+            if (item.tag == K_SUB) item = k_sub_base(item);
+            if (item.tag != K_INT || item.payload < 0 || item.payload > 255)
+                k_die("base64/encode takes bytes");
+            held[i] = (unsigned char)item.payload;
+        }
+        data = held;
+    } else {
+        k_die("base64/encode takes bytes");
+        return v;
+    }
+    KStr* s = k_str_alloc((n + 2) / 3 * 4);
+    long long wrote = k_base64_spell(data, n, s->data);
+    s->data[wrote] = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
+}
+
+/* `base64/decode`: the bytes a string spells, as a list of byte values, or
+   none when the string is not base64. */
+KValue k_b_base64_read(KValue v) {
+    if (!k_not_failure(v)) return v;
+    if (v.tag != K_STR) k_die("base64/decode takes a string");
+    if (K_COUNTING) k_stat_base64++;
+    KStr* s = k_as_str(v);
+    long long room = (long long)s->len / 4 * 3;
+    unsigned char* held = (unsigned char*)k_alloc((size_t)(room ? room : 1));
+    long long n = k_base64_read((const unsigned char*)s->data, s->len, held);
+    KValue out;
+    if (n < 0) { out.tag = K_NONE; out.payload = 0; return out; }
+    KValue* items = k_buf(n ? n : 4);
+    for (long long i = 0; i < n; i++) {
+        items[i].tag = K_INT;
+        items[i].payload = held[i];
+    }
+    return k_list_own(items, n);
+}
+
 /* A list or a bytes view, seen as a sequence of values. */
 static long long k_seq_len(KValue v) {
     if (v.tag == K_LIST) return k_as_list(v)->len;
