@@ -113715,3 +113715,42 @@ browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
 cause; the check now reads one table through one function, and layout may
 account for some of it. No runtime, text or allocation row moved. Welfare
 rose from 95.627876 to 95.627948, banked.
+
+## 2026-11-04 — find2 refuses what the interpreter refuses
+
+`text/find2` and `text/find2_below` take bytes and then three or four ints. The
+interpreter refused anything else in those positions; native answered (#2310).
+The emitted shims `k_b_find2_fast` and `k_b_find2_below_fast` test every tag
+and send any call that is not bytes and small ints to the out-of-line doors
+`k_b_find2` and `k_b_find2_below` in runtime/text.c. Those doors tested only
+the bytes, so a bool, a string or a float was scanned with its payload as the
+number, and a bignum with its pointer. The doors now refuse anything but an
+int, in the interpreter's words (`find2 takes bytes`, `find2_below takes
+bytes`).
+
+A tag test alone would have made native refuse a bignum, which the interpreter
+reads. So the doors read one as the interpreter does: a start past a word
+scans from the front, a byte keeps the low byte of its magnitude, and a floor
+past a word sits above every byte or below them all. A negative small byte
+still reads two ways, the magnitude's low byte in the interpreter and `& 0xff`
+in native. That one is on the scanning path and is #2313.
+
+Four specs, each seen red. Three runtime goldens pin the refusal of a bool
+start, a string byte and a float floor on native, `--interp`, the oracle and
+the tab; native wrote nothing to stderr before the fix. The micro golden
+`a_bignum_reads_the_same_in_every_find2_position` puts a bignum in each
+position, and with the fix reverted native printed nothing where the
+interpreter prints `2 2 3 2 4`.
+
+The rows are from a job on 0x19 model 0x11, on the tree merged with #2311,
+which moved none of the same rows. No scan path changed, since the
+new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
+so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
+codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
+compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
+(-218). The runtime instruction rows fell by 1,890: work_encodebench to
+2,335,339,191 (-630), work_oneshot to 9,978,933 (-385) and work_runbench to
+941,722,133 (-945), while work_livebench rose to 938,654,286 (+70). No benchmark reaches the
+doors with a non-int, so layout is the likely cause of all four; nothing here
+isolates it. The front end, the emitter, the interpreter and the tab did not
+move. Welfare rose by less than 0.0001 and the floor is banked.
