@@ -260,12 +260,9 @@ print takes a string; interpolate instead
 # takes a string`, which is pinned, before any builder exists.
 a string builder was expected here
 #
-# TWO RESOURCE CAPS AND AN EXHAUSTED HEAP. Each is reachable in principle and
+# A RESOURCE CAP AND AN EXHAUSTED HEAP. Each is reachable in principle and
 # each fixture would cost more than it proves.
 #   string too long          2,147,483,647 bytes; the fixture allocates 2 GB
-#   too many sockets         K_SOCKETS is 64; the fixture binds 64 real ports
-#                            on the runner, which is what sockets_serve.rs's
-#                            header records a day of wedged suites for
 #   a group out of memory    k_schedule's fiber and group arrays grow by
 #                            realloc (#2263), and only a failed realloc says
 #                            this; the fixture exhausts the runner's memory
@@ -273,7 +270,6 @@ a string builder was expected here
 #                            slots and each given value's copy with malloc,
 #                            and only a failed malloc says this (#2264)
 string too long
-too many sockets open at once
 out of memory growing a parallel group
 out of memory making a pool
 out of memory giving to a pool
@@ -426,9 +422,9 @@ field `{}` of `{}` takes {}
 # a_node_repaired_by_an_inner_pop_outlives_the_outer_stage fails.
 a beat mark and the arena disagree about the room that is left
 
-# A FOURTH RESOURCE CAP, joining the three above it for the same reason: it is
-# reachable in principle and the fixture costs more than it proves. The handle
-# table is K_SOCKETS, 64, shared with the sockets — so the fixture spawns 64
+# ANOTHER RESOURCE CAP, joining the ones above it for the same reason: it is
+# reachable in principle and the fixture costs more than it proves. The table
+# of running children is K_KIDS, 64 — so the fixture spawns 64
 # live child processes on the runner, which is what sockets_serve.rs's header
 # records a day of wedged suites for. tests/many_handles.rs is the regression
 # test, and it asserts the message never appears.

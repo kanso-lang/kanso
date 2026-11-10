@@ -1,0 +1,22 @@
+import "std/net"
+
+# A hundred callers connect before the listener takes any of them, and then
+# it takes them all. The system keeps a caller the program has not accepted
+# in the listener's queue, and a queue too short for a burst leaves the
+# rest waiting to try again.
+fn called _ 0
+  effect 0
+
+fn called p n
+  net/dial "127.0.0.1" p .> (_ -> called p (n - 1))
+
+fn taken _ 0
+  effect "a hundred callers waited, and each was taken"
+
+fn taken l n
+  net/accept l .> (_ -> taken l (n - 1))
+
+fn queued l p
+  called p 100 .> (_ -> taken l 100)
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> queued l p)) .> print

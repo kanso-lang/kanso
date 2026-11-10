@@ -1,0 +1,33 @@
+import "std/net"
+
+type pair
+  far
+  near
+
+# A hundred connections open at one moment, both ends of each held by this
+# program: two hundred sockets and a listener, where the native runtime's
+# table starts with room for sixty-four. The first pair and the last still
+# reach each other afterwards, so a socket taken before the table grew is
+# still found by its handle.
+fn paired l p
+  net/dial "127.0.0.1" p
+    .> (far -> net/accept l .> (near -> effect (pair far near)))
+
+fn filled _ _ 0
+  effect 0
+
+fn filled l p n
+  paired l p .> (_ -> filled l p (n - 1))
+
+fn told joined words
+  net/write joined.far words .> (_ -> net/read joined.near)
+
+fn spoken first last
+  told first "the first" .> (a -> told last "the last" .> (b -> "{a}, {b}"))
+
+fn held l p
+  paired l p
+    .> (first -> filled l p 98 .> (_ -> paired l p) .> (z -> spoken first z))
+    .> (said -> "of a hundred connections held at once: {said}")
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> held l p)) .> print

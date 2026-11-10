@@ -17,4 +17,7 @@ tests/golden/micro/is_dir.kso	false
 tests/golden/micro/modified_reads_when_a_file_changed.kso	comparison requires two values of one comparable type
 tests/golden/micro/make_dir_is_idempotent.kso	cannot make .
 
+tests/golden/micro/a_handle_closed_twice_closes_nothing_else.kso	cannot open a socket
+tests/golden/micro/a_listener_queues_a_hundred_callers.kso	cannot open a socket
+tests/golden/micro/a_program_holds_more_sockets_than_its_first_table.kso	cannot open a socket
 tests/golden/micro/a_write_to_a_peer_that_left_is_an_err.kso	cannot open a socket

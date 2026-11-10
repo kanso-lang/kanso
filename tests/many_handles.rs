@@ -1,7 +1,7 @@
 //! A program that opens more than the handle table holds, one at a time.
 //!
-//! A socket and a process are named by `h % K_SOCKETS`, and closing one frees
-//! its slot — but the guard used to compare how many had EVER been taken
+//! A socket and a process are named by the remainder their handle leaves by
+//! the size of their table, and closing one frees its slot — but the guard used to compare how many had EVER been taken
 //! against the size of the table. So the sixty-fourth open of a program's life
 //! failed however many it had already closed, and said "at once" about a table
 //! holding nothing.

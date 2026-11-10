@@ -113277,3 +113277,18 @@ its string routines by CPU. Those rows went into the goldens for one push and
 the next AMD run refused them. The rows above are the AMD readings, the
 silicon `bench/dispatch.txt` records; a run whose `interp_sample` line names
 another CPU family is not a source of rows.
+
+## 2026-11-02 — gavel: the pool's names are make, take, give and with
+
+#2264's ruling asked for the pool's public names as one question before they
+shipped, and #2274 asked it. Clay chose the recommended option: `std/pool`
+with `pool/make n`, `pool/take p`, `pool/give p v` and
+`pool/with p (v -> work)`.
+
+- `give` is the word for putting a value back, which keeps it apart from
+  `put`, the map insertion.
+- `with` takes a value, runs the work with it, and gives the value back
+  whether the work succeeds or fails. A failure still rises with the reason
+  and birthplace the work gave it.
+
+Owed: nothing beyond #2264's list. The pool (#2277) already uses these names.
