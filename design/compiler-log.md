@@ -2045,6 +2045,16 @@ are CI's.
   fourteen text rows sum to `text` 5,906,873.
 - The emitter picks between three calls where it picked between two:
   `emit_instructions` rises 1,114 to 5,643,537.
+- Clang's rows, from CI: `codegen_instructions_dev` rises 56,903 to
+  116,939,245 and `codegen_instructions_release` falls 281 to
+  372,180,496.
+- The tab runs the compiled corpus on the same runtime built for wasm,
+  so the registry is in its rows too, from CI. Its run frees its cells
+  and gives back the four pages the corpus entry cost:
+  `browser_run_peak_bytes` falls from 1,835,008 to 1,572,864. It pays
+  for the registry without the allocator's saving, and
+  `browser_run_instructions` rises 203,408 to 91,132,686.
+  `browser_compile_instructions` rises 3,211 to 358,139,032.
 
 **Tried and reverted.** `k_beat_rewind_slow` gained one test, and three
 ways of making it cheaper each made runbench slower than the plain form:
