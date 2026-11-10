@@ -20,29 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — gavel: senro is built out under a mandate, and keeps old paths only as aliases
-
-#2280 asked how a senro app keeps an old URL working once every route is
-RESTful. Clay ruled on that and widened it.
-
-- The declaration is `legacy_route_aliases`, a name that marks it as a
-  compatibility measure. Every resource still gets its RESTful route, and an
-  alias can only point at one. A wrong alias is refused while the app
-  compiles.
-- senro gets singular resources, as Rails has them: a resource with no
-  `:id`, such as `/profile`.
-- senro's design is delegated. Clay: "go to town and spend weeks expanding
-  the framework with a clear idea of what my underlying philosophy and
-  principles are, adding authentication a la devise, and basically making
-  this kanso alternative to ruby on rails." Cloud makes senro's design calls
-  and brings the whole to him for review. CLAUDE.md states the rule.
-
-Under the mandate, an alias answers with a permanent 308 redirect to its
-canonical path, so each resource keeps one URL.
-
-Owed: senro's principles written down for Clay to correct, then
-`legacy_route_aliases` and singular resources with specs.
-
 ## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
 
 senro's views were Slim files, each with the kanso file kata generated from it
@@ -1685,3 +1662,80 @@ agree, which welfare.kso sets outside the sum.
 **Open.** A fiber waiting on a socket is asked again every millisecond on
 both engines, so an idle server is never asleep for long and each query a
 request makes costs a millisecond of waiting (#2405).
+
+## 2026-11-10 — a fiber waiting on a socket is waited for
+
+A read that found nothing arrived, or an accept that found nobody calling,
+put its fiber back in the queue to be asked again a millisecond later. Both
+engines did this. Two costs followed, and senro's server showed both
+(#2405). A request that asks Postgres a question waits for the answer, and
+each wait rounded up to the next millisecond. A server with a listener and
+nothing to do woke a thousand times a second.
+
+**What changed.** When every fiber is waiting and at least one waits on a
+socket, the scheduler waits on those sockets with `poll`, for as long as
+the earliest fiber on the clock allows, and for good when no fiber is on
+the clock. A socket that is ready makes its fiber due now. The clock moves
+to the time that passed and no further than the fiber it was waiting for,
+so a sleeping fiber still runs at its own time.
+
+- Natively a step answers `blocked == 5` with the handle, `KFibers` keeps
+  it in `on`, and `k_sched_await` does the waiting. The descriptor is read
+  from the socket table at each wait.
+- The interpreter's step answers `Step::Waiting(handle, …)` and the
+  scheduler asks the executor's `await_sockets`. An executor without
+  sockets answers `None` and the scheduler ticks as before, which is what
+  the scripted executor and the tab do.
+- An accept the system refused for a reason other than nobody calling
+  keeps its one-millisecond tick natively. The listener stays ready through
+  such a refusal, so a wait on it would come straight back.
+- `libc` becomes a dependency of the compiler on unix, for `poll`. It was
+  already in the lock file.
+
+**The counter.** `sock_waits` counts the scheduler's waits on sockets, on
+both engines, and is printed only when it is not nought, as `delete_marks`
+is, so no golden without a socket carries it.
+`tests/golden/mem/a_reader_waits_on_its_socket` has a reader with nothing
+to read beside a writer that sleeps fifty milliseconds first: two waits,
+one for the writer's clock and one for the bytes. Its `.mem` pins
+`sock_waits=2` natively and
+`tests/a_fiber_waiting_on_a_socket_is_not_asked_again.rs` holds the
+interpreter to the same number. Thirty runs on each engine all read 2.
+With the wait taken out of either engine the count is not printed and the
+spec fails. The trend gate lists it among the counters a fall is a loss
+for.
+
+**A spec that caught a fault of mine.**
+`a_reader_is_told_when_its_socket_closes` has a reader on a connection
+another fiber closes; that fiber then dials, and the new connection takes
+the descriptor the closed one had. On main both engines tell the reader
+`that is not a connection`. My first native version held the descriptor
+and would have waited on the new connection for good, so it holds the
+handle. The interpreter held the handle already and still hung: it asked
+`poll` to pass over the missing socket and then waited with no time limit.
+A wait that includes a handle naming nothing now returns at once. The spec
+went red on that and is green on both engines.
+
+**Measured.** One sitting, 2026-11-10, in the development container: a
+senro app answering 300 requests over loopback after twenty to warm up,
+each on its own connection, with Postgres on a local socket. Mean time
+per request:
+
+| | before | after |
+|---|---|---|
+| native, no query | 1.29 ms | 0.15 ms |
+| native, one query | 2.53 ms | 0.29 ms |
+| native, five queries | 7.36 ms | 0.67 ms |
+| interpreted, no query | 2.81 ms | 1.39 ms |
+| interpreted, one query | 4.57 ms | 2.35 ms |
+| interpreted, five queries | 12.08 ms | 5.46 ms |
+
+An idle native server holding senro's listener made 1,004 scheduler
+sleeps in a second before and makes none now. It used 13 to 16 clock ticks
+of CPU in five seconds before; now it uses none on either engine.
+
+**Rows.** The runtime grows, so the machine-code and codegen rows are
+CI's to report, and the compile rows move with the binary's layout.
+
+**Open.** `net/write` still blocks the whole program on a client that
+reads slowly.
