@@ -20,44 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — find2 reads a negative byte as the interpreter does
-
-The interpreter reads each byte `find2` and `find2_below` look for as the low
-byte of the int's magnitude, so -98 is 98. Native's two raw scans read
-`a & 0xff`, so -98 was 158, and `find2 (bytes "abc") 1 -98 0` answered 4
-where the interpreter answered 2 (#2313). The interpreter is the oracle, so
-native changed. Both scans read `& 0xff` first and correct the two bytes
-only when `(a | b) < 0`. At the emitted sites the bytes are literals and the
-test folds away.
-
-The first version computed both magnitudes on every call, through a helper
-that the release tier's hot unit and `a_short_scan_tail_answers_like_the_byte_walk`
-each lift out of the runtime by name. The second lift did not know the
-helper and the spec failed on both hosts, so the magnitude is computed in
-place. That version cost the browser run 92,400 instructions; the single
-sign test costs 52,800.
-
-The micro goldens `find2_at_its_edges` and `find2_below_at_its_edges` each
-gain a negative byte in the scalar walk and one in the vector step. Before
-the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
-2 and 3.
-
-The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
-128 bytes, and scanbench's and runbench's, which inline the raw scans most,
-by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
-(+4,048). work_runbench rose to 942,094,162 (+372,029
-over main). Four other work rows moved by a few hundred instructions:
-work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
-(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
-(+141). An earlier run on the first version read encodebench 3.8M lower,
-and this one reads it within 238 of main, so neither reading is the change.
-browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
-wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
-and codegen_instructions_release fell to 371,954,589 (-46,231). The front
-end, the emitter and the interpreter did not move. Welfare fell by less than
-0.01. The differential law requires the fix, so the floor was lowered by
-exactly that, with the reason in bench/welfare_floor.json.
-
 ## 2026-11-04 — sha256's rounds carry raw words, and pbkdf2's chain skips its bytes
 
 `sha256/pbkdf2` was about nineteen times slower than OpenSSL at the release
@@ -2042,6 +2004,75 @@ the maps do not, which is the case for the positional layout the ruling
 asks for: a record's fields in order, with no key read and no map built.
 These are this machine's numbers from a runtime built here, and the
 benchmark #2416 owes will pin its own from CI.
+
+## 2026-11-10 — senro's pages travel as bytes kata derives
+
+#2416, built in senro (senro#107 for the benchmark, senro#108 for the
+encoding). A page's data and a component's state leave the server in a
+binary encoding, and JSON stays where something outside senro reads the
+data.
+
+kata knows a page's shape from the fields its template reads, so it writes
+a record as those fields in a fixed order and a list of records as a count
+and the records, with no name and no tag between them. Only the leaves are
+tagged: one byte that says what follows, and that holds the whole of a
+small int or the length of a short string. The server gets a packer for
+each page. The browser module gets a record type and a reader for each
+record a template reads, and draws the page with the template's ordinary
+compile; the compile that read fields out of a map is deleted. The first
+four bytes are a hash of every page's shape in the module, and bytes from
+another build draw nothing.
+
+`bench/pages` is a board of fifty records in a layout with one component.
+Its rows are wasm instructions counted by `count_module`, taken from CI
+under JSON and again under the encoding:
+
+    row                                   JSON      binary
+    page as data, bytes                 15,191       9,636   -36.6%
+    component state, bytes                  43          36   -16.3%
+    server: records, component drawn   405,267     423,263    +4.4%
+    server: page answered as data    1,861,329   1,269,908   -31.8%
+    server: page answered as HTML    5,720,720   5,074,507   -11.3%
+    browser: module start               13,905      13,764    -1.0%
+    browser: page drawn from data    7,092,359   6,302,146   -11.1%
+    browser: one component action      172,445     230,189   +33.5%
+
+A page is a third smaller and a third cheaper to write. Drawing it in the
+browser falls by a ninth, because drawing the markup is most of a page
+update and the encoding does not reach it.
+
+A component action costs more than it did. Its state is held in the page
+as base64 and read into a map, both in kanso code, where JSON was read and
+written by the runtime. Measured apart on a 33-byte state: spelling it as
+base64 costs 26,200 instructions and reading it back 28,000, against 15,600
+and 30,700 for `json/encode` and `json/decode` of the same value, and
+reading the tagged bytes into a map costs 58,300. Two issues carry what
+that found. #2420 is base64 in the runtime. #2421 is what a decoder
+written in kanso pays for each value it reads: a returned record costs
+607 instructions a value when it is destructured in a parameter with its
+int first, 1,013 with its value first, and 1,673 when it is bound to a
+name and read by its fields, which is the only way a caller in another
+module can take it.
+
+The codec was fuzzed before it was trusted: `wire` and a second writing of
+the format in JavaScript each read what the other wrote for 2,000,000
+random values with no disagreement. Three breaks were watched red first.
+One of them, a 64-byte string written behind the tag for 63, passed 2,000
+values because no string was 64 bytes long, and the strings are now aimed
+at exact byte lengths. The long run stopped once, at a string beginning
+with U+FEFF that the reference's `TextDecoder` dropped, which was the
+reference's fault.
+
+Decided on the way, by the committee and recorded on #2416. Floats travel
+as their decimal text, since kanso cannot read a float's bits and no page
+in the examples sends one. Component state stays tagged: writing it
+positionally needs a component to declare its state's type, and that waits
+on what #2420 and #2421 leave to win. Only a program that names `rendered`
+gets the readers and row types, so a server still refuses a misspelled
+field at the template's line.
+
+Nothing in kanso changed, so no row here moves. The site's views guide
+describes the bytes, and its senro pin moves to 43a2ca5.
 
 ## 2026-11-10 — a session's trip through base64 joins the corpus
 

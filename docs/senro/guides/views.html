@@ -184,7 +184,9 @@ served_with_data <span class="o">=</span> <span class="f">web/providers</span> a
 
 <h2>pages in the browser</h2>
 
-<p>when an app answers its pages with <code>views/answer</code> or <code>views/answer_as</code>, kata writes two more functions per page. <code>signed_view</code> describes the page as data, the template's name and the values it reads, and <code>signed_keyed</code> renders the template from that data. the first request gets the page rendered on the server as HTML. once the browser module has loaded, a link followed or a form sent on the app's own origin fetches the page as data and renders it in the browser with the same template compiled to wasm.</p>
+<p>when an app answers its pages with <code>views/answer</code> or <code>views/answer_as</code>, kata writes one more function per page. <code>signed_view</code> answers the page as a value: what the template takes, a function that writes it as bytes, and a function that draws it as markup. the first request gets the page drawn on the server as HTML. once the browser module has loaded, a link followed or a form sent on the app's own origin fetches the page as bytes, and the module reads them and draws the page with the same template compiled to wasm.</p>
+
+<p>the bytes carry no field names. kata reads a page's shape from its template: <code>each signatures e -&gt;</code> followed by <code>e.name</code> reads <code>name</code> from each record in <code>signatures</code>. so it writes a record as the fields the template reads, in a fixed order, and a list of records as a count and the records. the server and the browser module are compiled from the same templates, so both know the order. the first four bytes are a hash of every page's shape in the module, and a module handed bytes from another build draws nothing, which the page script answers by loading the page again. on senro's benchmark page, fifty records in a layout, the bytes are 9,636 where the same page as JSON was 15,191, and the browser spends 11% fewer wasm instructions drawing it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/browser.kso</div>
