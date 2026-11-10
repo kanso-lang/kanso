@@ -12,45 +12,7 @@ use std::process::Command;
 
 #[path = "support/wasm32.rs"]
 mod wasm32;
-use wasm32::{execute, runtime, toolchain};
-
-/// The payload of the custom section called `name`, if the module has one.
-fn custom(module: &[u8], name: &str) -> Option<Vec<u8>> {
-    let mut at = 8;
-    while at < module.len() {
-        let id = module[at];
-        at += 1;
-        let (size, read) = leb(&module[at..]);
-        at += read;
-        let end = at + size;
-        if id == 0 {
-            let (len, read) = leb(&module[at..]);
-            let named = &module[at + read..at + read + len];
-            if named == name.as_bytes() {
-                return Some(module[at + read + len..end].to_vec());
-            }
-        }
-        at = end;
-    }
-    None
-}
-
-fn leb(bytes: &[u8]) -> (usize, usize) {
-    let mut value = 0usize;
-    let mut shift = 0;
-    for (k, b) in bytes.iter().enumerate() {
-        value |= usize::from(b & 0x7f) << shift;
-        if b & 0x80 == 0 {
-            return (value, k + 1);
-        }
-        shift += 7;
-    }
-    (value, bytes.len())
-}
-
-fn word(bytes: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
-}
+use wasm32::{execute, link, runtime, toolchain};
 
 #[test]
 fn a_program_built_for_the_browser_runs_linked_against_the_runtime() {
@@ -76,10 +38,10 @@ fn a_program_built_for_the_browser_runs_linked_against_the_runtime() {
     assert_eq!(String::from_utf8_lossy(&built.stdout), "built ./page.wasm (llvm ir at page.ll)\n");
 
     let module = std::fs::read(work.join("page.wasm")).expect("the module was written");
-    let link = custom(&module, "kanso.link").expect("the module says how to link it");
-    assert_eq!(link.len(), 8, "two u32s: data bytes, then table slots");
-    let ran = execute(&runtime(&work), &module, word(&link, 0), word(&link, 4), &[])
-        .expect("the module links and runs");
+    let (data, table) =
+        link(&module).expect("the module says how to link it: data bytes, then table slots");
+    let ran =
+        execute(&runtime(&work), &module, data, table, &[]).expect("the module links and runs");
     assert_eq!((ran.out.as_str(), ran.err.as_str(), ran.exit), ("hello, tab\n", "", 0));
     let _ = std::fs::remove_dir_all(&work);
 }
