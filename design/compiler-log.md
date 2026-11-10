@@ -1681,11 +1681,16 @@ The interpreter passed all three before and after.
 
 **Rows.**
 - `unpinned_diagnostics.txt` loses the message that no longer exists.
-- Work, counted here and set from each row's distance to main's on this
-  machine: eleven of the fifteen rows are main's. `runbench` rises 469 to
-  913,657,523 and `oneshot` 357 to 9,980,628; `encodebench` falls 350 to
-  2,335,340,431 and `livebench` 161 to 938,655,540. No benchmark opens a
-  socket, so these four are layout.
+- Work: eleven of the fifteen rows are main's. `work_runbench` rises 469
+  to 913,657,523 and `work_oneshot` 357 to 9,980,628; `work_encodebench`
+  falls 350 to 2,335,340,431 and `work_livebench` 189 to 938,655,512. No
+  benchmark opens a socket, so these four are layout. I set the rows from
+  a count here and each row's distance to main's on this machine, and CI
+  then counted on the golden's own silicon: fourteen agreed and
+  `work_livebench` read 28 lower, which is CI's row above.
+- clang's work on the runtime: `codegen_instructions_release` falls 80,668
+  to 371,945,188 and `codegen_instructions_dev` rises 2,539 to
+  116,857,586.
 - Machine code: each of the fourteen benchmarks carries 512 fewer bytes of
   `.text` than on main, and `text` sums to 5,869,065 from 5,876,233. The
   lookup is one function now where it was a copy at each use.
@@ -1694,6 +1699,10 @@ The interpreter passed all three before and after.
   did not isolate what clang did differently.
 - The three specs join `native_route_gaps.txt`, because the tab has no
   sockets.
+
+**Welfare.** The sum rises by 0.000027 and is banked: the release tier
+and the tab cost less, against 469 instructions on runbench and 2,539 at
+the dev tier.
 
 **Open.** A fiber waiting on a socket is asked again every millisecond on
 both engines, so an idle server is never asleep for long and each query a
