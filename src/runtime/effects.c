@@ -149,7 +149,7 @@ static long long k_kid_handle(void) {
 /* Twice the slots, each open socket moved to where its handle now points.
    Two handles that left different remainders by the old size leave different
    ones by twice it, so no two land together. */
-static void k_more_sockets(void) {
+static __attribute__((noinline, cold)) void k_more_sockets(void) {
     long long cap = k_socket_cap ? k_socket_cap * 2 : K_SOCKETS_FIRST;
     KSock* grown = calloc((size_t)cap, sizeof(KSock));
     if (!grown) { fputs("out of memory\n", stderr); exit(1); }
@@ -162,13 +162,17 @@ static void k_more_sockets(void) {
 
 /* The slot a handle owns, or NULL for a handle that owns none: one never
    given, or one closed, whose slot a later socket may have taken since. */
-static KSock* k_sock(long long h) {
+/* Kept out of line, with the two functions that take and grow the table.
+   Folded into `k_exec`, which every effect a program runs passes through,
+   the lookup made that function dearer for a program that touches no
+   socket: deepbench, which opens none, retired 1.3 million more. */
+static __attribute__((noinline)) KSock* k_sock(long long h) {
     if (h <= 0 || !k_socket_cap) return NULL;
     KSock* at = &k_sockets[h % k_socket_cap];
     return at->handle == h ? at : NULL;
 }
 
-static long long k_hold_socket(int fd) {
+static __attribute__((noinline)) long long k_hold_socket(int fd) {
     for (;;) {
         for (long long i = 1; i <= k_socket_cap; i++) {
             long long cand = k_handles + i;
