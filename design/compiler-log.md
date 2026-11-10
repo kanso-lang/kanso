@@ -2119,8 +2119,19 @@ The carry stages the record's two fields, a slot each, and packs them on
 the far side, by value on both ways. When the fields would not fit the
 buffer's eight slots the record is staged built and its words read back.
 
+A record built at the loop's own call was the sixth, #2430, and it also did
+not build on main. Written at the call for a by-value slot, a record is
+packed into words in place and has no operand among the emitted ones. The
+carry staged the emitted operand at every carried position and wrote
+`call void @k_carry_stage(%KValue )`. The packed words join the emitted
+operands at a carried slot and cross as the two fields. A record built on
+the way into the loop from outside it, which is not a tail call, is still
+built and read back, once for each entry.
+
 Measured. `mem/a_record_held_by_value_crosses_a_loop_s_rewind` did not
-build and reads sh_rec 0. `mem/a_record_whose_int_comes_second_goes_back_by_value`
+build and reads sh_rec 0. `mem/a_record_built_at_a_loop_s_call_crosses_its_rewind`
+did not build either, and reads the one record its entry builds over 76
+laps. `mem/a_record_whose_int_comes_second_goes_back_by_value`
 read sh_rec 2,624 and reads 0. `mem/a_failure_crosses_a_beat_carry_in_two_words`
 falls from 64,000 to 0, and three scanning fixtures lose a record each.
 The run program's decoder phase builds none: run_sh_rec 17,011,296 ->
@@ -2135,8 +2146,8 @@ work_runbench_dev 2,924,577,667 -> 2,894,927,376, with the phase at about
 What rises. The runtime's three conversions are linked into every
 program, 368 bytes each; scanbench falls 512 and runbench 800, and the
 summed text goes 5,969,001 -> 5,972,105. The emitter asks more:
-emit_instructions 5,644,746 -> 5,650,840. The tab's compile rises with
-it, browser_compile_instructions 390,565,528 -> 393,709,046 and
+emit_instructions 5,644,746 -> 5,650,830. The tab's compile rises with
+it, browser_compile_instructions 390,565,528 -> 393,709,652 and
 browser_compile_peak_bytes 958,848 -> 965,297. Clang and the linker read
 a little more: codegen_instructions_dev 116,980,709 -> 117,010,112 and
 codegen_instructions_release 372,052,045 -> 372,097,082, both the
@@ -2146,7 +2157,7 @@ layout with the grown runtime: work_encodebench rises 350 to
 938,655,477; work_scanbench falls 84 to 267,843 with its record.
 runbench's emitted code reads defines=975 calls=10169 branches=9172
 lines=79632 and scanbench's defines=331 calls=3190 branches=3019
-lines=26106. Welfare rises 95.25752070 -> 95.29101595, and the floor is
+lines=26106. Welfare rises 95.25752070 -> 95.29101553, and the floor is
 banked there.
 
 Checked against the interpreter. `micro/a_record_held_by_value_reads_like_one_built`
@@ -2159,8 +2170,15 @@ be. The 2,163 programs of the numeric differential and the eight other
 differentials agree.
 
 What this does not reach. senro's `wire` is unmoved: its benchmark page
-reads the same six rows with this compiler. `wire` hands its decoder out
-as a value, to read a list's items, and passes the record whole to
-helpers that bind it, and either keeps the type on the heap. The analysis
-is all or nothing for a type, so one such use anywhere costs every read.
-That is the next piece of #2421.
+reads the same six rows with this compiler. Three things keep its `read`
+on the heap, found by asking the analysis which test refused it. Inference
+cannot say the position is an int: a count is read into the same `value`
+field as every other value, so the position after a string, the position
+of its bytes plus their count, may be a float, and the tag `bs[p]` is
+unknown because nothing says `bs` is bytes. `wire` hands its decoder out
+as a value, to read a list's items. And it passes the record whole to a
+helper that binds it. The analysis is all or nothing for a type, so one
+such use anywhere costs every read. The first is senro's to write
+differently, with a record of two ints for a count and `:int` where a
+position comes in from outside; the other two are the next piece of
+#2421 here.
