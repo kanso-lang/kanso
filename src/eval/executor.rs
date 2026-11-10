@@ -118,6 +118,15 @@ pub trait Executor {
     fn readable(&mut self, _conn: i64) -> Result<bool, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// Waits until one of the sockets is ready, a listener for a caller or a
+    /// connection for something to read, or until `ms` have passed; `None`
+    /// for `ms` waits as long as it takes. Answers which were ready, in the
+    /// order asked. An executor that cannot wait on a socket answers `None`
+    /// without waiting, and the scheduler asks each again after a tick, as
+    /// it always did.
+    fn await_sockets(&mut self, _handles: &[i64], _ms: Option<u64>) -> Option<Vec<bool>> {
+        None
+    }
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
         Err("this engine has no sockets".to_string())
     }
@@ -412,6 +421,38 @@ impl Executor for RealExecutor {
             s.conns.insert(handle, taken);
             Ok(handle)
         })
+    }
+
+    #[cfg(unix)]
+    fn await_sockets(&mut self, handles: &[i64], ms: Option<u64>) -> Option<Vec<bool>> {
+        use std::os::fd::AsRawFd;
+        let mut waited: Vec<libc::pollfd> = SOCKETS.with(|s| {
+            let s = s.borrow();
+            handles
+                .iter()
+                .map(|h| {
+                    let listener = s.listeners.get(h).map(|l| l.as_raw_fd());
+                    let fd = listener.or_else(|| s.conns.get(h).map(|c| c.as_raw_fd()));
+                    // A handle that names nothing is asked about as -1, which
+                    // poll passes over; its fiber is woken below to be told so.
+                    libc::pollfd { fd: fd.unwrap_or(-1), events: libc::POLLIN, revents: 0 }
+                })
+                .collect()
+        });
+        // A handle that names nothing has nothing to wait for, and with no
+        // fiber on the clock poll would wait on it for good.
+        let gone = waited.iter().any(|w| w.fd < 0);
+        let wait = if gone { 0 } else { ms.map_or(-1, |ms| ms.min(i32::MAX as u64) as i32) };
+        loop {
+            // SAFETY: `waited` is a live slice of pollfd for the whole call,
+            // and its length is the count passed.
+            let n = unsafe { libc::poll(waited.as_mut_ptr(), waited.len() as libc::nfds_t, wait) };
+            let interrupted = std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted;
+            if n >= 0 || !interrupted {
+                break;
+            }
+        }
+        Some(waited.iter().map(|w| w.fd < 0 || w.revents != 0).collect())
     }
 
     fn readable(&mut self, conn: i64) -> Result<bool, String> {

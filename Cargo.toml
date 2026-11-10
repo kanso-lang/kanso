@@ -68,3 +68,9 @@ opt-level = 3
 # there. Test-only, and already in the lock file under rustyline.
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
+
+# The interpreter's scheduler waits on the sockets its fibers are waiting for
+# with poll(2), which std does not offer (#2405). Already in the lock file
+# under rustyline, and it links no shared object of its own.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

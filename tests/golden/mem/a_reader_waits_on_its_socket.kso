@@ -1,0 +1,19 @@
+import "std/net"
+import "std/time"
+
+# A reader with nothing to read yet, beside a writer that sleeps fifty
+# milliseconds before it writes. The scheduler has two things to wait for,
+# the writer's clock and then the reader's socket, and waits twice: once
+# until the writer is due, and once until what it wrote has arrived. Asking
+# the socket again every millisecond, it waited some fifty times.
+fn heard near
+  net/read near .> (words -> print "the reader heard: {words}")
+
+fn both far near
+  heard near
+  time/sleep 50 .> (_ -> net/write far "late")
+
+fn joined l p
+  net/dial "127.0.0.1" p .> (far -> net/accept l .> (near -> both far near))
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> joined l p))

@@ -1,0 +1,25 @@
+import "std/net"
+import "std/time"
+
+# A reader with nothing to read, on a connection another fiber closes. The
+# closer then dials again, and the new connection takes the descriptor the
+# closed one had. The reader waits on its handle, which now names nothing,
+# and is told so. Nothing is ever written to either connection, so a
+# scheduler that waited on the descriptor would wait for good.
+fn refused u
+  effect "the reader was told: {u.reason}"
+
+fn told near
+  net/read near .? refused .> print
+
+fn swapped p near
+  time/sleep 20 .> (_ -> net/close_conn near) .> (_ -> net/dial "127.0.0.1" p)
+
+fn both p near
+  told near
+  swapped p near
+
+fn joined l p
+  net/dial "127.0.0.1" p .> (_ -> net/accept l .> (near -> both p near))
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> joined l p))

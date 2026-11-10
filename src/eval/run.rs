@@ -251,7 +251,7 @@ impl<'a> Interp<'a> {
         // would inline, and what follows the join takes the place of the
         // member that finishes last.
         let mut fibers: Vec<Fiber> =
-            members.into_iter().map(|work| Fiber { wake: 0, work, group: 0 }).collect();
+            members.into_iter().map(|work| Fiber { wake: 0, work, group: 0, on: None }).collect();
         let mut groups = vec![Group {
             remaining: fibers.len(),
             failures: Vec::new(),
@@ -291,6 +291,54 @@ impl<'a> Interp<'a> {
             }
             let wake = fibers[pick].wake;
             if wake > now {
+                // Every fiber is waiting. Where some wait on sockets the
+                // wait is on those, for as long as the earliest fiber on the
+                // clock allows: asking each socket again every millisecond
+                // answered a read up to a millisecond late and woke an idle
+                // server a thousand times a second (#2405). A socket that is
+                // ready makes its fiber due now, and one that is not stays a
+                // tick away. The clock moves to the time that passed, and no
+                // further than the fiber it was waiting for.
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let on: Vec<i64> = fibers.iter().filter_map(|f| f.on).collect();
+                    let due = fibers
+                        .iter()
+                        .filter(|f| f.on.is_none() && f.wake != PARKED)
+                        .map(|f| f.wake)
+                        .min();
+                    // Until a socket is ready or the fiber on the clock is
+                    // due. A wait that comes back a moment early is neither,
+                    // and waits again, so one wait is one thing waited for.
+                    let ready = loop {
+                        if on.is_empty() {
+                            break None;
+                        }
+                        let elapsed = wall_start.elapsed().as_millis() as u64;
+                        let wait = due.map(|d| d.saturating_sub(elapsed));
+                        let Some(ready) = executor.await_sockets(&on, wait) else {
+                            break None;
+                        };
+                        let passed = wall_start.elapsed().as_millis() as u64;
+                        if ready.iter().any(|r| *r) || due.is_some_and(|d| passed >= d) {
+                            break Some(ready);
+                        }
+                    };
+                    if let Some(ready) = ready {
+                        self.sock_waits.set(self.sock_waits.get() + 1);
+                        let passed = wall_start.elapsed().as_millis() as u64;
+                        now = now.max(passed);
+                        if let Some(due) = due {
+                            now = now.min(due);
+                        }
+                        let mut at = 0;
+                        for fiber in fibers.iter_mut().filter(|f| f.on.is_some()) {
+                            fiber.wake = if ready[at] { now } else { now + 1 };
+                            at += 1;
+                        }
+                        continue;
+                    }
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let elapsed = wall_start.elapsed().as_millis() as u64;
@@ -303,9 +351,15 @@ impl<'a> Interp<'a> {
                 now = wake;
             }
             let work = fibers[pick].work.clone();
+            fibers[pick].on = None;
             match self.step(&work, executor)? {
                 Step::Blocked(ms, cont) => {
                     fibers[pick].wake = if ms == PARKED { PARKED } else { now + ms };
+                    fibers[pick].work = cont;
+                }
+                Step::Waiting(handle, cont) => {
+                    fibers[pick].wake = now + 1;
+                    fibers[pick].on = Some(handle);
                     fibers[pick].work = cont;
                 }
                 Step::Forked(spawned, rejoin) => {
@@ -328,7 +382,7 @@ impl<'a> Interp<'a> {
                     let at = pick;
                     fibers.remove(at);
                     for (k, work) in spawned.into_iter().enumerate() {
-                        fibers.insert(at + k, Fiber { wake: now, work, group });
+                        fibers.insert(at + k, Fiber { wake: now, work, group, on: None });
                     }
                 }
                 Step::Done(value) => {
@@ -354,7 +408,7 @@ impl<'a> Interp<'a> {
                             Some(rejoin) => rejoin(settled),
                             None => settled,
                         };
-                        fibers.insert(pick, Fiber { wake: now, work, group: parent });
+                        fibers.insert(pick, Fiber { wake: now, work, group: parent, on: None });
                         groups[group].parent = None;
                         free.push(group);
                     } else if groups[group].remaining == 1
@@ -412,6 +466,7 @@ impl<'a> Interp<'a> {
             };
             match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => return Ok(Step::Blocked(ms, relinked(&desc, cont))),
+                Step::Waiting(on, cont) => return Ok(Step::Waiting(on, relinked(&desc, cont))),
                 Step::Forked(members, rejoin) => {
                     let link = desc.clone();
                     return Ok(Step::Forked(
@@ -467,7 +522,7 @@ impl<'a> Interp<'a> {
             },
             Desc::Accept(listener) => match executor.accept(*listener) {
                 Ok(Some(handle)) => Ok(Step::Done(Value::int(handle))),
-                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Ok(None) => Ok(Step::Waiting(*listener, desc.clone())),
                 Err(reason) => {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
                 }
@@ -476,7 +531,7 @@ impl<'a> Interp<'a> {
             // can be both ends of a connection: the fiber reading yields, and
             // the one that will write runs.
             Desc::Receive(conn) | Desc::ReceiveBytes(conn) => match executor.readable(*conn) {
-                Ok(false) => Ok(Step::Blocked(1, desc.clone())),
+                Ok(false) => Ok(Step::Waiting(*conn, desc.clone())),
                 Ok(true) => Ok(Step::Done(self.execute(desc, executor)?)),
                 Err(reason) => {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
@@ -501,6 +556,9 @@ impl<'a> Interp<'a> {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
                 }
+                Step::Waiting(on, cont) => {
+                    Ok(Step::Waiting(on, Rc::new(Desc::Insisted(cont, at.clone(), hako.clone()))))
+                }
                 Step::Forked(members, rejoin) => {
                     let (at, hako) = (at.clone(), hako.clone());
                     Ok(Step::Forked(
@@ -524,6 +582,9 @@ struct Fiber {
     wake: u64,
     work: Rc<Desc>,
     group: usize,
+    /// The socket the fiber is waiting on, by its handle, or none for a
+    /// fiber waiting on nothing but the clock.
+    on: Option<i64>,
 }
 
 /// A parallel group: how many members are still running, the failures the
