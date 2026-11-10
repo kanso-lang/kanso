@@ -20,47 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
-
-senro's views were Slim files, each with the kanso file kata generated from it
-checked in beside it. Clay: "i don't want to see actual slim files in here, i
-just want a special kanso-specific format... designed from first principles,
-and not paired with a kso file. it should stand on its own and work and have a
-conversion/compilation step." On how: "probably this means kanso provides
-some kind of templating layer where you can create an arbitrary format that
-parses into normal kanso. i dunno. whatever you think best."
-
-The layer is the derivation, which already runs a library's kanso while the
-program compiles and can write source into a module (`derive/define`). Two
-things were missing, and this change adds them:
-
-- `derive/module` gains `files`: the text of each file in the module's
-  directory that is not kanso source, by name. A convention reads its
-  templates there.
-- A directory that holds no kanso source is still a module when a derivation
-  writes its functions. While the entry's dependencies load to be described,
-  it loads empty; the second load compiles what was written, and refuses the
-  directory if nothing was.
-
-Specs: `a_derivation_writes_a_module_from_its_templates` and
-`a_module_of_templates_nothing_writes` in the derive corpus, on both engines.
-The first failed with `no .kso files in …/views` before the loader change.
-
-The format is senro's to design under #2280's mandate. kata's templates
-become `.kata` files and its syntax follows kanso: `takes` names the
-parameters, holes are `{expr}`, control lines are bare `if`, `else` and `for`,
-and `#` starts a comment. That work lands in senro.
-
-Describing a program now costs a little more, because each module's record
-carries its files and the loader asks one more question of an empty
-directory. The rows rose, by CI's measure: entry_instructions to 86,840,306
-(+30,611), browser_compile_instructions to 349,289,583 (+18,342),
-library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
-(+244), compile_instructions to 24,102,378 (+69) and interp_instructions to
-622,391,510 (+3).
-The ruling is a part of the language, so the welfare floor drops by exactly
-that cost, to 95.61456.
-
 ## 2026-11-03 — a write to a peer that has gone is an err on both engines
 
 A senro server died without a word when a page that had been listening for
@@ -1808,3 +1767,73 @@ rows and the interpreter's 9,993.
 
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
+
+## 2026-11-10 — a lazy binding a callback captured is not its frame's to free
+
+Fixes #2409.
+
+**What was wrong.** Natively, a callback could read a lazy binding that
+belonged to a later pass. This program binds `twice` in each of three
+passes and reads it in a callback that runs after a sleep:
+
+```
+fn shown 0 _
+  effect 0
+
+fn shown n twice
+  print "pass {n} read {twice + 0}"
+
+fn handled n
+  twice = doubled n
+  time/sleep 2 .> (_ -> shown n twice)
+```
+
+The interpreter prints 6, 4 and 2 for passes 3, 2 and 1. The native
+build printed 2 for all three.
+
+**Why.** `twice` is lazy because `shown` has an arm that discards it, so
+it is a cell. `src/demand.rs` decides whether the frame that made a cell
+may free it on the way out, and it decided by looking at where the
+binding is handed: `shown`'s second position, where the parameter is
+read by `+` and goes nowhere else. That position is safe, so the cell
+was marked releasable. Nothing asked whether the use sat inside a
+callback. The callback is built in `handled` and called after `handled`
+has returned, and by then the epilogue had put the cell on the free
+list. The next pass's binding took the same cell, and every callback
+read the last value written to it.
+
+The hole was on the callee's side as well. A function that takes the
+binding and reads it inside a callback of its own keeps the cell past
+its caller's frame, and its position was judged safe for the same
+reason.
+
+A binding read through a call, such as `length page`, was never
+affected: that position was already unsafe, so the cell was never
+freed.
+
+**What changed.** A use inside a callback keeps the cell from being
+released. `captured` asks it of the function that binds the name, and
+`param_stays_local` asks it of a parameter. Both are conservative: a
+callback handed to `list/map` is finished before the frame returns, and
+its cell is kept all the same.
+
+**The spec.** `tests/golden/micro/a_callback_reads_the_lazy_binding_it_captured`
+holds both shapes, the callback beside the binding and the callback in
+the function the binding is handed to. On main's native build it read 2
+six times.
+
+**How it was found.** While building the fix for #2408 on another
+branch I added a mode that marks a freed cell and dies when one is read.
+It died on a fixture written to stress that change, and the fault
+reproduced on main without the change.
+
+**Rows.** No runtime counter moves and every benchmark's machine code is
+byte for byte what it was: no benchmark binds a lazy value that a
+callback reads. The compiler's own rows move with its binary.
+`compile_instructions` falls 18 to 24,152,633, `entry_instructions`
+falls 156 to 156,082,821 and `library_instructions` falls 83 to
+73,608,573.
+
+**Open.** A cell its frame cannot free lives until the program exits,
+and these cells have joined that set. A server makes one for each
+request that binds one (#2408).
