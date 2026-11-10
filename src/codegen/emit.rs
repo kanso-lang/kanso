@@ -723,6 +723,20 @@ impl<'a> Backend<'a> {
                     }
                     return self.emit_declared_partial(f, name, args, *span);
                 }
+                // `r.next` where `r` names a record held by value: the field
+                // is in the words. Called, the getter is handed a record, so
+                // one would be built on the heap for each field read.
+                if let (Expr::Ident(getter, _, _), false, [Expr::Ident(held, _, _)]) =
+                    (head.as_ref(), *piped, args.as_slice())
+                {
+                    let field = crate::ast::getter_field(crate::ast::bare_name(getter));
+                    let record = f.lookup(held).filter(|t| f.is_parsed(t));
+                    if let (Some(field), Some(record)) = (field, record) {
+                        if let Some(read) = self.emit_parsed_field(f, &record, field) {
+                            return Ok(read);
+                        }
+                    }
+                }
                 let saved = match (head.as_ref(), piped) {
                     (Expr::Ident(name, _, _), false) => {
                         self.entering_deep(f, name.as_str(), args.len())
@@ -735,6 +749,9 @@ impl<'a> Backend<'a> {
             }
             Expr::Field { base, name, span } => {
                 let b = self.emit_expr(f, base)?;
+                if let Some(read) = self.emit_parsed_field(f, &b, name) {
+                    return Ok(read);
+                }
                 let (label, _) = self.intern(&format!("{name}\0"));
                 let t = f.tmp();
                 self.stamp_site(f, *span);
@@ -994,6 +1011,31 @@ impl<'a> Backend<'a> {
             f.start_block(&rest_label);
             self.emit_fn_body(f, rest)?;
             return Ok(());
+        }
+        // A constant of the record this function answers by value, named in
+        // tail position: its group answers the three words, and they go back
+        // as they came. Read for a value the constant is built on the heap,
+        // and the return would then take the record for a failure.
+        if let Expr::Ident(name, _, _) = expr {
+            let answered = self.escape.returns_ty(name, 0).map(|ty| self.escape.int_last(ty));
+            if let (true, true, Some(back)) =
+                (f.ret_ty == "%parsed", f.lookup(name).is_none(), answered)
+            {
+                if self.ret_ty(name, 0) == "%parsed" {
+                    let t = f.tmp();
+                    f.line_fmt(format_args!("{t} = call tailcc %parsed @{}()", dsym(name, 0)));
+                    f.line_fmt(format_args!("ret %parsed {t}"));
+                    return Ok(());
+                }
+                // A constant kept once it is worked out is a built record,
+                // and its words are read off it here.
+                let built = self.emit_expr(f, expr)?;
+                let built = release_cells(f, &built);
+                let (w0, w1, w2) = boxed_words(f, &built, back);
+                let p = parsed_of(f, &w0, &w1, &w2);
+                f.line_fmt(format_args!("ret %parsed {p}"));
+                return Ok(());
+            }
         }
         if let Some((name, n)) = Self::named_call(expr) {
             let caller = (f.deep_from.0.as_str(), f.deep_from.1);

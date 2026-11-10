@@ -430,6 +430,14 @@ impl<'a> Analysis<'a> {
     /// whose branches are each tail-safe. Anywhere else, ty must not appear
     /// except as an argument the callee immediately destructures.
     fn tail_position_safe(&self, ty: &str, e: &Expr) -> bool {
+        // A guard in tail position is a tail `if` whose else is the rest of
+        // the body: what it answers early leaves the function, and so does
+        // the last statement after it.
+        if let Expr::Guard { cond, early, rest, .. } = e {
+            return !self.expr_mentions_ty(ty, cond)
+                && self.tail_position_safe(ty, early)
+                && self.body_is_safe(ty, rest);
+        }
         if let Expr::App { head, args, .. } = e {
             if let Expr::Ident(name, _, _) = head.as_ref() {
                 if name == "if" && args.len() == 3 {
@@ -550,6 +558,11 @@ impl<'a> Analysis<'a> {
     /// such as json's `fail`. `produces_ty` asks whether one branch is a ty.
     fn ends_in_ty(&self, ty: &str, e: &Expr, inference: &crate::infer::Inference) -> bool {
         match e {
+            Expr::Guard { early, rest, .. } => {
+                self.ends_in_ty(ty, early, inference)
+                    && matches!(rest.last(), Some(Stmt::Expr(last)) if self.ends_in_ty(ty, last, inference))
+            }
+            Expr::Ident(..) => self.produces_ty(ty, e),
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(name, _, _) if name == "if" && args.len() == 3 => {
                     self.ends_in_ty(ty, &args[1], inference)
@@ -582,6 +595,13 @@ impl<'a> Analysis<'a> {
     /// Does `e` evaluate to a ty value (a construction or a ty-returning call)?
     fn produces_ty(&self, ty: &str, e: &Expr) -> bool {
         match e {
+            Expr::Guard { early, rest, .. } => {
+                self.produces_ty(ty, early)
+                    || matches!(rest.last(), Some(Stmt::Expr(last)) if self.produces_ty(ty, last))
+            }
+            // A constant that answers ty, named bare: `lost` beside the
+            // constructions of a decoder that answers it for a short read.
+            Expr::Ident(name, _, _) => self.returns_ty.contains(&(name.as_str(), 0)),
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(name, _, _) => {
                     name == ty

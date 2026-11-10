@@ -79,6 +79,53 @@ impl<'a> Backend<'a> {
         self.emit_pattern_known(f, status, pattern, fail, TOP)
     }
 
+    /// A field of a record held by value, read from its words. Reading it
+    /// the general way builds the record on the heap and asks the runtime
+    /// for the field by name. A failure riding in the words comes back as
+    /// itself, as it does from the runtime's read. A name that is not one of
+    /// the type's two fields is left to that read, which is what says so.
+    fn emit_parsed_field(&self, f: &mut FnEmit, record: &str, name: &str) -> Option<String> {
+        let (ty, _, back) = f.parsed_as(record)?;
+        // An err answers to these three whatever record was expected, and
+        // its getter hands back the piece, so they are the getter's to read.
+        if crate::ast::ERR_READERS.contains(&name) {
+            return None;
+        }
+        let decl = self.program.types.iter().find(|t| t.name == ty)?;
+        let at = decl.fields.iter().position(|(field, _, _)| field == name)?;
+        let w0 = f.tmp();
+        f.line_fmt(format_args!("{w0} = extractvalue %parsed {record}, 0"));
+        let w1 = f.tmp();
+        f.line_fmt(format_args!("{w1} = extractvalue %parsed {record}, 1"));
+        let (tag, word) = if (at == 1) == back {
+            // The int: its tag sits above the value's, and a failure's first
+            // word has nothing there, so a failure is asked for by name.
+            let w2 = f.tmp();
+            f.line_fmt(format_args!("{w2} = extractvalue %parsed {record}, 2"));
+            let failed = f.tmp();
+            f.line_fmt(format_args!("{failed} = icmp eq i64 {w0}, {K_ERR}"));
+            let above = f.tmp();
+            f.line_fmt(format_args!("{above} = lshr i64 {w0}, 8"));
+            let tag = f.tmp();
+            f.line_fmt(format_args!("{tag} = select i1 {failed}, i64 {K_ERR}, i64 {above}"));
+            let word = f.tmp();
+            f.line_fmt(format_args!("{word} = select i1 {failed}, i64 {w1}, i64 {w2}"));
+            (tag.to_string(), word.to_string())
+        } else {
+            // The value: a failure's first word is the err tag and nothing
+            // else, so its low byte and the second word are the failure.
+            let tag = f.tmp();
+            f.line_fmt(format_args!("{tag} = and i64 {w0}, 255"));
+            (tag.to_string(), w1.to_string())
+        };
+        let a = f.tmp();
+        f.line_fmt(format_args!("{a} = insertvalue %KValue undef, i64 {tag}, 0"));
+        let v = f.tmp();
+        f.line_fmt(format_args!("{v} = insertvalue %KValue {a}, i64 {word}, 1"));
+        f.record(&v, TOP);
+        Some(v.to_string())
+    }
+
     /// Which of a packed type's two fields is the int and which the value.
     fn packed_order(&self, ty: &str) -> (usize, usize) {
         if self.escape.int_last(ty) {
@@ -109,7 +156,9 @@ impl<'a> Backend<'a> {
     /// and is boxed here.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
         let value = release_cells(f, value);
-        if f.ret_ty == "%parsed" {
+        if f.ret_ty == "%parsed" && f.is_parsed(&value) {
+            f.line_fmt(format_args!("ret %parsed {value}"));
+        } else if f.ret_ty == "%parsed" {
             self.emit_parsed_from_failure(f, &value);
         } else {
             let value = self.as_value(f, &value);

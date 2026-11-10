@@ -2095,6 +2095,12 @@ impl<'a> Backend<'a> {
         if f.set_of(&value) & crate::infer::THUNK == 0 {
             return value;
         }
+        // A record held by value is its words, a record's or a failure's, and
+        // neither is a cell to force. Asked anyway, the words were built into
+        // a record for the asking and read back out of it.
+        if f.is_parsed(&value) {
+            return value;
+        }
         let post = f.set_of(&value) & !crate::infer::THUNK;
         let t = f.tmp();
         f.line_fmt(format_args!("{t} = call %KValue @k_force_fast(%KValue {value})"));
