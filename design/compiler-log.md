@@ -20,45 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — find2 refuses what the interpreter refuses
-
-`text/find2` and `text/find2_below` take bytes and then three or four ints. The
-interpreter refused anything else in those positions; native answered (#2310).
-The emitted shims `k_b_find2_fast` and `k_b_find2_below_fast` test every tag
-and send any call that is not bytes and small ints to the out-of-line doors
-`k_b_find2` and `k_b_find2_below` in runtime/text.c. Those doors tested only
-the bytes, so a bool, a string or a float was scanned with its payload as the
-number, and a bignum with its pointer. The doors now refuse anything but an
-int, in the interpreter's words (`find2 takes bytes`, `find2_below takes
-bytes`).
-
-A tag test alone would have made native refuse a bignum, which the interpreter
-reads. So the doors read one as the interpreter does: a start past a word
-scans from the front, a byte keeps the low byte of its magnitude, and a floor
-past a word sits above every byte or below them all. A negative small byte
-still reads two ways, the magnitude's low byte in the interpreter and `& 0xff`
-in native. That one is on the scanning path and is #2313.
-
-Four specs, each seen red. Three runtime goldens pin the refusal of a bool
-start, a string byte and a float floor on native, `--interp`, the oracle and
-the tab; native wrote nothing to stderr before the fix. The micro golden
-`a_bignum_reads_the_same_in_every_find2_position` puts a bignum in each
-position, and with the fix reverted native printed nothing where the
-interpreter prints `2 2 3 2 4`.
-
-The rows are from a job on 0x19 model 0x11, on the tree merged with #2311,
-which moved none of the same rows. No scan path changed, since the
-new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
-so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
-codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
-compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
-(-218). The runtime instruction rows fell by 1,890: work_encodebench to
-2,335,339,191 (-630), work_oneshot to 9,978,933 (-385) and work_runbench to
-941,722,133 (-945), while work_livebench rose to 938,654,286 (+70). No benchmark reaches the
-doors with a non-int, so layout is the likely cause of all four; nothing here
-isolates it. The front end, the emitter, the interpreter and the tab did not
-move. Welfare rose by less than 0.0001 and the floor is banked.
-
 ## 2026-11-04 — find2 reads a negative byte as the interpreter does
 
 The interpreter reads each byte `find2` and `find2_below` look for as the low
@@ -2081,3 +2042,48 @@ the maps do not, which is the case for the positional layout the ruling
 asks for: a record's fields in order, with no key read and no map built.
 These are this machine's numbers from a runtime built here, and the
 benchmark #2416 owes will pin its own from CI.
+
+## 2026-11-10 — a session's trip through base64 joins the corpus
+
+The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
+holds a component's state in the page as base64, and its benchmark showed
+an action costing more than it had in JSON, with base64 the larger part.
+senro also spells and reads base64 for every request that carries a
+session. `std/base64` is written in kanso: it joins a string for each group
+of three bytes, reads each letter out of its alphabet with a slice, and
+builds the bytes it decodes by pushing onto a list. No benchmark held a
+trip through it, so a fix would have scored as nothing.
+
+`sealed` joins the run program: 800 passes, each spelling a cookie of about
+sixty bytes and reading it back. Built with the phase and with it reading
+nothing, the program retires 991,852,481 instructions against 952,721,301
+in this container, so the phase is 39,131,180 of them, 3.95%, and a trip
+costs about 49,000. The same trip joins the interpreter's corpus at 15
+passes, where it costs 3.1 million instructions a trip.
+
+CI's rows. work_runbench 952,714,702 -> 991,852,372 and work_runbench_dev
+2,805,694,975 -> 2,894,015,349. interp_instructions 680,822,127 ->
+727,482,475, interp_allocs 984,852 -> 1,043,722 and interp_peak_bytes
+1,377,499 -> 1,489,302. In the tab, browser_compile_instructions
+358,139,032 -> 413,857,607, browser_compile_peak_bytes 862,043 -> 975,975
+and browser_run_instructions 91,173,579 -> 95,460,118, with
+browser_run_peak_bytes still 1,572,864. The tab's compile rises by 15.6%:
+the corpus now imports `std/base64` and through it `std/bits`, and the tab
+compiles both. The compile rows that read other programs did not move.
+
+The run program's counters rise with the phase: run_allocs 2,372,861,
+run_alloc_bytes 261,860,897, run_perm_allocs 161, run_beat_iters 197,248,
+run_push_mut_slow 1,658,292 (and run_push_mut_fast 1,398,651),
+run_bytes_malloc 9,468, run_str_scans 52,203, run_str_scan_bytes
+19,043,424, run_sh_str 19,617,504, run_sh_buf 102,043,040 and run_sh_bytes
+43,560, with run_buf_reuse at 7,390. `std/base64` joins the program's
+emitted code, so runbench reads defines=975 calls=10294 branches=9407
+lines=80567 and the summed rows emitted_other_defines 2,406,
+emitted_other_calls 22,268, emitted_other_branches 19,938 and
+emitted_other_lines 185,688. Its machine code is 912,641 bytes, and the
+summed text 5,954,425.
+
+The floor is re-based and the score is not a gain. Seven baselines are
+scaled by the new reading over the old, as the last corpus additions did,
+so the meta moves only by their rounding, 95.09928563621176 to
+95.09928566956496.
