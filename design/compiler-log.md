@@ -2149,9 +2149,9 @@ binding at lap 10 as well, when only the tenured holder has it, and
 again at the end. Both were red on main natively.
 
 **Rows.** Counts from this machine set by their distance to main's
-reading here; clang's rows and the tab's are CI's.
+reading here; `work_runbench`, clang's rows and the tab's are CI's.
 - A walk pays about three instructions for each cell it meets from the
-  pair. `work_runbench` rises 47,877 to 952,714,730 and
+  pair. `work_runbench` rises 47,849 to 952,714,702 and
   `work_runbench_dev` 47,787 to 2,805,694,975 for the run program's
   16,050 cells. `work_livebench` rises 459 to 938,655,379,
   `work_pendbench` 289 to 154,094,164 and `work_scanbench` 2 to 267,927.
@@ -2161,3 +2161,12 @@ reading here; clang's rows and the tab's are CI's.
   `work_jsonbench` and `work_readbench` 3 each.
 - The record is 496 bytes of machine code in every program, and the
   fourteen text rows sum to `text` 5,926,809.
+- Clang compiles the record: `codegen_instructions_dev` rises 7,036 to
+  116,951,956 and `codegen_instructions_release` 72,166 to 372,142,712.
+- The tab runs the same runtime, and `browser_run_instructions` rises
+  893 to 91,173,579.
+
+**The floor.** Welfare reads 95.09928563621176 with these rows, under the
+95.0994448300099 that #2414 banked. The objective's header sets a fix
+that makes the engines agree outside the sum, so the floor moves to what
+the fix costs and its history says so.
