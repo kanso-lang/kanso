@@ -33,7 +33,7 @@ pub play =
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
   trips = sealed 15 0
-  reads = taken 40 0
+  reads = taken 12 0
   shown = (_ -> print "interp {told} {trips} {reads}")
   served 2000 .> (_ -> deferred 2000) .> shown
 
