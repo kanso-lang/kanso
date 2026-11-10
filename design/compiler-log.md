@@ -1772,9 +1772,12 @@ reads slowly.
 
 Fixes #2409.
 
-**What was wrong.** Natively, a callback could read a lazy binding that
-belonged to a later pass. This program binds `twice` in each of three
-passes and reads it in a callback that runs after a sleep:
+**What was wrong.** Natively, a lazy binding could be read after the
+frame that made it had freed it, and what was read was a later
+binding's value. Two shapes did it.
+
+A callback captured the binding. This program binds `twice` in each of
+three passes and reads it in a callback that runs after a sleep:
 
 ```
 fn shown 0 _
@@ -1791,48 +1794,86 @@ fn handled n
 The interpreter prints 6, 4 and 2 for passes 3, 2 and 1. The native
 build printed 2 for all three.
 
-**Why.** `twice` is lazy because `shown` has an arm that discards it, so
-it is a cell. `src/demand.rs` decides whether the frame that made a cell
-may free it on the way out, and it decided by looking at where the
-binding is handed: `shown`'s second position, where the parameter is
-read by `+` and goes nowhere else. That position is safe, so the cell
-was marked releasable. Nothing asked whether the use sat inside a
-callback. The callback is built in `handled` and called after `handled`
-has returned, and by then the epilogue had put the cell on the free
-list. The next pass's binding took the same cell, and every callback
-read the last value written to it.
+A function handed the binding back and the caller kept it:
 
-The hole was on the callee's side as well. A function that takes the
-binding and reads it inside a callback of its own keeps the cell past
-its caller's frame, and its position was judged safe for the same
-reason.
+```
+fn held false _
+  ""
+
+fn held true words
+  words
+
+fn listed n
+  a = built n
+  [(held true a)]
+```
+
+Two lists made by `listed 1` and `listed 2` read "kept 1" and "kept 2"
+on the interpreter. Natively both read "kept 2".
+
+**Why.** Each binding is lazy because the function it is handed to has
+an arm that discards it, so it is a cell. `src/demand.rs` decides
+whether the frame that made a cell may free it on the way out, and it
+decided by looking at the position the binding was handed to. A
+position is safe when the parameter there is only read, or answered
+unread as the function's own result. Both positions above are safe by
+that test, so both cells were marked releasable, and the frame's
+epilogue put them on the free list. The next lazy binding took the same
+cell.
+
+The test was missing two questions about the frame that binds the
+name. It never asked whether the use sat inside a callback, which is
+called after the frame has returned. And it took an arm that answers
+its parameter unread to be harmless, on the strength of the epilogue's
+own guard: the epilogue does not free a cell that is the frame's
+result. That guard sees the cell leave only when the call is the
+frame's last expression. A call whose answer goes into a list, under a
+name or into another call's arguments has put the cell somewhere the
+epilogue does not look.
+
+The callback question was missing on the callee's side as well: a
+function that reads its parameter inside a callback of its own keeps
+the cell past its caller's frame.
 
 A binding read through a call, such as `length page`, was never
-affected: that position was already unsafe, so the cell was never
+affected. That position was already unsafe, so the cell was never
 freed.
 
-**What changed.** A use inside a callback keeps the cell from being
-released. `captured` asks it of the function that binds the name, and
-`param_stays_local` asks it of a parameter. Both are conservative: a
-callback handed to `list/map` is finished before the frame returns, and
-its cell is kept all the same.
+**What changed.** Three checks, all in `src/demand.rs`.
+- `captured`: a callback in the binding function that reads the name
+  keeps the cell from being released.
+- `param_stays_local`: a callback in the callee that reads the
+  parameter makes the position unsafe.
+- `keeps_what_is_handed_back`: a call that may answer the cell unread
+  releases it only where the answer is the frame's result or is read on
+  the spot, as an operand, an interpolation, an index or the subject of
+  `.>`.
 
-**The spec.** `tests/golden/micro/a_callback_reads_the_lazy_binding_it_captured`
-holds both shapes, the callback beside the binding and the callback in
-the function the binding is handed to. On main's native build it read 2
-six times.
+All three are conservative. A callback handed to `list/map` is finished
+before the frame returns, and its cell is kept all the same.
+
+**The specs.** `a_callback_reads_the_lazy_binding_it_captured` holds the
+callback beside the binding and the callback in the callee.
+`a_lazy_binding_handed_back_and_kept_is_read_later` keeps the answer in
+a list, under a name and in an argument. Both are in
+`tests/golden/micro`, and on main's native build each printed the last
+value bound on every line.
 
 **How it was found.** While building the fix for #2408 on another
 branch I added a mode that marks a freed cell and dies when one is read.
-It died on a fixture written to stress that change, and the fault
-reproduced on main without the change.
+A fixture written to stress that change died twice, once for each
+shape, and both faults reproduced on main without the change.
+`a_lazy_effect_handed_through_a_function_still_runs`, already in the
+corpus, has the first shape and died under the mode too. It has passed
+all along because nothing in it binds a second cell before the first is
+read.
 
 **Rows.** No runtime counter moves and every benchmark's machine code is
-byte for byte what it was: no benchmark binds a lazy value that a
-callback reads. The compiler's own rows move with its binary.
+byte for byte what it was: no benchmark binds a lazy value in either
+shape. The compiler's own rows move with its binary.
 `compile_instructions` falls 18 to 24,152,633, `entry_instructions`
-falls 156 to 156,082,821 and `library_instructions` falls 83 to
-73,608,573.
+falls 163 to 156,082,814 and `library_instructions` falls 86 to
+73,608,570.
 
 **Open.** A cell its frame cannot free lives until the program exits,
 and these cells have joined that set. A server makes one for each
