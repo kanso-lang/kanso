@@ -59,19 +59,12 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
       <h2 class="section-title">a guestbook, whole</h2>
       <p class="lede">senro's first app is a guestbook: visitors make an account, sign in, sign the book and remove what they signed. These are its own files. The panel above is its schema.</p>
     </div>
-    <p>A model is a module named for its table, holding the rules for the table's records. senro declares the record itself, <code>signature</code>, from the table. The policies say who may create and remove a signature, and <code>problems</code> says what makes one unfit to keep.</p>
+    <p>A model is a module named for one row of its table, holding the rules for the table's records. senro declares the record itself, <code>signature</code>, from the <code>signatures</code> table. The policies say who may create and remove a signature, and <code>problems</code> says what makes one unfit to keep.</p>
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <div class="code-panel-title">examples/guestbook/signature.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
-<span class="c"># the table, so senro/models declares `signature` here with a field for each</span>
-<span class="c"># column, and writes `signature_from`, which builds one from a row.</span>
-<span class="c">#</span>
-<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
-<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
-<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -88,14 +81,13 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
     (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">length</span> s<span class="o">.</span>message <span class="o">&gt;</span> <span class="n">280</span>) <span class="s">"Keep it under 280."</span>)
   ]</code></pre>
 </div>
-    <p>An action is a public function, and its name places it. <code>entries/index</code> answers <code>GET /entries</code> and <code>entries/create</code> answers <code>POST /entries</code>. Nothing else declares a route.</p>
+    <p>An action is a public function, and its name places it. <code>entries/index</code> answers <code>GET /entries</code> and <code>entries/create</code> answers <code>POST /entries</code>. Nothing else declares a route. An action reads and writes through the model by name and writes no SQL: <code>signature/newest db</code> is the book with the latest signature first, and <code>signature/create db f</code> asks the policy and checks the rules before it stores anything.</p>
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
-<span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
-<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./signature"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
 
@@ -104,7 +96,7 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
 <span class="c"># notice clears it.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
   s <span class="o">=</span> <span class="f">web/session</span> req secret
-  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
+  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> <span class="f">shown</span> req book s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
 
 <span class="c"># A development secret. A deployed guestbook signs its sessions with its own.</span>
 <span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
@@ -116,8 +108,7 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
   f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
-  <span class="f">models/created</span> viewer db signatures/signature_model f
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
+  <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
 </div>
     <p>A view is a kata template. It names what it takes on its first line, and the compiler checks every field it reads against the record it is handed.</p>
 <div class="code-panel">
@@ -148,7 +139,7 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
       <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"photo"</span> accept=<span class="s">"image/*"</span>
     <span class="f">button</span> Sign
 <span class="f">ol</span>.entries
-  <span class="k">for</span> e <span class="k">in</span> signatures
+  <span class="k">each</span> signatures e <span class="o">-&gt;</span>
     <span class="f">li</span>
       <span class="f">p</span>.message <span class="o">=</span> e.message
       <span class="k">if</span> e.photo != <span class="s">""</span>
@@ -197,7 +188,7 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
       <div class="feature">
         <span class="feature-num">03</span>
         <h3>models</h3>
-        <p>a model's record, its reader, its checked writes and its policies come from its table and the functions in its module. a write the policy refuses has no other way into the table.</p>
+        <p>a model's record comes from its table, and so do its reads and writes, which an action calls by the model's name. its policies and rules are the functions in its module. a write the policy refuses has no other way into the table.</p>
       </div>
       <div class="feature">
         <span class="feature-num">04</span>

@@ -17,7 +17,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 <span class="eyebrow">senro guides</span>
 <h1>models and migrations</h1>
 
-<p>a senro app keeps its data in Postgres. this guide covers where the schema comes from, how a model is tied to a table, the policies that guard each write, and the rules that decide whether a record is fit to keep.</p>
+<p>a senro app keeps its data in Postgres. this guide covers where the schema comes from, how a model is tied to a table, the calls an action reads and writes it with, the policies that guard each write, and the rules that decide whether a record is fit to keep.</p>
 
 <h2>migrations are the schema</h2>
 
@@ -108,14 +108,14 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts. it runs the migrations the database has not yet run, in order, and records each in a <code>senro_migrations</code> table under the app's name and its place in the list, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change goes at the end of the list. each change does nothing when its work is already done, so a database made before migrations were recorded takes the list safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
 
-<p>a table that lists <code>models/timestamps</code> among its columns gets <code>created_at</code> and <code>updated_at</code>, the two columns Rails' <code>t.timestamps</code> adds. each is <code>timestamptz not null default now()</code>, so Postgres sets both when a row is made. <code>models/updated</code> sets <code>updated_at</code> on every change it writes, and <code>models/created</code> and <code>models/updated</code> drop a form's value for either, so a request cannot backdate a row. the two are also <code>models/created_at</code> and <code>models/updated_at</code>, one at a time, which is how the scaffold ends every table it makes.</p>
+<p>a table that lists <code>models/timestamps</code> among its columns gets <code>created_at</code> and <code>updated_at</code>, the two columns Rails' <code>t.timestamps</code> adds. each is <code>timestamptz not null default now()</code>, so Postgres sets both when a row is made. a change written through the model sets <code>updated_at</code>, and neither making a record nor changing one takes a form's value for either column, so a request cannot backdate a row. the two are also <code>models/created_at</code> and <code>models/updated_at</code>, one at a time, which is how the scaffold ends every table it makes.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/stamped/migrations.kso</div>
   <pre><code>notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> (<span class="f">list/concat</span> [id body] <span class="f">models/timestamps</span>)</code></pre>
 </div>
 
-<p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint over one column in <code>schema.sql</code>, and the model names the column. <code>models/created</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. <code>models/updated</code> asks before it writes.</p>
+<p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint over one column in <code>schema.sql</code>, and the model names the column. the model's <code>create</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. its <code>update</code> asks before it writes.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/unique/migrations.kso</div>
@@ -124,13 +124,13 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
 
-<h2>a model is a module named for its table</h2>
+<h2>a model is a module named in the singular</h2>
 
-<p>a module named for a table holds the table's model, as a Rails model is named for its table. the derivation declares the record in it, with a field for each column in the table's order: the guestbook's <code>signatures</code> module gets <code>signature</code>, and its functions read <code>s.name</code> and <code>s.message</code> as they read any record's fields. the record is checked like code someone wrote, so a field the table lacks is an error where it is read. <code>kanso derived</code> prints the declaration with the rest of what the derivation writes:</p>
+<p>a module named for one of a table's rows holds the table's model, as a Rails model is named in the singular: the guestbook's <code>signature.kso</code> is the model of <code>signatures</code>. the derivation declares the record in it, <code>signature</code>, with a field for each column in the table's order, and the module's functions read <code>s.name</code> and <code>s.message</code> as they read any record's fields. the record is checked like code someone wrote, so a field the table lacks is an error where it is read. the entry imports the module, since a derivation reads the modules the entry names. <code>kanso derived</code> prints the declaration with the rest of what the derivation writes:</p>
 
 <div class="code-output">
   <div class="code-panel-title">kanso derived examples/guestbook</div>
-  <pre><code># in signatures, by models/tables
+  <pre><code># in signature, by models/tables
 pub type signature
   id
   name
@@ -158,22 +158,60 @@ pub type signature
 
 <p>a type named after no table is refused the same way. for each model the derivation writes a reader into the model's module, <code>signature_from row</code>, which builds a record from a row a query answered and takes each field from the column of the same name. it writes <code>signature_attributes s</code> too, the record as a map from each field's name to its value, as Rails' <code>attributes</code> gives one. <code>web/json</code> writes that map as a JSON object. a module that declares <code>signature_attributes</code> itself keeps its own, so a model can leave a field out of what it shows.</p>
 
+<h2>reads and writes by name</h2>
+
+<p>an action reads and writes through its model by name and writes no SQL. the derivation writes the calls into the model's module, so the module answers for its table as a Rails model answers its class methods. for the model in <code>note.kso</code>:</p>
+
+<table>
+<thead><tr><th>call</th><th>answers</th></tr></thead>
+<tbody>
+<tr><td><code>note/find db id</code></td><td>the record, or none</td></tr>
+<tr><td><code>note/find_by db "title" t</code></td><td>the first record whose field holds the value, or none</td></tr>
+<tr><td><code>note/all db</code></td><td>every record, oldest first</td></tr>
+<tr><td><code>note/newest db</code></td><td>every record, the one made last first</td></tr>
+<tr><td><code>note/ordered db "title"</code></td><td>every record in the order of a column</td></tr>
+<tr><td><code>note/where db "title" t</code></td><td>the records whose field holds the value</td></tr>
+<tr><td><code>note/paged db number per</code></td><td>one page of the records, oldest first</td></tr>
+<tr><td><code>note/paged db "author" a number per</code></td><td>one page of the records whose field holds the value</td></tr>
+<tr><td><code>note/create db fields</code></td><td>the record as stored, or <code>models/invalid</code></td></tr>
+<tr><td><code>note/update db id changes</code></td><td>the record as changed, or <code>models/invalid</code></td></tr>
+<tr><td><code>note/destroy db id</code></td><td>the record as it was</td></tr>
+</tbody>
+</table>
+
+<p>no call takes a viewer, because the <code>db</code> senro hands an action already knows who is signed in. the web layer names the viewer on the session before an action, a server component or a provider sees it, and a session nobody named asks as a visitor. a read shows what the model's read policy allows that viewer, and a write asks the model's policies about the same viewer. the next section covers the policies.</p>
+
+<p>a field or an order named in a call goes into the SQL senro writes, so it must be one of the table's columns. one written out in the call is checked against the columns when the app is checked, and the error is at the call:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/errors/order_not_a_column/main.kso</div>
+  <pre><code><span class="c"># An order written out that the comments table does not have, asked of the</span>
+<span class="c"># model by its module's name.</span>
+<span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">comment/ordered</span> db <span class="s">"written_at"</span>)
+  <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> <span class="f">print</span> cs)</code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">kanso check</div>
+  <pre><code>error[derive]: `written_at` is not a column of `comments`: it has id, post_id, body, author
+  --&gt; ./main.kso:11:13
+  11 |   .&gt; (db -&gt; comment/ordered db "written_at")
+                   ^</code></pre>
+</div>
+
+<p>a field or an order that arrives in a variable is checked when the call runs, before any SQL is sent, and one that names no column is an error there.</p>
+
+<p>a module that declares a function of one of these names keeps its own, so a resource's actions and its model sit in two modules: <code>notes/create</code> is the action, and <code>note/create</code> is the write it calls. a module that holds two models gets none of the calls, since a bare <code>find</code> would not say which model it meant.</p>
+
 <h2>policies</h2>
 
 <p>a model's module says who may change its rows. <code>create?</code>, <code>update?</code> and <code>destroy?</code> each take the viewer and the record and answer true or false. the guestbook lets anyone sign and only the signer remove:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <div class="code-panel-title">examples/guestbook/signature.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
-<span class="c"># the table, so senro/models declares `signature` here with a field for each</span>
-<span class="c"># column, and writes `signature_from`, which builds one from a row.</span>
-<span class="c">#</span>
-<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
-<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
-<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -191,40 +229,31 @@ pub type signature
   ]</code></pre>
 </div>
 
-<p>the derivation describes each model as a value, <code>signature_model</code>, and the writes take it. <code>models/created viewer db model fields</code> reads the fields into a record, asks <code>create?</code>, checks the rules, and inserts only when both pass. <code>models/updated</code> and <code>models/destroyed</code> read the row first, ask their policy, and write only on a yes, answering <code>web/denied</code> or <code>web/absent</code> otherwise. a model with no such policy cannot be written this way, so writes default closed.</p>
+<p>each write asks its policy first. <code>signature/create db fields</code> reads the fields into a record, asks <code>create?</code>, checks the rules, and inserts only when both pass. <code>update</code> and <code>destroy</code> read the row first, ask their policy, and write only on a yes. a no answers <code>web/denied</code>, and an id no row has answers <code>web/absent</code>. a model with no such policy cannot be written this way, so writes default closed.</p>
 
-<p>reads default open. a module may declare <code>visible?</code>, and <code>models/shown viewer model rows</code> keeps the records a query answered that the viewer may see; without it every row shows. a missing read policy can show a row but never change one.</p>
+<p>reads default open. a module may declare <code>visible?</code>, and each read then answers only the records it says the viewer may see; without it every row shows. a missing read policy can show a row but never change one.</p>
 
 <h2>rules</h2>
 
-<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. <code>models/created</code> and <code>models/updated</code> check it, the second on the record as the change leaves it. senro writes the rules a Rails model reaches for first. <code>models/present field value</code> is <code>presence: true</code>, and a value of nothing but spaces is as blank as none. <code>models/at_most field n value</code> and <code>models/at_least field n value</code> bound a value's length in characters, as <code>length: { maximum:, minimum: }</code> does. <code>models/one_of field choices value</code> is <code>inclusion: { in: choices }</code>, and the value must equal a choice whole, so a select can post only what the app knows. <code>models/email_address field value</code> asks for one @ with something on each side of it and no spaces. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
+<p><code>problems</code> takes a record and answers <code>models/problems</code> of a list of <code>models/rule field broken message</code>. the model's <code>create</code> and <code>update</code> check it, the second on the record as the change leaves it. senro writes the rules a Rails model reaches for first. <code>models/present field value</code> is <code>presence: true</code>, and a value of nothing but spaces is as blank as none. <code>models/at_most field n value</code> and <code>models/at_least field n value</code> bound a value's length in characters, as <code>length: { maximum:, minimum: }</code> does. <code>models/one_of field choices value</code> is <code>inclusion: { in: choices }</code>, and the value must equal a choice whole, so a select can post only what the app knows. <code>models/email_address field value</code> asks for one @ with something on each side of it and no spaces. a record that breaks a rule comes back as <code>models/invalid</code>, holding each broken field's message and the record as given, so the action can answer the form again with both. the guestbook's <code>entries/create</code> does that with a 422:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
-<span class="k">import</span> <span class="s">"../../pg"</span>
-<span class="k">import</span> <span class="s">"../../web"</span>
-<span class="k">import</span> <span class="s">"./removal"</span>
-<span class="k">import</span> <span class="s">"./signatures"</span>
-<span class="k">import</span> <span class="s">"./views"</span>
-<span class="k">import</span> <span class="s">"std/list"</span>
-
-<span class="c"># A signature is made through its model, whose rules decide whether it is</span>
+  <pre><code><span class="c"># A signature is made through its model, whose rules decide whether it is</span>
 <span class="c"># fit to keep. It is signed with the name of the account signed in. The</span>
 <span class="c"># fields go to Postgres as parameters, so what a visitor types is stored as</span>
 <span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
   f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
-  <span class="f">models/created</span> viewer db signatures/signature_model f
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)
+  <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)
 
 <span class="c"># A signature the rules turned back: the page again, answered 422, with the</span>
 <span class="c"># form as the visitor filled it in and what to fix.</span>
 <span class="k">fn</span> <span class="f">signed</span> req db w:models/invalid
   s <span class="o">=</span> <span class="f">web/session</span> req secret
   form <span class="o">=</span> <span class="f">filled</span> w<span class="o">.</span><span class="f">record</span><span class="o">.</span><span class="f">message</span> w<span class="o">.</span><span class="f">problems</span>
-  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s form <span class="n">422</span>)
+  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> <span class="f">shown</span> req book s form <span class="n">422</span>)
 
 <span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
 <span class="c"># reloading it does not sign the book again.</span>
@@ -232,11 +261,9 @@ pub type signature
   <span class="f">effect</span> (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
 </div>
 
-<h2>queries</h2>
+<h2>underneath</h2>
 
-<p>a query is SQL with numbered parameters, sent through <code>pg/query db sql args</code>. what a visitor types goes to Postgres as a parameter and is never read as SQL. senro speaks Postgres's wire protocol in a client written in kanso, logs in with SCRAM-SHA-256, and secures the connection with TLS when <code>pg/connect_tls</code> asks for it.</p>
-
-<p>two queries go through the model instead. <code>models/found viewer db model id</code> reads a record by its id and answers none when no row has it or the model's <code>visible?</code> hides it from the viewer, as Rails' <code>find_by(id:)</code> answers nil. <code>models/where viewer db model field value</code> answers the records whose field holds the value, oldest first, that the viewer may see. a post's comments are <code>models/where viewer db comment/comment_model "post_id" id</code>. the field goes into the SQL, so the derivation checks a field written out against the model's columns while the app compiles, and a field passed in a variable that names no column is an error when the call runs.</p>
+<p>the calls by name are written over functions of the <code>models</code> module that take the viewer and the model as arguments. the derivation describes each model as a value for them, <code>signature_model</code>. <code>models/found viewer db model id</code> reads a record by its id and answers none when no row has it or the model's <code>visible?</code> hides it from the viewer, as Rails' <code>find_by(id:)</code> answers nil. <code>models/where viewer db model field value</code> answers the records whose field holds the value, oldest first, that the viewer may see. a post's comments are <code>models/where viewer db comment/comment_model "post_id" id</code>. the field is checked as it is in a call by name. senro's spec calls both, once with a field in a variable that names no column:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/finders/reading.kso</div>
@@ -271,28 +298,30 @@ pub type signature
   <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
 </div>
 
+<p>the SQL these functions write goes to Postgres through <code>pg</code>, a client written in kanso. it speaks Postgres's wire protocol, logs in with SCRAM-SHA-256, and secures the connection with TLS when <code>pg/connect_tls</code> asks for it. what a visitor types goes to Postgres as a parameter and is never read as SQL.</p>
+
 <h2>a foreign key reads both ways</h2>
 
-<p>a foreign key the migrations add writes that <code>models/where</code> for the app, once in each direction, as Rails' <code>has_many</code> and <code>belongs_to</code> do. when <code>pages.note_id</code> holds a row of <code>notes</code>, the <code>pages</code> module gets <code>of_note viewer db note</code>, the pages of a note that the viewer may see, and the <code>notes</code> module gets <code>of_page viewer db page</code>, the note a page belongs to. each reads the other record's field by name, <code>note.id</code> or <code>page.note_id</code>, so neither module imports the other, and an app can import either one into the other without a cycle. a module that already declares a function of that name keeps its own. so does one that declares a pub function or record named as the parameter. an app that keeps a <code>schema.sql</code> gets its keys from the dump's <code>FOREIGN KEY ... REFERENCES</code> constraints instead.</p>
+<p>a foreign key the migrations add writes that <code>models/where</code> for the app, once in each direction, as Rails' <code>has_many</code> and <code>belongs_to</code> do. when <code>pages.note_id</code> holds a row of <code>notes</code>, the <code>page</code> module gets <code>of_note viewer db note</code>, the pages of a note that the viewer may see, and the <code>note</code> module gets <code>of_page viewer db page</code>, the note a page belongs to. each reads the other record's field by name, <code>note.id</code> or <code>page.note_id</code>, so neither module imports the other, and an app can import either one into the other without a cycle. a module that already declares a function of that name keeps its own. so does one that declares a pub function or record named as the parameter. an app that keeps a <code>schema.sql</code> gets its keys from the dump's <code>FOREIGN KEY ... REFERENCES</code> constraints instead.</p>
 
 <p>the modules in <code>spec/db/associated</code> hold one helper each and nothing about the other table. the derivation writes the rest:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/associated/reading.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
-<span class="k">import</span> <span class="s">"./notes"</span>
-<span class="k">import</span> <span class="s">"./pages"</span>
+<span class="k">import</span> <span class="s">"./note"</span>
+<span class="k">import</span> <span class="s">"./page"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">pages_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db notes/note_model id
-    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">pages/of_note</span> <span class="s">""</span> db n)
-    <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"note <span class="i">{id}</span>: <span class="i">{list/to_list (list/map ps pages/bodied)}</span>"</span>)
+  <span class="f">models/found</span> <span class="s">""</span> db note/note_model id
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">page/of_note</span> <span class="s">""</span> db n)
+    <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"note <span class="i">{id}</span>: <span class="i">{list/to_list (list/map ps page/bodied)}</span>"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">note_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db pages/page_model id
-    <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">notes/of_page</span> <span class="s">""</span> db p)
-    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"page <span class="i">{id}</span>: <span class="i">{notes/titled n}</span>"</span>)
+  <span class="f">models/found</span> <span class="s">""</span> db page/page_model id
+    <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">note/of_page</span> <span class="s">""</span> db p)
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"page <span class="i">{id}</span>: <span class="i">{note/titled n}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">said</span> db line
   <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
@@ -307,7 +336,7 @@ page 2: note: second</code></pre>
 
 <h2>a page at a time</h2>
 
-<p>a list that may grow is read a page at a time, as Pagy reads one for a Rails app. <code>models/paged db sql params number per</code> runs the query with a limit and an offset after its <code>order by</code>, and answers a <code>models/page</code>: the rows on the page, its number, and whether another page follows. it asks for one row more than a page holds to answer that last question, and leaves that row off. <code>models/page_number</code> reads the page a query string asks for, and anything that is not a whole number of 1 or more is the first page, so a link that has been edited by hand still shows a list.</p>
+<p>a list that may grow is read a page at a time, as Pagy reads one for a Rails app. <code>note/paged db number per</code> answers a <code>models/page</code>: the records on the page, its number, and whether another page follows. the read policy is asked about the rows of that page, so a page may show fewer than <code>per</code>. underneath it is <code>models/paged db sql params number per</code>, which runs a query with a limit and an offset after its <code>order by</code>. it asks for one row more than a page holds to learn whether another page follows, and leaves that row off. <code>models/page_number</code> reads the page a query string asks for, and anything that is not a whole number of 1 or more is the first page, so a link that has been edited by hand still shows a list.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">models/models.kso</div>
@@ -350,6 +379,6 @@ asked 2,,x,0,-3,2.5: 2 1 1 1 1 1</code></pre>
 
 <p>a scaffold's <code>index</code> lists its rows this way, 25 to a page, as the generators guide shows.</p>
 
-<p>a resource that lists another's records and one that shows its parent would import each other, and kanso refuses an import cycle. keeping each model in a module of its own, apart from the resource's actions, avoids it: both resources import both models, as the guestbook's <code>entries</code> imports its <code>signatures</code> model.</p>
+<p>a resource that lists another's records and one that shows its parent would import each other, and kanso refuses an import cycle. keeping each model in a module of its own, apart from the resource's actions, avoids it: both resources import both models, as the notebook's <code>pages</code> resource imports <code>note</code> beside its own <code>page</code>.</p>
 
 </article>

@@ -25,7 +25,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 
 <h2>the shape of an app</h2>
 
-<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>account</code>, <code>session</code>), one for its model (<code>signatures</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
+<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>account</code>, <code>session</code>), one for its model (<code>signature</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
@@ -45,7 +45,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"./removal"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
-<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./signature"</span>
 <span class="k">import</span> <span class="s">"./unlocks"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
@@ -74,7 +74,7 @@ serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> mail/performers serving)</code></pre>
 </div>
 
-<p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's reader, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
+<p>each <code>derive</code> line names a function the compiler runs during the build. <code>kata/views</code> compiles the templates, <code>models/tables</code> folds the migrations into a schema and writes each model's record, reads and writes, and <code>routes/rest</code> places the actions. their output is ordinary kanso, added to the entry before anything is checked; <code>kanso derived examples/guestbook</code> prints it.</p>
 
 <p>the last statement is the app: connect to Postgres, create the tables if they are missing and compare them with the schema, then serve on port 3000. <code>web/serve</code> answers each connection in a fiber of its own and lends each request a database session from a pool. bytes that are not a request, such as a line without a method and a path, are answered 400 Bad Request and the connection is closed.</p>
 
@@ -167,20 +167,13 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <h2>a model</h2>
 
-<p>a model lives in a module named for its table. the models derivation declares the record in <code>signatures</code>, as <code>signature</code> with a field for each column of the <code>signatures</code> table, so the module never lists them, and a field the table lacks cannot be read. the functions in the module are the model's policies and its rules.</p>
+<p>a model lives in a module named for one row of its table, in the singular as a Rails model is: the <code>signatures</code> table has its model in <code>signature.kso</code>. the models derivation declares the record there, <code>signature</code>, with a field for each column of the table, so the module never lists them, and a field the table lacks cannot be read. the functions in the module are the model's policies and its rules. anyone may sign the book, and only the person who signed an entry may remove it.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/signatures.kso</div>
+  <div class="code-panel-title">examples/guestbook/signature.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
-<span class="c"># the table, so senro/models declares `signature` here with a field for each</span>
-<span class="c"># column, and writes `signature_from`, which builds one from a row.</span>
-<span class="c">#</span>
-<span class="c"># Only the person who signed an entry may remove it. The models derivation</span>
-<span class="c"># reads this policy and writes `signature_destroyed`, which asks it before it</span>
-<span class="c"># deletes anything, so there is no other way to remove a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -198,7 +191,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
   ]</code></pre>
 </div>
 
-<p>from these, <code>models/tables</code> writes <code>signature_from</code>, which builds a signature from a row, and checked writes such as <code>signature_destroyed</code>, which asks <code>destroy?</code> before it deletes.</p>
+<p>from these, <code>models/tables</code> writes the table's reads and writes into the module, and the app calls them by the module's name. <code>signature/newest db</code> answers the book with the latest signature first, <code>signature/create db fields</code> asks <code>create?</code> and checks <code>problems</code> before it stores a signature, and <code>signature/destroy db id</code> asks <code>destroy?</code> before it deletes one. the <a href="models.html">models guide</a> lists the rest.</p>
 
 <h2>actions and routes</h2>
 
@@ -207,10 +200,9 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
-<span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
-<span class="k">import</span> <span class="s">"./signatures"</span>
+<span class="k">import</span> <span class="s">"./signature"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
 
@@ -219,7 +211,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 <span class="c"># notice clears it.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
   s <span class="o">=</span> <span class="f">web/session</span> req secret
-  <span class="f">pg/query</span> db newest [] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">shown</span> req r<span class="o">.</span><span class="f">rows</span> s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
+  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> <span class="f">shown</span> req book s (<span class="f">filled</span> <span class="s">""</span> {}) <span class="n">200</span>)
 
 <span class="c"># A development secret. A deployed guestbook signs its sessions with its own.</span>
 <span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
@@ -231,15 +223,14 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
   f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
-  <span class="f">models/created</span> viewer db signatures/signature_model f
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
+  <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)</code></pre>
 </div>
 
-<p><code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret. it never sees a visitor who is not signed in: the entry serves every action that its module does not open through <code>web/requiring_sign_in</code>, which sends that visitor to the sign-in page first (the sessions guide has the details). the form goes through the model: <code>models/created</code> checks the policy and the rules and answers either the new row or the problems to show.</p>
+<p>neither action writes SQL. <code>index</code> reads the book with <code>signature/newest</code>. <code>create</code> reads who is signed in from the session, which is a cookie signed with the app's secret, and signs the entry with that name. it never sees a visitor who is not signed in: the entry serves every action that its module does not open through <code>web/requiring_sign_in</code>, which sends that visitor to the sign-in page first (the sessions guide has the details). the form goes through the model: <code>signature/create</code> checks the policy and the rules and answers either the new record or the problems to show. the <code>db</code> an action is handed already knows who is signed in, so the policy is asked about that visitor without the action handing the model a viewer.</p>
 
 <h2>a view</h2>
 
-<p>a view is a kata template. its first line names what it takes, and the rest is indented markup, closed for you: a tag with its classes and attributes, then its text. <code>{viewer}</code> interpolates and escapes, <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw, and the control lines are <code>if</code> and <code>for</code>. <code>kata/views</code> compiles each template to kanso functions and checks each field it reads. <code>signed_view</code>, which <code>entries/index</code> calls, describes the page as data, so senro's page script can render it in the browser with the same template compiled to wasm; a first request gets it rendered as HTML.</p>
+<p>a view is a kata template. its first line names what it takes, and the rest is indented markup, closed for you: a tag with its classes and attributes, then its text. <code>{viewer}</code> interpolates and escapes, <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw, and the control lines are <code>if</code> and <code>each</code>: <code>each signatures e -&gt;</code> writes the rows under it once for each signature, with <code>e</code> naming it. <code>kata/views</code> compiles each template to kanso functions and checks each field it reads. <code>signed_view</code>, which <code>entries/index</code> calls, describes the page as data, so senro's page script can render it in the browser with the same template compiled to wasm; a first request gets it rendered as HTML.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/views/signed.kata</div>
@@ -269,7 +260,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
       <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"photo"</span> accept=<span class="s">"image/*"</span>
     <span class="f">button</span> Sign
 <span class="f">ol</span>.entries
-  <span class="k">for</span> e <span class="k">in</span> signatures
+  <span class="k">each</span> signatures e <span class="o">-&gt;</span>
     <span class="f">li</span>
       <span class="f">p</span>.message <span class="o">=</span> e.message
       <span class="k">if</span> e.photo != <span class="s">""</span>

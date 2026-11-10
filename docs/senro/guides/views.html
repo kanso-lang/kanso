@@ -51,7 +51,7 @@ description: "senro's views are kata templates compiled to kanso; a component bi
       <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"photo"</span> accept=<span class="s">"image/*"</span>
     <span class="f">button</span> Sign
 <span class="f">ol</span>.entries
-  <span class="k">for</span> e <span class="k">in</span> signatures
+  <span class="k">each</span> signatures e <span class="o">-&gt;</span>
     <span class="f">li</span>
       <span class="f">p</span>.message <span class="o">=</span> e.message
       <span class="k">if</span> e.photo != <span class="s">""</span>
@@ -60,7 +60,7 @@ description: "senro's views are kata templates compiled to kanso; a component bi
       <span class="o">==</span> removals[<span class="s">"{e.id}"</span>]</code></pre>
 </div>
 
-<p>the first line, <code>takes</code>, names the parameters in order. nesting is by indentation and tags close themselves. <code>tag.class#id</code> is shorthand, and a bare <code>.class</code> means a <code>div</code>. an attribute is <code>name="text"</code>, where the text may hold <code>{expr}</code>, or <code>name=expr</code> for a value. <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw. the control lines are <code>if</code>, <code>else if</code>, <code>else</code>, <code>for x in xs</code>, and <code>case expr</code> with <code>when value</code> rows under it and an optional <code>else</code>, and <code>#</code> starts a comment. a <code>when</code> matches its value as a function's argument is matched, so it names a string, a number, <code>true</code>, <code>false</code> or <code>none</code>, and a value no <code>when</code> names writes the <code>else</code> rows or nothing.</p>
+<p>the first line, <code>takes</code>, names the parameters in order. nesting is by indentation and tags close themselves. <code>tag.class#id</code> is shorthand, and a bare <code>.class</code> means a <code>div</code>. an attribute is <code>name="text"</code>, where the text may hold <code>{expr}</code>, or <code>name=expr</code> for a value. <code>= expr</code> writes a value escaped and <code>== expr</code> writes it raw. the control lines are <code>if</code>, <code>else if</code>, <code>else</code>, <code>each xs x -&gt;</code>, and <code>case expr</code> with <code>when value</code> rows under it and an optional <code>else</code>, and <code>#</code> starts a comment. <code>each xs x -&gt;</code> writes the rows under it once for each element of <code>xs</code>, with <code>x</code> in scope. kata has no <code>for</code>, as kanso has none, and a <code>for</code> row is refused at its line. a <code>when</code> matches its value as a function's argument is matched, so it names a string, a number, <code>true</code>, <code>false</code> or <code>none</code>, and a value no <code>when</code> names writes the <code>else</code> rows or nothing.</p>
 
 <p>because the template is compiled to kanso, <code>kanso check</code> reads it. a hole may read through a record a value holds, as <code>{p.author.name}</code> does for a post whose author is a record of its own. a field the template reads that no record in the app has is a compile error. the message quotes the line of the source kata wrote and adds the template line it came from: a misspelled <code>e.mesage</code> on line 29 of <code>signed.kata</code> adds <code>= written from ./views/signed.kata:29</code>. <code>kanso derived</code> prints the whole source kata wrote.</p>
 
@@ -127,21 +127,21 @@ description: "senro's views are kata templates compiled to kanso; a component bi
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/removal/removal.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
-<span class="k">import</span> <span class="s">"../signatures"</span>
+<span class="k">import</span> <span class="s">"../signature"</span>
 
-<span class="c"># Removes an entry. The action asks for the viewer and a database session, so</span>
-<span class="c"># it runs on the server. Its state is the entry's id, which anyone can send,</span>
-<span class="c"># so it removes the entry through the model, whose policy says no to anyone</span>
-<span class="c"># but the person who signed it, and a no is the answer.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">removed</span> viewer db id
-  <span class="f">models/destroyed</span> viewer db signatures/signature_model id
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">settled</span> id w)
+<span class="c"># Removes an entry. The action asks for a database session, so it runs on</span>
+<span class="c"># the server, and the session knows who is signed in. Its state is the</span>
+<span class="c"># entry's id, which anyone can send, so it removes the entry through the</span>
+<span class="c"># model, whose policy says no to anyone but the person who signed it, and a</span>
+<span class="c"># no is the answer.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">removed</span> db id
+  <span class="f">signature/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">settled</span> id w)
 
 <span class="k">fn</span> <span class="f">settled</span> id w
   <span class="f">if</span> (<span class="f">models/refused?</span> w) w id</code></pre>
 </div>
 
-<p>its state is the entry's id, which anyone can send, so the action removes the entry through the model, whose policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself: every write a component makes goes through a policy.</p>
+<p>its state is the entry's id, which anyone can send, so the action removes the entry through the model. the <code>db</code> a server action is handed knows who is signed in, as an action's does, so <code>signature/destroy db id</code> asks the policy about that visitor, and the policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself, so every write a component makes goes through a policy.</p>
 
 <h2>data from the server</h2>
 
@@ -151,14 +151,15 @@ description: "senro's views are kata templates compiled to kanso; a component bi
   <div class="code-panel-title">examples/pantry/stock.kso</div>
   <pre><code><span class="c"># The staples the shelf holds fewer of than `meals`, by name. The planner asks</span>
 <span class="c"># for them as `stock/short meals`, and this body runs only on the server.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">short</span> viewer db meals
-  <span class="f">models/where</span> viewer db item_model <span class="s">"staple"</span> <span class="s">"t"</span>
-    <span class="o">.&gt;</span> (items <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">under</span> items meals))
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">short</span> _ db meals
+  <span class="f">where</span> db <span class="s">"staple"</span> true <span class="o">.&gt;</span> (items <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">under</span> items meals))
 
 <span class="k">fn</span> <span class="f">under</span> items meals
   low <span class="o">=</span> <span class="f">list/select</span> items (i <span class="o">-&gt;</span> i.quantity <span class="o">&lt;</span> meals)
   <span class="f">list/to_list</span> (<span class="f">list/map</span> low (i <span class="o">-&gt;</span> i.name))</code></pre>
 </div>
+
+<p><code>stock.kso</code> holds the pantry's item model, so the derivation writes the model's calls into it, and the provider calls <code>where</code> bare: the staples are the items whose <code>staple</code> column holds true. the session a provider is handed knows the viewer, as an action's does, so <code>short</code> leaves its first parameter unnamed.</p>
 
 <p>the action calls the provider with two arguments fewer, as it calls any function. with <code>derive data/providers</code> in the entry, the derivation writes that shorter <code>short meals</code> into <code>stock.kso</code>, and called in the browser it asks the server for the answer:</p>
 
