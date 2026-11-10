@@ -1,0 +1,47 @@
+import "std/time"
+
+# Each pass binds a lazy value and hands it to a callback that runs after a
+# sleep, by which time the passes after it have bound theirs. Every callback
+# reads the value its own pass bound. Natively the frame that made a binding
+# freed its cell on the way out, the next pass's binding took the cell, and
+# every callback read the value bound last. The first loop's callback is
+# written where the binding is; the second's is in the function the binding
+# is handed to.
+fn doubled n
+  n * 2
+
+fn shown 0 _
+  effect 0
+
+fn shown n twice
+  print "pass {n} read {twice + 0}"
+
+fn handled n
+  twice = doubled n
+  time/sleep 2 .> (_ -> shown n twice)
+
+fn served 0
+  effect 0
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+fn later 0 _
+  effect 0
+
+fn later n twice
+  time/sleep 2 .> (_ -> print "pass {n} read {twice + 0} later")
+
+fn handed n
+  twice = doubled n
+  later n twice .> (_ -> effect 0)
+
+fn passed 0
+  effect 0
+
+fn passed n
+  handed n
+  time/sleep 0 .> (_ -> passed (n - 1))
+
+pub play = served 3 .> (_ -> passed 3)
