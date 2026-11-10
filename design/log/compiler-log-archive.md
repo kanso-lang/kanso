@@ -113383,3 +113383,26 @@ moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
 to 938,655,381. Welfare falls by a sliver.
 Engines that agree are part of the language's specification, so the floor
 drops by exactly that cost.
+
+## 2026-11-03 — kanso build writes a module a browser can run
+
+`kanso build page.kso --wasm` writes `page.wasm`: the emitted module
+lowered by `ir_wasm` to a wasm side module, the one the playground links
+against `runtime.c` built for wasm32. A page needs two numbers before it can
+link the module, the data bytes and the table slots it asks for, and they
+ride in the module as a custom section named `kanso.link`, two
+little-endian u32s, so the file is all a page has to fetch. senro's views
+compiled for the browser are built this way (#2280).
+
+`tests/build_wasm.rs` builds a two-module program with the flag, reads the
+section back, links the module against the runtime under wasmi and checks
+that it prints. It failed on the unknown flag before the change.
+
+The flag is a branch in the driver, and the binary's layout moved with it, by
+CI's measure. Four front-end rows rose by a handful of instructions:
+compile_instructions to 24,102,382, entry_instructions to 86,840,310,
+library_instructions to 72,628,277 and startup_instructions to 50,267.
+codegen_instructions_release rose to 371,872,843. emit_instructions fell to
+5,599,243. Welfare falls by a sliver, and the
+browser build is part of the senro mandate, so the floor drops by exactly
+that cost.

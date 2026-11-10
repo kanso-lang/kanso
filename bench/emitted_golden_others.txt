@@ -23,4 +23,4 @@ scanbench defines=333 calls=3212 branches=3034 lines=26156
 digestbench defines=115 calls=814 branches=982 lines=8213
 readbench defines=22 calls=70 branches=44 lines=788
 livebench defines=179 calls=1645 branches=1385 lines=15227
-runbench defines=935 calls=9875 branches=8913 lines=77221
+runbench defines=953 calls=9943 branches=8952 lines=77645
