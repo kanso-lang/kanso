@@ -20,91 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-01 — std/pool: fibers share values through a pool
-
-The pool #2264 ruled for is built on the interpreter, natively and in the tab.
-It ships as `std/pool` with `pool/make n`, `pool/take p`, `pool/give p v` and
-`pool/with p work`, the names #2274 recommended and Clay chose.
-
-A take from an empty pool or a give to a full one parks its fiber. Natively
-the step answers a kind of its own, and the scheduler gives the fiber a wake
-time no clock reaches. A take or give that succeeds marks the pool as moved,
-and before the scheduler next picks a fiber it wakes every parked one at the
-current time. Each tries again in spawn
-order, and one that still cannot proceed parks again. That is a retry for
-every parked fiber each time any pool moves. For a few connections it costs
-nothing worth measuring, and a program holding thousands of parked fibers
-would want a wait list per pool.
-
-When the earliest wake left is the parked mark, every fiber is waiting on a
-pool and nothing can wake any of them. The scheduler then wakes them all once
-more with the pool marked as failing, and each stuck take or give answers an
-err that says which it was. The program ends with those reasons instead of
-hanging; `every_fiber_parked_on_a_pool_is_reported` pins the report on both
-engines.
-
-The ruling promises no order of hand-out, and the scheduler keeps one anyway:
-a take answers the value given last, on every engine.
-`a_pool_hands_out_in_one_order` runs four fibers over two values and pins the
-transcript.
-
-Natively a given value is deep-copied into storage the pool allocates for
-itself, and a take copies it back into the arena. The pool holds nothing in a
-region a beat can rewind, so a value given in one request survives the
-reclaiming that follows it.
-
-`pool/with` hands a taken value to the work and gives it back however the work
-ends. #2274 said it would use annotate (`.!`), and it cannot: a failure passed
-as an argument goes straight through the call, so `give` would never run. It
-rescues the work's failure with `.?` instead, which std/pool may do because
-the failure is foreign to it, gives the value back, and raises the failure
-again with `effect`, so the reason and birthplace are the ones the work gave
-it. The issue now says so.
-
-A stress test for the pool found #2276, a long chain inside a fiber that ran
-out of native stack. It needed no pool to show, and #2278 fixed it first. That
-fix lets a long chain stop partway through its step so the scheduler can
-reclaim, and the pool has to respect it. A give made inside such a chain
-would otherwise wake the waiting taker at the stop, before the chain had
-finished, where the interpreter runs the whole chain first. The scheduler
-leaves parked fibers alone until the chain's step is done.
-`a_give_inside_a_long_chain_wakes_the_taker_after_it` pins the order: without
-the guard, the native run printed the taker's line first.
-
-The pool is a ruled feature, so the welfare floor drops by exactly what CI
-measured, 0.00159831, to 95.61462007. The figures below are against main with
-the scheduler kept out of line (#2279).
-
-`work_runbench` rises 527,874 to 890,913,940, because the scheduler asks
-whether a pool moved before each pick and tells a parked step from the others
-after it. The first version cost more. Inlined into `k_exec`, the bigger
-scheduler made every effect dearer, which is what #2279 fixed. Giving a
-parked fiber its own step kind, in place of a blocked step with an
-unreachable wake time, took about 320,000 more off runbench under callgrind
-here.
-
-The runtime carries the pool's code, so every benchmark's machine code is
-3,712 bytes longer, and `text` sums to 5,828,864. The other work rows move by
-layout: `work_oneshot` rises 325 to 9,979,993, `work_encodebench` 262 to
-2,335,341,049, and `work_jsonbench` 549,338,238, `work_widebench` 28,686,321,
-`work_digestbench` 4,104,970, `work_readbench` 4,584,378 and `work_livebench`
-938,655,549 rise by 3. Clang compiles the bigger runtime in
-`codegen_instructions_dev` 117,030,226 and `codegen_instructions_release`
-371,871,683. The tab runs the interpreted corpus dearer, at
-`browser_run_instructions` 78,338,381, and compiles it dearer, at
-`browser_compile_instructions` 349,271,241. The compiler's rows move with the
-bigger builtin tables and library: `compile_instructions` 24,102,309,
-`entry_instructions` 86,809,695, `library_instructions` 72,627,848,
-`emit_instructions` 5,599,665 and `interp_instructions` 622,391,507. No peak
-and no allocation counter moves.
-
-One CI run landed on an Intel runner (family 6), where every work row reads
-130 instructions lower and the codegen rows differ too, because glibc picks
-its string routines by CPU. Those rows went into the goldens for one push and
-the next AMD run refused them. The rows above are the AMD readings, the
-silicon `bench/dispatch.txt` records; a run whose `interp_sample` line names
-another CPU family is not a source of rows.
-
 ## 2026-11-02 — gavel: the pool's names are make, take, give and with
 
 #2264's ruling asked for the pool's public names as one question before they
@@ -1651,3 +1566,64 @@ feature that needs the derivation to see more than it is handed is a
 language change, proposed to the committee against the language's goals.
 The first candidate is the keys of a map literal at a call, which would let
 `where` take a map of conditions and still be checked (#2394).
+
+## 2026-11-10 — senro's apps hold no SQL
+
+The two rulings of this morning are built. The work is in senro (senro#93
+to senro#98) and on the site (#2393, #2398 and the sessions guide with
+this entry); no compiler change was needed, and no cost row moved.
+
+**What an app writes now.** A model lives in a module named for one row of
+its table, `note.kso` for `notes`, as kanso names a module for its type.
+The models derivation declares the record there from the table's columns
+and writes the calls: `note/find db id`, `find_by`, `all`, `newest`,
+`ordered`, `where`, `paged`, `create`, `update`, `destroy`, `increment`.
+The `db` an action is handed knows who is signed in, so no call takes a
+viewer. A column written out in a call is checked against the table when
+the app is checked, and the refusal is at the call
+(`spec/errors/order_not_a_column`).
+
+**The app's own writes.** Some writes have no viewer behind them: a reset
+link sets a digest, a sign-in counts a wrong password. The committee chose
+`models/as_app db`, a session that asks no policy, over naming the
+account's holder as the asker. Its reason: under the alternative the
+holder's `update?` must admit writes to the count of wrong passwords and
+the lock, which are the columns a browser-reachable write must never
+touch.
+
+**The count.** `account/increment db id "failures"` adds in the statement
+that answers the record. `spec/db/counted` runs eight on eight connections
+at once and they see 1 2 3 4 5 6 7 8, on both engines. With the increment
+rewritten as a read and then a write, they saw 1 1 1 1 1 1 1 1 natively
+and 1 1 1 1 1 2 2 2 interpreted.
+
+**The examples.** The pantry, the guestbook and what both generators write
+hold no query; `spec.sh` fails when one does. The guestbook's `account.kso`
+became the model alone, with `registration.kso` and `password.kso` as its
+resources, and the scaffold writes `note.kso` beside `notes.kso`.
+kata walks a list with `each xs x ->` and refuses a `for` row at its line.
+
+**What I got wrong on the way.**
+- I regenerated goldens (`SPEC_WRITE=1`) while the tree did not check, and
+  two goldens took the compiler's error text. Restored from the index; the
+  rule is to regenerate only from a tree that passes without writing.
+- The first generated app did not check because the model's module was not
+  imported by the entry. A derivation reads only the modules the entry
+  names, so the generators add that import.
+
+**Open.**
+- senro's CI failed twice in ten runs in the guestbook's browser spec with
+  the server interpreted, at different steps in different browsers. Forty
+  local Chromium runs passed (#2397).
+- A lock that runs out by the clock has no spec; it needs a clock the spec
+  can set.
+- `where` takes one field and one value because a derivation cannot read a
+  map literal's keys. That is the first language change senro would ask
+  for, and it goes to the committee when a second condition is wanted.
+
+**The site deploy.** Two deploys after #2393 stalled inside GitHub Pages at
+"syncing files", one failing and one reaching the ten-minute timeout, so
+the pantry's recording was on main for an hour before it was served. The
+third, after #2398, went through. Nothing in the artifact explains it: the
+merge added three small files. A merged site change is checked on
+kanso-lang.dev, since main holding it does not mean the site does.
