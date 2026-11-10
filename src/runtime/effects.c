@@ -149,7 +149,7 @@ static long long k_kid_handle(void) {
 /* Twice the slots, each open socket moved to where its handle now points.
    Two handles that left different remainders by the old size leave different
    ones by twice it, so no two land together. */
-static void k_more_sockets(void) {
+static __attribute__((noinline, cold)) void k_more_sockets(void) {
     long long cap = k_socket_cap ? k_socket_cap * 2 : K_SOCKETS_FIRST;
     KSock* grown = calloc((size_t)cap, sizeof(KSock));
     if (!grown) { fputs("out of memory\n", stderr); exit(1); }
@@ -162,13 +162,17 @@ static void k_more_sockets(void) {
 
 /* The slot a handle owns, or NULL for a handle that owns none: one never
    given, or one closed, whose slot a later socket may have taken since. */
-static KSock* k_sock(long long h) {
+/* Kept out of line, with the two functions that take and grow the table.
+   Folded into `k_exec`, which every effect a program runs passes through,
+   the lookup made that function dearer for a program that touches no
+   socket: deepbench, which opens none, retired 1.3 million more. */
+static __attribute__((noinline)) KSock* k_sock(long long h) {
     if (h <= 0 || !k_socket_cap) return NULL;
     KSock* at = &k_sockets[h % k_socket_cap];
     return at->handle == h ? at : NULL;
 }
 
-static long long k_hold_socket(int fd) {
+static __attribute__((noinline)) long long k_hold_socket(int fd) {
     for (;;) {
         for (long long i = 1; i <= k_socket_cap; i++) {
             long long cand = k_handles + i;
@@ -891,6 +895,10 @@ typedef struct {
 
 static KValue k_schedule(KDesc* join);
 static KStep k_step(KDesc* d);
+/* Set when an accept found nobody calling or a read found nothing arrived,
+   and put down when the scheduler next looks and finds no fiber waiting on a
+   socket. While it is down the scheduler has no reason to look. */
+static int k_sock_waiting = 0;
 static int k_sched_due(void);
 
 static int k_argc_global = 0;
@@ -1818,11 +1826,12 @@ static KStep k_step(KDesc* d) {
             if (taken < 0) {
                 /* Nobody calling is waited for on the listener. Any other
                    refusal, such as the system having no file to give, is
-                   asked again after a tick: the listener stays ready through
-                   it, and a wait on it would come straight back. */
+                   asked again after a tick and marked so, by an int where
+                   the description holds none: the listener stays ready
+                   through it, and a wait on it would come straight back. */
                 int nobody = errno == EAGAIN || errno == EWOULDBLOCK;
-                KStep s = {nobody ? 5 : 1, nobody ? (unsigned long long)d->x.payload : 1,
-                           k_mkdesc(21, d->x, d->y), k_none()};
+                if (nobody) k_sock_waiting = 1;
+                KStep s = {1, 1, k_mkdesc(21, d->x, nobody ? k_none() : k_int(1)), k_none()};
                 return s;
             }
             int tf = fcntl(taken, F_GETFL, 0);
@@ -1843,8 +1852,8 @@ static KStep k_step(KDesc* d) {
             if (fd >= 0 && !(ssl && k_ssl.pending(ssl) > 0)
                 && recv(fd, &one, 1, MSG_PEEK | MSG_DONTWAIT) < 0
                 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                KStep s = {5, (unsigned long long)d->x.payload,
-                           k_mkdesc(d->dtag, d->x, d->y), k_none()};
+                k_sock_waiting = 1;
+                KStep s = {1, 1, k_mkdesc(d->dtag, d->x, d->y), k_none()};
                 return s;
             }
 #endif
@@ -2000,16 +2009,19 @@ static void k_flatten_join(KDesc* d, KValue** out, int* n, int* cap) {
     }
 }
 
-/* The fibers a scheduler holds, in spawn order: when each may run next, what
-   it has left, and the group it counts toward. */
+/* A fiber: when it may run next, what it has left, and the group it counts
+   toward. */
 typedef struct {
-    unsigned long long* wake;
-    KValue* work;
-    int* group;
-    /* The socket a fiber is waiting on, by its handle, for a connection or
-       for something to read, and 0 for a fiber waiting on nothing but the
-       clock. */
-    long long* on;
+    unsigned long long wake;
+    KValue work;
+    int group;
+} KFiber;
+
+/* The fibers a scheduler holds, in spawn order. One array of records, so a
+   fork moves the fibers after it once: kept as an array per field, each
+   insert and each remove called memmove once per field. */
+typedef struct {
+    KFiber* at;
     int n;
     int cap;
 } KFibers;
@@ -2017,32 +2029,33 @@ typedef struct {
 static void k_fibers_insert(KFibers* f, int at, unsigned long long wake, KValue work, int group) {
     if (f->n >= f->cap) {
         f->cap = f->cap ? f->cap * 2 : 8;
-        f->wake = realloc(f->wake, sizeof(unsigned long long) * (size_t)f->cap);
-        f->work = realloc(f->work, sizeof(KValue) * (size_t)f->cap);
-        f->group = realloc(f->group, sizeof(int) * (size_t)f->cap);
-        f->on = realloc(f->on, sizeof(long long) * (size_t)f->cap);
-        if (!f->wake || !f->work || !f->group || !f->on)
-            k_die("out of memory growing a parallel group");
+        f->at = realloc(f->at, sizeof(KFiber) * (size_t)f->cap);
+        if (!f->at) k_die("out of memory growing a parallel group");
     }
-    int tail = f->n - at;
-    memmove(f->wake + at + 1, f->wake + at, sizeof(unsigned long long) * (size_t)tail);
-    memmove(f->work + at + 1, f->work + at, sizeof(KValue) * (size_t)tail);
-    memmove(f->group + at + 1, f->group + at, sizeof(int) * (size_t)tail);
-    memmove(f->on + at + 1, f->on + at, sizeof(long long) * (size_t)tail);
-    f->wake[at] = wake;
-    f->work[at] = work;
-    f->group[at] = group;
-    f->on[at] = 0;
+    memmove(f->at + at + 1, f->at + at, sizeof(KFiber) * (size_t)(f->n - at));
+    f->at[at].wake = wake;
+    f->at[at].work = work;
+    f->at[at].group = group;
     f->n++;
 }
 
 static void k_fibers_remove(KFibers* f, int at) {
-    int tail = f->n - at - 1;
-    memmove(f->wake + at, f->wake + at + 1, sizeof(unsigned long long) * (size_t)tail);
-    memmove(f->work + at, f->work + at + 1, sizeof(KValue) * (size_t)tail);
-    memmove(f->group + at, f->group + at + 1, sizeof(int) * (size_t)tail);
-    memmove(f->on + at, f->on + at + 1, sizeof(long long) * (size_t)tail);
+    memmove(f->at + at, f->at + at + 1, sizeof(KFiber) * (size_t)(f->n - at - 1));
     f->n--;
+}
+
+/* The socket a fiber is waiting on, by its handle, or 0: a listener nobody
+   has called (21) or a connection nothing has arrived on (22, 35), found
+   under the chain words (6, 29) around it. A fiber the scheduler holds with
+   one of these at the bottom of its work asked it and was told not yet. An
+   accept the system refused for another reason carries an int and is left to
+   its tick. */
+static long long k_waited_socket(KValue work) {
+    KDesc* d = k_as_desc(work);
+    while (d->dtag == 6 || d->dtag == 29) d = k_as_desc(d->x);
+    if (d->dtag == 22 || d->dtag == 35) return d->x.payload;
+    if (d->dtag == 21 && d->y.tag != K_INT) return d->x.payload;
+    return 0;
 }
 
 /* The scheduler's wait when a fiber is waiting on a socket. Every fiber is
@@ -2054,38 +2067,45 @@ static void k_fibers_remove(KFibers* f, int at) {
    is not stays a tick away, which is where the next wait finds it. The clock
    moves to the time that passed, and no further than the fiber it was
    waiting for, so that fiber runs at its own time as it did before.
-   A fiber is held by its handle, and the descriptor is read from the table
-   at each wait: a socket another fiber closed has none, poll passes over
-   the -1 asked in its place, and its fiber is woken to be told so.
-   Answers 0, having waited for nothing, when no fiber waits on a socket or
-   the build has no poll. */
+   What a fiber waits on is read from the work it has left, so nothing is
+   kept per fiber and nothing is done per step. A socket another fiber closed
+   has no descriptor: poll passes over the -1 asked in its place, and its
+   fiber is woken to be told so.
+   Answers 0, having waited for nothing, when no fiber waits on a socket, and
+   then puts the flag down that brought the scheduler here. */
 static long long k_ms_since(const struct timespec* t0);
 #ifndef __wasm__
 #include <poll.h>
 static int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t0) {
+    struct pollfd* fds = malloc(sizeof(struct pollfd) * (size_t)f->n);
+    int* who = malloc(sizeof(int) * (size_t)f->n);
+    if (!fds || !who) k_die("out of memory growing a parallel group");
     int nfds = 0;
     int clocked = 0;
+    int gone = 0;
     unsigned long long due = 0;
     for (int i = 0; i < f->n; i++) {
-        if (f->on[i]) { nfds++; continue; }
-        if (f->wake[i] == K_PARKED) continue;
-        if (!clocked || f->wake[i] < due) due = f->wake[i];
+        long long h = k_waited_socket(f->at[i].work);
+        if (h) {
+            who[nfds] = i;
+            fds[nfds].fd = k_socket_of(h);
+            fds[nfds].events = POLLIN;
+            fds[nfds].revents = 0;
+            if (fds[nfds].fd < 0) gone = 1;
+            nfds++;
+            continue;
+        }
+        if (f->at[i].wake == K_PARKED) continue;
+        if (!clocked || f->at[i].wake < due) due = f->at[i].wake;
         clocked = 1;
     }
-    if (!nfds) return 0;
-    if (K_COUNTING) k_stat_sock_waits++;
-    struct pollfd* fds = malloc(sizeof(struct pollfd) * (size_t)nfds);
-    if (!fds) k_die("out of memory growing a parallel group");
-    int at = 0;
-    int gone = 0;
-    for (int i = 0; i < f->n; i++) {
-        if (!f->on[i]) continue;
-        fds[at].fd = k_socket_of(f->on[i]);
-        fds[at].events = POLLIN;
-        fds[at].revents = 0;
-        if (fds[at].fd < 0) gone = 1;
-        at++;
+    k_sock_waiting = nfds > 0;
+    if (!nfds) {
+        free(fds);
+        free(who);
+        return 0;
     }
+    if (K_COUNTING) k_stat_sock_waits++;
     /* Until a socket is ready or the fiber on the clock is due. A poll that
        comes back a moment early, or for a signal, is not either, and waits
        again, so one wait is one thing waited for. */
@@ -2102,13 +2122,10 @@ static int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t
     unsigned long long passed = (unsigned long long)k_ms_since(t0);
     if (passed > *now) *now = passed;
     if (clocked && *now > due) *now = due;
-    at = 0;
-    for (int i = 0; i < f->n; i++) {
-        if (!f->on[i]) continue;
-        f->wake[i] = fds[at].fd < 0 || fds[at].revents ? *now : *now + 1;
-        at++;
-    }
+    for (int k = 0; k < nfds; k++)
+        f->at[who[k]].wake = fds[k].fd < 0 || fds[k].revents ? *now : *now + 1;
     free(fds);
+    free(who);
     return 1;
 }
 #else
@@ -2195,7 +2212,7 @@ static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
     }
     KValue* items = k_buf(n);
     long long at = 0;
-    for (int i = 0; i < f->n; i++) items[at++] = f->work[i];
+    for (int i = 0; i < f->n; i++) items[at++] = f->at[i].work;
     for (int g = 0; g < ngroups; g++) {
         if (g > 0 && groups[g].parent < 0) continue;
         items[at++] = groups[g].result;
@@ -2208,7 +2225,7 @@ static void k_sched_stage(KFibers* f, KGroup* groups, int ngroups) {
     if (held.tag != K_LIST) return;
     KValue* back = ((KList*)(intptr_t)held.payload)->items;
     at = 0;
-    for (int i = 0; i < f->n; i++) f->work[i] = back[at++];
+    for (int i = 0; i < f->n; i++) f->at[i].work = back[at++];
     for (int g = 0; g < ngroups; g++) {
         if (g > 0 && groups[g].parent < 0) continue;
         groups[g].result = back[at++];
@@ -2237,7 +2254,7 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
     KValue* first = NULL;
     int n = 0, cap = 0;
     k_flatten_join(join, &first, &n, &cap);
-    KFibers f = {NULL, NULL, NULL, NULL, 0, 0};
+    KFibers f = {NULL, 0, 0};
     for (int i = 0; i < n; i++) k_fibers_insert(&f, i, 0, first[i], 0);
     free(first);
     int ngroups = 1, gcap = 8;
@@ -2272,26 +2289,26 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
             k_pool_moved = 0;
             k_pool_failing = 0;
             for (int i = 0; i < f.n; i++)
-                if (f.wake[i] == K_PARKED) f.wake[i] = now;
+                if (f.at[i].wake == K_PARKED) f.at[i].wake = now;
         }
         resuming = 0;
         int pick = 0;
         for (int i = 1; i < f.n; i++) {
-            if (f.wake[i] < f.wake[pick]) pick = i;
+            if (f.at[i].wake < f.at[pick].wake) pick = i;
         }
-        if (f.wake[pick] > now) {
+        if (f.at[pick].wake > now) {
             /* Every fiber is parked on a pool: nothing can give or take, so
                each parked operation is woken to answer that it never will.
                The parked mark is later than any clock, so this is only ever
                asked on the way to a wait. */
-            if (f.wake[pick] == K_PARKED) {
+            if (f.at[pick].wake == K_PARKED) {
                 k_pool_failing = 1;
-                for (int i = 0; i < f.n; i++) f.wake[i] = now;
+                for (int i = 0; i < f.n; i++) f.at[i].wake = now;
                 continue;
             }
             if (getenv("KANSO_SCHED_DEBUG")) {
                 fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%lld\n",
-                        pick, f.wake[pick], k_ms_since(&sched_t0));
+                        pick, f.at[pick].wake, k_ms_since(&sched_t0));
             }
             /* loop to the deadline: usleep may return early on a signal */
             k_out_settle();
@@ -2305,35 +2322,28 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
 #endif
             /* a wait on sockets may leave the fiber picked still waiting,
                so the pick is made again */
-            if (k_sched_await(&f, &now, &sched_t0)) continue;
+            if (k_sock_waiting && k_sched_await(&f, &now, &sched_t0)) continue;
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
-                if ((long long)f.wake[pick] <= elapsed) break;
-                usleep((useconds_t)(((long long)f.wake[pick] - elapsed) * 1000));
+                if ((long long)f.at[pick].wake <= elapsed) break;
+                usleep((useconds_t)(((long long)f.at[pick].wake - elapsed) * 1000));
             }
-            now = f.wake[pick];
+            now = f.at[pick].wake;
         }
-        f.on[pick] = 0;
-        KStep s = k_step(k_as_desc(f.work[pick]));
+        KStep s = k_step(k_as_desc(f.at[pick].work));
         /* A chain that stopped to be staged (3) keeps its wake time. The
            stage at the top of the loop reclaims, and the pick that follows
            falls on this fiber again, since nothing else moved. A loop here
            of its own did the same and cost runbench 2.5 million
            instructions in the scheduler's code around it. */
-        if (s.blocked == 5) {
-            /* waiting on a socket: due at the next tick, as it always was,
-               and the scheduler's wait is on the socket itself */
-            f.wake[pick] = now + 1;
-            f.on[pick] = (long long)s.ms;
-            f.work[pick] = s.cont;
-        } else if (s.blocked == 1 || s.blocked == 3) {
-            if (s.blocked == 1) f.wake[pick] = now + s.ms;
+        if (s.blocked == 1 || s.blocked == 3) {
+            if (s.blocked == 1) f.at[pick].wake = now + s.ms;
             else resuming = 1;
-            f.work[pick] = s.cont;
+            f.at[pick].work = s.cont;
         } else if (__builtin_expect(s.blocked == 4, 0)) {
             /* parked on a pool: it waits for a take or give to move it */
-            f.wake[pick] = K_PARKED;
-            f.work[pick] = s.cont;
+            f.at[pick].wake = K_PARKED;
+            f.at[pick].work = s.cont;
         } else if (s.blocked == 2) {
             int g;
             if (nspare > 0) {
@@ -2353,13 +2363,13 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
             groups[g].result = k_none();
             groups[g].cont = s.cont;
             groups[g].hole = s.hole;
-            groups[g].parent = f.group[pick];
+            groups[g].parent = f.at[pick].group;
             groups[g].tail = s.cont.tag == K_DESC && k_as_desc(s.cont) == s.hole;
             k_fibers_remove(&f, pick);
             for (int i = 0; i < m; i++) k_fibers_insert(&f, pick + i, now, members[i], g);
             free(members);
         } else {
-            int g = f.group[pick];
+            int g = f.at[pick].group;
             k_fibers_remove(&f, pick);
             groups[g].result = k_failed_too(groups[g].result, s.value);
             groups[g].remaining--;
@@ -2383,7 +2393,7 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
             } else if (passes) {
                 int moved = 0;
                 for (int i = 0; i < f.n && !moved; i++) {
-                    if (f.group[i] == g) { f.group[i] = parent; moved = 1; }
+                    if (f.at[i].group == g) { f.at[i].group = parent; moved = 1; }
                 }
                 for (int h = 1; h < ngroups && !moved; h++) {
                     if (groups[h].remaining > 0 && groups[h].parent == g) {
@@ -2408,7 +2418,7 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
         }
     }
     KValue result = groups[0].result;
-    free(f.wake); free(f.work); free(f.group); free(groups); free(spare);
+    free(f.at); free(groups); free(spare);
     return k_beat_pop(result);
 }
 

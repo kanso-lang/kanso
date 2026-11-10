@@ -1573,6 +1573,9 @@ connected at one moment. Tracked as #2402.
   allows, where it asked for 16.
 - Running children keep their own table of 64 (`K_KIDS`), which they had
   shared a constant with.
+- The lookup, the taking of a slot and the growing are kept out of line,
+  so the function every effect passes through holds a call to them and
+  none of their code.
 
 When the system itself refuses a file, `dial` already answered an err, and
 `accept` already left its fiber waiting and trying again, so a server at
@@ -1595,29 +1598,47 @@ change.
 
 The interpreter passed all three before and after.
 
-**What I got wrong on the way.** The runtime is also built for wasm, where
-the headers name no queue length, and the first build of it failed. I had
-built and tested natively only. The constant is defined when the headers
-leave it out.
+**What I got wrong on the way.**
+- The runtime is also built for wasm, where the headers name no queue
+  length, and the first build of it failed. I had built and tested natively
+  only. The constant is defined when the headers leave it out.
+- The three specs open sockets, which the tab cannot, and I left them off
+  `native_route_gaps.txt`. Three wasm corpus tests went red on the first
+  push.
+- The first version made every benchmark's effects dearer. CI's hosts were
+  not the one the work rows were counted on, so the gate would not compare
+  and I read the differences it printed as the host's. They were mine.
+  Main built here reads each row a constant above its golden, 109 for
+  thirteen of the fifteen, and the branch read deepbench 1,308,377 higher than
+  that, runbench 303,062 and widebench 48,034. All of it was in `k_exec`,
+  the function every effect passes through. The table's lookup, with its
+  remainder by a size that is no longer a constant, had been folded into
+  it. With `k_sock` kept out of line deepbench reads main's number again.
 
-**Rows, from CI.**
+**Rows.**
 - `unpinned_diagnostics.txt` loses the message that no longer exists.
-- Machine code: every one of the fourteen benchmarks carries 1,856 more
-  bytes of `.text`, which is the growing, the moving of each socket to its
-  new slot and the owner test. `text` sums to 5,902,217 across them, from
-  5,876,233.
-- clang compiles a larger runtime: `codegen_instructions_dev` rose 4,150 to
-  116,859,197 and `codegen_instructions_release` rose 29,045 to
-  372,054,901.
-- The tab runs its corpus in 71,987 fewer wasm instructions
-  (`browser_run_instructions` 78,354,192). That corpus opens no socket. I
-  did not isolate what clang did differently with the larger file.
+- Work: eleven of the fifteen rows are main's. `work_runbench` rises 469
+  to 913,657,523 and `work_oneshot` 357 to 9,980,628; `work_encodebench`
+  falls 350 to 2,335,340,431 and `work_livebench` 189 to 938,655,512. No
+  benchmark opens a socket, so these four are layout. I set the rows from
+  a count here and each row's distance to main's on this machine, and CI
+  then counted on the golden's own silicon: fourteen agreed and
+  `work_livebench` read 28 lower, which is CI's row above.
+- clang's work on the runtime: `codegen_instructions_release` falls 80,668
+  to 371,945,188 and `codegen_instructions_dev` rises 2,539 to
+  116,857,586.
+- Machine code: each of the fourteen benchmarks carries 512 fewer bytes of
+  `.text` than on main, and `text` sums to 5,869,065 from 5,876,233. The
+  lookup is one function now where it was a copy at each use.
+- The tab runs its corpus in 55,987 fewer wasm instructions
+  (`browser_run_instructions` 78,370,192). That corpus opens no socket. I
+  did not isolate what clang did differently.
 - The three specs join `native_route_gaps.txt`, because the tab has no
   sockets.
 
-**Welfare.** The sum falls by 0.000018 and the floor follows it. Native
-ended a program the interpreter runs, so this is the engines made to
-agree, which welfare.kso sets outside the sum.
+**Welfare.** The sum rises by 0.000027 and is banked: the release tier
+and the tab cost less, against 469 instructions on runbench and 2,539 at
+the dev tier.
 
 **Open.** A fiber waiting on a socket is asked again every millisecond on
 both engines, so an idle server is never asleep for long and each query a
@@ -1639,16 +1660,24 @@ the clock. A socket that is ready makes its fiber due now. The clock moves
 to the time that passed and no further than the fiber it was waiting for,
 so a sleeping fiber still runs at its own time.
 
-- Natively a step answers `blocked == 5` with the handle, `KFibers` keeps
-  it in `on`, and `k_sched_await` does the waiting. The descriptor is read
-  from the socket table at each wait.
-- The interpreter's step answers `Step::Waiting(handle, …)` and the
-  scheduler asks the executor's `await_sockets`. An executor without
-  sockets answers `None` and the scheduler ticks as before, which is what
-  the scripted executor and the tab do.
+- What a fiber waits on is read from the work it has left. A fiber the
+  scheduler holds with an accept or a read at the bottom of its chain
+  asked it and was told not yet, so the scheduler walks down the chain
+  words to that description and takes the handle from it. Nothing is kept
+  per fiber and nothing is done per step.
+- A flag says whether to look at all. An accept that finds nobody and a
+  read that finds nothing raise it, and the scheduler puts it down when it
+  looks and finds no fiber on a socket. A program without sockets pays one
+  test of the flag each time every fiber is waiting.
+- Natively the wait is `k_sched_await`, which reads each descriptor from
+  the socket table. In the interpreter it is `awaited`, which asks the
+  executor's `await_sockets`. An executor without sockets answers `None`
+  and the scheduler ticks as before, which is what the scripted executor
+  and the tab do.
 - An accept the system refused for a reason other than nobody calling
-  keeps its one-millisecond tick natively. The listener stays ready through
-  such a refusal, so a wait on it would come straight back.
+  keeps its one-millisecond tick natively, and its description carries an
+  int to say so. The listener stays ready through such a refusal, so a
+  wait on it would come straight back.
 - `libc` becomes a dependency of the compiler on unix, for `poll`. It was
   already in the lock file.
 
@@ -1665,37 +1694,67 @@ With the wait taken out of either engine the count is not printed and the
 spec fails. The trend gate lists it among the counters a fall is a loss
 for.
 
-**A spec that caught a fault of mine.**
+**The fiber table is one array.** The native scheduler kept its fibers
+as an array per field, so each insert and each remove called `memmove`
+once per field, and a fork does both. It keeps one array of records now
+and moves the fibers after a fork once. runbench forks sixteen thousand
+times and retires 3,089,651 fewer instructions for it, and the tab, which
+runs the interpreted corpus through the same scheduler built for wasm,
+retires 1,244,416 fewer.
+
+**Two specs, and two faults of mine they caught.**
 `a_reader_is_told_when_its_socket_closes` has a reader on a connection
 another fiber closes; that fiber then dials, and the new connection takes
 the descriptor the closed one had. On main both engines tell the reader
 `that is not a connection`. My first native version held the descriptor
-and would have waited on the new connection for good, so it holds the
-handle. The interpreter held the handle already and still hung: it asked
-`poll` to pass over the missing socket and then waited with no time limit.
-A wait that includes a handle naming nothing now returns at once. The spec
-went red on that and is green on both engines.
+and would have waited on the new connection for good. The interpreter
+held the handle and still hung: it asked `poll` to pass over the missing
+socket and then waited with no time limit. A wait that includes a handle
+naming nothing now returns at once, and the spec that was red on that
+hang is green on both engines.
+
+The second fault was the first design. It kept the awaited handle in a
+field per fiber and cleared it before every step. Native kept it as a
+fourth array, which a fork then moved as well: runbench retired 1,407,682
+more instructions on this machine than the tree under it, and CI read
+`interp_instructions` 153,945 higher.
+Those rows are what the objective counts, and it does not count wall
+time, so the design scored as a loss. Reading the handle from the fiber's
+own work removed the field and the clearing. Left where
+the compiler put it, the interpreter's new function still cost its corpus
+59,991 instructions; kept cold and out of line it costs 9,993.
 
 **Measured.** One sitting, 2026-11-10, in the development container: a
 senro app answering 300 requests over loopback after twenty to warm up,
-each on its own connection, with Postgres on a local socket. Mean time
-per request:
+each on its own connection, with Postgres on a local socket, served by
+this branch's compiler and by the one before it in turn. Mean time per
+request:
 
 | | before | after |
 |---|---|---|
-| native, no query | 1.29 ms | 0.15 ms |
-| native, one query | 2.53 ms | 0.29 ms |
-| native, five queries | 7.36 ms | 0.67 ms |
-| interpreted, no query | 2.81 ms | 1.39 ms |
-| interpreted, one query | 4.57 ms | 2.35 ms |
-| interpreted, five queries | 12.08 ms | 5.46 ms |
+| native, no query | 1.25 ms | 0.12 ms |
+| native, one query | 2.48 ms | 0.34 ms |
+| native, five queries | 7.28 ms | 0.66 ms |
+| interpreted, no query | 2.70 ms | 1.82 ms |
+| interpreted, one query | 4.58 ms | 2.50 ms |
+| interpreted, five queries | 12.66 ms | 6.73 ms |
 
-An idle native server holding senro's listener made 1,004 scheduler
-sleeps in a second before and makes none now. It used 13 to 16 clock ticks
-of CPU in five seconds before; now it uses none on either engine.
+The same app left idle for five seconds used 15 clock ticks of CPU
+natively and 17 interpreted before, and none on either engine after. An
+earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
+1,004 times in a second.
 
-**Rows.** The runtime grows, so the machine-code and codegen rows are
-CI's to report, and the compile rows move with the binary's layout.
+**Rows.** Counted on this machine with the toolchain the goldens name,
+and set from each row's distance to main's here.
+- Work: all fifteen rows fall. `runbench` 913,657,054 to 910,567,403 and
+  its dev-tier build 2,763,752,866 to 2,759,705,221; the other thirteen
+  by between 166 and 1,713.
+- `browser_run_instructions` 78,426,179 to 77,181,763.
+- `interp_instructions` rises 9,993 to 622,568,308. The corpus opens no
+  socket, so this is the scheduler's loop laid out around one more call.
+  `entry_instructions` rises 12 to 156,082,977 with the binary's layout.
+- Machine code: each benchmark carries 48 fewer bytes of `.text` than on
+  main, and `text` sums to 5,875,561.
 
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
