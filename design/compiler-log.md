@@ -20,47 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
-
-senro's views were Slim files, each with the kanso file kata generated from it
-checked in beside it. Clay: "i don't want to see actual slim files in here, i
-just want a special kanso-specific format... designed from first principles,
-and not paired with a kso file. it should stand on its own and work and have a
-conversion/compilation step." On how: "probably this means kanso provides
-some kind of templating layer where you can create an arbitrary format that
-parses into normal kanso. i dunno. whatever you think best."
-
-The layer is the derivation, which already runs a library's kanso while the
-program compiles and can write source into a module (`derive/define`). Two
-things were missing, and this change adds them:
-
-- `derive/module` gains `files`: the text of each file in the module's
-  directory that is not kanso source, by name. A convention reads its
-  templates there.
-- A directory that holds no kanso source is still a module when a derivation
-  writes its functions. While the entry's dependencies load to be described,
-  it loads empty; the second load compiles what was written, and refuses the
-  directory if nothing was.
-
-Specs: `a_derivation_writes_a_module_from_its_templates` and
-`a_module_of_templates_nothing_writes` in the derive corpus, on both engines.
-The first failed with `no .kso files in …/views` before the loader change.
-
-The format is senro's to design under #2280's mandate. kata's templates
-become `.kata` files and its syntax follows kanso: `takes` names the
-parameters, holes are `{expr}`, control lines are bare `if`, `else` and `for`,
-and `#` starts a comment. That work lands in senro.
-
-Describing a program now costs a little more, because each module's record
-carries its files and the loader asks one more question of an empty
-directory. The rows rose, by CI's measure: entry_instructions to 86,840,306
-(+30,611), browser_compile_instructions to 349,289,583 (+18,342),
-library_instructions to 72,628,273 (+425), emit_instructions to 5,599,909
-(+244), compile_instructions to 24,102,378 (+69) and interp_instructions to
-622,391,510 (+3).
-The ruling is a part of the language, so the welfare floor drops by exactly
-that cost, to 95.61456.
-
 ## 2026-11-03 — a write to a peer that has gone is an err on both engines
 
 A senro server died without a word when a page that had been listening for
@@ -1740,3 +1699,75 @@ CI's to report, and the compile rows move with the binary's layout.
 
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
+
+## 2026-11-10 — senro's server logs its requests and lets its connections go
+
+Five senro pull requests and one here, all found by running the guestbook
+as a server for longer than a spec does. The site's pin moves to senro
+5b17eac with them.
+
+**A request log (senro#101).** The server writes a line to stdout for each
+request as it answers: `GET /entries/3 200 in 2ms`. The method is the one
+a form stands for, so a confirmation's button reads `PATCH`. The query
+string is left out. A path segment shaped like one of senro's signed
+tokens is written `:token`, and an uploaded file's key `:key`, so a kept
+log holds no link that confirms an address or resets a password.
+`/senro/live` gets no line. `spec/serve/logged` pins the lines, with the
+milliseconds masked.
+
+**Every accepted connection is closed (senro#102).** The server closed a
+connection after answering it and at no other time. A client that
+connected and hung up without a request left its socket open on the
+server for good, and about sixty of those ended a natively built app at
+the runtime's table of 64 (#2402, fixed here in #2404). The close now
+happens in one place, after whatever became of the connection. A
+connection that sent nothing closes silently and any other early ending
+is written to stderr. `spec/serve/hung_up` sends 320 such clients to a
+server limited to 256 open files and then asks it a question.
+
+**An action that answers no response (senro#102).** An action that
+answered a string ended the request with no reply and nothing in the log.
+The cause is a rule of the language working as written: a failure raised
+inside a package is not caught by a `.?` in that same package, so `web`
+could not rescue the err it raised itself, and the fiber's failure waited
+for a join the accept loop never reaches. `web` now answers a 500 and
+reports the value directly. `spec/serve/answered` pins the reply and the
+report.
+
+**One session listens for every page (senro#103).** Each open tab's
+`/senro/live` stream held a Postgres session of its own, and a tab that
+closed was noticed only when the next change was written to it. One fiber
+now listens on one session and passes each change to every open page.
+The server writes each page a line every fifteen seconds, and a page
+whose write fails twice is let go. `spec/live` opens twenty pages and
+reads the server's own descriptor count: twenty more files and no more
+sessions, and none more once they have left.
+
+**A lock that runs out (senro#100).** The guestbook locks an account
+after three wrong passwords and mails a link, and the lock lapses after
+an hour. Nothing had run the hour. `spec/lapsed` moves the lock's time
+back in the database and watches the right password work again.
+
+**The guides sat off the left edge (#2401).** Clay reported the views
+guide against the left edge of the window. The nine guide pages had
+`spec-doc`, which sets a column's width, and lacked `essay`, which
+centres it; they had lacked it since they were written. `prose_check`
+gained a family, "no reading column", that fails a page whose article has
+a width and no centring.
+
+**What I got wrong.**
+- senro#102's first CI run was red on its own spec. The script read the
+  server's log after stopping the server, and the log by then held the
+  line kanso prints for a program ended by a signal. It reads the log
+  first.
+- #2401's first commit message said the pages had been checked in a
+  narrow window, which I had not established. The message now says only
+  that the class was missing.
+- The spec for many callers stalled at eighty dials, and I put a pause
+  between dials before finding the cause. It was the listen queue of 16,
+  which #2404 isolated.
+
+**Open.** A native server's resident memory grew from 3,140 kB to 3,692 kB
+over 1,500 connections, and I have not found what holds it. The runtime
+never frees a pool, which is why the live streams reuse their seats.
+`net/write` blocks the whole program on a client that reads slowly.
