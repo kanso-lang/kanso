@@ -16,6 +16,7 @@ static __attribute__((noinline)) KValue k_region_pop_slow(KValue r) {
             if (outside && !k_carries[d].used_flag) {
                 k_beat_rewind(&k_beat_stack[d]);
                 k_ten_release(d);
+                k_cellreg_end((int)d);
                 return r;
             }
             if (!outside && !k_carries[d].used_flag && !k_reg_any_at(d) && !k_ten_blocks[d]) {
@@ -83,11 +84,13 @@ KValue k_cohort_pop(KValue r) {
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
         k_permreg_migrate(k_beat_depth);
+        k_cellreg_migrate(k_beat_depth);
         return r;
     }
     if (!k_is_heap(r.tag) && r.tag != K_THUNK && !(k_pend_n && k_pend_holds_below(m))) {
         k_beat_set_depth(k_beat_depth - 1);
         k_beat_rewind(m);
+        k_cellreg_end(k_beat_depth);
         k_spare_release(2);
         if (K_COUNTING) k_stat_cohort_frees++;
         return r;
@@ -115,6 +118,7 @@ KValue k_cohort_pop(KValue r) {
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
         k_permreg_migrate(k_beat_depth);
+        k_cellreg_migrate(k_beat_depth);
         return r;
     }
     k_carry_reset();
@@ -306,7 +310,7 @@ void k_beat_lap_carry(void) {
     KCarry* kc = &k_carries[d];
     size_t wait = (size_t)1 << 18;
     if (2 * kc->last_copy > wait) wait = 2 * kc->last_copy;
-    if (kc->at_arena && !(k_beat_stack[d].reg_any & ~K_REG_VIEW)
+    if (kc->at_arena && !(k_beat_stack[d].reg_any & ~(K_REG_VIEW | K_REG_CELL))
         && (kc->at_blocks == (const void*)k_blocks
                 ? (size_t)(k_arena - kc->at_arena) < wait
                 : wait > ((size_t)1 << 18) && k_drift_since(kc) < wait)) {

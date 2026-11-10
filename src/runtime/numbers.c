@@ -207,6 +207,7 @@ static __attribute__((cold, optnone, noinline)) KValue k_tie_cell(void) {
     t->argc = 0;
     t->next_free = 0;
     t->pooled = 0;
+    t->held = 0;
     KValue v;
     v.tag = K_THUNK;
     v.payload = (long long)t;

@@ -60,12 +60,17 @@ impl<'a> Backend<'a> {
                     if self.demand.is_lazy_bind(&f.group.clone(), f.arity, i)
                         && self.thunkable(f, expr) =>
                 {
-                    let t = match name.as_str().starts_with(crate::ahead::POOLED) {
-                        true => self.emit_cell_by(f, expr, "k_thunk_new_pooled")?,
-                        false => self.emit_cell(f, expr)?,
-                    };
+                    // A cell this frame will not release is held by the beat
+                    // it is made in, whose rewind frees it (`k_cell_hold`).
                     let in_beat = self.beat.ids.contains_key(&(f.group.clone(), f.arity));
-                    if !in_beat && self.demand.is_releasable(&f.group, f.arity, i) {
+                    let released = !in_beat && self.demand.is_releasable(&f.group, f.arity, i);
+                    let pooled = name.as_str().starts_with(crate::ahead::POOLED);
+                    let t = match (pooled, released) {
+                        (true, _) => self.emit_cell_by(f, expr, "k_thunk_new_pooled")?,
+                        (false, true) => self.emit_cell(f, expr)?,
+                        (false, false) => self.emit_cell_by(f, expr, "k_thunk_new_held")?,
+                    };
+                    if released {
                         f.lazy_cells.push(t.clone());
                     }
                     f.bind(name, &t);
