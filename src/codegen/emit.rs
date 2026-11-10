@@ -1423,8 +1423,10 @@ impl<'a> Backend<'a> {
                                     // rewind merges with one through it. When
                                     // the fields would not fit the buffer the
                                     // record is staged built.
-                                    let held: Vec<Option<(String, i64, bool)>> =
-                                        positions.iter().map(|&j| f.parsed_as(&emitted[j])).collect();
+                                    let held: Vec<Option<(String, i64, bool)>> = positions
+                                        .iter()
+                                        .map(|&j| f.parsed_as(&emitted[j]))
+                                        .collect();
                                     let apart = positions.len() + held.iter().flatten().count()
                                         <= CARRY_SLOTS;
                                     for ((&j, stage), by_value) in
@@ -1439,11 +1441,17 @@ impl<'a> Backend<'a> {
                                         }
                                         let p = &emitted[j];
                                         let w0 = f.tmp();
-                                        f.line_fmt(format_args!("{w0} = extractvalue %parsed {p}, 0"));
+                                        f.line_fmt(format_args!(
+                                            "{w0} = extractvalue %parsed {p}, 0"
+                                        ));
                                         let w1 = f.tmp();
-                                        f.line_fmt(format_args!("{w1} = extractvalue %parsed {p}, 1"));
+                                        f.line_fmt(format_args!(
+                                            "{w1} = extractvalue %parsed {p}, 1"
+                                        ));
                                         let w2 = f.tmp();
-                                        f.line_fmt(format_args!("{w2} = extractvalue %parsed {p}, 2"));
+                                        f.line_fmt(format_args!(
+                                            "{w2} = extractvalue %parsed {p}, 2"
+                                        ));
                                         let (ptag, n, vtag, vpay) = unpack_words(f, &w0, &w1, &w2);
                                         for (tag, word) in [(vtag, vpay), (ptag, n)] {
                                             let a = f.tmp();
@@ -1578,8 +1586,16 @@ impl<'a> Backend<'a> {
                         ));
                         if let Some(ty) = self.escape.returns_ty(name, n) {
                             if callee_ret == "%parsed" {
-                                f.record_parsed(&t, ty, self.type_ids[ty], self.escape.int_last(ty));
+                                f.record_parsed(
+                                    &t,
+                                    ty,
+                                    self.type_ids[ty],
+                                    self.escape.int_last(ty),
+                                );
                             }
+                        }
+                        if let Some(ty) = self.escape.answers_built(name, n) {
+                            f.note_built(&t, self.escape.int_last(ty));
                         }
                         self.emit_ret(f, &t);
                     }

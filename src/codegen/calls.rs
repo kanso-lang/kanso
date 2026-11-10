@@ -1330,6 +1330,9 @@ impl<'a> Backend<'a> {
                 f.record_parsed(&result, ty, self.type_ids[ty], self.escape.int_last(ty));
             }
         }
+        if let Some(ty) = self.escape.answers_built(name, n) {
+            f.note_built(&result, self.escape.int_last(ty));
+        }
         let returned = self.group_return_set(name, n) | fails;
         f.record(&result, returned);
         if callee_ret == "%KValue" && self.sub_parents.is_empty() {

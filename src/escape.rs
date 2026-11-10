@@ -29,6 +29,11 @@ pub struct EscapeInfo {
     /// are the same either way; only which field each is read from and
     /// built into differs.
     int_last: HashSet<String>,
+    /// Groups that answer a register-returnable type and stay boxed all the
+    /// same, by function name: each arity with the type's name. A caller
+    /// that answers in registers and ends in a call to one is handed a built
+    /// record, and has to read its words off it.
+    built: HashMap<String, Vec<(usize, String)>>,
 }
 
 // Keyed by name alone so a question borrows the name it is asked with. Keyed
@@ -45,6 +50,13 @@ impl EscapeInfo {
         slots.iter().find(|(a, p, _)| *a == arity && *p == param).map(|(_, _, ty)| ty.as_str())
     }
 
+    /// The type a group answers built, when the analysis found it answers a
+    /// register-returnable type and codegen keeps it boxed anyway.
+    pub fn answers_built(&self, name: &str, arity: usize) -> Option<&str> {
+        let groups = self.built.get(name)?;
+        groups.iter().find(|(a, _)| *a == arity).map(|(_, ty)| ty.as_str())
+    }
+
     /// Whether `ty` packs its second field as the int and its first as the
     /// value.
     pub fn int_last(&self, ty: &str) -> bool {
@@ -53,7 +65,7 @@ impl EscapeInfo {
 
     /// Keeps only the answers whose type `keep` accepts.
     pub fn keep_types(&mut self, keep: impl Fn(&str) -> bool) {
-        for groups in self.returns.values_mut() {
+        for groups in self.returns.values_mut().chain(self.built.values_mut()) {
             groups.retain(|(_, ty)| keep(ty));
         }
         for slots in self.carries.values_mut() {
@@ -72,6 +84,7 @@ impl EscapeInfo {
             returns: HashMap::default(),
             carries: HashMap::default(),
             int_last,
+            built: HashMap::default(),
         };
         for ((name, arity), ty) in returns {
             info.returns.entry(name).or_default().push((arity, ty));
@@ -106,7 +119,10 @@ pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> Escape
     }
     for (name, arity) in &union_groups {
         if let Some(groups) = info.returns.get_mut(name) {
-            groups.retain(|(a, _)| a != arity);
+            if let Some(at) = groups.iter().position(|(a, _)| a == arity) {
+                let (arity, ty) = groups.remove(at);
+                info.built.entry(name.clone()).or_default().push((arity, ty));
+            }
         }
         if let Some(slots) = info.carries.get_mut(name) {
             slots.retain(|(a, _, _)| a != arity);

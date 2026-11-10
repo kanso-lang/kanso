@@ -2128,6 +2128,24 @@ operands at a carried slot and cross as the two fields. A record built on
 the way into the loop from outside it, which is not a tail call, is still
 built and read back, once for each entry.
 
+A boxed answer was the seventh, #2432, and on main it is a wrong answer
+with no complaint. A name a module declares can also be one of an
+import's: `std/list` exports `first`, so a bare `first` in a module that
+declares one calls into the module's own overload space, and a group
+there stays boxed. A decoder that answers in registers and ends in such a
+call is handed a built record. Its return took whatever value it was
+handed for a failure, sent the record's tag and pointer on as the value,
+and the caller read the whole record where the value belonged and 0 for
+the position: main prints `shared/read 2 97 then 0` where the
+interpreter prints `97 then 2`. The analysis now keeps the groups that
+answer the type and stay boxed, a call to one is noted where it comes
+back, and the return reads the record's words off a noted value. Any
+other value still goes back as a failure's two words. Reading the words
+off every value not known to be a failure was tried first and put 234
+calls into the decoder's emitted code, since inference rarely knows.
+`micro/a_bare_name_shared_with_an_import_answers_its_record` holds every
+engine to the interpreter's two lines.
+
 Measured. `mem/a_record_held_by_value_crosses_a_loop_s_rewind` did not
 build and reads sh_rec 0. `mem/a_record_built_at_a_loop_s_call_crosses_its_rewind`
 did not build either, and reads the one record its entry builds over 76
@@ -2146,18 +2164,20 @@ work_runbench_dev 2,924,577,667 -> 2,894,927,376, with the phase at about
 What rises. The runtime's three conversions are linked into every
 program, 368 bytes each; scanbench falls 512 and runbench 800, and the
 summed text goes 5,969,001 -> 5,972,105. The emitter asks more:
-emit_instructions 5,644,746 -> 5,650,830. The tab's compile rises with
-it, browser_compile_instructions 390,565,528 -> 393,709,652 and
+emit_instructions 5,644,746 -> 5,651,651. The tab's compile rises with
+it, browser_compile_instructions 390,565,528 -> 393,730,774 and
 browser_compile_peak_bytes 958,848 -> 965,297. Clang and the linker read
-a little more: codegen_instructions_dev 116,980,709 -> 117,010,112 and
-codegen_instructions_release 372,052,045 -> 372,097,082, both the
-container's move added to CI's last reading. Three programs move by
+a little more: codegen_instructions_dev 116,980,709 -> 117,010,179 and
+codegen_instructions_release 372,052,045 -> 372,177,641, both CI's
+readings. The container's move added to CI's last reading had predicted
+67 and 80,559 fewer, so that sum is a guide for these two rows and no
+more. Three programs move by
 layout with the grown runtime: work_encodebench rises 350 to
 2,335,340,893, work_oneshot 854 to 9,980,359 and work_livebench 742 to
 938,655,477; work_scanbench falls 84 to 267,843 with its record.
 runbench's emitted code reads defines=975 calls=10169 branches=9172
 lines=79632 and scanbench's defines=331 calls=3190 branches=3019
-lines=26106. Welfare rises 95.25752070 -> 95.29101553, and the floor is
+lines=26106. Welfare rises 95.25752070 -> 95.29096728, and the floor is
 banked there.
 
 Checked against the interpreter. `micro/a_record_held_by_value_reads_like_one_built`

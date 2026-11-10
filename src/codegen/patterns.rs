@@ -147,17 +147,27 @@ impl<'a> Backend<'a> {
     }
 
     /// Return a KValue in the current function's ABI shape. A `%parsed`-returning
-    /// function only reaches here with a failure (its record tails are built
-    /// directly), so the failure's two words become the `%parsed`.
+    /// function builds its record tails directly, so what reaches here as a
+    /// value is a failure, whose two words become the `%parsed`, or a record
+    /// a group that stays boxed handed back, as a module's bare overload
+    /// space does when a local name is also an import's. That record's words
+    /// are read off it. Taken for a failure, its tag and pointer went back as
+    /// the value word, and the caller read the whole record where a field
+    /// belonged (#2432).
     ///
     /// A `%KValue` function can be handed a register-returned record to
     /// return: a thunk site is emitted outside the analysis that gives a tail
     /// caller its callee's return shape, so its tail call comes back `%parsed`
     /// and is boxed here.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
+        let built = f.built_as(value);
         let value = release_cells(f, value);
         if f.ret_ty == "%parsed" && f.is_parsed(&value) {
             f.line_fmt(format_args!("ret %parsed {value}"));
+        } else if let ("%parsed", Some(back)) = (f.ret_ty.as_str(), built) {
+            let (w0, w1, w2) = boxed_words(f, &value, back);
+            let p = parsed_of(f, &w0, &w1, &w2);
+            f.line_fmt(format_args!("ret %parsed {p}"));
         } else if f.ret_ty == "%parsed" {
             self.emit_parsed_from_failure(f, &value);
         } else {

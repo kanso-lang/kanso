@@ -1,0 +1,45 @@
+# A name a module declares can also be one of an import's: `std/list`
+# exports `first`, so a bare `first` here calls into the module's own
+# overload space, which stays boxed. A decoder that answers its record in
+# registers and ends in such a call is handed a built record back. Its
+# return took that record for a failure and sent the record's tag and
+# pointer on as the value, so a caller read the whole record where the
+# value belonged and 0 for the position (#2432). The record's words are
+# read off it now. The second line is the same decoder round a loop.
+import "std/list"
+import "std/text"
+
+type read
+  next
+  value
+
+fn at bs p
+  first bs[p] (p + 1)
+
+fn first none _
+  read 0 none
+
+fn first b p
+  read p b
+
+fn told (read p v)
+  "{shown v} then {p}"
+
+fn shown none
+  "none"
+
+fn shown v
+  "{v}"
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read p v) acc
+  summed (n - 1) bs (at bs p) "{acc}{shown v} "
+
+fn total s
+  bs = text/bytes s
+  two = length (list/to_list (list/take list/naturals 2))
+  "{told (at bs 1)} | {told (at bs 9)} | of {two}\n{summed 4 bs (at bs 1) ""}"
+
+pub play = print (total "abc")
