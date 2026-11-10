@@ -1,0 +1,34 @@
+import "std/net"
+
+# One program that is both ends of a connection. The writer sends twelve
+# megabytes, more than the sockets between the two ends hold, so its write
+# cannot finish until the reader has taken some of it. A write that waits
+# inside the system holds every fiber, the reader among them, and the
+# program never ends. A write that would wait yields its fiber as a read
+# does, the reader runs, and the two finish together.
+fn doubled s 0
+  s
+
+fn doubled s n
+  doubled "{s}{s}" (n - 1)
+
+fn counted _ got ""
+  print "the reader took {got} bytes"
+
+fn counted near got words
+  drained near (got + length words)
+
+fn drained near got
+  net/read near .> (words -> counted near got words)
+
+fn sent far
+  net/write far (doubled "kanso " 21) .> (_ -> net/close_conn far)
+
+fn both far near
+  drained near 0
+  sent far
+
+fn joined l p
+  net/dial "127.0.0.1" p .> (far -> net/accept l .> (near -> both far near))
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> joined l p))
