@@ -1664,8 +1664,24 @@ the headers name no queue length, and the first build of it failed. I had
 built and tested natively only. The constant is defined when the headers
 leave it out.
 
-**Rows.** `unpinned_diagnostics.txt` loses the message that no longer
-exists. The rows that move with the runtime's text are CI's to report.
+**Rows, from CI.**
+- `unpinned_diagnostics.txt` loses the message that no longer exists.
+- Machine code: every one of the fourteen benchmarks carries 1,856 more
+  bytes of `.text`, which is the growing, the moving of each socket to its
+  new slot and the owner test.
+- clang compiles a larger runtime: `codegen_instructions_dev` rose 4,150 to
+  116,859,197 and `codegen_instructions_release` rose 29,045 to
+  372,054,901.
+- The tab runs its corpus in 71,987 fewer wasm instructions
+  (`browser_run_instructions` 78,354,192). That corpus opens no socket. I
+  did not isolate what clang did differently with the larger file.
+- The three specs join `native_route_gaps.txt`, because the tab has no
+  sockets.
 
-**Open.** senro's live streams hold a Postgres session for each open tab,
-and a page that left is noticed only at the next write (#2403).
+**Welfare.** The sum falls by 0.000018 and the floor follows it. Native
+ended a program the interpreter runs, so this is the engines made to
+agree, which welfare.kso sets outside the sum.
+
+**Open.** A fiber waiting on a socket is asked again every millisecond on
+both engines, so an idle server is never asleep for long and each query a
+request makes costs a millisecond of waiting (#2405).
