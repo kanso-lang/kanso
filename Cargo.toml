@@ -29,6 +29,12 @@ rustls-native-certs = "0.8"
 name = "kanso"
 path = "src/main.rs"
 
+# Counts the wasm instructions a built module executes, with the host the
+# browser rows use. An example so that it may use wasmi, a dev-dependency.
+[[example]]
+name = "count_module"
+path = "scripts/count_module.rs"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

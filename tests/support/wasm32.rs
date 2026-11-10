@@ -90,7 +90,18 @@ struct Host {
     /// Nanoseconds the program has slept, which is the only thing that moves
     /// its clock.
     slept: u64,
+    /// The files the program can read, each under its absolute path without
+    /// the leading slash, which is how WASI names a path beneath the one
+    /// directory the host opens for it.
+    files: Vec<(String, Vec<u8>)>,
+    /// What the program has open: the file's place in `files` and how far it
+    /// has read. Descriptor 4 is the first.
+    open: Vec<(usize, usize)>,
 }
+
+/// The first descriptor `path_open` hands out: 0 to 2 are the streams and 3
+/// is the directory the files sit under.
+const FIRST_FILE: usize = 4;
 
 fn word(m: &wasmi::Memory, c: &Caller<'_, Host>, at: usize) -> usize {
     let mut b = [0u8; 4];
@@ -101,7 +112,9 @@ fn word(m: &wasmi::Memory, c: &Caller<'_, Host>, at: usize) -> usize {
 /// One WASI call. Writes go to the stream they name, the clock reads one fixed
 /// instant (2026-01-01, so a program asking whether time has passed the epoch
 /// is answered) and randomness is zeros, so a run is a function of its
-/// program; everything that would reach a filesystem answers ENOSYS.
+/// program. The only filesystem is the files the host was given, which the
+/// program may open and read; everything else that would reach one answers
+/// ENOSYS.
 fn wasi(name: &str, c: &mut Caller<'_, Host>, args: &[Val]) -> Result<i32, wasmi::Error> {
     let i = |k: usize| args[k].i32().expect("an i32 argument") as u32 as usize;
     let m = c.data().memory.expect("the runtime's memory");
@@ -178,13 +191,119 @@ fn wasi(name: &str, c: &mut Caller<'_, Host>, args: &[Val]) -> Result<i32, wasmi
             m.write(&mut *c, i(3), &(n as u32).to_le_bytes()).expect("in bounds");
             0
         }
+        // One directory, `/`, when there are files to read, and none when
+        // there are not: wasi-libc asks about descriptor 3 upward until one
+        // answers EBADF, and resolves every path against what it found.
+        "fd_prestat_get" if i(0) == 3 && !c.data().files.is_empty() => {
+            m.write(&mut *c, i(1), &[0u8; 4]).expect("in bounds");
+            m.write(&mut *c, i(1) + 4, &1u32.to_le_bytes()).expect("in bounds");
+            0
+        }
         "fd_prestat_get" => 8,
+        "fd_prestat_dir_name" => {
+            m.write(&mut *c, i(1), b"/").expect("in bounds");
+            0
+        }
+        // A file that is not among the host's answers ENOENT, which the
+        // runtime's readers answer as none.
+        "path_open" => {
+            let mut path = vec![0u8; i(3)];
+            m.read(&*c, i(2), &mut path).expect("in bounds");
+            let found = c.data().files.iter().position(|(name, _)| name.as_bytes() == &path[..]);
+            match found {
+                None => 44,
+                Some(at) => {
+                    let fd = (FIRST_FILE + c.data().open.len()) as u32;
+                    c.data_mut().open.push((at, 0));
+                    m.write(&mut *c, i(8), &fd.to_le_bytes()).expect("in bounds");
+                    0
+                }
+            }
+        }
+        "fd_seek" if i(0) >= FIRST_FILE => {
+            let Some(&(file, at)) = c.data().open.get(i(0) - FIRST_FILE) else { return Ok(8) };
+            let by = args[1].i64().expect("an i64 offset");
+            let size = c.data().files[file].1.len() as i64;
+            let from = match i(2) {
+                0 => 0,
+                1 => at as i64,
+                _ => size,
+            };
+            let to = (from + by).clamp(0, size);
+            c.data_mut().open[i(0) - FIRST_FILE].1 = to as usize;
+            m.write(&mut *c, i(3), &(to as u64).to_le_bytes()).expect("in bounds");
+            0
+        }
+        "fd_read" if i(0) >= FIRST_FILE => {
+            let Some(&(file, mut at)) = c.data().open.get(i(0) - FIRST_FILE) else { return Ok(8) };
+            let mut total = 0u32;
+            for k in 0..i(2) {
+                let p = word(&m, c, i(1) + k * 8);
+                let n = word(&m, c, i(1) + k * 8 + 4);
+                let left = c.data().files[file].1.len() - at;
+                let take = n.min(left);
+                let bytes = c.data().files[file].1[at..at + take].to_vec();
+                m.write(&mut *c, p, &bytes).expect("in bounds");
+                at += take;
+                total += take as u32;
+            }
+            c.data_mut().open[i(0) - FIRST_FILE].1 = at;
+            m.write(&mut *c, i(3), &total.to_le_bytes()).expect("in bounds");
+            0
+        }
+        "fd_close" => 0,
         "proc_exit" => {
             c.data_mut().exit = Some(i(0) as i32);
             return Err(wasmi::Error::new("proc_exit"));
         }
         _ => 52,
     })
+}
+
+/// The payload of the custom section called `name`, if the module has one.
+pub fn custom(module: &[u8], name: &str) -> Option<Vec<u8>> {
+    let mut at = 8;
+    while at < module.len() {
+        let id = module[at];
+        at += 1;
+        let (size, read) = leb(&module[at..]);
+        at += read;
+        let end = at + size;
+        if id == 0 {
+            let (len, read) = leb(&module[at..]);
+            let named = &module[at + read..at + read + len];
+            if named == name.as_bytes() {
+                return Some(module[at + read + len..end].to_vec());
+            }
+        }
+        at = end;
+    }
+    None
+}
+
+fn leb(bytes: &[u8]) -> (usize, usize) {
+    let mut value = 0usize;
+    let mut shift = 0;
+    for (k, b) in bytes.iter().enumerate() {
+        value |= usize::from(b & 0x7f) << shift;
+        if b & 0x80 == 0 {
+            return (value, k + 1);
+        }
+        shift += 7;
+    }
+    (value, bytes.len())
+}
+
+/// What a module `kanso build --wasm` wrote asks its host to set aside before
+/// linking it: the bytes of data and the table slots, which its `kanso.link`
+/// section holds as two little-endian u32s.
+pub fn link(module: &[u8]) -> Option<(u32, u32)> {
+    let section = custom(module, "kanso.link")?;
+    if section.len() != 8 {
+        return None;
+    }
+    let word = |at: usize| u32::from_le_bytes(section[at..at + 4].try_into().expect("four bytes"));
+    Some((word(0), word(4)))
 }
 
 /// The export `counted` adds: an i64 global holding how many wasm instructions
@@ -432,6 +551,19 @@ pub fn execute(
     table: u32,
     env: &[(&str, &str)],
 ) -> Result<Ran, String> {
+    execute_beside(runtime, module, data, table, env, &[])
+}
+
+/// `execute` with files the program can read: each an absolute path and the
+/// bytes there, as `os/read_bytes` and `os/read_file` find them.
+pub fn execute_beside(
+    runtime: &[u8],
+    module: &[u8],
+    data: u32,
+    table: u32,
+    env: &[(&str, &str)],
+    files: &[(&str, &[u8])],
+) -> Result<Ran, String> {
     let mut config = Config::default();
     config.consume_fuel(true);
     // wasmi stops at a thousand frames, where a browser gives a page several
@@ -445,7 +577,11 @@ pub fn execute(
     let prog = Module::new(&engine, &counted(module)[..])
         .map_err(|e| format!("the module validates: {e}"))?;
     let env = env.iter().map(|(k, v)| format!("{k}={v}\0").into_bytes()).collect();
-    let mut store = Store::new(&engine, Host { env, ..Host::default() });
+    let files = files
+        .iter()
+        .map(|(path, bytes)| (path.trim_start_matches('/').to_string(), bytes.to_vec()))
+        .collect();
+    let mut store = Store::new(&engine, Host { env, files, ..Host::default() });
     store.set_fuel(10_000_000_000).expect("fuel is on");
     let linker = wasi_linker(&engine, &mut store, &rt);
     let rti = linker.instantiate_and_start(&mut store, &rt).map_err(|e| format!("runtime: {e}"))?;

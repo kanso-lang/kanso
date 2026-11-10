@@ -20,201 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
-
-#2299. Both shapes joined the run program in #2301, measured before this.
-
-**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
-and the running XOR. A list built in one iteration and read in the next is
-a value that crosses a rewind, and the carry tier that could copy it out is
-closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
-loop kept everything every HMAC built. It now carries the sixteen words as
-arguments, as `compress` has carried its eight since 2026-09-23, and the
-beat report reads "rewinds every iteration". Each word read out of a list
-is masked with `whole`: an item of a list could be anything to inference,
-and the mask, a no-op on a word, makes the argument a number. Without the
-mask the loop kept its grow-only verdict, "argument 2 may carry heap".
-`paired_xor` had no other caller and is gone.
-
-**The postcard.** The issue's shape is a loop that hands
-`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
-bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
-is the digest's answer. It spelled its words as bytes through `list/fold`,
-and inference gives a library function one return set for every caller in
-the program, so the fold answers anything and so does the digest. `bytes_of`
-is now a push loop of its own, the slot reads `0x220` (a list or an err),
-and the loop carries it. The general case, any function answering through a
-shared driver, is #2302.
-
-A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
-hand the slot. It changed nothing, because the handed set was the digest's
-TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
-could not have told a builtin from a library function anyway. It was
-reverted before commit.
-
-**Measured on this container**, the same box before and after:
-
-| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
-|---|---:|---:|
-| wall | 4.24 s | 0.68 s |
-| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
-| peak resident | 1,523,724 kB | 2,300 kB |
-
-Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
-vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
-interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
-after. The mem fixtures read one arena block each, where they read three
-and five.
-
-Their other rows move with the loop that now rewinds:
-a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
-a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
-a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
-a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
-a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
-a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
-a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
-a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
-A loop that gives its arena back each iteration copies what it carries out
-first, which fits the evacuations, and has no buffer of the last
-iteration's left to reuse; the byte loop's pushes replace the fold's. That
-reading fits the rows, and nothing here isolates each counter.
-
-**What an iteration costs now.** Callgrind on 2,000 iterations reads
-202,252,987 instructions, about 101,000 an iteration for two compressions.
-`digested`, with the rounds and the schedule inlined into it, is 50%;
-`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
-called rather than inlined; list pushes and the fold that spells the first
-HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
-compression, so this is roughly ten times that. **OPEN:** inlining the four
-mixing functions is the next lead.
-
-CI's rows, on the run program with both phases: work_runbench 947,406,395
--> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
-5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
-2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
-run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
-run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
-run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
-1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
-96,452,880. The sixteen-argument loop and the byte loop are more code:
-runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
-which take the totals emitted_other_branches 18,498 -> 18,759,
-emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
-emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
-Compiling the longer library costs entry_instructions 86,832,572 ->
-87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
-(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
--> 95.63 and is banked.
-
-## 2026-11-04 — bytes nobody can predict
-
-senro's sign-in needs random salts and tokens, and std had only
-`math/random`, which `KANSO_SEED` replays (#2298, under #2280).
-`os/random_bytes n` is a description that yields `n` bytes from the
-operating system's secure source. Native code calls `getentropy` in
-256-byte pieces, or `arc4random_buf` on macOS, as desc 40. The interpreter
-makes the same libc call from Rust. In the tab, wasi-libc's `getentropy` is
-WASI's `random_get`, which `kanso-engine.js` already answered with
-`crypto.getRandomValues`. The interpreter build, `kanso.wasm`, had no call
-out to the page: its seed and sources are pushed in through exports. A
-pushed buffer cannot know how many bytes a program will ask for, so it
-gained one import, `kanso_host.random_fill`, which the page fills from
-`crypto.getRandomValues` in 65,536-byte slices. The wasmi hosts in `tests/`
-define it through `wasm32::page_linker` and leave the zeros. The import is
-wasm32's alone: macOS refused to link the native library with it unresolved,
-which Linux had allowed. Off the page the browser executor takes the
-machine's bytes.
-
-Three specs, each seen red. `random_bytes_are_as_many_as_were_asked_for`
-in the micro corpus asks for 32, 1 and 0 bytes and appends `"ok"`, which only
-bytes accept, so it pins the length and the kind of value on every engine the
-corpus reaches. It went red at `31 ok` with native broken to one byte short.
-`random_bytes_takes_a_count` in the runtime corpus pins the refusal of a
-string on both engines. `tests/random_bytes_ignore_the_seed.rs` runs one
-program twice under `KANSO_SEED=7` and holds the dice equal and the bytes
-different. It went red when the interpreter drew from its seeded generator.
-Under node with the page's host function, the interpreter build replays the
-dice and not the bytes, and it fills a 70,000-byte ask.
-
-The rows are from a job on 0x19 model 0x11, on the tree merged with main.
-Before the merge, a job on model 0x1, the silicon the goldens were recorded
-on, read the same numbers as one on 0x11. Every binary's `.text` grew by 272 bytes, the new
-case and helper, so text across the fourteen benchmarks rose to 5,869,488
-(+3,808). The runtime instruction rows fell by 45 to 1,578, though no
-benchmark runs the new case, so layout is the likely cause; nothing here
-isolates it. codegen_instructions_release rose to 371,998,504 (+125,509) and
-codegen_instructions_dev to 117,050,653 (+18,303), likely clang compiling the
-larger runtime. The front end moved too, and its code changed only by the
-table entries, so again layout is the likely cause:
-compile_instructions to 24,100,614 (+1,169), entry_instructions to 87,192,183
-(+3,765), library_instructions to 72,964,207 (+2,990) and emit_instructions
-to 5,601,693 (+811). interp_instructions fell to 622,464,159 (-35,790). In
-the tab, browser_compile_instructions rose to 349,357,398 (+18,068) and
-browser_run_instructions to 78,344,393 (+6,012). Welfare fell by less than 0.0001. A secure source of randomness is required
-for the sign-in the senro mandate asks for, so the floor drops by exactly
-that cost.
-
-The page's sections for `kanso build --wasm` and the language server were
-owed, and this change was the fourth entry since the page last moved, so
-docs/compiler.html gains all three as sections 281 to 283.
-
-## 2026-11-04 — a parameter handed to a builtin reads as what the builtin takes
-
-Kanso#2288. The hover in `kanso lsp` followed a parameter into every group
-it was passed to and stopped at builtins, because nothing recorded what a
-builtin takes. `fn parts s = text/split s ","` read `s` as the whole union.
-
-`infer::BUILTIN_TAKES` now holds it, beside `infer::builtin_set`, which says
-what a builtin answers. A row is a set per position over the full tag
-vocabulary. The check's own table in `src/check/literals.rs`, written in
-literal kinds, is deleted, and the literal check, the none check and the two
-list checks read the new rows. The hover meets a parameter's set with the
-row's set at each position it is handed to a builtin, so `s` reads
-`string`. `print` keeps one rule in literals.rs, the language's own: the
-check refuses a literal that is not a string, while every engine prints any
-value a program computes.
-
-Each row carries a third field, how many of its leading positions the
-compile-time checks enforce. The first build had the checks read every
-position, and the suite showed what that costs: the none check refused a
-key that may be none in `scripts/welfare_rescore` (40 failures across the
-rescorer's specs), and the literal check refused `delete m 2.5`, which the
-runtime corpus pins as the interpreter's refusal. Refusing more at compile
-time is a change to the language, which #2288 did not ask for, so the
-checks enforce exactly the positions the old table held. The hover reads
-every position.
-
-`tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every row
-against the interpreter. For each position a row constrains, it hands the
-builtin a value of each of fourteen tags the row leaves out, hidden behind
-an index into a one-element list so no check that reads the row answers
-first, and requires `error[runtime]` under `kanso play --interp`. A control
-with only fillers must run without a refusal. 1019 probes. It went red
-with `BYTES` dropped from `concat`'s first position, and red again in the
-control with a float as `split`'s filler. The golden transcript
-`tests/golden/lsp/builtins` went red with the hover's lookup removed.
-
-Measuring rewrote several rows. `concat`, `push`, `length` and `utf8` take
-bytes, `utf8` takes a list, `write_file` and `net_write` take bytes as text,
-and `put` and `delete` take an int or a string as the key. `length`'s
-refusal now names bytes, which moved two error goldens and the book's
-appendix A sample. The handle positions of `net/read`, `pool/take` and their
-kin are gone from the table: std hands them a record's `handle`, and only
-their own module can build the record, so no program reaches them.
-
-The probe ran native first by mistake, since `kanso play` builds a binary,
-and found native `text/find2` and `text/find2_below` answering for any value
-in their int positions where the interpreter refuses. That is #2310.
-
-The rows are from a job on family 0x19 model 0x1, the recorded silicon.
-compile_instructions fell to 24,090,335 (-10,279), entry_instructions to
-87,188,542 (-3,641), library_instructions to 72,961,337 (-2,870) and
-browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
-cause; the check now reads one table through one function, and layout may
-account for some of it. No runtime, text or allocation row moved. Welfare
-rose from 95.627876 to 95.627948, banked.
-
 ## 2026-11-04 — find2 refuses what the interpreter refuses
 
 `text/find2` and `text/find2_below` take bytes and then three or four ints. The
@@ -2170,3 +1975,109 @@ reading here; `work_runbench`, clang's rows and the tab's are CI's.
 95.0994448300099 that #2414 banked. The objective's header sets a fix
 that makes the engines agree outside the sum, so the floor moves to what
 the fix costs and its history says so.
+
+## 2026-11-10 — gavel: senro's page data and component state travel in a binary encoding
+
+senro's design note said "JSON first; a binary encoding only if a
+measurement says the JSON is the cost." Clay, overriding it: "of course it's
+an extra cost. you KNOW it's a bottleneck."
+
+Page data (a `senro-view` answer) and component state (the state a page
+holds and the state posted to `/senro/act/<component>`) travel in an encoding
+kata derives from the template's shape. It is positional: no field names on
+the wire and no schema file. Both ends are compiled from the same templates,
+so the shape is known on each, and a page built by one compile refuses data
+from another. JSON stays wherever something outside senro reads the data.
+
+Owed, on #2416: a benchmark of page updates and component actions baselined
+under JSON first, as the 2026-09-05 corpus-first gavel asks; the encoder and
+decoder derived for each page and component, on the server and in the
+browser module; a differential golden that a page rendered from the encoded
+data is byte-identical to the server's rendering; a fuzzer for the codec run
+to silence; the guard against data from another compile; and the numbers
+before and after.
+
+## 2026-11-10 — gavel: keyed list matching and compiled updates are recorded, not built
+
+Clay ruled that two ways of making senro's pages update faster are written
+into senro's `design/live-views.md` as later work, and that neither is built
+yet (#2418).
+
+Keyed list matching: the page script's morph matches children by position,
+so a list that gains an item at the top re-patches every element after it.
+Matching on a stable key moves the existing elements, with `moveBefore()`
+where the browser has it and `insertBefore` elsewhere. Compiled updates:
+kata knows which fields each part of a template reads, so it could compile a
+template into direct updates of the nodes that show a changed field. A
+virtual DOM is declined, and the note says so.
+
+Each is measured before it is built. The issue gives an order for when the
+time comes: keyed matching, then the binary encoding, then compiled updates
+if a benchmark shows the morph is the cost. The encoding is ruled and owed
+on #2416, so cloud reads the order as placing the two later items around it
+and builds the encoding now. The note went in with senro#105.
+
+## 2026-11-10 — a built module's wasm instructions can be counted from outside the tests
+
+#2416 owes a benchmark that counts what a page update costs in the browser,
+and senro had no way to count it. kanso's own browser rows are counted by
+`tests/support/wasm32.rs`, which runs a module against the runtime under
+wasmi and counts the instructions executed, the same on every machine. That
+host was reachable only from kanso's tests.
+
+`scripts/count_module.rs` is a cargo example that runs it on any module
+`kanso build --wasm` wrote:
+
+    cargo run --release --example count_module -- runtime.wasm app.wasm \
+        NAME=@file /path=@file
+
+The module's output goes to stdout and `instructions=` and `grown_bytes=`
+to stderr. `NAME=@file` is a variable read from a file, since a page event
+has newlines in it. `/path=@file` is a file the module finds at that path
+with `os/read_bytes`, because a variable cannot carry a zero byte or bytes
+that are not utf-8, and the encoding #2416 asks for is binary. It is an
+example because wasmi is a dev-dependency, and the `kanso` binary a user
+installs does not carry a wasm interpreter. No row moves: nothing in the
+binary or the library changed.
+
+The host under it answered every filesystem call with ENOSYS. It now
+serves the files it is given: one directory, `/`, and `path_open`,
+`fd_seek`, `fd_read` and `fd_close` over them. A path it was not given
+answers ENOENT, which reads in the program as `os/file_not_found`, as
+native reads it.
+
+`tests/a_built_module_is_counted.rs` builds a program that prints a
+variable and the bytes of a file, runs the example's `answered` on it and
+reads the count the host gives when called directly. Its first version ran
+the example's binary and passed against an example edited to report one
+instruction too many: `cargo test --test` does not rebuild examples, so it
+read the binary an earlier build had left. A second version built the
+example from inside the test, and each of `cargo test` and the nested
+`cargo build` then rebuilt what the other had left, three minutes a run.
+The spec now compiles the example's source into itself with `#[path]`, so
+there is no binary to be stale, and with the edit it fails on 38,157
+against 38,156.
+
+The reader of a module's `kanso.link` section moved from
+`tests/build_wasm.rs` into the shared support, where the example reads it
+too.
+
+A first reading with it, on senro's `spec/runs/pages` views and a list of
+fifty posts (6,562 bytes of JSON): the browser module executes 3,991,398
+instructions to turn the page's data into HTML. Splitting the event and
+decoding the JSON, with nothing rendered, is 1,064,700 of them, and the
+split alone is 145,817. Rendering is the larger part.
+
+A second, on a tagged binary encoding written in kanso as a prototype,
+field names still on the wire: the same page is 5,044 bytes and decodes in
+1,708,928 instructions, where the JSON decodes in 918,883. By kind of
+value, binary against JSON: 905 against 1,664 instructions for a small
+int, 1,828 against 1,915 for a string of twenty bytes, and 17,729 against
+14,203 for a map of five one-letter keys. std/json reads a key with a
+builtin and keeps short tokens in a cache, and the prototype reads a key
+as any other string and puts it in a map, so the page's two hundred and
+fifty keys are where it loses. The scalars favour the binary encoding and
+the maps do not, which is the case for the positional layout the ruling
+asks for: a record's fields in order, with no key read and no map built.
+These are this machine's numbers from a runtime built here, and the
+benchmark #2416 owes will pin its own from CI.

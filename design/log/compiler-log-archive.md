@@ -113520,3 +113520,198 @@ another phase's beat verdicts; that is a likely cause, and nothing here
 isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
 -> 8,939,665), each keeping its ratio to its baseline, and the floor moves
 only by the rounding of the two baselines.
+
+## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
+
+#2299. Both shapes joined the run program in #2301, measured before this.
+
+**pbkdf2.** `chained` handed its next iteration two lists, the latest HMAC
+and the running XOR. A list built in one iteration and read in the next is
+a value that crosses a rewind, and the carry tier that could copy it out is
+closed to library loops by the 2026-09-01 and 2026-09-08 entries. So the
+loop kept everything every HMAC built. It now carries the sixteen words as
+arguments, as `compress` has carried its eight since 2026-09-23, and the
+beat report reads "rewinds every iteration". Each word read out of a list
+is masked with `whole`: an item of a list could be anything to inference,
+and the mask, a no-op on a word, makes the argument a number. Without the
+mask the loop kept its grow-only verdict, "argument 2 may carry heap".
+`paired_xor` had no other caller and is gone.
+
+**The postcard.** The issue's shape is a loop that hands
+`sha256/digest u` to its next iteration. Its slot read `0x37fff`, every
+bit, and `costly_to_carry` refuses a slot that reads as anything. The cause
+is the digest's answer. It spelled its words as bytes through `list/fold`,
+and inference gives a library function one return set for every caller in
+the program, so the fold answers anything and so does the digest. `bytes_of`
+is now a push loop of its own, the slot reads `0x220` (a list or an err),
+and the loop carries it. The general case, any function answering through a
+shared driver, is #2302.
+
+A first attempt narrowed `costly_to_carry` to the set the self-tail-calls
+hand the slot. It changed nothing, because the handed set was the digest's
+TOP, and `infer::builtin_set` answers TOP for a name it does not know, so it
+could not have told a builtin from a library function anyway. It was
+reverted before commit.
+
+**Measured on this container**, the same box before and after:
+
+| `pbkdf2`, 100,000 iterations, built `--release` | before | after |
+|---|---:|---:|
+| wall | 4.24 s | 0.68 s |
+| user / sys | 0.93 s / 3.29 s | 0.67 s / 0.00 s |
+| peak resident | 1,523,724 kB | 2,300 kB |
+
+Output is byte-identical to Python's `hashlib.pbkdf2_hmac`, and the 13
+vectors in `lib/sha256/sha256_test.kso` pass, 4,096 rounds among them. The
+interpreter does not move: 10,000 iterations take 22.9 s before and 22.5 s
+after. The mem fixtures read one arena block each, where they read three
+and five.
+
+Their other rows move with the loop that now rewinds:
+a_digest_hashed_again_round_a_loop_beat_iters 52,828 -> 53,428,
+a_digest_hashed_again_round_a_loop_buf_reuse 2,401 -> 1,187,
+a_digest_hashed_again_round_a_loop_evac_allocs 33 -> 47,
+a_digest_hashed_again_round_a_loop_evac_bytes 3,728 -> 7,536,
+a_digest_hashed_again_round_a_loop_push_mut_fast 61,274 -> 43,874,
+a_password_stretched_three_hundred_times_beat_iters 13,827 -> 14,126,
+a_password_stretched_three_hundred_times_buf_reuse 3,614 -> 1,816 and
+a_password_stretched_three_hundred_times_push_mut_fast 70,276 -> 44,205.
+A loop that gives its arena back each iteration copies what it carries out
+first, which fits the evacuations, and has no buffer of the last
+iteration's left to reuse; the byte loop's pushes replace the fold's. That
+reading fits the rows, and nothing here isolates each counter.
+
+**What an iteration costs now.** Callgrind on 2,000 iterations reads
+202,252,987 instructions, about 101,000 an iteration for two compressions.
+`digested`, with the rounds and the schedule inlined into it, is 50%;
+`big_sigma0`, `big_sigma1`, `majority` and `choice` are 34% between them,
+called rather than inlined; list pushes and the fold that spells the first
+HMAC are about 10%. A C SHA-256 spends a few thousand instructions on a
+compression, so this is roughly ten times that. **OPEN:** inlining the four
+mixing functions is the next lead.
+
+CI's rows, on the run program with both phases: work_runbench 947,406,395
+-> 941,723,266, run_arena_blocks 7 -> 5, run_arena_peak_bytes 6,815,760 ->
+5,767,184, run_spare_peak_bytes 4,718,608 -> 3,670,032, run_allocs
+2,040,700 -> 2,022,734, run_alloc_bytes 245,492,129 -> 243,362,481,
+run_cohort_frees 13 -> 12, run_beat_iters 195,099 -> 195,898,
+run_evac_allocs 2,156 -> 2,190, run_evac_bytes 4,599,264 -> 4,608,512,
+run_push_mut_fast 1,302,366 -> 1,267,595, run_push_mut_slow 1,657,081 ->
+1,653,484, run_buf_reuse 7,813 -> 5,385 and run_sh_buf 98,439,088 ->
+96,452,880. The sixteen-argument loop and the byte loop are more code:
+runbench's emitted lines 71,622 -> 73,713 and its text 889,681 -> 892,849,
+which take the totals emitted_other_branches 18,498 -> 18,759,
+emitted_other_calls 21,507 -> 21,738, emitted_other_defines 2,359 -> 2,358,
+emitted_other_lines 176,483 -> 178,574 and text 5,862,512 -> 5,865,680.
+Compiling the longer library costs entry_instructions 86,832,572 ->
+87,188,418 (+355,846) and library_instructions 72,621,853 -> 72,961,217
+(+339,364), read the same on cpu family 0x19 and 0x1a. Welfare rises 95.61
+-> 95.63 and is banked.
+
+## 2026-11-04 — bytes nobody can predict
+
+senro's sign-in needs random salts and tokens, and std had only
+`math/random`, which `KANSO_SEED` replays (#2298, under #2280).
+`os/random_bytes n` is a description that yields `n` bytes from the
+operating system's secure source. Native code calls `getentropy` in
+256-byte pieces, or `arc4random_buf` on macOS, as desc 40. The interpreter
+makes the same libc call from Rust. In the tab, wasi-libc's `getentropy` is
+WASI's `random_get`, which `kanso-engine.js` already answered with
+`crypto.getRandomValues`. The interpreter build, `kanso.wasm`, had no call
+out to the page: its seed and sources are pushed in through exports. A
+pushed buffer cannot know how many bytes a program will ask for, so it
+gained one import, `kanso_host.random_fill`, which the page fills from
+`crypto.getRandomValues` in 65,536-byte slices. The wasmi hosts in `tests/`
+define it through `wasm32::page_linker` and leave the zeros. The import is
+wasm32's alone: macOS refused to link the native library with it unresolved,
+which Linux had allowed. Off the page the browser executor takes the
+machine's bytes.
+
+Three specs, each seen red. `random_bytes_are_as_many_as_were_asked_for`
+in the micro corpus asks for 32, 1 and 0 bytes and appends `"ok"`, which only
+bytes accept, so it pins the length and the kind of value on every engine the
+corpus reaches. It went red at `31 ok` with native broken to one byte short.
+`random_bytes_takes_a_count` in the runtime corpus pins the refusal of a
+string on both engines. `tests/random_bytes_ignore_the_seed.rs` runs one
+program twice under `KANSO_SEED=7` and holds the dice equal and the bytes
+different. It went red when the interpreter drew from its seeded generator.
+Under node with the page's host function, the interpreter build replays the
+dice and not the bytes, and it fills a 70,000-byte ask.
+
+The rows are from a job on 0x19 model 0x11, on the tree merged with main.
+Before the merge, a job on model 0x1, the silicon the goldens were recorded
+on, read the same numbers as one on 0x11. Every binary's `.text` grew by 272 bytes, the new
+case and helper, so text across the fourteen benchmarks rose to 5,869,488
+(+3,808). The runtime instruction rows fell by 45 to 1,578, though no
+benchmark runs the new case, so layout is the likely cause; nothing here
+isolates it. codegen_instructions_release rose to 371,998,504 (+125,509) and
+codegen_instructions_dev to 117,050,653 (+18,303), likely clang compiling the
+larger runtime. The front end moved too, and its code changed only by the
+table entries, so again layout is the likely cause:
+compile_instructions to 24,100,614 (+1,169), entry_instructions to 87,192,183
+(+3,765), library_instructions to 72,964,207 (+2,990) and emit_instructions
+to 5,601,693 (+811). interp_instructions fell to 622,464,159 (-35,790). In
+the tab, browser_compile_instructions rose to 349,357,398 (+18,068) and
+browser_run_instructions to 78,344,393 (+6,012). Welfare fell by less than 0.0001. A secure source of randomness is required
+for the sign-in the senro mandate asks for, so the floor drops by exactly
+that cost.
+
+The page's sections for `kanso build --wasm` and the language server were
+owed, and this change was the fourth entry since the page last moved, so
+docs/compiler.html gains all three as sections 281 to 283.
+
+## 2026-11-04 — a parameter handed to a builtin reads as what the builtin takes
+
+Kanso#2288. The hover in `kanso lsp` followed a parameter into every group
+it was passed to and stopped at builtins, because nothing recorded what a
+builtin takes. `fn parts s = text/split s ","` read `s` as the whole union.
+
+`infer::BUILTIN_TAKES` now holds it, beside `infer::builtin_set`, which says
+what a builtin answers. A row is a set per position over the full tag
+vocabulary. The check's own table in `src/check/literals.rs`, written in
+literal kinds, is deleted, and the literal check, the none check and the two
+list checks read the new rows. The hover meets a parameter's set with the
+row's set at each position it is handed to a builtin, so `s` reads
+`string`. `print` keeps one rule in literals.rs, the language's own: the
+check refuses a literal that is not a string, while every engine prints any
+value a program computes.
+
+Each row carries a third field, how many of its leading positions the
+compile-time checks enforce. The first build had the checks read every
+position, and the suite showed what that costs: the none check refused a
+key that may be none in `scripts/welfare_rescore` (40 failures across the
+rescorer's specs), and the literal check refused `delete m 2.5`, which the
+runtime corpus pins as the interpreter's refusal. Refusing more at compile
+time is a change to the language, which #2288 did not ask for, so the
+checks enforce exactly the positions the old table held. The hover reads
+every position.
+
+`tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every row
+against the interpreter. For each position a row constrains, it hands the
+builtin a value of each of fourteen tags the row leaves out, hidden behind
+an index into a one-element list so no check that reads the row answers
+first, and requires `error[runtime]` under `kanso play --interp`. A control
+with only fillers must run without a refusal. 1019 probes. It went red
+with `BYTES` dropped from `concat`'s first position, and red again in the
+control with a float as `split`'s filler. The golden transcript
+`tests/golden/lsp/builtins` went red with the hover's lookup removed.
+
+Measuring rewrote several rows. `concat`, `push`, `length` and `utf8` take
+bytes, `utf8` takes a list, `write_file` and `net_write` take bytes as text,
+and `put` and `delete` take an int or a string as the key. `length`'s
+refusal now names bytes, which moved two error goldens and the book's
+appendix A sample. The handle positions of `net/read`, `pool/take` and their
+kin are gone from the table: std hands them a record's `handle`, and only
+their own module can build the record, so no program reaches them.
+
+The probe ran native first by mistake, since `kanso play` builds a binary,
+and found native `text/find2` and `text/find2_below` answering for any value
+in their int positions where the interpreter refuses. That is #2310.
+
+The rows are from a job on family 0x19 model 0x1, the recorded silicon.
+compile_instructions fell to 24,090,335 (-10,279), entry_instructions to
+87,188,542 (-3,641), library_instructions to 72,961,337 (-2,870) and
+browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
+cause; the check now reads one table through one function, and layout may
+account for some of it. No runtime, text or allocation row moved. Welfare
+rose from 95.627876 to 95.627948, banked.
