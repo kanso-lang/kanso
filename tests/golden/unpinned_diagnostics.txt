@@ -486,3 +486,14 @@ value_at takes a map and a position
 # mem/work_ahead_pools_a_call_on_a_builtin_read then dies here. No program
 # reaches it on an unmutated runtime.
 a carry copied more than its sizing walk counted
+
+# The cell check's two messages. A counting build run with KANSO_CELL_CHECK
+# set marks a freed lazy cell where it would hand it out again, and dies at a
+# read or a carry of a marked one. A cell is freed while something still holds
+# it only when a rewind and the copy walk disagree about what survives, and
+# that is a bug in the runtime, not in a program. The check found two such
+# bugs in the frame's own release (kanso#2410), and the suite, senro's and
+# kq's have run under it clean since. No program reaches either on an
+# unmutated runtime, and a shipping build compiles neither.
+a lazy binding was read after its cell was freed
+a lazy binding was carried after its cell was freed

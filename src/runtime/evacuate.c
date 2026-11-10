@@ -26,6 +26,9 @@ static int k_copy_seen_check(const void* p) {
    deepbench. */
 typedef struct {
     KCarryBuf* buf; KMark* mark; int to_arena; int in_ten; int deep;
+    /* Set by a copy into storage no beat owns, a constant's or a pool's: a
+       held cell it reaches is kept for good (K_CELL_KEPT). */
+    int keeps;
 } KCopy;
 
 static void* k_copy_alloc(KCopy* cp, size_t n) {
@@ -462,6 +465,16 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
        the same thunk — and only its slots evacuate, written back in place. */
     if (v.tag == K_THUNK) {
         KThunk* t = (KThunk*)(intptr_t)v.payload;
+        if (K_CELL_CHECKING && t->site == K_SITE_LET_GO) {
+            k_site = 0; k_site_id = 0;
+            k_die("a lazy binding was carried after its cell was freed");
+        }
+        /* Before the map is asked: a cell met first from the carry pair and
+           again from under tenure is tenured by the second meeting. */
+        if (t->held) {
+            t->held |= cp->keeps ? K_CELL_KEPT
+                     : cp->in_ten ? K_CELL_TENURED : K_CELL_SEEN;
+        }
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, t, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == t) return v;
         k_copy_map_put(t, t);
@@ -916,8 +929,9 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
             k_viewreg_migrate((int)d);
             k_permreg_migrate((int)d);
         }
+        k_cellreg_migrate((int)d);
     }
-    if (rewound) k_ten_release(d);
+    if (rewound) { k_ten_release(d); k_cellreg_end((int)d); }
     else k_ten_hand_up(d);
     c->used_flag = 0;
     c->skipped = 0;

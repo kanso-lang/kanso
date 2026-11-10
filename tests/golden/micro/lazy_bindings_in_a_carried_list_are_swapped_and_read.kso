@@ -1,0 +1,44 @@
+import "std/list"
+
+type spun_out
+# A loop carries a list of lazy bindings for many laps, swaps it for a
+# fresh one now and then, and reads the last after the loop. The bindings a
+# lap still carries outlive its rewind; the ones a swap dropped are freed
+# with the lap that dropped them (#2408).
+  kept
+  total
+
+# A loop carries a list of lazy bindings for many laps, swaps it for a fresh
+# one now and then, and reads the last after the loop.
+fn built n
+  "kept {n} {n * 23}"
+
+fn held false _
+  ""
+
+fn held true words
+  words
+
+fn fresh n
+  a = built n
+  b = built (n + 1)
+  [(held true a) (held true b) (held false a)]
+
+fn turned n kept
+  return fresh n if n - n / 700 * 700 == 0
+  kept
+
+fn weight kept n
+  length "lap {n} {n * 3} {n * 5} {n * 7}" + length kept
+
+fn spun 0 kept total
+  spun_out kept total
+
+fn spun n kept total
+  spun (n - 1) (turned n kept) (total + weight kept n)
+
+fn read out
+  words = list/fold out.kept 0 (sum w -> sum + length w)
+  "kept {words} of {out.total}"
+
+pub play = print (read (spun 12000 (fresh 0) 0))

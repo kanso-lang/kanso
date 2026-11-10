@@ -1,0 +1,38 @@
+import "std/time"
+
+# A lazy binding built from another lazy binding, each kept by a different
+# holder: the inner one by the outer, the outer by a callback that runs
+# after a sleep. The inner outlives the frame that made it for as long as
+# the outer is held (#2408).
+fn built n
+  "inner {n} {n * 41}"
+
+fn wrapped false _
+  "none"
+
+fn wrapped true words
+  "outer of {words}"
+
+fn sized 0 _
+  effect 0
+
+fn sized _ words
+  effect (length words)
+
+fn handled n
+  inner = built n
+  outer = wrapped (n - n / 2 * 2 == 0) inner
+  time/sleep 3 .> (_ -> sized n outer) .> (k -> tallied n k)
+
+fn tallied n k
+  return print "pass {n} read {k}" if n - n / 2000 * 2000 == 0
+  effect 0
+
+fn served 0
+  print "served them all"
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub play = served 6000

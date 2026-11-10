@@ -1,0 +1,32 @@
+import "std/time"
+
+# Every pass forks a fiber that holds a lazy binding across a long sleep,
+# while the passes after it fill the arena and the scheduler rewinds it many
+# times over. Each fiber then reads the binding it made. Natively the
+# scheduler's beat holds these bindings, and a rewind frees only the ones no
+# fiber can still reach (#2408).
+fn built n
+  "request {n} {n * 7} {n * 13}"
+
+fn sized 0 _
+  effect 0
+
+fn sized _ page
+  effect (length page)
+
+fn handled n
+  page = built n
+  time/sleep 40 .> (_ -> sized n page) .> (k -> tallied n k)
+
+fn tallied n k
+  return print "pass {n} read {k}" if n - n / 2000 * 2000 == 0
+  effect 0
+
+fn served 0
+  print "served them all"
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub play = served 6000
