@@ -225,6 +225,23 @@ ol.entries
   </div>
 </section>
 
+<section class="section" id="running">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">running</span>
+      <h2 class="section-title">the pantry, in a browser</h2>
+    </div>
+    <p>senro's second example app keeps a shelf of things with counts and plans the week's meals. the meal count is a component whose actions run in the browser, in the app's own kanso compiled to wasm, so the − and + buttons send nothing to the server. the check button asks which starred staples the week would run short of. its action calls <code>stock/short meals</code>, a provider that reads the shelf through the item's model on the server, and each check is one request. the shelf's own buttons are forms the server answers, and the page script morphs each answer into the live page without a reload. the bar along the bottom is a caption added for this recording.</p>
+    <figure class="demo">
+      <video poster="pantry-poster.png" controls muted playsinline preload="metadata" width="720" height="600">
+        <source src="pantry.webm" type="video/webm">
+        <source src="pantry.mp4" type="video/mp4">
+      </video>
+      <figcaption>a recording of <code>examples/pantry</code> driven in Chromium. the <a href="guides/views.html">views guide</a> walks through the planner and its provider.</figcaption>
+    </figure>
+  </div>
+</section>
+
 <section class="section" id="decides">
   <div class="container">
     <div class="section-head">
