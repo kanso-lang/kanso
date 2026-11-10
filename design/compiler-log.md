@@ -1993,6 +1993,9 @@ on the far side of a rewind is one the walk passed through.
 **A check that reads for it.** A counting build run with
 `KANSO_CELL_CHECK` set never hands a freed cell out again. It marks the
 cell, and a read or a carry of a marked cell ends the program saying so.
+A shipping build compiles neither test. The read's was first written
+unguarded, and cost every forced binding two instructions, 32,050 in
+runbench, until CI's listing of new diagnostics drew the eye to it.
 With the check forced on, the whole suite here ran (256 test binaries),
 then senro's (186 specs) and kq's, with no read of a freed cell. Twelve
 programs written to break the registry ran under it too, and four of them
@@ -2023,22 +2026,23 @@ are CI's.
   term, goes from 10,852,497 to 7,899,297. pendbench frees its 200:
   `pend_thunk_frees` 200, `pend_thunk_live_exit` 0,
   `pend_held_peak_bytes` 368. `many_cells` frees its 40.
-- `work_runbench` falls 1,448,535 to 953,914,756 and `work_runbench_dev`
-  falls 1,448,462 to 2,805,999,425. A freed cell goes back on the free
+- `work_runbench` falls 1,480,340 to 953,882,951 and `work_runbench_dev`
+  falls 1,480,512 to 2,805,967,375. A freed cell goes back on the free
   list and the next binding takes it, so the allocator retires 2.94
   million fewer instructions. Holding, the lap over the registry and the
-  release cost 1.49 million of that back.
-  `work_pendbench` falls 30,352 to 154,094,075 the same way.
-- Programs that hold no cell pay for the test at a rewind and at a pop:
-  `work_encodebench` rises 2,328 to 2,335,341,396, `work_jsonbench` 472
-  to 549,338,002, `work_digestbench` 414 to 3,107,797 and `work_oneshot`
-  341 to 9,980,362. `work_indexbench` 1,887,800, `work_scanbench`
-  267,925, `work_basket` 18,295,405, `work_deepbench` 198,294,818,
-  `work_escapebench` 40,308,987, `work_readbench` 4,583,687 and
-  `work_widebench` 28,701,610 each rise by 50 or fewer. `work_livebench`
-  falls 27 to 938,655,480.
-- The registry is 1,728 bytes of machine code in every program, so the
-  fourteen text rows sum to `text` 5,907,545.
+  release cost 1.46 million of that back.
+  `work_pendbench` falls 30,552 to 154,093,875 the same way.
+- A program that holds no cell pays for one test at a rewind and at a
+  pop. Three of the rest rise by more than 50: `work_encodebench` 1,775
+  to 2,335,340,843, `work_jsonbench` 472 to 549,338,002 and
+  `work_digestbench` 414 to 3,107,797. Seven rise by 50 or fewer:
+  `work_indexbench` 1,887,800, `work_scanbench` 267,925, `work_basket`
+  18,295,405, `work_deepbench` 198,294,818, `work_escapebench`
+  40,308,987, `work_readbench` 4,583,687 and `work_widebench`
+  28,701,610. Two fall: `work_oneshot` 268 to 9,979,753 and
+  `work_livebench` 888 to 938,654,619.
+- The registry is 1,680 bytes of machine code in every program, so the
+  fourteen text rows sum to `text` 5,906,873.
 - The emitter picks between three calls where it picked between two:
   `emit_instructions` rises 1,114 to 5,643,537.
 

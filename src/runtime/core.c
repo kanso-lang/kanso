@@ -527,7 +527,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         t->forced = K_MEMO_NONE;
     }
     if (t->site == K_SITE_BLACKHOLE) { k_site = 0; k_site_id = 0; k_die("a lazy binding demands its own value"); }
-    if (t->site == K_SITE_LET_GO) { k_site = 0; k_site_id = 0; k_die("a lazy binding was read after its cell was freed"); }
+    if (K_CELL_CHECKING && t->site == K_SITE_LET_GO) { k_site = 0; k_site_id = 0; k_die("a lazy binding was read after its cell was freed"); }
     if (K_COUNTING && !t->pooled) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     /* The computation can answer with a cell of its own: a deferred binding
