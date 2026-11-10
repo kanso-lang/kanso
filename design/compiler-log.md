@@ -20,21 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-02 — gavel: the pool's names are make, take, give and with
-
-#2264's ruling asked for the pool's public names as one question before they
-shipped, and #2274 asked it. Clay chose the recommended option: `std/pool`
-with `pool/make n`, `pool/take p`, `pool/give p v` and
-`pool/with p (v -> work)`.
-
-- `give` is the word for putting a value back, which keeps it apart from
-  `put`, the map insertion.
-- `with` takes a value, runs the work with it, and gives the value back
-  whether the work succeeds or fails. A failure still rises with the reason
-  and birthplace the work gave it.
-
-Owed: nothing beyond #2264's list. The pool (#2277) already uses these names.
-
 ## 2026-11-03 — gavel: senro is built out under a mandate, and keeps old paths only as aliases
 
 #2280 asked how a senro app keeps an old URL working once every route is
@@ -1627,3 +1612,60 @@ the pantry's recording was on main for an hour before it was served. The
 third, after #2398, went through. Nothing in the artifact explains it: the
 merge added three small files. A merged site change is checked on
 kanso-lang.dev, since main holding it does not mean the site does.
+
+## 2026-11-10 — a native program holds as many sockets as the system allows
+
+The native runtime kept open sockets in a table of 64, found by the
+remainder a handle leaves, and ended the process when a sixty-fifth was
+wanted: `too many sockets open at once`. The interpreter has no table. The
+limit came to light through senro, whose server kept a connection for
+every client that hung up without a request (fixed there in senro#102):
+about sixty such clients ended a natively built app. With that leak fixed
+the limit still stood in the way of any server with sixty clients
+connected at one moment. Tracked as #2402.
+
+**What changed, in `src/runtime/effects.c`.**
+- The table starts at 64 slots and doubles when every one is taken. Two
+  handles that leave different remainders by a size leave different ones
+  by twice it, so each open socket moves to the slot its handle now names
+  and no two meet. Handles are numbered as before, so a program that
+  prints one reads the same on both engines.
+- A slot remembers the handle that owns it. Before, `k_socket_of` asked
+  only whether the slot was in use, so closing a handle a second time
+  closed whatever connection had taken its slot since.
+- `listen` asks for the longest queue of unaccepted callers the system
+  allows, where it asked for 16.
+- Running children keep their own table of 64 (`K_KIDS`), which they had
+  shared a constant with.
+
+When the system itself refuses a file, `dial` already answered an err, and
+`accept` already left its fiber waiting and trying again, so a server at
+the system's limit keeps the clients it has. Nothing there needed to
+change.
+
+**Three specs in the micro corpus, each red on the runtime before.**
+- `a_program_holds_more_sockets_than_its_first_table`: a hundred
+  connections held by both ends, then the first pair and the last speak.
+  Before: `too many sockets open at once`, at the thirty-second accept.
+- `a_handle_closed_twice_closes_nothing_else`: sixty-four sockets, one
+  closed, one opened in its place, the old handle closed again. Now the
+  second close is refused and the new connection takes a write. Before,
+  the second close succeeded and the write failed: `that is not a
+  connection`.
+- `a_listener_queues_a_hundred_callers`: a hundred callers connect before
+  any is accepted. Before, the program stopped partway and was ended by
+  the test's clock. With the table grown and the queue alone put back to
+  16 it stops the same way, so the queue is the cause.
+
+The interpreter passed all three before and after.
+
+**What I got wrong on the way.** The runtime is also built for wasm, where
+the headers name no queue length, and the first build of it failed. I had
+built and tested natively only. The constant is defined when the headers
+leave it out.
+
+**Rows.** `unpinned_diagnostics.txt` loses the message that no longer
+exists. The rows that move with the runtime's text are CI's to report.
+
+**Open.** senro's live streams hold a Postgres session for each open tab,
+and a page that left is noticed only at the next write (#2403).

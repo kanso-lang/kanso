@@ -78,13 +78,27 @@ static int k_entropy(unsigned char* at, long long n) {
 /* Sockets and running children live for the process. A program holds a
    handle — a small number counted from one, the same number the interpreter
    hands out, so a program that prints one reads the same on both engines. */
-#define K_SOCKETS 64
-/* `tls` is the OpenSSL session of a connection `net/secured` upgraded, and
-   NULL for a plain one. */
-static struct { int used; int fd; void* tls; } k_sockets[K_SOCKETS];
+#define K_KIDS 64
+/* A listener's queue of callers not yet accepted is as long as the system
+   allows. A server's callers arrive in bursts, and one the queue has no
+   room for waits a second or more to try again. wasi's headers name no
+   length. */
+#ifndef SOMAXCONN
+#define SOMAXCONN 128
+#endif
+/* An open socket remembers the handle that owns it, and 0 says the slot is
+   free. `tls` is the OpenSSL session of a connection `net/secured` upgraded,
+   and NULL for a plain one. The table starts at K_SOCKETS_FIRST slots and
+   doubles when every one is taken: a server holds a socket for each client
+   connected at that moment, and how many that may be is the system's to say,
+   through its limit on open files. */
+#define K_SOCKETS_FIRST 64
+typedef struct { long long handle; int fd; void* tls; } KSock;
+static KSock* k_sockets = NULL;
+static long long k_socket_cap = 0;
 static struct { int used; pid_t pid; int out; int err; int started;
                 char* obuf; long long olen; long long ocap;
-                char* ebuf; long long elen; long long ecap; } k_kids[K_SOCKETS];
+                char* ebuf; long long elen; long long ecap; } k_kids[K_KIDS];
 
 /* A child that could not be executed and a child that ran and answered 127
    are different answers, and an exit status cannot tell them apart: 127 is
@@ -113,18 +127,18 @@ static int k_started(int rfd) {
 }
 static long long k_handles = 0;
 
-/* A handle names its slot by `h % K_SOCKETS`, so a new one has to land on a
-   slot nobody is using. Counting how many have ever been taken is not the same
-   question: it made a program's sixty-fourth socket or process fail however
-   many it had already closed, and say "at once" about a table holding nothing.
-   A server answering requests spends two of them a turn. */
-static int k_socket_free(long long slot);
+/* A handle names its slot by the remainder it leaves, so a new one has to
+   land on a slot nobody is using. Counting how many have ever been taken is
+   not the same question: it made a program's sixty-fourth socket or process
+   fail however many it had already closed, and say "at once" about a table
+   holding nothing. A server answering requests spends two of them a turn.
+   Sockets and children count from the one `k_handles`. */
 static int k_kid_free(long long slot);
 
-static long long k_free_handle(int (*free_at)(long long)) {
-    for (long long i = 1; i <= K_SOCKETS; i++) {
+static long long k_kid_handle(void) {
+    for (long long i = 1; i <= K_KIDS; i++) {
         long long cand = k_handles + i;
-        if (free_at(cand % K_SOCKETS)) {
+        if (k_kid_free(cand % K_KIDS)) {
             k_handles = cand;
             return cand;
         }
@@ -132,20 +146,47 @@ static long long k_free_handle(int (*free_at)(long long)) {
     return -1;
 }
 
-static int k_socket_free(long long slot) { return !k_sockets[slot].used; }
+/* Twice the slots, each open socket moved to where its handle now points.
+   Two handles that left different remainders by the old size leave different
+   ones by twice it, so no two land together. */
+static void k_more_sockets(void) {
+    long long cap = k_socket_cap ? k_socket_cap * 2 : K_SOCKETS_FIRST;
+    KSock* grown = calloc((size_t)cap, sizeof(KSock));
+    if (!grown) { fputs("out of memory\n", stderr); exit(1); }
+    for (long long i = 0; i < k_socket_cap; i++)
+        if (k_sockets[i].handle) grown[k_sockets[i].handle % cap] = k_sockets[i];
+    free(k_sockets);
+    k_sockets = grown;
+    k_socket_cap = cap;
+}
+
+/* The slot a handle owns, or NULL for a handle that owns none: one never
+   given, or one closed, whose slot a later socket may have taken since. */
+static KSock* k_sock(long long h) {
+    if (h <= 0 || !k_socket_cap) return NULL;
+    KSock* at = &k_sockets[h % k_socket_cap];
+    return at->handle == h ? at : NULL;
+}
 
 static long long k_hold_socket(int fd) {
-    long long h = k_free_handle(k_socket_free);
-    if (h < 0) k_die("too many sockets open at once");
-    k_sockets[h % K_SOCKETS].used = 1;
-    k_sockets[h % K_SOCKETS].fd = fd;
-    k_sockets[h % K_SOCKETS].tls = NULL;
-    return h;
+    for (;;) {
+        for (long long i = 1; i <= k_socket_cap; i++) {
+            long long cand = k_handles + i;
+            KSock* at = &k_sockets[cand % k_socket_cap];
+            if (at->handle) continue;
+            at->handle = cand;
+            at->fd = fd;
+            at->tls = NULL;
+            k_handles = cand;
+            return cand;
+        }
+        k_more_sockets();
+    }
 }
 
 static int k_socket_of(long long h) {
-    if (h <= 0 || !k_sockets[h % K_SOCKETS].used) return -1;
-    return k_sockets[h % K_SOCKETS].fd;
+    KSock* at = k_sock(h);
+    return at ? at->fd : -1;
 }
 
 KValue k_b_listen(KValue port) {
@@ -938,7 +979,7 @@ static __attribute__((noinline)) KValue k_secure(long long h, KValue host) {
         k_ssl.free(ssl);
         return k_err(k_str(said), NULL);
     }
-    k_sockets[h % K_SOCKETS].tls = ssl;
+    k_sock(h)->tls = ssl;
     return k_int(h);
 }
 #else
@@ -951,7 +992,8 @@ static KValue k_secure(long long h, KValue host) {
 /* Bytes from a connection, through its TLS session when it has one. */
 static ssize_t k_conn_take(long long h, int fd, char* buf, size_t n) {
 #ifndef __wasm__
-    void* ssl = k_sockets[h % K_SOCKETS].tls;
+    KSock* at = k_sock(h);
+    void* ssl = at ? at->tls : NULL;
     if (ssl) {
         /* 0 is the peer's goodbye or its close without one, read as the end
            the way a plain socket's close is; below 0 is a failure. */
@@ -972,7 +1014,8 @@ static ssize_t k_conn_take(long long h, int fd, char* buf, size_t n) {
    one thread, so the handler it sets around the write is its own. */
 static ssize_t k_conn_give(long long h, int fd, const char* buf, size_t n) {
 #ifndef __wasm__
-    void* ssl = k_sockets[h % K_SOCKETS].tls;
+    KSock* at = k_sock(h);
+    void* ssl = at ? at->tls : NULL;
     void (*was)(int) = signal(SIGPIPE, SIG_IGN);
     ssize_t r = ssl ? k_ssl.write(ssl, buf, (int)n) : write(fd, buf, n);
     signal(SIGPIPE, was);
@@ -1186,7 +1229,7 @@ static KValue k_exec(KDesc* d) {
             addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
             addr.sin_port = htons((unsigned short)d->x.payload);
-            if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) || listen(fd, 16)) {
+            if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) || listen(fd, SOMAXCONN)) {
                 close(fd);
                 return k_err(k_str("cannot listen on that port"), NULL);
             }
@@ -1240,15 +1283,14 @@ static KValue k_exec(KDesc* d) {
             int fd = k_socket_of(h);
             if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
 #ifndef __wasm__
-            void* ssl = k_sockets[h % K_SOCKETS].tls;
+            void* ssl = k_sock(h)->tls;
             if (ssl) {
                 k_ssl.shutdown(ssl);
                 k_ssl.free(ssl);
-                k_sockets[h % K_SOCKETS].tls = NULL;
             }
 #endif
             close(fd);
-            k_sockets[h % K_SOCKETS].used = 0;
+            k_sock(h)->handle = 0;
             return k_done();
         }
         case 19: {
@@ -1719,9 +1761,9 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
     int started = k_started(gonep[0]);
     fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
     fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
-    long long h = k_free_handle(k_kid_free);
+    long long h = k_kid_handle();
     if (h < 0) k_die("too many processes at once");
-    long long slot = h % K_SOCKETS;
+    long long slot = h % K_KIDS;
     k_kids[slot].used = 1;
     k_kids[slot].started = started;
     k_kids[slot].pid = kid;
@@ -1735,7 +1777,7 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
 /* Ends a process the program is holding and reaps it, so a child that ignores
    its own exit budget does not outlive the run that started it. */
 static KValue k_kill_kid(KValue handle) {
-    long long slot = handle.payload % K_SOCKETS;
+    long long slot = handle.payload % K_KIDS;
     if (!k_kids[slot].used) {
         return k_err(k_str("that is not a running process"), NULL);
     }
@@ -1790,7 +1832,7 @@ static KStep k_step(KDesc* d) {
                the read answers what it always did. */
 #ifndef __wasm__
             int fd = k_socket_of(d->x.payload);
-            void* ssl = fd >= 0 ? k_sockets[d->x.payload % K_SOCKETS].tls : NULL;
+            void* ssl = fd >= 0 ? k_sock(d->x.payload)->tls : NULL;
             char one;
             if (fd >= 0 && !(ssl && k_ssl.pending(ssl) > 0)
                 && recv(fd, &one, 1, MSG_PEEK | MSG_DONTWAIT) < 0
@@ -1829,7 +1871,7 @@ static KStep k_step(KDesc* d) {
             return s;
         }
         case 25: {
-            long long slot = d->x.payload % K_SOCKETS;
+            long long slot = d->x.payload % K_KIDS;
             if (!k_kids[slot].used) {
                 KStep s = {0, 0, k_none(),
                            k_err(k_str("that is not a running process"), NULL)};

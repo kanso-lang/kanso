@@ -1,0 +1,41 @@
+import "std/net"
+
+type pair
+  far
+  near
+
+# A handle that was closed is no socket, even once another connection has
+# taken its place. The program holds a listener, thirty-one connections by
+# both ends and one more by its near end: sixty-four sockets, which fills
+# the native runtime's first table. It closes one and opens a connection,
+# which can only go where the closed one was. Closing the old handle again
+# is refused, and the connection in its place still takes a write.
+fn paired l p
+  net/dial "127.0.0.1" p
+    .> (far -> net/accept l .> (near -> effect (pair far near)))
+
+fn filled _ _ 0
+  effect 0
+
+fn filled l p n
+  paired l p .> (_ -> filled l p (n - 1))
+
+fn twice p old
+  net/dial "127.0.0.1" p
+    .> (_ -> net/close_conn old)
+    .> (_ -> net/dial "127.0.0.1" p)
+    .> (far -> net/close_conn old .? refused .> (said -> heard far said))
+
+fn refused u
+  effect "closing it again: {u.reason}"
+
+fn heard far said
+  net/write far "still here"
+    .> (_ -> "{said}; the connection in its place is open")
+
+fn held l p
+  paired l p .> (first -> filled l p 30 .> (_ -> twice p first.far))
+
+pub play = net/listen 0 .> (l -> net/port l .> (p -> held l p))
+  .? (u -> "failed: {u.reason}")
+  .> print
