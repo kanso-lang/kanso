@@ -20,90 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — a call to list/fold answers what its init and lambda can answer
-
-#2302. Every arm of `list/fold` answers by calling `f`, a value it was
-handed, and inference reads a call to a handed value as answering anything.
-So every fold in a program answered anything, and so did any function that
-answered through one. A tail loop that carried such an answer had a slot
-reading TOP, and `costly_to_carry` in src/beat.rs never carries a TOP slot,
-because it may hold bytes. The loop stayed grow-only and kept every
-iteration's work.
-
-A call to the shipped fold now answers the group's answer intersected with
-what that call passes: its init, the answer of the lambda it hands as `f`,
-a failure, or a thunk. A callback that is not a lambda literal keeps the
-group's answer. The rule rests on a promise the fold arms keep (each answers
-its init, an answer of `f`, or a failure), and lib/list/list.kso states it
-above them.
-
-The lambda is walked at the call, with its accumulator holding the init and
-then whatever the walk answers, until that stops growing (`eval_fold_step`).
-The first version used the Lambda arm's walk, which seeds every parameter as
-any value. That read `list/group_by`'s `put acc k v` as a put into a list,
-which can answer none, and the runtime golden
-`a_library_failure_after_a_callback_names_the_outer_line` was refused at
-compile time for printing a value that might be none. Its accumulator is only
-ever the map it started with, and with the accumulator walked as that map the
-golden reports its runtime failure again. A fold whose lambda really can
-answer none now reads as possibly none where it read as anything, so the
-checker asks for that none to be handled; before, it was let through.
-
-The macOS host then refused scripts/welfare_rescore. Its `columned` answers
-either `without row "welfare"`, a fold, or `put row "welfare" score`, and the
-fold's answer had hidden the put's. `builtin_set` answered `LIST | NONE` for
-a put on a value that might be a list, whatever the key, and a list handed a
-text key is refused at run time on both engines ("put writes a list at an
-int position"), so it never answers none. A put now admits the none only
-when its key may be an int. The micro golden
-`a_put_by_text_key_never_answers_none` is a program main refuses and this
-branch prints, on both engines. `kanso check` over every directory in
-scripts, lib, examples and bench reports the same errors on main's binary
-and this one.
-
-The new mem fixture `a_fold_answer_carried_round_a_loop` carries a fold's
-answer round twelve thousand iterations. It held 4 arena blocks before and
-holds 1. A user function that answers `list/to_list` of a fold over a
-digest's words held 13 blocks at two thousand iterations and holds 1. Both
-print the same on every engine.
-
-`list/map` answers a `mapped` record, and `list/to_list` reads it through a
-fold, so a function that answers `list/to_list (list/map xs f)` reads as a
-list as well: the mem fixture `a_mapped_answer_carried_round_a_loop` holds 1
-block where the compiler before this entry held 4.
-A driver that answers one element, such as `list/find`, answers whatever the
-elements can be. (Corrected after merge: this paragraph first said the other
-drivers were not narrowed.)
-
-The rows are CI's, taken on the tree merged with net/peer, on the recorded
-silicon. runbench's work fell to 915,613,360 (-1,340,890) and its text to
-871,297 bytes (-20,864); basket's text fell 96 bytes and both programs emit a
-few fewer calls and branches. Some counters rose. work_basket rose to
-18,296,297 (+22). emitted_other_lines rose to 180,275 (+121) and runbench's
-emitted lines to 75,463 (+128) while its machine code shrank. interp_allocs
-rose to 810,150 (+13). In the run program, run_beat_iters rose to 196,398
-(+500), cohort_frees fell to 11 and run_perm_peak_bytes rose to 1,883,425
-(+8,208). In the tab, browser_compile_instructions rose to 350,942,505
-(+1,637,741), browser_compile_peak_bytes to 856,131 (+136) and
-browser_run_instructions to 78,418,178 (+14,989); browser_run_peak_bytes fell
-to 1,572,864. The front end visits 7,388 declarations on the compile corpus,
-9 fewer, and the module compile row fell on every count, to 1,163 lines, 109
-calls, 80 branches, 29 defines and 1,449 visits.
-
-The compile rows are from two runs on AMD family 0x19 model 0x11, which agree
-to the instruction and read every other row as the recorded silicon does:
-compile_instructions rose to 24,210,964 (+120,564), emit_instructions to
-5,612,352 (+9,616), entry_instructions to 88,288,229 (+541,640) and
-library_instructions to 73,806,390 (+372,881).
-
-The first version cost the front end 207K more instructions on the compile
-corpus. A third of that was the test for the shipped fold, run on every arm
-of every call; it now runs only where the call's shape is a fold's, and the
-name test is a suffix compare. That left 122K, the second walk a lambda takes
-when its answer widens its accumulator. Seeding each lambda from its last
-visit's accumulator cost more than it saved and was dropped. Welfare rose by
-0.0016 and the floor is banked.
-
 ## 2026-11-05 — the dev tier's run joins the development side
 
 `kanso run` and a bare `kanso build` hand a developer a binary built at `-O0`,
@@ -2156,3 +2072,95 @@ record taken apart 12,500. The phase was sized down to 12.
 The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.25752068 before and 95.25752070 after.
+
+## 2026-11-10 — a decoder's answer stays in registers
+
+#2421, and #2428 on the way. The by-value return packs one int beside one
+value into three words, and it existed for the json scanner's `_parsed`,
+whose int comes first and whose callers take it apart in a parameter. A
+decoder a library exports is written the other way round in four places,
+and each kept its record on the heap.
+
+The int had to be the first field. `read value next` declares the value
+first, as a type that says what was read and where to go on would. The
+escape analysis now asks inference which of the two fields is an int and
+nothing else, the emitter builds and takes apart in that order, and the
+runtime has `k_parsed_box_back`, `k_parsed_words_back` and
+`k_parsed_int_back` for the second order. The three words are laid out the
+same either way.
+
+A guard's early return was not a tail. `return read b p if b < 128`
+refused the type, because only a tail `if` and a tail construction were
+recognised. A guard in tail position is read as the tail `if` it is.
+
+A constant of the type, named bare in a tail, was not counted as answering
+it, so a decoder that answers `lost` for a short read was said to answer
+something else. It counts now. Returned from a by-value function, a kept
+constant is a built record, and the return took any value it was handed
+for a failure and sent its tag and pointer back as words; the constant's
+words are read off it there.
+
+A record bound to a name was built on the heap again for every field read
+off it, since a getter is handed a record. `r.next` on a name that holds a
+record by value reads the field out of the words, and a failure riding in
+them comes back as itself. `.reason`, `.cause` and `.origin` are left to
+the getter, which answers them for an err whatever record was expected.
+The record was also built once more on its way into a call in any program
+with a lazy binding, to ask whether it was a cell to force. It is not
+asked.
+
+The loop's carry was the fifth. A loop that rewinds its arena each lap
+staged a by-value record built, a heap record a lap, and
+`mem/a_failure_crosses_a_beat_carry_in_two_words` said so in its comment.
+On the way that skips the rewind, taken when another argument may be a
+failure, the record stayed three words, the two ways met in a phi of two
+types, and clang refused the module: #2428, a program main cannot build.
+The carry stages the record's two fields, a slot each, and packs them on
+the far side, by value on both ways. When the fields would not fit the
+buffer's eight slots the record is staged built and its words read back.
+
+Measured. `mem/a_record_held_by_value_crosses_a_loop_s_rewind` did not
+build and reads sh_rec 0. `mem/a_record_whose_int_comes_second_goes_back_by_value`
+read sh_rec 2,624 and reads 0. `mem/a_failure_crosses_a_beat_carry_in_two_words`
+falls from 64,000 to 0, and three scanning fixtures lose a record each.
+The run program's decoder phase builds none: run_sh_rec 17,011,296 ->
+4,723,168, run_allocs 2,541,664 -> 2,349,662, run_alloc_bytes 268,840,291
+-> 256,552,163, run_evac_allocs 5,617 -> 2,617 and run_evac_bytes
+4,721,376 -> 4,625,408; scan_allocs 97 -> 96 and scan_sh_rec 1,872 ->
+1,808. work_runbench falls 997,844,059 -> 982,946,782 and
+work_runbench_dev 2,924,577,667 -> 2,894,927,376, with the phase at about
+146 instructions a value where it was 223. The tab runs its corpus in
+93,283,820 instructions where it took 93,856,364.
+
+What rises. The runtime's three conversions are linked into every
+program, 368 bytes each; scanbench falls 512 and runbench 800, and the
+summed text goes 5,969,001 -> 5,972,105. The emitter asks more:
+emit_instructions 5,644,746 -> 5,650,840. The tab's compile rises with
+it, browser_compile_instructions 390,565,528 -> 393,709,046 and
+browser_compile_peak_bytes 958,848 -> 965,297. Clang and the linker read
+a little more: codegen_instructions_dev 116,980,709 -> 117,010,112 and
+codegen_instructions_release 372,052,045 -> 372,097,082, both the
+container's move added to CI's last reading. Three programs move by
+layout with the grown runtime: work_encodebench rises 350 to
+2,335,340,893, work_oneshot 854 to 9,980,359 and work_livebench 742 to
+938,655,477; work_scanbench falls 84 to 267,843 with its record.
+runbench's emitted code reads defines=975 calls=10169 branches=9172
+lines=79632 and scanbench's defines=331 calls=3190 branches=3019
+lines=26106. Welfare rises 95.25752070 -> 95.29101595, and the floor is
+banked there.
+
+Checked against the interpreter. `micro/a_record_held_by_value_reads_like_one_built`
+walks a short read, an early answer, a field read off a bound name, the
+record handed whole and kept in a list, a string carried round a rewinding
+loop, a position too wide for a word and a failure where the record was
+expected, on every engine and through the tab's translator. With the
+constant's branch taken out it prints the record where its field should
+be. The 2,163 programs of the numeric differential and the eight other
+differentials agree.
+
+What this does not reach. senro's `wire` is unmoved: its benchmark page
+reads the same six rows with this compiler. `wire` hands its decoder out
+as a value, to read a list's items, and passes the record whole to
+helpers that bind it, and either keeps the type on the heap. The analysis
+is all or nothing for a type, so one such use anywhere costs every read.
+That is the next piece of #2421.
