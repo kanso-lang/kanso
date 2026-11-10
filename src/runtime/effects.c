@@ -323,7 +323,7 @@ static KValue k_pool_kept(KValue v, KCarryBuf** held) {
     if (!buf->data) k_die("out of memory giving to a pool");
     buf->cap = need ? need : 16;
     buf->used = 0;
-    KCopy cp = { buf, &none, 0, 0, 0 };
+    KCopy cp = { buf, &none, 0, 0, 0, 1 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;
     *held = buf;
@@ -736,6 +736,9 @@ static int k_ahead_guard(void (*run)(void*), void* arg, void** cells, long long 
                 *ready = 0;
             }
         }
+        /* the beats the work died inside were never popped; what they held
+           died with the work */
+        for (int d = K_BEAT_MAX - 1; d >= depth; d--) k_cellreg_end(d);
         k_beat_set_depth(depth);
         k_deep_site = deep_site;
     }
@@ -1741,6 +1744,7 @@ static KValue k_exec(KDesc* d) {
                     k_chunkreg_migrate(k_beat_depth);
                     k_viewreg_migrate(k_beat_depth);
                     k_permreg_migrate(k_beat_depth);
+                    k_cellreg_migrate(k_beat_depth);
                     k_beat_push();
                     k_carries[k_beat_depth - 1].at_arena = NULL;
                     cur = next;

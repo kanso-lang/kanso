@@ -79,7 +79,7 @@ KValue k_caf_freeze(KValue v) {
     buf->cap = need ? need : 16;
     buf->used = 0;
     k_frozen_note(buf->data, buf->cap);
-    KCopy cp = { buf, &none, 0, 0 };
+    KCopy cp = { buf, &none, 0, 0, 0, 1 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;
     return k_deep_copy(v, &cp);

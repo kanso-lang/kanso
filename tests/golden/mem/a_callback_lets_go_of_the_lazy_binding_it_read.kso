@@ -1,0 +1,31 @@
+import "std/time"
+
+# A server's shape with a lazy binding in it. Each pass binds `page`, which
+# is lazy because `sized` has an arm that never reads it, and hands it to a
+# callback that runs after a sleep. The frame that made the binding cannot
+# free it, since the callback still holds it. The scheduler's beat holds it
+# instead and frees it at the rewind after the callback has run, so
+# thunk_frees keeps pace with thunk_allocs and one cell is live at exit.
+# Before, no cell here was ever freed: 4,000 passes left 4,000 live, and a
+# server held one more for every request it answered.
+fn built n
+  "request {n}"
+
+fn sized 0 _
+  effect 0
+
+fn sized _ page
+  effect (length page)
+
+fn handled n
+  page = built n
+  time/sleep 0 .> (_ -> sized n page)
+
+fn served 0
+  print "served them all"
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub play = served 4000

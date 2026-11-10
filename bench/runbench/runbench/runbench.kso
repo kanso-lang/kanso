@@ -332,6 +332,18 @@
 # answers through the shared `list/fold`. Both loops kept everything they
 # built, about ten kilobytes an iteration for `stretched` and five for
 # `carried`, so their counts are sized to lift the program's peak.
+#
+# One more joined on 2026-11-10, measured on main before kanso#2408's fix.
+# Its column is the whole program with it, 955,363,291, less the whole
+# without, 910,567,403, and its share is of the former.
+#
+#   deferred  16,000 passes that bind a page lazily       44,795,888  4.69%
+#
+# `deferred` is `forked` with the page a lazy binding: the handler's callback
+# may never read it, so it is built only when asked for. The frame that made
+# the binding cannot free its cell while the callback holds it, and natively
+# nothing else did, so each pass left 184 bytes behind until the program
+# exited: 2,944,000 of them over the phase.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -342,6 +354,7 @@ import "./carried"
 import "./counted"
 import "./deduped"
 import "./deep"
+import "./deferred"
 import "./drained"
 import "./escape"
 import "./fold"
@@ -378,6 +391,8 @@ encode_rounds = 90
 deep_trials = 545
 
 forked_passes = 16000
+
+deferred_passes = 16000
 
 pend_cards = 50
 
@@ -525,4 +540,7 @@ pub fn run raw
   json/decode raw .> on
 
 fn forked_then raw doc a
-  forked/total forked_passes .> (_ -> shaped raw doc a)
+  forked/total forked_passes .> (_ -> deferred_then raw doc a)
+
+fn deferred_then raw doc a
+  deferred/total deferred_passes .> (_ -> shaped raw doc a)

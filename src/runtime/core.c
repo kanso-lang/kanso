@@ -158,7 +158,22 @@ typedef struct KThunk {
        both engines must agree on, leave it out. Last, so no field the
        emitted code reads moves. */
     int pooled;
+    /* Who answers for this cell when no frame does (K_CELL_*, below). Zero
+       for a cell its frame releases, and for one made outside every beat. */
+    int held;
 } KThunk;
+
+/* A lazy binding its frame cannot release — a callback captured it, or it
+   rode out in a tail call's arguments — is held by the beat it was made in.
+   The beat's rewind frees every held cell no survivor reached, which the
+   copy walk says by marking each cell it passes. Until then such a cell
+   lived to exit, and a server made one for every request it answered. */
+#define K_CELL_HELD    1 /* in a beat's registry, which owns one reference */
+#define K_CELL_SEEN    2 /* a carry walk reached it since the last rewind */
+#define K_CELL_TENURED 4 /* reached under tenured storage, which no later walk
+                            enters: kept until the beat ends */
+#define K_CELL_KEPT    8 /* copied into storage no beat owns: kept for good */
+static void k_cell_hold(KThunk* t);
 
 static KThunk* k_thunk_free = 0;
 static long long k_stat_thunk_allocs = 0;
@@ -266,13 +281,21 @@ static KValue k_thunk_vnew(long long site, int argc, int pooled, va_list ap) {
     } else {
         t = (KThunk*)malloc(sizeof(KThunk));
     }
-    if (K_COUNTING && !pooled) k_stat_thunk_allocs++;
+    if (K_COUNTING && !pooled) {
+        k_stat_thunk_allocs++;
+        /* A cell is malloc'd, so it is held storage like a builder's buffer
+           or a map's view, and until this counted it the memory terms could
+           not see a cell nobody frees. */
+        k_stat_held_live += (long long)sizeof(KThunk);
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+    }
     t->rc = 1;
     t->site = site;
     t->forced = K_MEMO_NONE;
     t->argc = argc;
     t->next_free = 0;
     t->pooled = pooled;
+    t->held = 0;
     for (int i = 0; i < argc; i++) {
 #ifdef __wasm__
         /* The emitted IR passes each argument as a first-class `%KValue`,
@@ -298,6 +321,16 @@ KValue k_thunk_new(long long site, int argc, ...) {
     va_start(ap, argc);
     KValue v = k_thunk_vnew(site, argc, 0, ap);
     va_end(ap);
+    return v;
+}
+
+/* A cell no frame releases: the beat it is made in holds it. */
+KValue k_thunk_new_held(long long site, int argc, ...) {
+    va_list ap;
+    va_start(ap, argc);
+    KValue v = k_thunk_vnew(site, argc, 0, ap);
+    va_end(ap);
+    k_cell_hold((KThunk*)v.payload);
     return v;
 }
 
@@ -343,7 +376,15 @@ const char* k_deep_place(void) {
 }
 const char* k_deep_place(void);
 
-enum { K_SITE_BLACKHOLE = -1 };
+enum { K_SITE_BLACKHOLE = -1, K_SITE_LET_GO = -2 };
+
+/* A counting build run with KANSO_CELL_CHECK set never hands a freed cell out
+   again. It marks the cell instead, and a read of a marked cell dies saying
+   so, where a cell handed out again would answer with some other binding's
+   value. It is how a rewind that frees a cell something still holds is
+   found. */
+static int k_cell_check = 0;
+#define K_CELL_CHECKING (K_COUNTING && k_cell_check)
 
 KValue k_caf_blackhole(void) {
     KThunk* t = (KThunk*)malloc(sizeof(KThunk));
@@ -354,6 +395,7 @@ KValue k_caf_blackhole(void) {
     t->argc = 0;
     t->next_free = 0;
     t->pooled = 0;
+    t->held = 0;
     KValue v;
     v.tag = K_THUNK;
     v.payload = (long long)t;
@@ -365,9 +407,17 @@ static void k_thunk_drop_args(KThunk* t);
 static void k_thunk_release_cell(KThunk* t) {
     if (--t->rc > 0) return;
     k_thunk_drop_args(t);
+    if (K_COUNTING && !t->pooled) {
+        k_stat_thunk_frees++;
+        k_stat_held_live -= (long long)sizeof(KThunk);
+    }
+    if (K_CELL_CHECKING) {
+        t->site = K_SITE_LET_GO;
+        t->forced = K_MEMO_NONE;
+        return;
+    }
     t->next_free = k_thunk_free;
     k_thunk_free = t;
-    if (K_COUNTING && !t->pooled) k_stat_thunk_frees++;
 }
 
 static void k_thunk_drop_args(KThunk* t) {
@@ -383,13 +433,16 @@ static void k_thunk_drop_args(KThunk* t) {
 /* A cell handed onward in a tail call outlives its frame by design;
    count it so live-to-exit cells are always attributable. */
 void k_thunk_note_escape(KValue cell) {
-    if (K_COUNTING && cell.tag == K_THUNK) k_stat_thunk_escaped++;
+    if (cell.tag != K_THUNK) return;
+    if (K_COUNTING) k_stat_thunk_escaped++;
+    k_cell_hold((KThunk*)cell.payload);
 }
 
 KValue k_thunk_release_unless(KValue cell, KValue result) {
     if (cell.tag != K_THUNK) return result;
     if (result.tag == K_THUNK && result.payload == cell.payload) {
         if (K_COUNTING) k_stat_thunk_escaped++;
+        k_cell_hold((KThunk*)cell.payload);
         return result;
     }
     k_thunk_release_cell((KThunk*)cell.payload);
@@ -475,6 +528,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         t->forced = K_MEMO_NONE;
     }
     if (t->site == K_SITE_BLACKHOLE) { k_site = 0; k_site_id = 0; k_die("a lazy binding demands its own value"); }
+    if (K_CELL_CHECKING && t->site == K_SITE_LET_GO) { k_site = 0; k_site_id = 0; k_die("a lazy binding was read after its cell was freed"); }
     if (K_COUNTING && !t->pooled) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     /* The computation can answer with a cell of its own: a deferred binding
@@ -939,6 +993,7 @@ int k_stats_on = -1;
    what was always true. */
 __attribute__((constructor)) static void k_stats_switch(void) {
     k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+    k_cell_check = K_COUNTING && getenv("KANSO_CELL_CHECK") != NULL;
 }
 
 /* The refill path stays out of line; the bump inlines into every hot
@@ -1188,6 +1243,94 @@ static inline __attribute__((always_inline)) void k_viewreg_migrate(int d) {
     k_viewreg_migrate_held(d);
 }
 
+/* The cells each beat holds (K_CELL_HELD). It grows rather than spilling, for
+   the view registry's reason: a bank that quietly stops taking entries goes
+   back to the leak this exists to remove. */
+#define K_REG_CELL 8
+static KThunk** k_cellreg[K_BEAT_MAX];
+static long long k_cellreg_n[K_BEAT_MAX];
+static long long k_cellreg_cap[K_BEAT_MAX];
+
+static void k_cellreg_push(int d, KThunk* t) {
+    if (k_cellreg_n[d] == k_cellreg_cap[d]) {
+        long long grown = k_cellreg_cap[d] ? k_cellreg_cap[d] * 2 : 64;
+        KThunk** wider = realloc(k_cellreg[d], sizeof(KThunk*) * (size_t)grown);
+        if (!wider) { fputs("out of memory\n", stderr); exit(1); }
+        k_cellreg[d] = wider;
+        k_cellreg_cap[d] = grown;
+    }
+    k_cellreg[d][k_cellreg_n[d]++] = t;
+    k_reg_any_at(d) |= K_REG_CELL;
+}
+
+/* The innermost beat takes the cell. Outside every beat, or past the last
+   mark the stack keeps, nothing rewinds and the cell lives to exit as it
+   always did. A cell the work-ahead pool made is the pool's. */
+static __attribute__((noinline)) void k_cell_hold(KThunk* t) {
+    int d = k_beat_depth - 1;
+    if (t->held || t->pooled || d < 0 || d >= K_BEAT_MAX) return;
+    t->held = K_CELL_HELD;
+    k_cellreg_push(d, t);
+}
+
+static void k_cell_let_go(KThunk* t) {
+    t->held = 0;
+    k_thunk_release_cell(t);
+}
+
+/* A lap is over and its survivors were walked: a held cell the walk did not
+   reach has no holder left. One it reached stays for the next lap, as does
+   one under tenure. A cell copied out for good leaves the registry. */
+static __attribute__((noinline)) void k_cellreg_lap(int d) {
+    long long w = 0;
+    for (long long i = 0; i < k_cellreg_n[d]; i++) {
+        KThunk* t = k_cellreg[d][i];
+        if (t->held & K_CELL_KEPT) continue;
+        if (t->held & (K_CELL_SEEN | K_CELL_TENURED)) {
+            t->held &= ~K_CELL_SEEN;
+            k_cellreg[d][w++] = t;
+            continue;
+        }
+        k_cell_let_go(t);
+    }
+    k_cellreg_n[d] = w;
+    if (w) k_reg_any_at(d) |= K_REG_CELL;
+    else k_reg_any_at(d) &= ~K_REG_CELL;
+}
+
+/* The beat is over and was rewound whole, its tenure with it: nothing it held
+   has a holder. */
+static __attribute__((noinline)) void k_cellreg_end_held(int d) {
+    for (long long i = 0; i < k_cellreg_n[d]; i++) {
+        KThunk* t = k_cellreg[d][i];
+        if (!(t->held & K_CELL_KEPT)) k_cell_let_go(t);
+    }
+    k_cellreg_n[d] = 0;
+    k_reg_any_at(d) &= ~K_REG_CELL;
+}
+
+static inline __attribute__((always_inline)) void k_cellreg_end(int d) {
+    if (d < 0 || d >= K_BEAT_MAX || k_cellreg_n[d] == 0) return;
+    k_cellreg_end_held(d);
+}
+
+/* A pop that keeps its region hands its cells to the enclosing beat with
+   everything else it built. With no enclosing beat they live to exit. */
+static __attribute__((noinline)) void k_cellreg_migrate_held(int d) {
+    for (long long i = 0; i < k_cellreg_n[d]; i++) {
+        KThunk* t = k_cellreg[d][i];
+        if (t->held & K_CELL_KEPT) continue;
+        if (d > 0) k_cellreg_push(d - 1, t);
+    }
+    k_cellreg_n[d] = 0;
+    k_reg_any_at(d) &= ~K_REG_CELL;
+}
+
+static inline __attribute__((always_inline)) void k_cellreg_migrate(int d) {
+    if (d < 0 || d >= K_BEAT_MAX || k_cellreg_n[d] == 0) return;
+    k_cellreg_migrate_held(d);
+}
+
 static int k_born_this_beat(const void* p);
 
 static int k_frozen_holds(const void* p);
@@ -1347,6 +1490,7 @@ void k_beat_rewind_slow(KMark* m) {
         k_viewreg_flush((int)d);
         k_permreg_flush((int)d);
         k_reg_any_at(d) = 0;
+        if (k_cellreg_n[d]) k_cellreg_lap((int)d);
     }
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;

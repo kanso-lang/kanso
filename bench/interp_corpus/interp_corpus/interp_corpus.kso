@@ -24,7 +24,7 @@ pub play =
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
-  served 2000 .> (_ -> print "interp {told}")
+  served 2000 .> (_ -> deferred 2000) .> (_ -> print "interp {told}")
 
 fn rounds n
   source = document 220
@@ -251,3 +251,25 @@ fn served 0
 fn served n
   handled n
   time/sleep 0 .> (_ -> served (n - 1))
+
+# The same loop with the page a lazy binding: `page_sized` has an arm that
+# never reads it, so it is built only if the callback asks.
+fn page_built n
+  text/join ["<p>" "request {n}" "</p>"] ""
+
+fn page_sized 0 _
+  effect 0
+
+fn page_sized _ page
+  effect (length page)
+
+fn deferring n
+  page = page_built n
+  time/sleep 0 .> (_ -> page_sized n page)
+
+fn deferred 0
+  effect 0
+
+fn deferred n
+  deferring n
+  time/sleep 0 .> (_ -> deferred (n - 1))
