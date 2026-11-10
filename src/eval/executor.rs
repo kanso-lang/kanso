@@ -447,7 +447,8 @@ impl Executor for RealExecutor {
             // SAFETY: `waited` is a live slice of pollfd for the whole call,
             // and its length is the count passed.
             let n = unsafe { libc::poll(waited.as_mut_ptr(), waited.len() as libc::nfds_t, wait) };
-            let interrupted = std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted;
+            let interrupted =
+                std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted;
             if n >= 0 || !interrupted {
                 break;
             }

@@ -331,10 +331,9 @@ impl<'a> Interp<'a> {
                         if let Some(due) = due {
                             now = now.min(due);
                         }
-                        let mut at = 0;
-                        for fiber in fibers.iter_mut().filter(|f| f.on.is_some()) {
-                            fiber.wake = if ready[at] { now } else { now + 1 };
-                            at += 1;
+                        let waiting = fibers.iter_mut().filter(|f| f.on.is_some());
+                        for (fiber, ready) in waiting.zip(ready) {
+                            fiber.wake = if ready { now } else { now + 1 };
                         }
                         continue;
                     }
