@@ -1,0 +1,32 @@
+# A server's handler with a lazy binding in it. Each pass binds a page that
+# `sized` has an arm never to read, so the page is built only if the
+# callback asks for it, and the callback runs after the handler has
+# returned. A handler that can refuse a request before it reads the body has
+# this shape. The frame that made the binding cannot free it while the
+# callback holds it, and natively nothing else did: every pass left one cell
+# behind until the program exited (#2408).
+import "std/text"
+import "std/time"
+
+fn built n
+  text/join ["<p>" "request {n}" "</p>"] ""
+
+fn sized 0 _
+  effect 0
+
+fn sized _ page
+  effect (length page)
+
+fn handled n
+  page = built n
+  time/sleep 0 .> (_ -> sized n page)
+
+fn served 0
+  effect 0
+
+fn served n
+  handled n
+  time/sleep 0 .> (_ -> served (n - 1))
+
+pub fn total n
+  served n .> (_ -> effect n)
