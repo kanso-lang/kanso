@@ -32,6 +32,7 @@ description: "how senro's generators write an app and a resource, and what each 
   create examples/notebook/views/layout.kata
   create examples/notebook/views/home.kata
 $ kanso run generate -- scaffold examples/notebook note title:text pages:int cover:attachment
+  create examples/notebook/note.kso
   create examples/notebook/notes.kso
   create examples/notebook/views/notes_index.kata
   create examples/notebook/views/note_shown.kata
@@ -39,6 +40,7 @@ $ kanso run generate -- scaffold examples/notebook note title:text pages:int cov
   change examples/notebook/migrations.kso
   change examples/notebook/main.kso
 $ kanso run generate -- scaffold examples/notebook page body:text note:references
+  create examples/notebook/page.kso
   create examples/notebook/pages.kso
   create examples/notebook/views/pages_index.kata
   create examples/notebook/views/page_shown.kata
@@ -47,7 +49,7 @@ $ kanso run generate -- scaffold examples/notebook page body:text note:reference
   change examples/notebook/main.kso</code></pre>
 </div>
 
-<p>each line names a file and what happened to it. <code>scaffold</code> changes two files that <code>new</code> wrote: it adds the migration to the end of the migrations list, and the resource's import to the entry. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
+<p>each line names a file and what happened to it. <code>scaffold</code> changes two files that <code>new</code> wrote: it adds the migration to the end of the migrations list, and the imports of the model and the resource to the entry. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -71,7 +73,7 @@ generate: cannot read `title:words`: a field is name:text, name:int, name:refere
 connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pre>
 </div>
 
-<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends with <code>web/serve 3000 routes connected</code>. each <code>scaffold</code> adds an import of the resource it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
+<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends with <code>web/serve 3000 routes connected</code>. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
 
 <h2>the migration</h2>
 
@@ -134,24 +136,18 @@ users_digest <span class="o">=</span> <span class="f">models/column</span> <span
 
 <p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it, as <code>pages_made</code> and <code>users_made</code> do; the models guide says how the list is run and recorded. each table ends with <code>models/created_at</code> and <code>models/updated_at</code>, as a Rails scaffold ends with <code>t.timestamps</code>, and <code>users_email_unique</code> is the index <code>email:text:uniq</code> asks for.</p>
 
-<h2>the resource</h2>
+<h2>the model</h2>
 
-<p>the resource is one module, named for its table, and the models guide says how that gives it its record: the derivation declares <code>note</code> here with a field for each column of <code>notes</code>, so the module never lists them. the three policies let anyone write, which suits a first run and nothing after it. <code>problems</code> holds the model's rules; the scaffold writes one for each int field, and <code>models/whole_number</code> is broken by anything an <code>integer</code> column would refuse.</p>
+<p><code>scaffold</code> writes two modules for a resource, and <code>note.kso</code> is the model. it is named for one row of the table, as a Rails model is named in the singular, and the models guide says how that gives it its record: the derivation declares <code>note</code> here with a field for each column of <code>notes</code>, so the module never lists them. the three policies let anyone write, which suits a first run and nothing after it. <code>problems</code> holds the model's rules; the scaffold writes one for each int field, and <code>models/whole_number</code> is broken by anything an <code>integer</code> column would refuse.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <div class="code-panel-title">examples/notebook/note.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
-<span class="k">import</span> <span class="s">"../../pg"</span>
-<span class="k">import</span> <span class="s">"../../web"</span>
-<span class="k">import</span> <span class="s">"./views"</span>
-<span class="k">import</span> <span class="s">"std/list"</span>
-<span class="k">import</span> <span class="s">"std/net/http"</span>
-<span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># A note is a row of the `notes` table. This module is named for the table,</span>
-<span class="c"># so the models derivation declares `note` here with a field for each</span>
-<span class="c"># column, and writes `note_from`, which builds one from a row, and</span>
-<span class="c"># `note_model`, which the writes below go through.</span>
+<span class="c"># A note is a row of the `notes` table. This module is named for it, so the</span>
+<span class="c"># models derivation declares `note` here with a field for each column and</span>
+<span class="c"># answers for the table by this module's name: `note/find db id`,</span>
+<span class="c"># `note/paged db number per`, `note/create db fields` and the rest.</span>
 <span class="c">#</span>
 <span class="c"># Anyone may make, change and remove a note. The models module asks these</span>
 <span class="c"># before it writes; narrow them to the visitors who should.</span>
@@ -166,60 +162,63 @@ users_digest <span class="o">=</span> <span class="f">models/column</span> <span
 
 <span class="c"># What makes a note fit to keep: each number is one its column takes.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> r
-  <span class="f">models/problems</span> [(<span class="f">models/whole_number</span> <span class="s">"pages"</span> r<span class="o">.</span>pages)]
-
-model <span class="o">=</span> <span class="f">note_model</span></code></pre>
+  <span class="f">models/problems</span> [(<span class="f">models/whole_number</span> <span class="s">"pages"</span> r<span class="o">.</span>pages)]</code></pre>
 </div>
 
-<p>the seven actions are the ones a Rails scaffold writes, and the routing guide says how each name places it. reads go through two queries over the model's columns, <code>note_columns</code>, which the derivation declares from the table, so a column a later migration adds reaches both queries with no edit. writes go through the model, so the policies and the model's rules are asked before anything is written.</p>
+<p>the derivation also writes the table's reads and writes into this module, and the rest of the app calls them by its name: <code>note/find db id</code>, <code>note/paged db number per</code>, <code>note/create db fields</code>. the models guide lists them all.</p>
+
+<p>with a module of its own, the model can use the names the resource uses: <code>notes/create</code> is the action, and <code>note/create</code> is the write it calls. a second resource can also import the model without the actions. <code>pages.kso</code>, below, imports <code>note</code> to ask whether a page's note is there.</p>
+
+<h2>the resource</h2>
+
+<p><code>notes.kso</code> is the resource. its seven actions are the ones a Rails scaffold writes, and the routing guide says how each name places it. each reads or writes through the model by name, and the module holds no SQL. the <code>db</code> an action is handed knows who is signed in, so <code>note/create</code>, <code>note/update</code> and <code>note/destroy</code> ask the model's policies about that visitor, and check its rules, before anything is written.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
-  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./note"</span>
+<span class="k">import</span> <span class="s">"./views"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
   number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
-  asked <span class="o">=</span> <span class="f">models/paged</span> db listed [] number per_page
-  <span class="f">asked</span> <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req p))
+  <span class="f">note/paged</span> db number per_page <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req p))
 
 <span class="c"># How many rows a page of the list shows.</span>
 per_page <span class="o">=</span> <span class="n">25</span>
 
-columns <span class="o">=</span> <span class="f">text/join</span> note_columns <span class="s">", "</span>
-
-listed <span class="o">=</span> <span class="s">"select <span class="i">{columns}</span> from notes order by id"</span>
-
-found <span class="o">=</span> <span class="s">"select <span class="i">{columns}</span> from notes where id = $1::integer"</span>
-
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db id:int
-  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span>] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
   <span class="f">effect</span> (<span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} <span class="n">200</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   given <span class="o">=</span> <span class="f">sent</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
-  <span class="f">models/created</span> <span class="s">""</span> db model given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">made</span> req w))
+  <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">made</span> req w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
-  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span>]
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">editing</span> req id (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">editing</span> req id r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
   given <span class="o">=</span> <span class="f">picked</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
-  <span class="f">models/updated</span> <span class="s">""</span> db model <span class="s">"<span class="i">{id}</span>"</span> given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">changed</span> req id w))
+  <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">changed</span> req id w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
-  <span class="f">models/destroyed</span> <span class="s">""</span> db model <span class="s">"<span class="i">{id}</span>"</span> <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">gone</span> w))</code></pre>
+  <span class="f">note/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">gone</span> w))</code></pre>
 </div>
 
-<p><code>index</code> shows a page of notes at a time. <code>models/page_number</code> reads the page the query string asks for, and anything that is not a whole number of 1 or more reads as the first page. <code>models/paged</code> runs the listing's query with a limit and an offset, asking for one row more than <code>per_page</code> so that it knows whether another page follows, as Pagy does for a Rails app. the list links the page before and the page after, each only when there is one.</p>
+<p><code>index</code> shows a page of notes at a time. <code>models/page_number</code> reads the page the query string asks for, and anything that is not a whole number of 1 or more reads as the first page. <code>note/paged</code> reads that page of the notes, oldest first. it asks for one row more than <code>per_page</code> so that it knows whether another page follows, as Pagy does for a Rails app, and answers the page's records, its number, and whether there is more. the list links the page before and the page after, each only when there is one.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">listing</span> req p
-  every <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p<span class="o">.</span><span class="f">rows</span> note_from)
-  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> every note_attributes)
+  as_json <span class="o">=</span> <span class="f">note/note_attributes</span>
+  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p<span class="o">.</span><span class="f">rows</span> as_json)
   <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
-  page <span class="o">=</span> <span class="f">views/notes_index_view</span> every p<span class="o">.</span><span class="f">number</span> p<span class="o">.</span><span class="f">more</span>
+  page <span class="o">=</span> <span class="f">views/notes_index_view</span> p<span class="o">.</span><span class="f">rows</span> p<span class="o">.</span><span class="f">number</span> p<span class="o">.</span><span class="f">more</span>
   <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
 </div>
 
@@ -231,7 +230,7 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
   <span class="f">p</span>.lede
     <span class="f">a</span> href=<span class="s">"/notes/new"</span> New note
 <span class="f">ul</span>.notes
-  <span class="k">for</span> r <span class="k">in</span> rows
+  <span class="k">each</span> rows r <span class="o">-&gt;</span>
     <span class="f">li</span>
       <span class="f">a</span> href=<span class="s">"/notes/{r.id}"</span> = r.title
 <span class="f">nav</span>.pages
@@ -241,13 +240,15 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
     <span class="f">a</span> href=<span class="s">"/notes?page={number + 1}"</span> Next page</code></pre>
 </div>
 
-<p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks.</p>
+<p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks. <code>note/find</code> answers none for an id no row has, and the first arm of <code>shown</code> answers that with a 404.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">shown</span> req row
-  record <span class="o">=</span> <span class="f">note_from</span> row
-  attributes <span class="o">=</span> <span class="f">note_attributes</span> record
+  <pre><code><span class="k">fn</span> <span class="f">shown</span> _ none
+  <span class="f">http/not_found</span>
+
+<span class="k">fn</span> <span class="f">shown</span> req record
+  attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
   <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/note_shown_view</span> record
   <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
@@ -279,7 +280,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
   <span class="f">list/fold</span> names given (<span class="f">m</span> n <span class="o">-&gt;</span> <span class="f">if</span> (m[n] <span class="o">==</span> <span class="s">""</span>) (<span class="f">delete</span> m n) m)</code></pre>
 </div>
 
-<p>what each write answers decides the response. a record that breaks a rule comes back as <code>models/invalid</code>, and the form is shown again with what was typed and a 422. a write a policy refuses is a <code>web/denied</code>, and a row that is not there is a <code>web/absent</code>; <code>web/refusal</code> answers them with a 403 and a 404. anything else is the written row, and the action redirects to it.</p>
+<p>what each write answers decides the response. a record that breaks a rule comes back as <code>models/invalid</code>, and the form is shown again with what was typed and a 422. a write a policy refuses is a <code>web/denied</code>, and a row that is not there is a <code>web/absent</code>; <code>web/refusal</code> answers them with a 403 and a 404. anything else is the record as stored, and the action redirects to it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
@@ -347,7 +348,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <h2>a resource under another</h2>
 
-<p>a field written <code>name:references</code> nests the resource under another, as Rails' generator reads it. the third command above makes pages that belong to a note. the migration gains two changes: <code>pages_made</code> makes the table with a <code>note_id</code> column that may not be empty, and <code>pages_to_notes</code>, written with <code>models/add_foreign_key</code>, has Postgres refuse a page whose note is not there and remove a note's pages along with the note.</p>
+<p>a field written <code>name:references</code> nests the resource under another, as Rails' generator reads it. the third command above makes pages that belong to a note. it writes a model, <code>page.kso</code>, and a resource, <code>pages.kso</code>, as the second command did for notes. the migration gains two changes: <code>pages_made</code> makes the table with a <code>note_id</code> column that may not be empty, and <code>pages_to_notes</code>, written with <code>models/add_foreign_key</code>, has Postgres refuse a page whose note is not there and remove a note's pages along with the note.</p>
 
 <p>each of the resource's actions takes the note's id right after the database, which is how the <a href="routing.html">routing guide</a> places a nested resource: <code>pages/index</code> answers GET /notes/:note_id/pages, and <code>pages/show</code> GET /notes/:note_id/pages/:id.</p>
 
@@ -359,38 +360,35 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 <span class="c"># list or make.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db note_id:int
   number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
-  asked <span class="o">=</span> <span class="f">models/paged</span> db listed [<span class="s">"<span class="i">{note_id}</span>"</span>] number per_page
+  asked <span class="o">=</span> <span class="f">page/paged</span> db <span class="s">"note_id"</span> note_id number per_page
   listing_of <span class="o">=</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req note_id p))
   <span class="f">within</span> db note_id (<span class="f">asked</span> <span class="o">.&gt;</span> listing_of)
 
-listed <span class="o">=</span> <span class="s">""</span>"
-  select {columns} from pages
-  <span class="f">where</span> note_id <span class="o">=</span> $<span class="n">1</span>::integer order by id
-<span class="s">""</span>"
-
-found <span class="o">=</span> <span class="s">""</span>"
-  select {columns} from pages
-  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>::integer and note_id <span class="o">=</span> $<span class="n">2</span>::integer
-<span class="s">""</span>"
-
-parent <span class="o">=</span> <span class="s">"select id from notes where id = $1::integer"</span>
-
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db note_id:int id:int
-  <span class="f">pg/query</span> db found [<span class="s">"<span class="i">{id}</span>"</span> <span class="s">"<span class="i">{note_id}</span>"</span>]
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req (<span class="f">list/first</span> r<span class="o">.</span>rows)))
+  <span class="f">under</span> db note_id id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req r))
 
 <span class="c"># `then` when the note is there, and a 404 when it is not.</span>
 <span class="k">fn</span> <span class="f">within</span> db id then
-  <span class="f">pg/query</span> db parent [<span class="s">"<span class="i">{id}</span>"</span>] <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">held</span> (<span class="f">list/first</span> r<span class="o">.</span>rows) then)
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (found <span class="o">-&gt;</span> <span class="f">held</span> found then)
 
 <span class="k">fn</span> <span class="f">held</span> none _
   <span class="f">effect</span> http/not_found
 
 <span class="k">fn</span> <span class="f">held</span> _ then
-  <span class="f">then</span></code></pre>
+  <span class="f">then</span>
+
+<span class="c"># The row with this id under this note, or none.</span>
+<span class="k">fn</span> <span class="f">under</span> db note_id id
+  <span class="f">page/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">owned</span> note_id r))
+
+<span class="k">fn</span> <span class="f">owned</span> _ none
+  <span class="f">none</span>
+
+<span class="k">fn</span> <span class="f">owned</span> note_id r
+  <span class="f">if</span> (<span class="s">"<span class="i">{r.note_id}</span>"</span> <span class="o">==</span> <span class="s">"<span class="i">{note_id}</span>"</span>) r none</code></pre>
 </div>
 
-<p>a page is looked up by its own id and its note's together, so <code>/notes/1/pages/7</code> finds nothing when page 7 belongs to note 2. listing a note's pages and making one first ask whether the note is there, and answer 404 when it is not.</p>
+<p><code>page/paged db "note_id" note_id number per_page</code> reads one page of the pages whose <code>note_id</code> is the note's. <code>under</code> finds a page by its id and keeps it only when it belongs to the note the path names, so <code>/notes/1/pages/7</code> finds nothing when page 7 belongs to note 2. listing a note's pages and making one first ask <code>note/find</code> whether the note is there, and answer 404 when it is not.</p>
 
 <p>the note's resource must be there before the pages are generated, a resource nests under one parent, and a reference's name is at most 12 characters, so the lines the scaffold writes still fit in 80 columns.</p>
 
@@ -451,7 +449,9 @@ digest_by <span class="o">=</span> <span class="s">"select digest from users whe
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./note"</span>
 <span class="k">import</span> <span class="s">"./notes"</span>
+<span class="k">import</span> <span class="s">"./page"</span>
 <span class="k">import</span> <span class="s">"./pages"</span>
 <span class="k">import</span> <span class="s">"./registration"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
