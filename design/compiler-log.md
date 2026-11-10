@@ -1668,7 +1668,8 @@ leave it out.
 - `unpinned_diagnostics.txt` loses the message that no longer exists.
 - Machine code: every one of the fourteen benchmarks carries 1,856 more
   bytes of `.text`, which is the growing, the moving of each socket to its
-  new slot and the owner test.
+  new slot and the owner test. `text` sums to 5,902,217 across them, from
+  5,876,233.
 - clang compiles a larger runtime: `codegen_instructions_dev` rose 4,150 to
   116,859,197 and `codegen_instructions_release` rose 29,045 to
   372,054,901.
