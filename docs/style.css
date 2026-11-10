@@ -745,3 +745,10 @@ a:hover {
   margin-top: 0.6rem;
   max-width: 11rem;
 }
+
+.demo { margin: 1.5rem 0 0; }
+.demo video { display: block; width: 100%; max-width: 720px; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+.demo figcaption { margin-top: 0.5rem; font-size: 0.9em; color: var(--muted); }
+
+/* senro's hero sits beside a long code panel, so its text is held at the top. */
+.senro-hero .hero-inner { align-items: start; }

@@ -225,20 +225,20 @@ found <span class="o">=</span> <span class="s">"select <span class="i">{columns}
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_index.kata</div>
-  <pre><code>takes rows number more
-header
-  h1 Notes
-  p.lede
-    a href="/notes/new" New note
-ul.notes
-  for r in rows
-    li
-      a href="/notes/{r.id}" = r.title
-nav.pages
-  if number &gt; 1
-    a href="/notes?page={number - 1}" Previous page
-  if more
-    a href="/notes?page={number + 1}" Next page</code></pre>
+  <pre><code><span class="k">takes</span> rows number more
+<span class="f">header</span>
+  <span class="f">h1</span> Notes
+  <span class="f">p</span>.lede
+    <span class="f">a</span> href=<span class="s">"/notes/new"</span> New note
+<span class="f">ul</span>.notes
+  <span class="k">for</span> r <span class="k">in</span> rows
+    <span class="f">li</span>
+      <span class="f">a</span> href=<span class="s">"/notes/{r.id}"</span> = r.title
+<span class="f">nav</span>.pages
+  <span class="k">if</span> number &gt; 1
+    <span class="f">a</span> href=<span class="s">"/notes?page={number - 1}"</span> Previous page
+  <span class="k">if</span> more
+    <span class="f">a</span> href=<span class="s">"/notes?page={number + 1}"</span> Next page</code></pre>
 </div>
 
 <p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks.</p>
@@ -320,29 +320,29 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/note_form.kata</div>
-  <pre><code>takes path method fields problems
-header
-  h1 Note
-  p.lede
-    a href="/notes" All notes
-form method="post" action=path enctype="multipart/form-data"
-  input type="hidden" name="_method" value=method
-  label
-    | title
-    input name="title" value=fields["title"]
-  if problems["title"] != none
-    p.problem = problems["title"]
-  label
-    | pages
-    input name="pages" value=fields["pages"]
-  if problems["pages"] != none
-    p.problem = problems["pages"]
-  label
-    | cover
-    input type="file" name="cover"
-  if fields["cover"] != ""
-    p.kept Leave it empty to keep the file it has.
-  button Save</code></pre>
+  <pre><code><span class="k">takes</span> path method fields problems
+<span class="f">header</span>
+  <span class="f">h1</span> Note
+  <span class="f">p</span>.lede
+    <span class="f">a</span> href=<span class="s">"/notes"</span> All notes
+<span class="f">form</span> method=<span class="s">"post"</span> action=path enctype=<span class="s">"multipart/form-data"</span>
+  <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=method
+  <span class="f">label</span>
+    <span class="o">|</span> title
+    <span class="f">input</span> name=<span class="s">"title"</span> value=fields[<span class="s">"title"</span>]
+  <span class="k">if</span> problems[<span class="s">"title"</span>] != none
+    <span class="f">p</span>.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
+  <span class="f">label</span>
+    <span class="o">|</span> pages
+    <span class="f">input</span> name=<span class="s">"pages"</span> value=fields[<span class="s">"pages"</span>]
+  <span class="k">if</span> problems[<span class="s">"pages"</span>] != none
+    <span class="f">p</span>.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
+  <span class="f">label</span>
+    <span class="o">|</span> cover
+    <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"cover"</span>
+  <span class="k">if</span> fields[<span class="s">"cover"</span>] != <span class="s">""</span>
+    <span class="f">p</span>.kept Leave it empty to keep the file it has.
+  <span class="f">button</span> Save</code></pre>
 </div>
 
 <h2>a resource under another</h2>
