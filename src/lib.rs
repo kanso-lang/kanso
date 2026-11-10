@@ -2,6 +2,7 @@ use crate::name::Name;
 pub mod advisory;
 pub mod ahead;
 pub mod ast;
+pub mod base64;
 pub mod beat;
 pub mod check;
 pub mod codegen;

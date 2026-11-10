@@ -1,0 +1,14 @@
+# `base64/decode` reads a string. Any other value is a mistake in the caller,
+# and stops the program as a value that is not a string stops `text/bytes`.
+import "std/base64"
+
+pub fn opaque v
+  v
+
+fn shown none
+  "not base64"
+
+fn shown bs
+  "{length bs} bytes"
+
+pub play = print (shown (base64/decode (opaque 7)))

@@ -1,0 +1,2 @@
+error[runtime]: base64/decode takes a string
+  failed in base64_decode_takes_a_string/play at base64_decode_takes_a_string.kso:14

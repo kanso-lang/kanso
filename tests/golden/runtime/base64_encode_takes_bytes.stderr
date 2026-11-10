@@ -1,0 +1,2 @@
+error[runtime]: base64/encode takes bytes
+  failed in base64_encode_takes_bytes/play at base64_encode_takes_bytes.kso:9

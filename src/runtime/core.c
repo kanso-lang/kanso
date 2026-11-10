@@ -825,6 +825,9 @@ static long long k_stat_delete_marks = 0;
 /* A wait the scheduler made on the sockets its fibers were waiting for,
    rather than asking each again a millisecond later (#2405). */
 static long long k_stat_sock_waits = 0;
+/* Calls `std/base64` made on the runtime's two kernels: their presence.
+   Printed only by a run that made one. */
+static long long k_stat_base64 = 0;
 
 static void k_stats_dump(void);
 
@@ -898,6 +901,7 @@ static void k_stats_dump(void) {
     fprintf(stderr, "spare_peak_bytes=%lld\n", k_stat_spare_peak);
     if (k_stat_delete_marks) fprintf(stderr, "delete_marks=%lld\n", k_stat_delete_marks);
     if (k_stat_sock_waits) fprintf(stderr, "sock_waits=%lld\n", k_stat_sock_waits);
+    if (k_stat_base64) fprintf(stderr, "base64_calls=%lld\n", k_stat_base64);
     if (k_ahead_ran) {
         fprintf(stderr, "ahead_forced=%lld\nahead_dropped=%lld\n",
                 k_stat_ahead_forced, k_stat_ahead_dropped);
