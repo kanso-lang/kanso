@@ -20,13 +20,21 @@ type bucket
   hits
   items
 
+# What a decoder answers for each value it reads: the value and the position
+# after it. `unframed` binds one to a name and reads its fields, and
+# `inside` takes one apart in a parameter (#2421).
+type frame
+  value
+  next
+
 pub play =
   maps = "{counted 1000} {drained 600} {admitted 500} {deduped 800}"
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
   trips = sealed 15 0
-  shown = (_ -> print "interp {told} {trips}")
+  reads = taken 12 0
+  shown = (_ -> print "interp {told} {trips} {reads}")
   served 2000 .> (_ -> deferred 2000) .> shown
 
 fn rounds n
@@ -297,3 +305,63 @@ fn sealed 0 acc
 
 fn sealed n acc
   sealed (n - 1) (acc + trip n)
+
+# A stream of numbers read back, as a decoder a library exports reads one:
+# a number under 128 is one byte and a larger one two, and each read answers
+# a `frame`. A caller in another module cannot take a record apart, so it
+# binds the frame and reads its two fields, which `unframed` does; `inside`
+# is the same loop where the frame is taken apart in a parameter.
+fn frame_add acc low 0
+  text/append acc low
+
+fn frame_add acc low high
+  text/append (text/append acc (128 + low)) high
+
+fn framed 0 acc
+  acc
+
+fn framed n acc
+  framed (n - 1) (frame_add acc (n * 37 % 128) (n % 3))
+
+fn frame_at bs p
+  frame_first bs[p] bs (p + 1)
+
+fn frame_first none _ _
+  frame none 0
+
+fn frame_first b bs p
+  return frame b p if b < 128
+  frame_second (b - 128) bs[p] (p + 1)
+
+fn frame_second _ none _
+  frame none 0
+
+fn frame_second low b p
+  frame (low + 128 * b) p
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn unframed _ _ 0 acc
+  acc
+
+fn unframed bs p n acc
+  r = frame_at bs p
+  unframed bs r.next (n - 1) (acc + worth r.value)
+
+fn inside 0 _ (frame _ _) acc
+  acc
+
+fn inside n bs (frame v p) acc
+  inside (n - 1) bs (frame_at bs p) (acc + worth v)
+
+fn taken 0 acc
+  acc
+
+fn taken n acc
+  bs = framed 64 (text/bytes "")
+  apart = inside 64 bs (frame_at bs 1) 0
+  taken (n - 1) (acc + unframed bs 1 64 0 + apart)

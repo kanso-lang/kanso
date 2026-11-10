@@ -20,53 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — net/peer reads the address at the other end of a connection
-
-A server that counts sign-in attempts per client needs to know which client
-it is talking to, and nothing in `std/net` said. `net/peer c` answers the
-address at the other end of a connection as text: `127.0.0.1`, or an IPv6
-address in its short form. senro's sign-in rate limit is the first reader;
-senro's accept loop already adds a `senro-at` header to each request, and the
-peer goes in beside it, so `std/net/http`'s request record is unchanged.
-
-It is description tag 41 natively, read with `getpeername` and written with
-`inet_ntop`, and `Desc::Peer` in the interpreter, read from the stream's
-`peer_addr`. A handle that is not an open connection answers "that is not an
-open socket" on both engines, the native runtime's words for the same fault
-in `net/port`. The tab and the scripted executor have no sockets and refuse,
-as they refuse every other net word. The row goes last among the builtins
-the interpreter dispatches, so no existing word's scan position moves.
-
-The spec is in `tests/sockets_serve.rs`: a one-statement server accepts the
-harness's connection and prints who called. Watched red on each engine in
-turn, with the address replaced by `0.0.0.0`.
-
-The rows are CI's. The runtime's new case adds 288 bytes of `.text` to every
-binary: jsonbench 442,145, encodebench 368,056, oneshot 448,337, basket
-366,024, widebench 382,142, deepbench 333,303, escapebench 323,335,
-pendbench 342,395, indexbench 322,233, scanbench 528,076, digestbench
-349,921, readbench 323,537, livebench 452,911 and runbench 892,161, so text across the fourteen rose to
-5,874,576 (+4,032). Clang
-compiles the larger runtime: codegen_instructions_dev 117,101,715 (+43,557)
-and codegen_instructions_release 371,967,035 (+12,446). The table and the
-library grew by one word each, so the front end and the engines read a
-little more: compile_instructions 24,090,400 (+65), entry_instructions
-87,746,589 (+1,053), library_instructions 73,433,509 (+833),
-emit_instructions 5,602,736 (+1,043), interp_instructions 622,466,237
-(+2,078), browser_compile_instructions 349,304,764 (+9,566) and
-browser_run_instructions 78,403,189 (+5,996). No benchmark calls `net/peer`,
-so the work rows move by layout: work_jsonbench 549,338,422, work_encodebench
-2,335,340,285, work_oneshot 9,980,090, work_basket 18,296,275,
-work_widebench 28,686,523, work_escapebench 40,309,541, work_pendbench
-154,124,923, work_indexbench 1,888,327, work_scanbench 268,526,
-work_digestbench 3,289,743, work_readbench 4,584,584, work_livebench
-938,655,611 and work_runbench 916,954,250 (+35,260), while work_deepbench
-fell to 197,755,729 (-103,256). Nothing here isolates a cause for those.
-Welfare fell by less than 0.005; `net/peer` is the prerequisite for senro's
-sign-in rate limit under #2280, as `os/random_bytes` was for its sign-in, so
-the floor drops by exactly what CI measured, with the reason in
-bench/welfare_floor.json.
-
 ## 2026-11-04 — a call to list/fold answers what its init and lambda can answer
 
 #2302. Every arm of `list/fold` answers by calling `f`, a value it was
@@ -2156,3 +2109,50 @@ layout: work_encodebench rises 350 to 2,335,340,543, work_oneshot rises
 `runtime/base64_decode_takes_a_string` pins the other refusal, a value
 that is not a string handed to `decode`, on both engines. Welfare rises
 from 95.09928567 to 95.25752069, and the floor is banked there.
+
+## 2026-11-10 — a decoder read across a module joins the corpus
+
+#2421, corpus first. A decoder written in kanso answers each value with
+the position after it, as a record of two fields, and no benchmark built
+one. `framed` is such a decoder, a stream of numbers at one byte or two,
+and `taken` reads it from another module. A record cannot be taken apart
+across an import, so `taken` binds what `framed/at` answers to a name and
+reads its two fields, which is how the readers senro derives call `wire`.
+Each pass also has `framed` sum the stream itself, with the record taken
+apart in a parameter, value first as its type declares it. The run program
+makes 1,500 passes over 64 numbers, and the interpreter's corpus carries
+the same two loops in its one module for 12.
+
+The baseline already says something about the leads. Both loops build
+every record on the heap: run_sh_rec goes from 4,723,232 to 17,011,296,
+which is 1,500 passes of 128 reads at 64 bytes and one record more. So the
+loop that takes the record apart in a parameter misses the by-value path
+too, on the order of its fields.
+
+The run program's work rises: work_runbench 954,999,153 -> 997,844,059
+and work_runbench_dev 2,808,131,450 -> 2,924,577,667. Both are this
+container's readings less 109, which is what every work row here reads
+above CI's. The phase is 42,844,906 of the program, 4.29%. Its other
+counters: run_allocs 2,541,664, run_alloc_bytes 268,840,291,
+run_perm_allocs 136, run_beat_iters 390,812, run_evac_allocs 5,617,
+run_evac_bytes 4,721,376, run_append_fast 5,329,378, run_append_grow
+1,081, run_bytes_malloc 7,869 and run_sh_bytes 24,384. runbench's emitted
+code reads defines=978 calls=10213 branches=9202 lines=79617, the summed
+rows emitted_other_defines 2,409, emitted_other_calls 22,187,
+emitted_other_branches 19,733 and emitted_other_lines 184,738, and its
+machine code is 900,801 bytes, so the summed text is 5,969,001.
+
+The interpreter's corpus rises: interp_instructions 681,004,692 ->
+711,444,159, with interp_allocs 1,026,142 and interp_peak_bytes 1,487,351.
+The tab's rows rise with it: browser_compile_instructions 366,327,369 ->
+390,565,528, browser_run_instructions 91,307,704 -> 93,856,364 and
+browser_compile_peak_bytes 867,315 -> 958,848. The first sizing was 40 passes,
+which cost the interpreter 95 million instructions, about 18,500 for each
+value read. That looked like a cliff and is not one: building the stream
+costs it about 7,000 instructions a number at 64, 256 and 1,024 numbers
+alike, the bare loop about 5,200 a value, the bound record 16,900 and the
+record taken apart 12,500. The phase was sized down to 12.
+
+The floor is re-based. The baselines of the seven rows that read the two
+programs are scaled by what each rose, and welfare stays where it was,
+95.25752068 before and 95.25752070 after.

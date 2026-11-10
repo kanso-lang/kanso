@@ -356,6 +356,22 @@
 # string for each group of three bytes, reads each letter out of its
 # alphabet with a slice, and builds the bytes it decodes by pushing onto a
 # list, which comes to about 49,000 instructions for a cookie of sixty bytes.
+#
+# One more joined that day after kanso#2420's fix, measured on main before
+# any of kanso#2421's leads was tried. Its column is the whole program with
+# it, 997,844,168, less the whole without, 954,999,262, and its share is of
+# the former.
+#
+#   taken     1,500 passes over a stream of 64 numbers     42,844,906  4.29%
+#
+# `taken` reads a stream through a decoder another module exports. The
+# decoder answers each number with the position after it, as a record of two
+# fields. A record cannot be taken apart across an import, so the reader
+# binds each one to a name and reads its fields; the decoder's own module
+# sums the same stream with the record taken apart in a parameter, value
+# first as its type declares it. Both build a record on the heap for every
+# number. The phase adds 12,288,064 to sh_rec: 1,500 passes of 128 reads at
+# 64 bytes, and one record more.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -391,6 +407,7 @@ import "./sealed"
 import "./split"
 import "./stack"
 import "./stretched"
+import "./taken"
 import "./worded"
 import "std/io"
 import "std/json"
@@ -475,6 +492,8 @@ carried_hashes = 600
 
 sealed_passes = 800
 
+taken_passes = 1500
+
 fn decoded _ 0 sofar
   sofar
 
@@ -540,8 +559,9 @@ fn tally raw doc a b
   ported22 = ported21 + stretched/total stretched_iterations
   ported23 = ported22 + carried/total carried_hashes
   ported24 = ported23 + sealed/total sealed_passes
+  ported25 = ported24 + taken/total taken_passes
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported24 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported25 + rest))
   bulk .> on
 
 fn shaped raw doc a

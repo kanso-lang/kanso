@@ -1,0 +1,39 @@
+# A stream read from outside the library that decodes it. A record's fields
+# cannot be taken apart across an import, so the reader binds what `at`
+# answers to a name and reads the two fields from it, once for every value.
+# This is how the readers senro derives call its `wire` module (#2421). Each
+# pass also has the library sum the stream itself, where the record is taken
+# apart in a parameter.
+import "../framed"
+import "std/text"
+
+held = 64
+
+fn written 0 acc
+  acc
+
+fn written n acc
+  written (n - 1) (framed/add acc (n * 37 % 1000))
+
+fn weighed none
+  0
+
+fn weighed v
+  v
+
+fn read_out _ _ 0 acc
+  acc
+
+fn read_out bs p n acc
+  r = framed/at bs p
+  read_out bs r.next (n - 1) (acc + weighed r.value)
+
+fn passes _ 0 acc
+  acc
+
+fn passes bs n acc
+  inside = framed/sum bs held
+  passes bs (n - 1) (acc + read_out bs 1 held 0 + inside)
+
+pub fn total n
+  passes (written held (text/bytes "")) n 0
