@@ -1,0 +1,40 @@
+# A function with an arm that answers its parameter unread hands a lazy
+# binding back as it was given. A caller that keeps that answer, in a list,
+# under a name, or in what it hands to another function, has kept the
+# binding, and reads it after its own frame has gone. Natively the frame
+# freed the binding on the way out, the next call's binding took its place,
+# and the first answer read the second one's value.
+fn built n
+  "kept {n}"
+
+fn held false _
+  ""
+
+fn held true words
+  words
+
+fn listed n
+  a = built n
+  [(held true a)]
+
+fn named n
+  a = built n
+  back = held true a
+  [back]
+
+fn boxed words
+  [words]
+
+fn passed n
+  a = built n
+  boxed (held true a)
+
+fn both make
+  first = make 1
+  second = make 2
+  "{first[1]} and {second[1]}"
+
+fn shown make
+  print (both make)
+
+pub play = shown listed .> (_ -> shown named) .> (_ -> shown passed)
