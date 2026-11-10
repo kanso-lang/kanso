@@ -122,39 +122,39 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
     <p>A view is a kata template. It names what it takes on its first line, and the compiler checks every field it reads against the record it is handed.</p>
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/views/signed.kata</div>
-  <pre><code>takes signatures form flash removals viewer
-header
-  h1 Guestbook
-  p.lede Leave a line for whoever comes next.
-if viewer == ""
-  nav.door
-    a href="/session/new" Sign in
-    a href="/account/new" Make an account
-else
-  form.out method="post" action="/session"
-    input type="hidden" name="_method" value="DELETE"
-    span Signed in as {viewer}.
-    a href="/account/edit" Your account
-    button Sign out
-if flash != ""
-  p.flash = flash
-if viewer != ""
-  form.sign method="post" action="/entries" enctype="multipart/form-data"
-    textarea name="message" placeholder="say something" required="required" = form.message
-    if form.problems["message"] != none
-      p.problem = form.problems["message"]
-    label
-      span A photo, if you like
-      input type="file" name="photo" accept="image/*"
-    button Sign
-ol.entries
-  for e in signatures
-    li
-      p.message = e.message
-      if e.photo != ""
-        img.photo src="/senro/blobs/{e.photo}" alt="a photo from {e.name}"
-      p.who = e.name
-      == removals["{e.id}"]</code></pre>
+  <pre><code><span class="k">takes</span> signatures form flash removals viewer
+<span class="f">header</span>
+  <span class="f">h1</span> Guestbook
+  <span class="f">p</span>.lede Leave a line for whoever comes next.
+<span class="k">if</span> viewer == <span class="s">""</span>
+  <span class="f">nav</span>.door
+    <span class="f">a</span> href=<span class="s">"/session/new"</span> Sign in
+    <span class="f">a</span> href=<span class="s">"/account/new"</span> Make an account
+<span class="k">else</span>
+  <span class="f">form</span>.out method=<span class="s">"post"</span> action=<span class="s">"/session"</span>
+    <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=<span class="s">"DELETE"</span>
+    <span class="f">span</span> Signed in as {viewer}.
+    <span class="f">a</span> href=<span class="s">"/account/edit"</span> Your account
+    <span class="f">button</span> Sign out
+<span class="k">if</span> flash != <span class="s">""</span>
+  <span class="f">p</span>.flash <span class="o">=</span> flash
+<span class="k">if</span> viewer != <span class="s">""</span>
+  <span class="f">form</span>.sign method=<span class="s">"post"</span> action=<span class="s">"/entries"</span> enctype=<span class="s">"multipart/form-data"</span>
+    <span class="f">textarea</span> name=<span class="s">"message"</span> placeholder=<span class="s">"say something"</span> required=<span class="s">"required"</span> = form.message
+    <span class="k">if</span> form.problems[<span class="s">"message"</span>] != none
+      <span class="f">p</span>.problem <span class="o">=</span> form.problems[<span class="s">"message"</span>]
+    <span class="f">label</span>
+      <span class="f">span</span> A photo, if you like
+      <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"photo"</span> accept=<span class="s">"image/*"</span>
+    <span class="f">button</span> Sign
+<span class="f">ol</span>.entries
+  <span class="k">for</span> e <span class="k">in</span> signatures
+    <span class="f">li</span>
+      <span class="f">p</span>.message <span class="o">=</span> e.message
+      <span class="k">if</span> e.photo != <span class="s">""</span>
+        <span class="f">img</span>.photo src=<span class="s">"/senro/blobs/{e.photo}"</span> alt=<span class="s">"a photo from {e.name}"</span>
+      <span class="f">p</span>.who <span class="o">=</span> e.name
+      <span class="o">==</span> removals[<span class="s">"{e.id}"</span>]</code></pre>
 </div>
   </div>
 </section>
