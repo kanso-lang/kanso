@@ -14,9 +14,12 @@ import "std/text"
 # Code samples are excluded. A `<pre>` block is what a program said, and a
 # program is allowed to say anything.
 #
-# One check is about markup rather than prose: a page's `<div>` tags must pair
-# up. The modules chapter shipped with a stray `</div>` that the browser forgave
-# and every other gate passed over.
+# Two checks are about markup rather than prose. A page's `<div>` tags must
+# pair up: the modules chapter shipped with a stray `</div>` that the browser
+# forgave and every other gate passed over. And an article classed `spec-doc`
+# is classed `essay` too: the first gives it a width and the second centres
+# it, and the senro guides shipped with the first alone, against the left
+# edge of the window.
 type finding
   page
   line
@@ -126,7 +129,8 @@ fn scanned_page pages at acc after page raw
   text = prose raw
   prose_hits = in_page page text
   divs = unbalanced page raw
-  both = prose_hits .> (s -> divs .> (d -> list/to_list (list/concat s d)))
+  marked = divs .> (d -> edge_bound page raw .> (e -> list/concat d e))
+  both = prose_hits .> (s -> marked .> (m -> list/to_list (list/concat s m)))
   onward pages at acc after both
 
 fn onward pages at acc after here
@@ -142,6 +146,26 @@ fn in_page page text
   first = from_family page text "antithesis flip" flips 1 []
   second = from_family page text "self-announcing" said 1 first
   from_family page text "throat-clearing" throat 1 second
+
+fn edge_bound page raw
+  hits "<article class=\"[^\"]*\"" raw .> (ms -> uncentred page raw ms)
+
+fn uncentred page raw ms
+  bare = list/select ms (m -> columnless? (tag_at raw m))
+  list/to_list (list/map bare (m -> off_centre page raw m))
+
+fn tag_at raw m
+  present (text/slice raw m.from (m.to - 1))
+
+fn columnless? tag
+  holds? tag "spec-doc" and not holds? tag "essay"
+
+fn holds? tag word
+  length (text/split tag word) > 1
+
+fn off_centre page raw m
+  told_of = "{tag_at raw m} lacks `essay`, which centres the column"
+  finding page (line_of raw m.from) "no reading column" told_of
 
 fn unbalanced page raw
   tags = hits "</?div\\b" raw
