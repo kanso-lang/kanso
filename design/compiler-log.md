@@ -1949,8 +1949,9 @@ after `forked`. `bench/interp_corpus` runs the same loop for 2,000 passes
 before it prints. Neither printed line moves.
 
 **Rows.** Only runbench and the interpreted corpus run the new loop.
-Instruction rows are counts from this machine set by their distance to
-main's reading here; the tab's rows are CI's.
+The native and interpreted instruction rows are counts from this machine
+set by their distance to main's reading here, and CI's first run agreed
+with each. The tab's rows and clang's are CI's.
 - runbench rises to `work_runbench` 955,363,291, the shape's 44,795,888
   instructions or 4.69% of the program, and at the dev tier to
   `work_runbench_dev` 2,807,447,887. Its machine code grows 7,792 bytes
@@ -1974,6 +1975,16 @@ main's reading here; the tab's rows are CI's.
   `interp_allocs` 984,852 and `interp_peak_bytes` 1,377,499. The
   interpreter frees a cell when nothing holds it, so its peak moves by
   the loop's own 11,012 bytes.
+- The tab compiles and runs the same corpus:
+  `browser_compile_instructions` 358,135,821 (from 352,283,482),
+  `browser_compile_peak_bytes` 862,043 (from 856,339),
+  `browser_run_instructions` 90,929,278 (from 77,181,763) and
+  `browser_run_peak_bytes` 1,835,008 (from 1,572,864), which is four more
+  pages of wasm memory.
+- `codegen_instructions_release` rises 71 to 372,180,777. It arrived with
+  the two counting statements in the runtime, which clang reads at the
+  release tier and folds away. The dev tier links a runtime built ahead of
+  time and its row holds.
 - Counting cells alone moves ten goldens that run no new code.
   pendbench's 200 cells read `pend_held_peak_bytes` 36,800. In
   `tests/golden/mem`, `many_cells_held_peak_bytes` reads 7,360 for its
@@ -1986,7 +1997,10 @@ main's reading here; the tab's rows are CI's.
 
 **The floor is re-based.** The change is only to what is measured, so
 each term it moves keeps its ratio to its baseline, as it did when the
-corpus first forked (2026-11-01). The baselines of the terms the two
-programs feed are scaled by the new reading over the old and rounded up.
+corpus first forked (2026-11-01). Ten baselines are scaled by the new
+reading over the old and rounded up: `run_instructions`, `run_peak_bytes`,
+`dev_run_instructions`, `interp_instructions`, `interp_peak_bytes`,
+`codegen_instructions_release` and the tab's four. The score moves only by
+that rounding, and the `--set` records it.
 
 **Open.** #2408's fix, measured against this.
