@@ -453,6 +453,39 @@ static void k_pend_keep_repaired(long long d) {
         if (k_pend_below(k_repaired[i], outer)) k_pend_push(k_repaired[i]);
 }
 
+/* The slots of each cell this walk met from the pair, as it found them: the
+   result, then the arguments. A cell keeps its identity, so its slots are
+   copied and written back in place, and a cell met first from the pair has
+   them in the pair. If the same walk meets it again under tenure, the
+   tenured holder is pruned at by every later walk and nothing copies those
+   slots forward: the pair is written over two stages later and the cell is
+   left pointing into it. So the second meeting copies the slots again, into
+   tenure, from what is kept here. An ordinary node needs no such record,
+   because the walk never writes into the node it copies from (#2415).
+   The record belongs to one walk and is emptied when the copy map moves on. */
+static KValue* k_cellsave;
+static long long k_cellsave_n, k_cellsave_cap;
+static unsigned long long k_cellsave_gen;
+
+static long long k_cellsave_put(const KThunk* t) {
+    if (k_cellsave_gen != k_copy_map.gen) {
+        k_cellsave_gen = k_copy_map.gen;
+        k_cellsave_n = 0;
+    }
+    long long at = k_cellsave_n;
+    if (at + 1 + t->argc > k_cellsave_cap) {
+        long long grown = k_cellsave_cap ? k_cellsave_cap * 2 : 64;
+        KValue* wider = realloc(k_cellsave, sizeof(KValue) * (size_t)grown);
+        if (!wider) { fputs("out of memory\n", stderr); exit(1); }
+        k_cellsave = wider;
+        k_cellsave_cap = grown;
+    }
+    k_cellsave[at] = t->result;
+    for (int i = 0; i < t->argc; i++) k_cellsave[at + 1 + i] = t->args[i];
+    k_cellsave_n = at + 1 + t->argc;
+    return at;
+}
+
 /* Tenuring is sticky, and it is never unset within one evacuation. A promoted
    node's fresh descendants must land beside it — leave one in the pair and the
    pair overwrites it two laps later while the tenured parent still points at
@@ -476,8 +509,21 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
                      : cp->in_ten ? K_CELL_TENURED : K_CELL_SEEN;
         }
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, t, &k_copy_map_live);
-        if (slot->gen == k_copy_map.gen && slot->key == t) return v;
-        k_copy_map_put(t, t);
+        if (slot->gen == k_copy_map.gen && slot->key == t) {
+            /* An odd value is a place in `k_cellsave`: the cell's slots went
+               to the pair. Under tenure they are copied again from what the
+               walk found, and the map then says they are settled. */
+            uintptr_t was = (uintptr_t)slot->val;
+            if (!cp->in_ten || !(was & 1)) return v;
+            long long at = (long long)(was >> 1);
+            slot->val = t;
+            if (t->forced) t->result = k_deep_copy(k_cellsave[at], cp);
+            for (int i = 0; i < t->argc; i++)
+                t->args[i] = k_deep_copy(k_cellsave[at + 1 + i], cp);
+            return v;
+        }
+        k_copy_map_put(t, cp->in_ten ? (void*)t
+                                     : (void*)(uintptr_t)(2 * k_cellsave_put(t) + 1));
         if (t->forced) t->result = k_deep_copy(t->result, cp);
         for (int i = 0; i < t->argc; i++) t->args[i] = k_deep_copy(t->args[i], cp);
         return v;
