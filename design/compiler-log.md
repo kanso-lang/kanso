@@ -1786,16 +1786,25 @@ earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
 1,004 times in a second.
 
 **Rows.** Counted on this machine with the toolchain the goldens name,
-and set from each row's distance to main's here.
+set from each row's distance to main's here, and then counted by CI on
+the golden's own silicon, which agreed with every one. The two codegen
+rows are CI's.
 - Work: all fifteen rows fall. `runbench` 913,657,054 to 910,567,403 and
   its dev-tier build 2,763,752,866 to 2,759,705,221; the other thirteen
-  by between 166 and 1,713.
+  by between 194 and 1,713.
 - `browser_run_instructions` 78,426,179 to 77,181,763.
 - `interp_instructions` rises 9,993 to 622,568,308. The corpus opens no
   socket, so this is the scheduler's loop laid out around one more call.
   `entry_instructions` rises 12 to 156,082,977 with the binary's layout.
 - Machine code: each benchmark carries 48 fewer bytes of `.text` than on
   main, and `text` sums to 5,875,561.
+- clang compiles the wait: `codegen_instructions_dev` rises 27,295 over
+  main to 116,882,342 and `codegen_instructions_release` 154,850 to
+  372,180,706.
+
+**Welfare.** The sum rises by 0.0080, from 95.0845 to 95.0925, and is
+banked. The falls in the run program and the tab outweigh the two codegen
+rows and the interpreter's 9,993.
 
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
