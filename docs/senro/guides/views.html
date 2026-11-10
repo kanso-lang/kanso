@@ -205,4 +205,6 @@ browser/answer_pages {} views/rendered</code></pre>
 <h2>live pages</h2>
 
 <p>when a request that is not a GET finishes, the server notifies Postgres's <code>senro</code> channel, and every page holding <code>/senro/live</code> open fetches itself again. one visitor's signature appears on another's screen without a reload, and a field someone is typing in keeps what they typed, unless it was in the form they just sent.</p>
+
+<p>the server listens on one Postgres session however many pages are open, so a hundred open tabs hold a hundred connections to the server and one to the database. it writes each page a line every fifteen seconds, which is how it learns that a tab has closed and gives the connection back.</p>
 </article>
