@@ -65,6 +65,13 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
+<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
+<span class="c"># the record, so the models derivation declares `signature` here with a</span>
+<span class="c"># field for each column and answers for the table by this module's name.</span>
+<span class="c">#</span>
+<span class="c"># Only the person who signed an entry may remove it. `signature/destroy`</span>
+<span class="c"># asks this policy before it deletes anything, and nothing else in the</span>
+<span class="c"># guestbook removes a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -120,12 +127,12 @@ confirmable <span class="o">=</span> <span class="f">models/add_column</span> <s
 <span class="k">if</span> viewer == <span class="s">""</span>
   <span class="f">nav</span>.door
     <span class="f">a</span> href=<span class="s">"/session/new"</span> Sign in
-    <span class="f">a</span> href=<span class="s">"/account/new"</span> Make an account
+    <span class="f">a</span> href=<span class="s">"/registration/new"</span> Make an account
 <span class="k">else</span>
   <span class="f">form</span>.out method=<span class="s">"post"</span> action=<span class="s">"/session"</span>
     <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=<span class="s">"DELETE"</span>
     <span class="f">span</span> Signed in as {viewer}.
-    <span class="f">a</span> href=<span class="s">"/account/edit"</span> Your account
+    <span class="f">a</span> href=<span class="s">"/password/edit"</span> Your account
     <span class="f">button</span> Sign out
 <span class="k">if</span> flash != <span class="s">""</span>
   <span class="f">p</span>.flash <span class="o">=</span> flash

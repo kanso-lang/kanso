@@ -176,6 +176,7 @@ pub type signature
 <tr><td><code>note/create db fields</code></td><td>the record as stored, or <code>models/invalid</code></td></tr>
 <tr><td><code>note/update db id changes</code></td><td>the record as changed, or <code>models/invalid</code></td></tr>
 <tr><td><code>note/destroy db id</code></td><td>the record as it was</td></tr>
+<tr><td><code>note/increment db id "views"</code></td><td>the record after one is added to the column</td></tr>
 </tbody>
 </table>
 
@@ -212,6 +213,13 @@ pub type signature
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
+<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
+<span class="c"># the record, so the models derivation declares `signature` here with a</span>
+<span class="c"># field for each column and answers for the table by this module's name.</span>
+<span class="c">#</span>
+<span class="c"># Only the person who signed an entry may remove it. `signature/destroy`</span>
+<span class="c"># asks this policy before it deletes anything, and nothing else in the</span>
+<span class="c"># guestbook removes a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -230,6 +238,8 @@ pub type signature
 </div>
 
 <p>each write asks its policy first. <code>signature/create db fields</code> reads the fields into a record, asks <code>create?</code>, checks the rules, and inserts only when both pass. <code>update</code> and <code>destroy</code> read the row first, ask their policy, and write only on a yes. a no answers <code>web/denied</code>, and an id no row has answers <code>web/absent</code>. a model with no such policy cannot be written this way, so writes default closed.</p>
+
+<p>a write no viewer is behind is made as the app. <code>account/update (models/as_app db) id { "failures":"0" }</code> asks no policy. the guestbook writes this way when a sign-in counts a wrong password and when a reset link sets a digest, and the <a href="sessions.html">sessions guide</a> gives the rule for it. <code>increment</code> asks <code>update?</code> as <code>update</code> does. it adds one in the statement that answers the record, so requests that count at once each see a count of their own.</p>
 
 <p>reads default open. a module may declare <code>visible?</code>, and each read then answers only the records it says the viewer may see; without it every row shows. a missing read policy can show a row but never change one.</p>
 

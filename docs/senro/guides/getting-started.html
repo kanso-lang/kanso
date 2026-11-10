@@ -25,7 +25,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 
 <h2>the shape of an app</h2>
 
-<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>account</code>, <code>session</code>), one for its model (<code>signature</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
+<p>an app is a directory. its entry, <code>main.kso</code>, holds the statements that start the app, and each other file beside it is a module. the guestbook has a module per resource (<code>entries</code>, <code>registration</code>, <code>session</code> and the rest), one for each of its two models (<code>signature</code> and <code>account</code>), one for its migrations, and a <code>views</code> directory of templates. the entry imports them all and asks for three conventions.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
@@ -42,6 +42,8 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
+<span class="k">import</span> <span class="s">"./password"</span>
+<span class="k">import</span> <span class="s">"./registration"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
@@ -174,6 +176,13 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
+<span class="c"># A signature is a row of the `signatures` table. This module is named for</span>
+<span class="c"># the record, so the models derivation declares `signature` here with a</span>
+<span class="c"># field for each column and answers for the table by this module's name.</span>
+<span class="c">#</span>
+<span class="c"># Only the person who signed an entry may remove it. `signature/destroy`</span>
+<span class="c"># asks this policy before it deletes anything, and nothing else in the</span>
+<span class="c"># guestbook removes a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
   <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
 
@@ -241,12 +250,12 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 <span class="k">if</span> viewer == <span class="s">""</span>
   <span class="f">nav</span>.door
     <span class="f">a</span> href=<span class="s">"/session/new"</span> Sign in
-    <span class="f">a</span> href=<span class="s">"/account/new"</span> Make an account
+    <span class="f">a</span> href=<span class="s">"/registration/new"</span> Make an account
 <span class="k">else</span>
   <span class="f">form</span>.out method=<span class="s">"post"</span> action=<span class="s">"/session"</span>
     <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=<span class="s">"DELETE"</span>
     <span class="f">span</span> Signed in as {viewer}.
-    <span class="f">a</span> href=<span class="s">"/account/edit"</span> Your account
+    <span class="f">a</span> href=<span class="s">"/password/edit"</span> Your account
     <span class="f">button</span> Sign out
 <span class="k">if</span> flash != <span class="s">""</span>
   <span class="f">p</span>.flash <span class="o">=</span> flash
