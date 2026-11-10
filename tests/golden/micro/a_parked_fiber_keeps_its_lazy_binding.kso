@@ -1,0 +1,42 @@
+import "std/pool"
+import "std/time"
+
+# Three fibers wait on an empty pool, each holding a lazy binding in what it
+# will do when it is given a seat, while a fourth fills the arena before it
+# gives one. The scheduler rewinds many times with the three parked, and
+# each still reads its own binding (#2408).
+fn built n
+  "parked {n} {n * 29}"
+
+fn sized 0 _
+  effect 0
+
+fn sized seat words
+  effect (seat + length words)
+
+fn waiter p n
+  words = built n
+  pool/take p .> (seat -> sized seat words) .> (k -> said p n k)
+
+fn said p n k
+  print "waiter {n} read {k}" .> (_ -> pool/give p 1)
+
+fn junk n
+  effect "junk {n} {n * 5} {n * 9} {n * 31}"
+
+fn churned 0
+  effect 0
+
+fn churned n
+  time/sleep 0 .> (_ -> junk n) .> (_ -> churned (n - 1))
+
+fn giver p
+  churned 8000 .> (_ -> pool/give p 1)
+
+fn all p
+  waiter p 1
+  waiter p 2
+  waiter p 3
+  giver p
+
+pub play = pool/make 1 .> all

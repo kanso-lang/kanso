@@ -981,7 +981,7 @@ int k_stats_on = -1;
    what was always true. */
 __attribute__((constructor)) static void k_stats_switch(void) {
     k_stats_on = getenv("KANSO_COUNTERS") != NULL;
-    k_cell_check = getenv("KANSO_CELL_CHECK") != NULL;
+    k_cell_check = K_COUNTING && getenv("KANSO_CELL_CHECK") != NULL;
 }
 
 /* The refill path stays out of line; the bump inlines into every hot
