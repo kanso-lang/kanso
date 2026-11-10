@@ -2086,8 +2086,10 @@ The harness came first. `tests/base64_agrees_with_its_reference.rs` holds
 all four kernels to a reference written apart from them, which spells by
 laying the bytes out as bits and taking six at a time: 2,000,000 spellings
 and 2,000,000 readings for the interpreter's, and 400,000 of each for the
-runtime's, whose text is lifted out of the runtime and compiled with the
-address sanitizer, each case in a buffer of exactly its size. The texts
+runtime's, whose text is lifted out of the runtime and given each case in
+a buffer that ends at a page nothing may touch, in exactly the room the
+runtime promises. The first writing used the address sanitizer, which CI's
+clang cannot link. The texts
 are true spellings, spellings with characters swapped for letters, pads
 and the characters either side of each run of the alphabet, spellings cut
 short or run long, and ragged strings from that pool. It was watched red
@@ -2095,7 +2097,10 @@ three ways: a wrong shift in the interpreter's second byte with a five-bit
 mask on the runtime's third letter, both caught within three cases; the
 runtime refusing a padded third place with the interpreter taking ragged
 text, caught at the first case; and the runtime taking ragged text, which
-the sanitizer stopped at a read past the end.
+stopped at a read past the end. With the fence in place of the sanitizer
+it was watched red again: ragged text taken and a terminator written past
+the speller's room each stop the harness with a fault, and a five-bit mask
+on the third letter parts from the reference at byte 18.
 
 The old library was the second oracle. A program holding it as a module of
 its own compared it with the new one on 300,000 generated cases, bytes
@@ -2106,26 +2111,48 @@ both ways, a list in place of bytes, and each edge of what reading takes,
 and `runtime/base64_encode_takes_bytes` pins the refusal on both engines.
 
 A trip now costs about 2,800 instructions natively, most of it building
-the cookie and the list of sixty byte values `decode` answers.
-Rows, counted in this container; clang's two, the instruction rows and the
-tab's follow from CI. The interpreter's corpus falls from 727,482,475
-instructions to 681,005,307, with interp_allocs 1,043,722 -> 988,431 and
-interp_peak_bytes 1,489,302 -> 1,400,327. The run program's counters fall
-back toward what they were before the phase joined: run_allocs 2,349,661,
-run_alloc_bytes 256,551,969, run_perm_allocs 135, run_push_mut_slow
-1,650,292, run_bytes_malloc 7,868, run_str_scans 36,202,
-run_str_scan_bytes 19,043,360, run_sh_str 19,156,704, run_sh_buf
-97,305,312 and run_sh_bytes 24,360, and `base64_calls=1600` is the
-kernels' presence, printed only by a run that calls them. runbench's
-emitted code loses the library's kanso: defines=959 calls=9986
-branches=8989 lines=77949, and summed emitted_other_defines 2,390,
-emitted_other_calls 21,960, emitted_other_branches 19,520 and
+the cookie and the list of sixty byte values `decode` answers. The run
+program's work falls from 991,852,372 instructions to 954,999,153 and its
+dev-tier build's from 2,894,015,349 to 2,808,131,450. The interpreter's
+corpus falls from 727,482,475 instructions to 681,004,692, with
+interp_allocs 1,043,722 -> 988,431 and interp_peak_bytes 1,489,302 ->
+1,400,327. The tab compiles that corpus in 366,327,369 instructions where
+it took 413,857,607, the library's kanso and its import of `std/bits`
+being gone, with browser_compile_peak_bytes 975,975 -> 867,315, and runs
+it in 91,307,704 where it took 95,460,118.
+
+The run program's counters fall back toward what they were before the
+phase joined: run_allocs 2,349,661, run_alloc_bytes 256,551,969,
+run_perm_allocs 135, run_push_mut_slow 1,650,292, run_bytes_malloc 7,868,
+run_str_scans 36,202, run_str_scan_bytes 19,043,360, run_sh_str
+19,156,704, run_sh_buf 97,305,312 and run_sh_bytes 24,360, and
+`base64_calls=1600` is the kernels' presence, printed only by a run that
+calls them. Two counters fall that the trend gate reads as worse,
+run_push_mut_fast to 1,238,867 and run_buf_reuse to 3,390. Both are
+exactly what they read before the phase joined, so what the phase added to
+them was the kanso library's pushes and buffer reuses, and those are gone
+with it. runbench's emitted code loses the library's kanso: defines=959
+calls=9986 branches=8989 lines=77949, and summed emitted_other_defines
+2,390, emitted_other_calls 21,960, emitted_other_branches 19,520 and
 emitted_other_lines 183,070.
 
-Two things rise. The runtime is linked whole, so every program's machine
+Several rows rise. The runtime is linked whole, so every program's machine
 code gains the kernels and their wrappers, 2,032 bytes each: runbench
 falls to 889,489 with the library's kanso gone, the other thirteen rise,
 and the summed text goes 5,954,425 -> 5,957,689. And the compiler knows two
 more builtins: compile_instructions 24,152,633 -> 24,154,945,
 entry_instructions 156,082,814 -> 156,095,335, library_instructions
 73,608,570 -> 73,612,703 and emit_instructions 5,643,537 -> 5,644,746.
+
+Clang and the linker do more for the dev tier and less for the release
+tier: codegen_instructions_dev 116,951,956 -> 116,980,709, a rise of
+28,753, and codegen_instructions_release 372,142,712 -> 372,052,045, a
+fall of 90,667. A build now has less of runbench to compile and more
+runtime to link; which of the two decides each tier was not isolated.
+Three programs that never call base64 link the grown runtime and move by
+layout: work_encodebench rises 350 to 2,335,340,543, work_oneshot rises
+154 to 9,979,505 and work_livebench falls 644 to 938,654,735.
+
+`runtime/base64_decode_takes_a_string` pins the other refusal, a value
+that is not a string handed to `decode`, on both engines. Welfare rises
+from 95.09928567 to 95.25752069, and the floor is banked there.

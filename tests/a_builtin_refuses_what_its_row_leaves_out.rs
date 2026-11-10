@@ -70,6 +70,8 @@ fn route(name: &str) -> Option<(&'static str, &'static [&'static str], bool)> {
         "to_float" => ("text/to_float {0}", &["\"1.5\""], false),
         "to_int" => ("text/to_int {0}", &["\"1\""], false),
         "utf8" => ("text/utf8 {0}", &["text/bytes \"a\""], false),
+        "base64_spell" => ("base64/encode {0}", &["text/bytes \"a\""], false),
+        "base64_read" => ("base64/decode {0}", &["\"YQ==\""], false),
         "sqrt" => ("math/sqrt {0}", &["4.0"], false),
         "round" => ("math/round {0}", &["1.5"], false),
         "bit_and" => ("{0} & {1}", &["1", "2"], false),
@@ -153,10 +155,11 @@ fn program(name: &str, args: &[String]) -> String {
         false => format!("got = {call}\nprint \"{{got}}\"\n"),
     };
     let connected = body.contains("connected");
-    let modules: Vec<&str> = ["bits", "io", "list", "math", "net", "os", "pool", "text", "time"]
-        .into_iter()
-        .filter(|m| body.contains(&format!("{m}/")) || (*m == "net" && connected))
-        .collect();
+    let modules: Vec<&str> =
+        ["base64", "bits", "io", "list", "math", "net", "os", "pool", "text", "time"]
+            .into_iter()
+            .filter(|m| body.contains(&format!("{m}/")) || (*m == "net" && connected))
+            .collect();
     let mut out = String::new();
     for m in &modules {
         out.push_str(&format!("import \"std/{m}\"\n"));

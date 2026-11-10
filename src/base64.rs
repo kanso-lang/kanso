@@ -48,8 +48,8 @@ pub fn read(text: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
     let mut out = Vec::with_capacity(text.len() / 4 * 3);
-    for group in text.chunks_exact(4) {
-        let (a, b, c, d) = (place(group[0]), place(group[1]), place(group[2]), place(group[3]));
+    for &[a, b, c, d] in text.as_chunks::<4>().0 {
+        let (a, b, c, d) = (place(a), place(b), place(c), place(d));
         if a > 63 || b > 63 || c > 64 || d > 64 {
             return None;
         }
