@@ -1680,16 +1680,24 @@ the clock. A socket that is ready makes its fiber due now. The clock moves
 to the time that passed and no further than the fiber it was waiting for,
 so a sleeping fiber still runs at its own time.
 
-- Natively a step answers `blocked == 5` with the handle, `KFibers` keeps
-  it in `on`, and `k_sched_await` does the waiting. The descriptor is read
-  from the socket table at each wait.
-- The interpreter's step answers `Step::Waiting(handle, …)` and the
-  scheduler asks the executor's `await_sockets`. An executor without
-  sockets answers `None` and the scheduler ticks as before, which is what
-  the scripted executor and the tab do.
+- What a fiber waits on is read from the work it has left. A fiber the
+  scheduler holds with an accept or a read at the bottom of its chain
+  asked it and was told not yet, so the scheduler walks down the chain
+  words to that description and takes the handle from it. Nothing is kept
+  per fiber and nothing is done per step.
+- A flag says whether to look at all. An accept that finds nobody and a
+  read that finds nothing raise it, and the scheduler puts it down when it
+  looks and finds no fiber on a socket. A program without sockets pays one
+  test of the flag each time every fiber is waiting.
+- Natively the wait is `k_sched_await`, which reads each descriptor from
+  the socket table. In the interpreter it is `awaited`, which asks the
+  executor's `await_sockets`. An executor without sockets answers `None`
+  and the scheduler ticks as before, which is what the scripted executor
+  and the tab do.
 - An accept the system refused for a reason other than nobody calling
-  keeps its one-millisecond tick natively. The listener stays ready through
-  such a refusal, so a wait on it would come straight back.
+  keeps its one-millisecond tick natively, and its description carries an
+  int to say so. The listener stays ready through such a refusal, so a
+  wait on it would come straight back.
 - `libc` becomes a dependency of the compiler on unix, for `poll`. It was
   already in the lock file.
 
@@ -1706,34 +1714,54 @@ With the wait taken out of either engine the count is not printed and the
 spec fails. The trend gate lists it among the counters a fall is a loss
 for.
 
-**A spec that caught a fault of mine.**
+**The fiber table is one array.** The native scheduler kept its fibers
+as an array per field, so each insert and each remove called `memmove`
+once per field, and a fork does both. It keeps one array of records now
+and moves the fibers after a fork once. Counted here, on a machine the
+golden's rows were not counted on, runbench retired 913,960,225
+instructions before and 910,533,567 after, and its dev-tier build
+2,763,671,442 and 2,759,639,689. CI's rows are the ones that count.
+
+**Two specs, and two faults of mine they caught.**
 `a_reader_is_told_when_its_socket_closes` has a reader on a connection
 another fiber closes; that fiber then dials, and the new connection takes
 the descriptor the closed one had. On main both engines tell the reader
 `that is not a connection`. My first native version held the descriptor
-and would have waited on the new connection for good, so it holds the
-handle. The interpreter held the handle already and still hung: it asked
-`poll` to pass over the missing socket and then waited with no time limit.
-A wait that includes a handle naming nothing now returns at once. The spec
-went red on that and is green on both engines.
+and would have waited on the new connection for good. The interpreter
+held the handle and still hung: it asked `poll` to pass over the missing
+socket and then waited with no time limit. A wait that includes a handle
+naming nothing now returns at once, and the spec that was red on that
+hang is green on both engines.
+
+The second fault was the first design. It kept the awaited handle in a
+field per fiber and cleared it before every step. Native kept it as a
+fourth array, which a fork then moved as well: runbench retired 1,407,682
+more instructions here, and CI read `interp_instructions` 153,945 higher.
+Those rows are what the objective counts, and it does not count wall
+time, so the design scored as a loss. Reading the handle from the fiber's
+own work removed the field and the clearing. Left where
+the compiler put it, the interpreter's new function still cost its corpus
+59,991 instructions; kept cold and out of line it costs 9,993.
 
 **Measured.** One sitting, 2026-11-10, in the development container: a
 senro app answering 300 requests over loopback after twenty to warm up,
-each on its own connection, with Postgres on a local socket. Mean time
-per request:
+each on its own connection, with Postgres on a local socket, served by
+this branch's compiler and by the one before it in turn. Mean time per
+request:
 
 | | before | after |
 |---|---|---|
-| native, no query | 1.29 ms | 0.15 ms |
-| native, one query | 2.53 ms | 0.29 ms |
-| native, five queries | 7.36 ms | 0.67 ms |
-| interpreted, no query | 2.81 ms | 1.39 ms |
-| interpreted, one query | 4.57 ms | 2.35 ms |
-| interpreted, five queries | 12.08 ms | 5.46 ms |
+| native, no query | 1.25 ms | 0.12 ms |
+| native, one query | 2.48 ms | 0.34 ms |
+| native, five queries | 7.28 ms | 0.66 ms |
+| interpreted, no query | 2.70 ms | 1.82 ms |
+| interpreted, one query | 4.58 ms | 2.50 ms |
+| interpreted, five queries | 12.66 ms | 6.73 ms |
 
-An idle native server holding senro's listener made 1,004 scheduler
-sleeps in a second before and makes none now. It used 13 to 16 clock ticks
-of CPU in five seconds before; now it uses none on either engine.
+The same app left idle for five seconds used 15 clock ticks of CPU
+natively and 17 interpreted before, and none on either engine after. An
+earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
+1,004 times in a second.
 
 **Rows.** The runtime grows, so the machine-code and codegen rows are
 CI's to report, and the compile rows move with the binary's layout.
