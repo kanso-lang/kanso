@@ -40,6 +40,21 @@ impl<'a> DemandInfo<'a> {
     }
 }
 
+/// Whether an expression reads `name` anywhere inside it.
+fn mentions(e: &Expr, name: &str) -> bool {
+    matches!(e, Expr::Ident(id, _, _) | Expr::Partial(id, _) if id == name)
+        || crate::any_child(e, |c| mentions(c, name))
+}
+
+/// Whether a callback written in `e` reads `name`. The callback is a value
+/// the frame hands on, and it is called after the frame has returned.
+fn captured(e: &Expr, name: &str) -> bool {
+    match e {
+        Expr::Lambda { body, .. } => mentions(body, name),
+        _ => crate::any_child(e, |c| captured(c, name)),
+    }
+}
+
 /// Occurrences of a bound parameter that cannot leak its cell past the
 /// callee's frame: forced positions (operands, index bases and keys,
 /// interpolations — codegen forces each when a thunk may arrive) and the
@@ -47,7 +62,7 @@ impl<'a> DemandInfo<'a> {
 /// passed onward — may outlive the frame, so the position is unsafe. One
 /// level deep by design: passing the parameter to another call is unsafe
 /// even if that callee would qualify, erring sound.
-fn param_stays_local(body: &[Stmt], name: &str) -> bool {
+fn param_stays_local(body: &[Stmt], name: &str, may_answer_it: bool) -> bool {
     fn operand_is(e: &Expr, name: &str) -> bool {
         matches!(e, Expr::Ident(id, _, _) if id == name)
     }
@@ -83,7 +98,9 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
             Expr::Join { lhs: a, rhs: b, .. } => {
                 expr_safe(a, name, false) && expr_safe(b, name, false)
             }
-            Expr::Lambda { body, .. } => expr_safe(body, name, false),
+            // A callback is called after this frame has gone, so one that
+            // reads the parameter holds its cell past the frame.
+            Expr::Lambda { body, .. } => !mentions(body, name),
         }
     }
     fn param_stays_local_at(body: &[Stmt], name: &str, result_ok: bool) -> bool {
@@ -93,7 +110,78 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
             Stmt::Expr(expr) => expr_safe(expr, name, result_ok && i == last),
         })
     }
-    param_stays_local_at(body, name, true)
+    param_stays_local_at(body, name, may_answer_it)
+}
+
+/// Whether some arm of the callee can answer the cell it was handed, unread.
+/// Asked of a position `safe_position` passed, so the cell goes nowhere else.
+fn hands_back(program: &Program, group: &str, arity: usize, position: usize) -> bool {
+    program.fns.iter().any(|f| {
+        f.name == group
+            && f.params.len() == arity
+            && matches!(&f.params[position],
+                Pattern::Var(name, _) if !param_stays_local(&f.body, name, false))
+    })
+}
+
+/// Where a call's answer goes, for a call that may answer the cell itself.
+#[derive(Clone, Copy, PartialEq)]
+enum Place {
+    /// The frame's own result, where the epilogue sees the cell leave and
+    /// does not free it.
+    Result,
+    /// An operand, an interpolation, an index, the subject of `.>`: the
+    /// value is read out of the cell and the cell is let go.
+    Read,
+    /// Anywhere else: a list, an argument, a name. The cell is kept there
+    /// past anything the frame can see.
+    Kept,
+}
+
+/// Whether the statements keep a cell that a call handed back. A function
+/// with an arm that answers its parameter unread answers the cell, and a
+/// frame that stores that answer has stored the cell.
+fn keeps_what_is_handed_back(stmts: &[Stmt], name: &str, program: &Program, at: Place) -> bool {
+    let last = stmts.len().saturating_sub(1);
+    stmts.iter().enumerate().any(|(i, stmt)| match stmt {
+        Stmt::Bind { expr, .. } => keeps_handed_back(expr, name, program, Place::Kept),
+        Stmt::Expr(expr) => {
+            let place = if i == last { at } else { Place::Kept };
+            keeps_handed_back(expr, name, program, place)
+        }
+    })
+}
+
+fn keeps_handed_back(e: &Expr, name: &str, program: &Program, at: Place) -> bool {
+    let go = |e: &Expr, at: Place| keeps_handed_back(e, name, program, at);
+    match e {
+        Expr::App { head, args, .. } => {
+            let answers_it = match head.as_ref() {
+                Expr::Ident(callee, _, _) => args.iter().enumerate().any(|(i, arg)| {
+                    matches!(arg, Expr::Ident(id, _, _) if id == name)
+                        && hands_back(program, callee, args.len(), i)
+                }),
+                _ => false,
+            };
+            (answers_it && at == Place::Kept)
+                || go(head, Place::Kept)
+                || args.iter().any(|arg| go(arg, Place::Kept))
+        }
+        Expr::BinOp { lhs, rhs, .. } => go(lhs, Place::Read) || go(rhs, Place::Read),
+        Expr::Index { base, index, .. } => go(base, Place::Read) || go(index, Place::Read),
+        Expr::Str(parts, _) => parts.iter().any(|part| match part {
+            TemplatePart::Interp(inner) => go(inner, Place::Read),
+            TemplatePart::Lit(_) => false,
+        }),
+        Expr::Join { lhs, rhs, .. } => go(lhs, Place::Read) || go(rhs, Place::Kept),
+        Expr::Block(stmts, _) => keeps_what_is_handed_back(stmts, name, program, at),
+        Expr::Guard { cond, early, rest, .. } => {
+            go(cond, Place::Read)
+                || go(early, at)
+                || keeps_what_is_handed_back(rest, name, program, at)
+        }
+        _ => crate::any_child(e, |c| go(c, Place::Kept)),
+    }
 }
 
 /// A callee position is safe when every arm either never binds the value
@@ -112,7 +200,7 @@ fn safe_position(program: &Program, group: &str, arity: usize, position: usize) 
             | Pattern::StrLit(..)
             | Pattern::Nullary(..) => {}
             Pattern::Var(name, _) => {
-                if !param_stays_local(&f.body, name) {
+                if !param_stays_local(&f.body, name, true) {
                     return false;
                 }
             }
@@ -432,13 +520,17 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
                 continue;
             }
             let mut targets = Vec::new();
+            let mut kept = false;
             for later in &decl.body[i + 1..] {
                 let e = match later {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
                 use_targets(e, name, &mut targets);
+                kept |= captured(e, name);
             }
-            let ok = targets.iter().all(|(g, a, p)| safe_position(program, g, *a, *p));
+            let ok = !kept
+                && targets.iter().all(|(g, a, p)| safe_position(program, g, *a, *p))
+                && !keeps_what_is_handed_back(&decl.body[i + 1..], name, program, Place::Result);
             let slot = verdicts.entry(key).or_insert(true);
             *slot = *slot && ok;
         }

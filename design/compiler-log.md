@@ -20,33 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — a write to a peer that has gone is an err on both engines
-
-A senro server died without a word when a page that had been listening for
-changes closed. Native code wrote to the socket with `write()`, so the closed
-peer raised SIGPIPE, which the driver leaves at its default so that a program
-behind `head` ends quietly. The interpreter writes through Rust's std, which
-suppresses the signal, and answered `cannot write: Broken pipe (os error 32)`,
-a wording the host supplies. The engines disagreed, and the interpreter is the
-oracle.
-
-The native write now ignores SIGPIPE for its duration and fails with EPIPE.
-The runtime runs one thread, so the handler it sets around the write is its
-own. Both engines say `cannot write`. The micro corpus's
-`a_write_to_a_peer_that_left_is_an_err` dials its own listener, closes the far
-end and writes; before the fix the native run exited 141 with no output. The
-tab has no sockets, so the program is listed in the native route's known gaps.
-
-The two calls around the write cost code, by CI's measure. Every benchmark's
-machine code grew by 64 bytes, so `text` rose to 5,829,760 across the
-fourteen. Clang does more work on the runtime: codegen_instructions_dev to
-117,032,350 and codegen_instructions_release to 371,872,769. Four run rows
-moved with the layout: work_oneshot rose to 9,980,896 and work_runbench to
-890,914,087, while work_encodebench fell to 2,335,339,866 and work_livebench
-to 938,655,381. Welfare falls by a sliver.
-Engines that agree are part of the language's specification, so the floor
-drops by exactly that cost.
-
 ## 2026-11-03 — kanso build writes a module a browser can run
 
 `kanso build page.kso --wasm` writes `page.wasm`: the emitted module
@@ -1839,3 +1812,131 @@ a width and no centring.
 over 1,500 connections, and I have not found what holds it. The runtime
 never frees a pool, which is why the live streams reuse their seats.
 `net/write` blocks the whole program on a client that reads slowly.
+
+## 2026-11-10 — a lazy binding a callback captured is not its frame's to free
+
+Fixes #2409.
+
+**What was wrong.** Natively, a lazy binding could be read after the
+frame that made it had freed it, and what was read was a later
+binding's value. Two shapes did it.
+
+A callback captured the binding. This program binds `twice` in each of
+three passes and reads it in a callback that runs after a sleep:
+
+```
+fn shown 0 _
+  effect 0
+
+fn shown n twice
+  print "pass {n} read {twice + 0}"
+
+fn handled n
+  twice = doubled n
+  time/sleep 2 .> (_ -> shown n twice)
+```
+
+The interpreter prints 6, 4 and 2 for passes 3, 2 and 1. The native
+build printed 2 for all three.
+
+A function handed the binding back and the caller kept it:
+
+```
+fn held false _
+  ""
+
+fn held true words
+  words
+
+fn listed n
+  a = built n
+  [(held true a)]
+```
+
+Two lists made by `listed 1` and `listed 2` read "kept 1" and "kept 2"
+on the interpreter. Natively both read "kept 2".
+
+**Why.** Each binding is lazy because the function it is handed to has
+an arm that discards it, so it is a cell. `src/demand.rs` decides
+whether the frame that made a cell may free it on the way out, and it
+decided by looking at the position the binding was handed to. A
+position is safe when the parameter there is only read, or answered
+unread as the function's own result. Both positions above are safe by
+that test, so both cells were marked releasable, and the frame's
+epilogue put them on the free list. The next lazy binding took the same
+cell.
+
+The test was missing two questions about the frame that binds the
+name. It never asked whether the use sat inside a callback, which is
+called after the frame has returned. And it took an arm that answers
+its parameter unread to be harmless, on the strength of the epilogue's
+own guard: the epilogue does not free a cell that is the frame's
+result. That guard sees the cell leave only when the call is the
+frame's last expression. A call whose answer goes into a list, under a
+name or into another call's arguments has put the cell somewhere the
+epilogue does not look.
+
+The callback question was missing on the callee's side as well: a
+function that reads its parameter inside a callback of its own keeps
+the cell past its caller's frame.
+
+A binding read through a call, such as `length page`, was never
+affected. That position was already unsafe, so the cell was never
+freed.
+
+**What changed.** Three checks, all in `src/demand.rs`.
+- `captured`: a callback in the binding function that reads the name
+  keeps the cell from being released.
+- `param_stays_local`: a callback in the callee that reads the
+  parameter makes the position unsafe.
+- `keeps_what_is_handed_back`: a call that may answer the cell unread
+  releases it only where the answer is the frame's result or is read on
+  the spot, as an operand, an interpolation, an index or the subject of
+  `.>`.
+
+All three are conservative. A callback handed to `list/map` is finished
+before the frame returns, and its cell is kept all the same.
+
+**The specs.** `a_callback_reads_the_lazy_binding_it_captured` holds the
+callback beside the binding and the callback in the callee.
+`a_lazy_binding_handed_back_and_kept_is_read_later` keeps the answer in
+a list, under a name and in an argument. Both are in
+`tests/golden/micro`, and on main's native build each printed the last
+value bound on every line.
+
+**How it was found.** While building the fix for #2408 on another
+branch I added a mode that marks a freed cell and dies when one is read.
+A fixture written to stress that change died twice, once for each
+shape, and both faults reproduced on main without the change.
+`a_lazy_effect_handed_through_a_function_still_runs`, already in the
+corpus, has the first shape and died under the mode too. It has passed
+all along because nothing in it binds a second cell before the first is
+read.
+
+**Rows.** No runtime counter moves and every benchmark's machine code is
+byte for byte what it was: no benchmark binds a lazy value in either
+shape. clang reads the same programs, so the two codegen rows stay where
+they were. What moves is the front end, which asks two more questions of
+every lazy binding.
+- `browser_compile_instructions` rises 18,918 to 352,283,482: the tab
+  compiles its corpus through the same analysis.
+- `interp_instructions` rises 3,510 to 622,571,818. The row runs the
+  interpreted corpus from source, so it carries the front end too.
+- `compile_instructions` falls 18 to 24,152,633, `entry_instructions`
+  falls 163 to 156,082,814, `library_instructions` falls 86 to 73,608,570
+  and `emit_instructions` falls 62 to 5,642,423. These four move with the
+  compiler's binary. None of their corpora binds a lazy value.
+
+I set the three compile rows from a count here and CI agreed with them.
+I did not run the interpreter's sweep or the tab's before pushing, so
+CI found those two rows and the emitter's.
+
+**Welfare.** The sum falls by 0.0000166, from 95.09254193 to 95.09252535,
+and the floor follows it. `welfare.kso` weighs every change but one: a
+change that makes the engines agree ships at whatever it costs. The tool
+never lowers the floor itself, so the floor's value was set by hand and
+its history says why.
+
+**Open.** A cell its frame cannot free lives until the program exits,
+and these cells have joined that set. A server makes one for each
+request that binds one (#2408).
