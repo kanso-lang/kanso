@@ -20,60 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — a password stretched and a digest carried join the run program
-
-`sha256/pbkdf2` peaked at 1,525,448 kB resident for 100,000 iterations
-(#2299). The issue reduced it to a tail loop that hands `sha256/digest`'s
-answer to its next iteration and carries a list it never reads, and that
-loop keeps every digest's garbage too. Under the 2026-09-05 corpus-first
-gavel both shapes join the run program here, measured on main before the
-fix.
-
-`stretched` runs `sha256/pbkdf2` for 200 iterations and `carried` runs the
-postcard for 600 digests. On this container the release-tier run program
-reads 1,045,660,009 with both. Without `stretched` (one iteration) it reads
-1,023,809,139, a column of 21,850,870 (2.09%); without `carried` (none) it
-reads 1,013,906,580, a column of 31,753,429 (3.04%). Each phase keeps its
-loop's work: `stretched` about ten kilobytes an iteration and `carried`
-about five. The counts are sized so the program's peak sees it: with both,
-arena_peak_bytes reads 6,815,760 where it read 4,718,608, and at 250
-digests `carried` stayed under the old peak and the objective could not see
-it.
-
-The mem vein takes the two fixtures, each at today's growth:
-`a_digest_hashed_again_round_a_loop` (600 digests, three arena blocks) and
-`a_password_stretched_three_hundred_times` (five). Their outputs agree with
-Python's `hashlib`.
-
-The issue's control row, the same loop without `p` at 2,296 kB, does not
-reproduce on this tree. `chain u left`, a public loop with no wrapper, and
-the wrapper with its unread list removed both keep every digest: five arena
-blocks at a thousand digests, like the postcard. The extra parameter is not
-the cause. `sha256/digest` answers through `list/fold`, and inference gives
-a library function one answer for every caller in the program, so the
-digest reads as any value. A loop slot that may hold any value is never
-carried across a rewind.
-
-CI's rows for the two phases: work_runbench 890,914,087 -> 947,406,395
-(+56,492,308, 6.0% of the new whole), run_allocs 1,930,602 -> 2,040,700,
-run_alloc_bytes 237,920,257 -> 245,492,129, run_arena_blocks 4 -> 7,
-run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
--> 4,718,608, run_cohort_frees 11 -> 13, run_perm_allocs 131 -> 133,
-run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
-1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
-run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
-runbench's emitted lines 69,443 -> 71,622 and its text 856,929 -> 889,681,
-which take the totals emitted_other_branches 18,260 -> 18,498,
-emitted_other_calls 21,198 -> 21,507, emitted_other_defines 2,327 -> 2,359,
-emitted_other_lines 174,304 -> 176,483 and text 5,829,760 -> 5,862,512.
-run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
-container reads 195,099 with the phases present as well. Inference is
-whole-program, so new callers of the shared library functions can change
-another phase's beat verdicts; that is a likely cause, and nothing here
-isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
--> 8,939,665), each keeping its ratio to its baseline, and the floor moves
-only by the rounding of the two baselines.
-
 ## 2026-11-04 — pbkdf2 and a rehashed digest give their arena back
 
 #2299. Both shapes joined the run program in #2301, measured before this.
@@ -2152,3 +2098,66 @@ distance to main's reading here. Clang's rows and the tab's are CI's.
 - The tab's run of the compiled corpus, from CI, rises 40,000 to
   `browser_run_instructions` 91,172,686. Its other three rows hold. I
   did not look for where the 40,000 are.
+
+## 2026-11-10 — a lazy binding under two holders keeps its slots in tenure
+
+Fixes #2415.
+
+**What was wrong.** Natively, a lazy binding held by two values could be
+read after its argument had been written over. The interpreter printed
+the program's answer and the native build ran out of stack, on main and
+on a compiler from 2026-11-07.
+
+A cell is malloc'd and keeps its identity, so the copy walk copies its
+slots (its arguments, and its result once forced) and writes them back in
+place. The copy map then says the cell was seen, and a second meeting in
+the same walk returned at once. An ordinary node met first from the carry
+pair and again under tenure is copied a second time, into tenure, because
+the tenured parent is pruned at by the next walk and the pair is written
+over the stage after. The cell had no such second copy. Its slots stayed
+in the pair.
+
+`k_slots_survive` refuses to share a node that holds a cell directly, so
+a tenured list of cells is walked again at every stage. It asks only about
+the immediate interior. A tenured `[[c]]` has an interior of ordinary
+survivors, and every later walk pruned there without reaching the cell.
+
+**How it was found.** Read from the code while the registry was built
+(#2408), and filed as a hazard without a program. Three programs later
+it had one. The first two never tenured anything. The third took the
+shape of a fixture whose counters show tenure, and still answered right.
+A print on the cell arm showed the sequence happening in it all the
+same: first meeting from the pair, second under tenure, and no walk
+after. The answer had stayed right because later laps wrote less into
+the pair than the lap that planted the cell. Carrying a list one string
+longer each lap wrote past the argument, and the program died.
+
+**The fix.** The walk keeps the slots of each cell it meets from the
+pair, as it found them (`k_cellsave`, emptied when the copy map moves
+on). A second meeting under tenure copies them again from that record,
+into tenure, and the map then says the cell is settled. The originals
+are needed because the first meeting wrote over the cell's own slots,
+which an ordinary node's copy never does.
+
+**The specs.** `tests/golden/mem/a_lazy_binding_under_two_holders_outlives_the_first`
+is the program: one cell under `[c]` and `[[c]]`, the first dropped a lap
+later, nineteen more laps each carrying a longer list. Its counters pin
+that the chain staged and tenured (`ten_blocks=1`, `evac_allocs=1806`),
+so a change that stops it reaching the path moves a number.
+`tests/golden/micro/a_lazy_binding_under_tenure_is_read_twice` reads the
+binding at lap 10 as well, when only the tenured holder has it, and
+again at the end. Both were red on main natively.
+
+**Rows.** Counts from this machine set by their distance to main's
+reading here; clang's rows and the tab's are CI's.
+- A walk pays about three instructions for each cell it meets from the
+  pair. `work_runbench` rises 47,877 to 952,714,730 and
+  `work_runbench_dev` 47,787 to 2,805,694,975 for the run program's
+  16,050 cells. `work_livebench` rises 459 to 938,655,379,
+  `work_pendbench` 289 to 154,094,164 and `work_scanbench` 2 to 267,927.
+- Seven fall, by layout: `work_encodebench` 1,266 to 2,335,340,193,
+  `work_deepbench` 1,098 to 198,293,720, `work_oneshot` 500 to
+  9,979,351, `work_widebench` 23, `work_digestbench` 18, and
+  `work_jsonbench` and `work_readbench` 3 each.
+- The record is 496 bytes of machine code in every program, and the
+  fourteen text rows sum to `text` 5,926,809.

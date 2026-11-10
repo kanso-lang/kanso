@@ -113466,3 +113466,57 @@ Only a string in the driver changed. By CI's measure, on the tree merged
 with the language server, codegen_instructions_release fell to 371,872,995
 (-15) and no other row moved. The emitted IR is unchanged; the binary's
 layout is the likely cause, though nothing here isolates it.
+
+## 2026-11-04 — a password stretched and a digest carried join the run program
+
+`sha256/pbkdf2` peaked at 1,525,448 kB resident for 100,000 iterations
+(#2299). The issue reduced it to a tail loop that hands `sha256/digest`'s
+answer to its next iteration and carries a list it never reads, and that
+loop keeps every digest's garbage too. Under the 2026-09-05 corpus-first
+gavel both shapes join the run program here, measured on main before the
+fix.
+
+`stretched` runs `sha256/pbkdf2` for 200 iterations and `carried` runs the
+postcard for 600 digests. On this container the release-tier run program
+reads 1,045,660,009 with both. Without `stretched` (one iteration) it reads
+1,023,809,139, a column of 21,850,870 (2.09%); without `carried` (none) it
+reads 1,013,906,580, a column of 31,753,429 (3.04%). Each phase keeps its
+loop's work: `stretched` about ten kilobytes an iteration and `carried`
+about five. The counts are sized so the program's peak sees it: with both,
+arena_peak_bytes reads 6,815,760 where it read 4,718,608, and at 250
+digests `carried` stayed under the old peak and the objective could not see
+it.
+
+The mem vein takes the two fixtures, each at today's growth:
+`a_digest_hashed_again_round_a_loop` (600 digests, three arena blocks) and
+`a_password_stretched_three_hundred_times` (five). Their outputs agree with
+Python's `hashlib`.
+
+The issue's control row, the same loop without `p` at 2,296 kB, does not
+reproduce on this tree. `chain u left`, a public loop with no wrapper, and
+the wrapper with its unread list removed both keep every digest: five arena
+blocks at a thousand digests, like the postcard. The extra parameter is not
+the cause. `sha256/digest` answers through `list/fold`, and inference gives
+a library function one answer for every caller in the program, so the
+digest reads as any value. A loop slot that may hold any value is never
+carried across a rewind.
+
+CI's rows for the two phases: work_runbench 890,914,087 -> 947,406,395
+(+56,492,308, 6.0% of the new whole), run_allocs 1,930,602 -> 2,040,700,
+run_alloc_bytes 237,920,257 -> 245,492,129, run_arena_blocks 4 -> 7,
+run_arena_peak_bytes 4,718,608 -> 6,815,760, run_spare_peak_bytes 2,621,456
+-> 4,718,608, run_cohort_frees 11 -> 13, run_perm_allocs 131 -> 133,
+run_push_mut_fast 1,195,311 -> 1,302,366, run_push_mut_slow 1,645,465 ->
+1,657,081, run_buf_reuse 157 -> 7,813, run_sh_rec 4,675,856 -> 4,723,232,
+run_sh_buf 92,424,544 -> 98,439,088, run_sh_bytes 5,112 -> 5,160,
+runbench's emitted lines 69,443 -> 71,622 and its text 856,929 -> 889,681,
+which take the totals emitted_other_branches 18,260 -> 18,498,
+emitted_other_calls 21,198 -> 21,507, emitted_other_defines 2,327 -> 2,359,
+emitted_other_lines 174,304 -> 176,483 and text 5,829,760 -> 5,862,512.
+run_beat_iters fell, 211,349 -> 195,099, though both phases add loops. This
+container reads 195,099 with the phases present as well. Inference is
+whole-program, so new callers of the shared library functions can change
+another phase's beat verdicts; that is a likely cause, and nothing here
+isolates it. Welfare re-bases run_instructions and run_peak_bytes (6,842,513
+-> 8,939,665), each keeping its ratio to its baseline, and the floor moves
+only by the rounding of the two baselines.
