@@ -118,14 +118,21 @@ pub trait Executor {
     fn readable(&mut self, _conn: i64) -> Result<bool, String> {
         Err("this engine has no sockets".to_string())
     }
-    /// Waits until one of the sockets is ready, a listener for a caller or a
-    /// connection for something to read, or until `ms` have passed; `None`
-    /// for `ms` waits as long as it takes. Answers which were ready, in the
-    /// order asked. An executor that cannot wait on a socket answers `None`
-    /// without waiting, and the scheduler asks each again after a tick, as
-    /// it always did.
-    fn await_sockets(&mut self, _handles: &[i64], _ms: Option<u64>) -> Option<Vec<bool>> {
+    /// Waits until one of the sockets is ready, or until `ms` have passed;
+    /// `None` for `ms` waits as long as it takes. Each is a handle and
+    /// whether its fiber waits to write: a listener is ready with a caller,
+    /// a connection with something to read, and a writer's connection with
+    /// room. Answers which were ready, in the order asked. An executor that
+    /// cannot wait on a socket answers `None` without waiting, and the
+    /// scheduler asks each again after a tick, as it always did.
+    fn await_sockets(&mut self, _on: &[(i64, bool)], _ms: Option<u64>) -> Option<Vec<bool>> {
         None
+    }
+    /// Writes what the connection takes without waiting and answers how
+    /// many bytes that was, or `None` when it would take none yet. An
+    /// executor that cannot write part of a value writes all of it.
+    fn send_some(&mut self, conn: i64, raw: &[u8]) -> Result<Option<usize>, String> {
+        self.send_bytes(conn, raw).map(|()| Some(raw.len()))
     }
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
         Err("this engine has no sockets".to_string())
@@ -424,18 +431,18 @@ impl Executor for RealExecutor {
     }
 
     #[cfg(unix)]
-    fn await_sockets(&mut self, handles: &[i64], ms: Option<u64>) -> Option<Vec<bool>> {
+    fn await_sockets(&mut self, on: &[(i64, bool)], ms: Option<u64>) -> Option<Vec<bool>> {
         use std::os::fd::AsRawFd;
         let mut waited: Vec<libc::pollfd> = SOCKETS.with(|s| {
             let s = s.borrow();
-            handles
-                .iter()
-                .map(|h| {
+            on.iter()
+                .map(|(h, writing)| {
                     let listener = s.listeners.get(h).map(|l| l.as_raw_fd());
                     let fd = listener.or_else(|| s.conns.get(h).map(|c| c.as_raw_fd()));
+                    let events = if *writing { libc::POLLOUT } else { libc::POLLIN };
                     // A handle that names nothing is asked about as -1, which
                     // poll passes over; its fiber is woken below to be told so.
-                    libc::pollfd { fd: fd.unwrap_or(-1), events: libc::POLLIN, revents: 0 }
+                    libc::pollfd { fd: fd.unwrap_or(-1), events, revents: 0 }
                 })
                 .collect()
         });
@@ -559,6 +566,11 @@ impl Executor for RealExecutor {
 
     fn send_bytes(&mut self, conn: i64, raw: &[u8]) -> Result<(), String> {
         send_raw(conn, raw)
+    }
+
+    #[cfg(unix)]
+    fn send_some(&mut self, conn: i64, raw: &[u8]) -> Result<Option<usize>, String> {
+        send_some_raw(conn, raw)
     }
 
     fn close_socket(&mut self, handle: i64) -> Result<(), String> {
@@ -729,6 +741,51 @@ fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
     };
     stream.write_all(raw).map_err(|_| cannot_write())?;
     stream.flush().map_err(|_| cannot_write())
+}
+
+/// The most a secured connection is handed at once: one TLS record.
+#[cfg(unix)]
+const TLS_RECORD: usize = 16384;
+
+/// What a connection takes of `raw` without waiting (`Executor::send_some`).
+/// A TLS session writes whole records and has no word for "as much as fits",
+/// so it is asked only when the socket says it has room, and handed one
+/// record's worth at a time.
+#[cfg(unix)]
+fn send_some_raw(conn: i64, raw: &[u8]) -> Result<Option<usize>, String> {
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    let stream = SOCKETS.with(|s| {
+        let s = s.borrow();
+        let found = s.conns.get(&conn);
+        found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+    })?;
+    let Some(mut stream) = stream else {
+        return Err("that is not a connection".to_string());
+    };
+    if SOCKETS.with(|s| s.borrow().secured.contains_key(&conn)) {
+        let mut room = libc::pollfd { fd: stream.as_raw_fd(), events: libc::POLLOUT, revents: 0 };
+        // SAFETY: `room` is one live pollfd for the whole call.
+        if unsafe { libc::poll(&mut room, 1, 0) } == 0 {
+            return Ok(None);
+        }
+        let record = &raw[..raw.len().min(TLS_RECORD)];
+        return send_raw(conn, record).map(|()| Some(record.len()));
+    }
+    stream.set_nonblocking(true).map_err(|e| e.to_string())?;
+    let taken = loop {
+        match stream.write(raw) {
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            taken => break taken,
+        }
+    };
+    stream.set_nonblocking(false).map_err(|e| e.to_string())?;
+    match taken {
+        Ok(0) if !raw.is_empty() => Err(cannot_write()),
+        Ok(n) => Ok(Some(n)),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+        Err(_) => Err(cannot_write()),
+    }
 }
 
 /// What a failed write to a socket says, on both engines. The host's own
