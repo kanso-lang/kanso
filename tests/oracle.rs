@@ -34,11 +34,19 @@ fn expected(path: &Path, extension: &str) -> String {
 
 /// Captures raw printed lines the way the native binary writes stdout, and
 /// reads the real filesystem so file-driven cases behave as `RealExecutor`.
+/// Sockets are the real executor's own, so a case that is both ends of a
+/// connection runs here as it runs under `kanso run --interp`.
 struct CollectExecutor {
     program_args: Vec<String>,
     stdout: String,
     stderr: String,
     rng: kanso::eval::Rng,
+}
+
+/// The real executor, for the socket calls the oracle hands on to it. Its
+/// sockets live in the thread, so one built per call names the same ones.
+fn host() -> kanso::eval::RealExecutor {
+    kanso::eval::RealExecutor { program_args: Vec::new(), rng: kanso::eval::Rng::from_seed(0) }
 }
 
 impl Executor for CollectExecutor {
@@ -126,6 +134,54 @@ impl Executor for CollectExecutor {
             String::from_utf8_lossy(&done.stdout).into_owned(),
             String::from_utf8_lossy(&done.stderr).into_owned(),
         ))
+    }
+
+    fn listen(&mut self, port: i64) -> Result<i64, String> {
+        host().listen(port)
+    }
+
+    fn socket_port(&mut self, listener: i64) -> Result<i64, String> {
+        host().socket_port(listener)
+    }
+
+    fn accept(&mut self, listener: i64) -> Result<Option<i64>, String> {
+        host().accept(listener)
+    }
+
+    fn accept_waiting(&mut self, listener: i64) -> Result<i64, String> {
+        host().accept_waiting(listener)
+    }
+
+    fn readable(&mut self, conn: i64) -> Result<bool, String> {
+        host().readable(conn)
+    }
+
+    fn await_sockets(&mut self, handles: &[i64], ms: Option<u64>) -> Option<Vec<bool>> {
+        host().await_sockets(handles, ms)
+    }
+
+    fn receive(&mut self, conn: i64) -> Result<String, String> {
+        host().receive(conn)
+    }
+
+    fn receive_bytes(&mut self, conn: i64) -> Result<Vec<u8>, String> {
+        host().receive_bytes(conn)
+    }
+
+    fn dial(&mut self, to: &str, port: i64) -> Result<i64, String> {
+        host().dial(to, port)
+    }
+
+    fn send(&mut self, conn: i64, text: &str) -> Result<(), String> {
+        host().send(conn, text)
+    }
+
+    fn send_bytes(&mut self, conn: i64, raw: &[u8]) -> Result<(), String> {
+        host().send_bytes(conn, raw)
+    }
+
+    fn close_socket(&mut self, handle: i64) -> Result<(), String> {
+        host().close_socket(handle)
     }
 
     fn make_dir(&mut self, path: &str) -> Result<(), String> {
