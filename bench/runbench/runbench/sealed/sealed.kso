@@ -1,0 +1,29 @@
+# A session's trip through base64. A server reads the cookie a request
+# carries and writes the one its answer sets, so each pass spells a cookie's
+# bytes as base64 and reads them back. `std/base64` builds its text a group
+# at a time by joining strings, reads each letter out of the alphabet with a
+# slice, and builds its bytes by pushing onto a list (#2420).
+import "std/base64"
+import "std/text"
+
+fn cookie n
+  text/bytes "viewer={n}&token=k3v9Qm2xLr8TzW1bHs6Yd0Pc&flash=saved&kept=true"
+
+fn weighed none
+  0
+
+fn weighed bs
+  length bs
+
+fn trip n
+  spelled = base64/encode (cookie n)
+  length spelled + weighed (base64/decode spelled)
+
+fn passes 0 acc
+  acc
+
+fn passes n acc
+  passes (n - 1) (acc + trip n)
+
+pub fn total n
+  passes n 0

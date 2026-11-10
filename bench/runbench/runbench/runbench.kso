@@ -344,6 +344,18 @@
 # the binding cannot free its cell while the callback holds it, and natively
 # nothing else did, so each pass left 184 bytes behind until the program
 # exited: 2,944,000 of them over the phase.
+#
+# One more joined later on 2026-11-10, measured on main before kanso#2420's
+# fix. Its column is the whole program with it, 991,852,481, less the whole
+# without, 952,721,301, and its share is of the former.
+#
+#   sealed    800 cookies through base64 and back         39,131,180  3.95%
+#
+# `sealed` is the trip a session makes on every request that carries one:
+# the cookie's bytes spelled as base64 and read back. `std/base64` joins a
+# string for each group of three bytes, reads each letter out of its
+# alphabet with a slice, and builds the bytes it decodes by pushing onto a
+# list, which comes to about 49,000 instructions for a cookie of sixty bytes.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -375,6 +387,7 @@ import "./restate"
 import "./rested"
 import "./rewind"
 import "./scatter"
+import "./sealed"
 import "./split"
 import "./stack"
 import "./stretched"
@@ -460,6 +473,8 @@ stretched_iterations = 200
 
 carried_hashes = 600
 
+sealed_passes = 800
+
 fn decoded _ 0 sofar
   sofar
 
@@ -524,8 +539,9 @@ fn tally raw doc a b
   ported21 = ported20 + worded/total worded_words
   ported22 = ported21 + stretched/total stretched_iterations
   ported23 = ported22 + carried/total carried_hashes
+  ported24 = ported23 + sealed/total sealed_passes
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported23 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported24 + rest))
   bulk .> on
 
 fn shaped raw doc a
