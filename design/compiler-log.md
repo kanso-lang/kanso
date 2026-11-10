@@ -1729,10 +1729,10 @@ for.
 **The fiber table is one array.** The native scheduler kept its fibers
 as an array per field, so each insert and each remove called `memmove`
 once per field, and a fork does both. It keeps one array of records now
-and moves the fibers after a fork once. Counted here, on a machine the
-golden's rows were not counted on, runbench retired 913,960,225
-instructions before and 910,533,567 after, and its dev-tier build
-2,763,671,442 and 2,759,639,689. CI's rows are the ones that count.
+and moves the fibers after a fork once. runbench forks sixteen thousand
+times and retires 3,089,651 fewer instructions for it, and the tab, which
+runs the interpreted corpus through the same scheduler built for wasm,
+retires 1,244,416 fewer.
 
 **Two specs, and two faults of mine they caught.**
 `a_reader_is_told_when_its_socket_closes` has a reader on a connection
@@ -1748,7 +1748,8 @@ hang is green on both engines.
 The second fault was the first design. It kept the awaited handle in a
 field per fiber and cleared it before every step. Native kept it as a
 fourth array, which a fork then moved as well: runbench retired 1,407,682
-more instructions here, and CI read `interp_instructions` 153,945 higher.
+more instructions on this machine than the tree under it, and CI read
+`interp_instructions` 153,945 higher.
 Those rows are what the objective counts, and it does not count wall
 time, so the design scored as a loss. Reading the handle from the fiber's
 own work removed the field and the clearing. Left where
@@ -1775,8 +1776,17 @@ natively and 17 interpreted before, and none on either engine after. An
 earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
 1,004 times in a second.
 
-**Rows.** The runtime grows, so the machine-code and codegen rows are
-CI's to report, and the compile rows move with the binary's layout.
+**Rows.** Counted on this machine with the toolchain the goldens name,
+and set from each row's distance to main's here.
+- Work: all fifteen rows fall. `runbench` 913,657,054 to 910,567,403 and
+  its dev-tier build 2,763,752,866 to 2,759,705,221; the other thirteen
+  by between 166 and 1,713.
+- `browser_run_instructions` 78,426,179 to 77,181,763.
+- `interp_instructions` rises 9,993 to 622,568,308. The corpus opens no
+  socket, so this is the scheduler's loop laid out around one more call.
+  `entry_instructions` rises 12 to 156,082,977 with the binary's layout.
+- Machine code: each benchmark carries 48 fewer bytes of `.text` than on
+  main, and `text` sums to 5,875,561.
 
 **Open.** `net/write` still blocks the whole program on a client that
 reads slowly.
