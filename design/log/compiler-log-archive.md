@@ -113715,3 +113715,80 @@ browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
 cause; the check now reads one table through one function, and layout may
 account for some of it. No runtime, text or allocation row moved. Welfare
 rose from 95.627876 to 95.627948, banked.
+
+## 2026-11-04 — find2 refuses what the interpreter refuses
+
+`text/find2` and `text/find2_below` take bytes and then three or four ints. The
+interpreter refused anything else in those positions; native answered (#2310).
+The emitted shims `k_b_find2_fast` and `k_b_find2_below_fast` test every tag
+and send any call that is not bytes and small ints to the out-of-line doors
+`k_b_find2` and `k_b_find2_below` in runtime/text.c. Those doors tested only
+the bytes, so a bool, a string or a float was scanned with its payload as the
+number, and a bignum with its pointer. The doors now refuse anything but an
+int, in the interpreter's words (`find2 takes bytes`, `find2_below takes
+bytes`).
+
+A tag test alone would have made native refuse a bignum, which the interpreter
+reads. So the doors read one as the interpreter does: a start past a word
+scans from the front, a byte keeps the low byte of its magnitude, and a floor
+past a word sits above every byte or below them all. A negative small byte
+still reads two ways, the magnitude's low byte in the interpreter and `& 0xff`
+in native. That one is on the scanning path and is #2313.
+
+Four specs, each seen red. Three runtime goldens pin the refusal of a bool
+start, a string byte and a float floor on native, `--interp`, the oracle and
+the tab; native wrote nothing to stderr before the fix. The micro golden
+`a_bignum_reads_the_same_in_every_find2_position` puts a bignum in each
+position, and with the fix reverted native printed nothing where the
+interpreter prints `2 2 3 2 4`.
+
+The rows are from a job on 0x19 model 0x11, on the tree merged with #2311,
+which moved none of the same rows. No scan path changed, since the
+new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
+so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
+codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
+compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
+(-218). The runtime instruction rows fell by 1,890: work_encodebench to
+2,335,339,191 (-630), work_oneshot to 9,978,933 (-385) and work_runbench to
+941,722,133 (-945), while work_livebench rose to 938,654,286 (+70). No benchmark reaches the
+doors with a non-int, so layout is the likely cause of all four; nothing here
+isolates it. The front end, the emitter, the interpreter and the tab did not
+move. Welfare rose by less than 0.0001 and the floor is banked.
+
+## 2026-11-04 — find2 reads a negative byte as the interpreter does
+
+The interpreter reads each byte `find2` and `find2_below` look for as the low
+byte of the int's magnitude, so -98 is 98. Native's two raw scans read
+`a & 0xff`, so -98 was 158, and `find2 (bytes "abc") 1 -98 0` answered 4
+where the interpreter answered 2 (#2313). The interpreter is the oracle, so
+native changed. Both scans read `& 0xff` first and correct the two bytes
+only when `(a | b) < 0`. At the emitted sites the bytes are literals and the
+test folds away.
+
+The first version computed both magnitudes on every call, through a helper
+that the release tier's hot unit and `a_short_scan_tail_answers_like_the_byte_walk`
+each lift out of the runtime by name. The second lift did not know the
+helper and the spec failed on both hosts, so the magnitude is computed in
+place. That version cost the browser run 92,400 instructions; the single
+sign test costs 52,800.
+
+The micro goldens `find2_at_its_edges` and `find2_below_at_its_edges` each
+gain a negative byte in the scalar walk and one in the vector step. Before
+the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
+2 and 3.
+
+The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
+128 bytes, and scanbench's and runbench's, which inline the raw scans most,
+by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
+(+4,048). work_runbench rose to 942,094,162 (+372,029
+over main). Four other work rows moved by a few hundred instructions:
+work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
+(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
+(+141). An earlier run on the first version read encodebench 3.8M lower,
+and this one reads it within 238 of main, so neither reading is the change.
+browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
+wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
+and codegen_instructions_release fell to 371,954,589 (-46,231). The front
+end, the emitter and the interpreter did not move. Welfare fell by less than
+0.01. The differential law requires the fix, so the floor was lowered by
+exactly that, with the reason in bench/welfare_floor.json.

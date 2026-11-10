@@ -20,83 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — find2 refuses what the interpreter refuses
-
-`text/find2` and `text/find2_below` take bytes and then three or four ints. The
-interpreter refused anything else in those positions; native answered (#2310).
-The emitted shims `k_b_find2_fast` and `k_b_find2_below_fast` test every tag
-and send any call that is not bytes and small ints to the out-of-line doors
-`k_b_find2` and `k_b_find2_below` in runtime/text.c. Those doors tested only
-the bytes, so a bool, a string or a float was scanned with its payload as the
-number, and a bignum with its pointer. The doors now refuse anything but an
-int, in the interpreter's words (`find2 takes bytes`, `find2_below takes
-bytes`).
-
-A tag test alone would have made native refuse a bignum, which the interpreter
-reads. So the doors read one as the interpreter does: a start past a word
-scans from the front, a byte keeps the low byte of its magnitude, and a floor
-past a word sits above every byte or below them all. A negative small byte
-still reads two ways, the magnitude's low byte in the interpreter and `& 0xff`
-in native. That one is on the scanning path and is #2313.
-
-Four specs, each seen red. Three runtime goldens pin the refusal of a bool
-start, a string byte and a float floor on native, `--interp`, the oracle and
-the tab; native wrote nothing to stderr before the fix. The micro golden
-`a_bignum_reads_the_same_in_every_find2_position` puts a bignum in each
-position, and with the fix reverted native printed nothing where the
-interpreter prints `2 2 3 2 4`.
-
-The rows are from a job on 0x19 model 0x11, on the tree merged with #2311,
-which moved none of the same rows. No scan path changed, since the
-new tests sit behind the shims' own. Every binary's `.text` grew by 288 bytes,
-so text across the fourteen benchmarks rose to 5,873,520 (+4,032).
-codegen_instructions_release rose to 372,000,820 (+2,316), likely clang
-compiling the larger runtime, and codegen_instructions_dev fell to 117,050,435
-(-218). The runtime instruction rows fell by 1,890: work_encodebench to
-2,335,339,191 (-630), work_oneshot to 9,978,933 (-385) and work_runbench to
-941,722,133 (-945), while work_livebench rose to 938,654,286 (+70). No benchmark reaches the
-doors with a non-int, so layout is the likely cause of all four; nothing here
-isolates it. The front end, the emitter, the interpreter and the tab did not
-move. Welfare rose by less than 0.0001 and the floor is banked.
-
-## 2026-11-04 — find2 reads a negative byte as the interpreter does
-
-The interpreter reads each byte `find2` and `find2_below` look for as the low
-byte of the int's magnitude, so -98 is 98. Native's two raw scans read
-`a & 0xff`, so -98 was 158, and `find2 (bytes "abc") 1 -98 0` answered 4
-where the interpreter answered 2 (#2313). The interpreter is the oracle, so
-native changed. Both scans read `& 0xff` first and correct the two bytes
-only when `(a | b) < 0`. At the emitted sites the bytes are literals and the
-test folds away.
-
-The first version computed both magnitudes on every call, through a helper
-that the release tier's hot unit and `a_short_scan_tail_answers_like_the_byte_walk`
-each lift out of the runtime by name. The second lift did not know the
-helper and the spec failed on both hosts, so the magnitude is computed in
-place. That version cost the browser run 92,400 instructions; the single
-sign test costs 52,800.
-
-The micro goldens `find2_at_its_edges` and `find2_below_at_its_edges` each
-gain a negative byte in the scalar walk and one in the vector step. Before
-the fix native answered 5, 25, 10 and 23 where the interpreter answers 2, 6,
-2 and 3.
-
-The rows are CI's, on the recorded host. Twelve binaries' `.text` grew by
-128 bytes, and scanbench's and runbench's, which inline the raw scans most,
-by 1,248 and 1,264, so text across the fourteen benchmarks rose to 5,877,568
-(+4,048). work_runbench rose to 942,094,162 (+372,029
-over main). Four other work rows moved by a few hundred instructions:
-work_encodebench to 2,335,339,429 (+238), work_livebench to 938,654,937
-(+651), work_oneshot to 9,979,423 (+490) and work_scanbench to 267,717
-(+141). An earlier run on the first version read encodebench 3.8M lower,
-and this one reads it within 238 of main, so neither reading is the change.
-browser_run_instructions rose to 78,397,193 (+52,800), the sign test on the
-wasm runtime's calls. codegen_instructions_dev rose to 117,058,158 (+7,723)
-and codegen_instructions_release fell to 371,954,589 (-46,231). The front
-end, the emitter and the interpreter did not move. Welfare fell by less than
-0.01. The differential law requires the fix, so the floor was lowered by
-exactly that, with the reason in bench/welfare_floor.json.
-
 ## 2026-11-04 — sha256's rounds carry raw words, and pbkdf2's chain skips its bytes
 
 `sha256/pbkdf2` was about nineteen times slower than OpenSSL at the release
@@ -2081,3 +2004,117 @@ the maps do not, which is the case for the positional layout the ruling
 asks for: a record's fields in order, with no key read and no map built.
 These are this machine's numbers from a runtime built here, and the
 benchmark #2416 owes will pin its own from CI.
+
+## 2026-11-10 — senro's pages travel as bytes kata derives
+
+#2416, built in senro (senro#107 for the benchmark, senro#108 for the
+encoding). A page's data and a component's state leave the server in a
+binary encoding, and JSON stays where something outside senro reads the
+data.
+
+kata knows a page's shape from the fields its template reads, so it writes
+a record as those fields in a fixed order and a list of records as a count
+and the records, with no name and no tag between them. Only the leaves are
+tagged: one byte that says what follows, and that holds the whole of a
+small int or the length of a short string. The server gets a packer for
+each page. The browser module gets a record type and a reader for each
+record a template reads, and draws the page with the template's ordinary
+compile; the compile that read fields out of a map is deleted. The first
+four bytes are a hash of every page's shape in the module, and bytes from
+another build draw nothing.
+
+`bench/pages` is a board of fifty records in a layout with one component.
+Its rows are wasm instructions counted by `count_module`, taken from CI
+under JSON and again under the encoding:
+
+    row                                   JSON      binary
+    page as data, bytes                 15,191       9,636   -36.6%
+    component state, bytes                  43          36   -16.3%
+    server: records, component drawn   405,267     423,263    +4.4%
+    server: page answered as data    1,861,329   1,269,908   -31.8%
+    server: page answered as HTML    5,720,720   5,074,507   -11.3%
+    browser: module start               13,905      13,764    -1.0%
+    browser: page drawn from data    7,092,359   6,302,146   -11.1%
+    browser: one component action      172,445     230,189   +33.5%
+
+A page is a third smaller and a third cheaper to write. Drawing it in the
+browser falls by a ninth, because drawing the markup is most of a page
+update and the encoding does not reach it.
+
+A component action costs more than it did. Its state is held in the page
+as base64 and read into a map, both in kanso code, where JSON was read and
+written by the runtime. Measured apart on a 33-byte state: spelling it as
+base64 costs 26,200 instructions and reading it back 28,000, against 15,600
+and 30,700 for `json/encode` and `json/decode` of the same value, and
+reading the tagged bytes into a map costs 58,300. Two issues carry what
+that found. #2420 is base64 in the runtime. #2421 is what a decoder
+written in kanso pays for each value it reads: a returned record costs
+607 instructions a value when it is destructured in a parameter with its
+int first, 1,013 with its value first, and 1,673 when it is bound to a
+name and read by its fields, which is the only way a caller in another
+module can take it.
+
+The codec was fuzzed before it was trusted: `wire` and a second writing of
+the format in JavaScript each read what the other wrote for 2,000,000
+random values with no disagreement. Three breaks were watched red first.
+One of them, a 64-byte string written behind the tag for 63, passed 2,000
+values because no string was 64 bytes long, and the strings are now aimed
+at exact byte lengths. The long run stopped once, at a string beginning
+with U+FEFF that the reference's `TextDecoder` dropped, which was the
+reference's fault.
+
+Decided on the way, by the committee and recorded on #2416. Floats travel
+as their decimal text, since kanso cannot read a float's bits and no page
+in the examples sends one. Component state stays tagged: writing it
+positionally needs a component to declare its state's type, and that waits
+on what #2420 and #2421 leave to win. Only a program that names `rendered`
+gets the readers and row types, so a server still refuses a misspelled
+field at the template's line.
+
+Nothing in kanso changed, so no row here moves. The site's views guide
+describes the bytes, and its senro pin moves to 43a2ca5.
+
+## 2026-11-10 — a session's trip through base64 joins the corpus
+
+The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
+holds a component's state in the page as base64, and its benchmark showed
+an action costing more than it had in JSON, with base64 the larger part.
+senro also spells and reads base64 for every request that carries a
+session. `std/base64` is written in kanso: it joins a string for each group
+of three bytes, reads each letter out of its alphabet with a slice, and
+builds the bytes it decodes by pushing onto a list. No benchmark held a
+trip through it, so a fix would have scored as nothing.
+
+`sealed` joins the run program: 800 passes, each spelling a cookie of about
+sixty bytes and reading it back. Built with the phase and with it reading
+nothing, the program retires 991,852,481 instructions against 952,721,301
+in this container, so the phase is 39,131,180 of them, 3.95%, and a trip
+costs about 49,000. The same trip joins the interpreter's corpus at 15
+passes, where it costs 3.1 million instructions a trip.
+
+CI's rows. work_runbench 952,714,702 -> 991,852,372 and work_runbench_dev
+2,805,694,975 -> 2,894,015,349. interp_instructions 680,822,127 ->
+727,482,475, interp_allocs 984,852 -> 1,043,722 and interp_peak_bytes
+1,377,499 -> 1,489,302. In the tab, browser_compile_instructions
+358,139,032 -> 413,857,607, browser_compile_peak_bytes 862,043 -> 975,975
+and browser_run_instructions 91,173,579 -> 95,460,118, with
+browser_run_peak_bytes still 1,572,864. The tab's compile rises by 15.6%:
+the corpus now imports `std/base64` and through it `std/bits`, and the tab
+compiles both. The compile rows that read other programs did not move.
+
+The run program's counters rise with the phase: run_allocs 2,372,861,
+run_alloc_bytes 261,860,897, run_perm_allocs 161, run_beat_iters 197,248,
+run_push_mut_slow 1,658,292 (and run_push_mut_fast 1,398,651),
+run_bytes_malloc 9,468, run_str_scans 52,203, run_str_scan_bytes
+19,043,424, run_sh_str 19,617,504, run_sh_buf 102,043,040 and run_sh_bytes
+43,560, with run_buf_reuse at 7,390. `std/base64` joins the program's
+emitted code, so runbench reads defines=975 calls=10294 branches=9407
+lines=80567 and the summed rows emitted_other_defines 2,406,
+emitted_other_calls 22,268, emitted_other_branches 19,938 and
+emitted_other_lines 185,688. Its machine code is 912,641 bytes, and the
+summed text 5,954,425.
+
+The floor is re-based and the score is not a gain. Seven baselines are
+scaled by the new reading over the old, as the last corpus additions did,
+so the meta moves only by their rounding, 95.09928563621176 to
+95.09928566956496.
