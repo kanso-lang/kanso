@@ -1368,6 +1368,19 @@ impl<'a> Backend<'a> {
                     {
                         match self.beat.carried.get(&(name.to_string(), n)) {
                             Some(positions) => {
+                                // A record built at the call for a by-value
+                                // slot has no operand among the emitted ones:
+                                // its words are packed apart. Where the slot
+                                // is carried they join the others, so the
+                                // carry stages its fields like any record
+                                // held by value. Left apart, the carry staged
+                                // an operand that was never written and the
+                                // module did not build.
+                                for &j in positions {
+                                    if let Some(p) = packed[j].take() {
+                                        emitted[j] = p;
+                                    }
+                                }
                                 // evacuate the loop-varying arguments through
                                 // the carry buffers, then rewind — before the
                                 // ABI conversion below, so the call passes
