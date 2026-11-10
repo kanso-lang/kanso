@@ -198,6 +198,10 @@ higher = [
   "put_mut_fast"
   # A pair the in-place delete marked dead where it stands.
   "delete_marks"
+  # A wait the scheduler made on the sockets its fibers were waiting for.
+  # Losing the wait asks each socket again every millisecond, which answers
+  # the same bytes a little later, and this counter goes to nought.
+  "sock_waits"
   "bytes_freed"
   "carry_dedup"
   # What stays unclassified, and why each one is not an oversight.

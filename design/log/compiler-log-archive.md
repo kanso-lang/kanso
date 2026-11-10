@@ -113292,3 +113292,26 @@ with `pool/make n`, `pool/take p`, `pool/give p v` and
   and birthplace the work gave it.
 
 Owed: nothing beyond #2264's list. The pool (#2277) already uses these names.
+
+## 2026-11-03 — gavel: senro is built out under a mandate, and keeps old paths only as aliases
+
+#2280 asked how a senro app keeps an old URL working once every route is
+RESTful. Clay ruled on that and widened it.
+
+- The declaration is `legacy_route_aliases`, a name that marks it as a
+  compatibility measure. Every resource still gets its RESTful route, and an
+  alias can only point at one. A wrong alias is refused while the app
+  compiles.
+- senro gets singular resources, as Rails has them: a resource with no
+  `:id`, such as `/profile`.
+- senro's design is delegated. Clay: "go to town and spend weeks expanding
+  the framework with a clear idea of what my underlying philosophy and
+  principles are, adding authentication a la devise, and basically making
+  this kanso alternative to ruby on rails." Cloud makes senro's design calls
+  and brings the whole to him for review. CLAUDE.md states the rule.
+
+Under the mandate, an alias answers with a permanent 308 redirect to its
+canonical path, so each resource keeps one URL.
+
+Owed: senro's principles written down for Clay to correct, then
+`legacy_route_aliases` and singular resources with specs.
