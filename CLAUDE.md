@@ -509,3 +509,17 @@ in one.
   whole. Clay: "when you think it's gorgeous, only then do i step in and take
   the 5000 ft view and dictate any major rewrites." A question about kanso
   the language goes to the committee, as The tracker says.
+- **No `for` loops, anywhere (#2395).** kanso has none, and nothing built on
+  it gets one: a template or configuration language walks a collection with
+  `each`, `map` and their kin. Clay: "we NEVER EVER EVER EVER want 'for' loops
+  in kanso. we use collection pipeline constructs like each and map."
+- **An app goes through its models (#2394).** senro app code, the examples
+  and what the generator writes hold no SQL and no `pg/query`. A read or a
+  write the models cannot express is a gap in senro, fixed there.
+- **senro may ask the language for more.** Clay: "this real world use case
+  for kanso may lead to several more language tweaks. in general i support
+  ambition as long as it fits with the stated goals for the language and the
+  principles behind them." Such a change is proposed to the committee.
+- **A senro design may go by the committee.** Clay: "definitely feel free to
+  run any of these designs by the language committee to find beauty and
+  elegance." The reading goes on the design's issue.
