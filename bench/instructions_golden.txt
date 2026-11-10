@@ -39,6 +39,6 @@ indexbench 1887750
 scanbench 267886
 digestbench 3107383
 readbench 4583665
-livebench 938655535
+livebench 938655507
 runbench 910567403
 runbench_dev 2759705221
