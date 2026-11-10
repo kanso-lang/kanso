@@ -269,6 +269,9 @@ pub enum Desc {
     Secure(i64, String),
     Send(i64, String),
     SendBytes(i64, Rc<Vec<u8>>),
+    /// A send the scheduler holds part done: the send, and how many of its
+    /// bytes the connection has taken.
+    Sending(Rc<Desc>, usize),
     CloseSocket(i64),
     Sleep(u64),
     Random(u64),

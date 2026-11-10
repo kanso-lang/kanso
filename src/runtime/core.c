@@ -45,6 +45,7 @@
 #include <arpa/inet.h>
 #ifndef __wasm__
 #include <dlfcn.h>
+#include <poll.h>
 #endif
 
 #ifndef __wasm__
@@ -643,7 +644,8 @@ struct KDesc { long long dtag; KValue x; KValue y; };
    30 read_bytes,
    31 settled (a box already holding its answer: what `effect v` was handed),
    32 read_line, 33 modified, 34 dial, 35 net_read_bytes, 36 net_secure,
-   37 pool_make, 38 pool_take, 39 pool_give, 40 random_bytes, 41 net_peer */
+   37 pool_make, 38 pool_take, 39 pool_give, 40 random_bytes, 41 net_peer,
+   42 a net_write the scheduler holds part done (x: the write, y: bytes gone) */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for

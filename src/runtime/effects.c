@@ -1037,6 +1037,62 @@ static ssize_t k_conn_give(long long h, int fd, const char* buf, size_t n) {
 #endif
 }
 
+/* What a connection takes of `n` bytes without waiting: how many, 0 when it
+   would take none yet, and -1 when the write failed. A scheduled fiber writes
+   this way, so one client that has stopped reading holds its own fiber and no
+   other (#2407). A TLS session writes whole records and has no word for "as
+   much as fits", so it is asked only when the socket says it has room, and
+   handed one record's worth at a time. */
+#define K_TLS_RECORD 16384
+static ssize_t k_conn_give_some(long long h, int fd, const char* buf, size_t n) {
+#ifndef __wasm__
+    KSock* at = k_sock(h);
+    void* ssl = at ? at->tls : NULL;
+    void (*was)(int) = signal(SIGPIPE, SIG_IGN);
+    ssize_t r;
+    if (ssl) {
+        struct pollfd room = { fd, POLLOUT, 0 };
+        if (poll(&room, 1, 0) == 0) {
+            r = 0;
+        } else {
+            r = k_ssl.write(ssl, buf, (int)(n < K_TLS_RECORD ? n : K_TLS_RECORD));
+            if (r <= 0) r = -1;
+        }
+    } else {
+        /* `send` with MSG_DONTWAIT says this in one call, and would be one
+           more name for the loader to find at every program's start, 443
+           instructions whether or not the program opens a socket. `fcntl`
+           and `write` are here already. */
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        do r = write(fd, buf, n);
+        while (r < 0 && errno == EINTR);
+        int said = errno;
+        fcntl(fd, F_SETFL, flags);
+        if (r < 0) r = said == EAGAIN || said == EWOULDBLOCK ? 0 : -1;
+        else if (r == 0) r = -1;
+    }
+    signal(SIGPIPE, was);
+    return r;
+#else
+    (void)h;
+    ssize_t r = write(fd, buf, n);
+    return r <= 0 ? -1 : r;
+#endif
+}
+
+/* The bytes a write was asked to send, whichever value carries them. */
+static const char* k_write_data(KValue v, long long* len) {
+    if (v.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(v);
+        *len = b->len;
+        return (const char*)b->data;
+    }
+    KStr* t = k_as_str(v);
+    *len = t->len;
+    return t->data;
+}
+
 /* A read from a connection, out of line for its 64 KiB buffer. Inside k_exec
    the buffer was part of every k_exec frame, and a bind chain built from the
    left enters k_exec once a link, so each link held 64 KiB of stack it never
@@ -1804,6 +1860,46 @@ static KValue k_kill_kid(KValue handle) {
     return k_done();
 }
 
+/* A write inside the scheduler (23), or the rest of one (42). A write the
+   connection has no room for waits as a read with nothing arrived does. The
+   bytes it did take are counted in the description the fiber is left holding
+   (42: the write, and how much of it has gone), so the fiber picks up where
+   it stopped and no byte is copied to remember the rest.
+   Out of line, and `k_exec` is left as it was: a write outside the scheduler
+   has no other fiber to yield to and waits where it stands, and a part-done
+   one (42) never reaches it, because only the scheduler steps a fiber it
+   holds. Written into both switches this cost deepbench, which opens no
+   socket, 1.87 million instructions. 1.2 million of them were one `mov` at
+   `k_exec`'s entry, where a changed switch made clang keep its argument in
+   a second register. */
+static __attribute__((noinline)) KStep k_step_write(KDesc* d) {
+    KDesc* w = d->dtag == 42 ? k_as_desc(d->x) : d;
+    long long sent = d->dtag == 42 ? d->y.payload : 0;
+    int fd = k_socket_of(w->x.payload);
+    if (fd < 0) {
+        KStep s = {0, 0, k_none(), k_err(k_str("that is not a connection"), NULL)};
+        return s;
+    }
+    long long tlen;
+    const char* tdata = k_write_data(w->y, &tlen);
+    while (sent < tlen) {
+        ssize_t n = k_conn_give_some(w->x.payload, fd, tdata + sent, (size_t)(tlen - sent));
+        if (n < 0) {
+            KStep s = {0, 0, k_none(), k_err(k_str("cannot write"), NULL)};
+            return s;
+        }
+        if (n == 0) {
+            k_sock_waiting = 1;
+            KValue whole = d->dtag == 42 ? d->x : k_mkdesc(23, d->x, d->y);
+            KStep s = {1, 1, k_mkdesc(42, whole, k_int(sent)), k_none()};
+            return s;
+        }
+        sent += n;
+    }
+    KStep s = {0, 0, k_none(), k_done()};
+    return s;
+}
+
 /* Links walked inside steps, so the drift test below runs on one link in 256:
    asked after every link it cost runbench 650,000 instructions, and a stage
    that comes 255 links late still keeps the region inside its budget. */
@@ -1864,6 +1960,9 @@ static KStep k_step(KDesc* d) {
             KStep s = {0, 0, k_none(), k_conn_read(d->x.payload, d->dtag == 35)};
             return s;
         }
+        case 23:
+        case 42:
+            return k_step_write(d);
         case 17: {
             /* Same shape for a process: start it, then wait by yielding, so
                the other statements of the group run while it does. */
@@ -2049,14 +2148,17 @@ static void k_fibers_remove(KFibers* f, int at) {
 }
 
 /* The socket a fiber is waiting on, by its handle, or 0: a listener nobody
-   has called (21) or a connection nothing has arrived on (22, 35), found
-   under the chain words (6, 29) around it. A fiber the scheduler holds with
-   one of these at the bottom of its work asked it and was told not yet. An
-   accept the system refused for another reason carries an int and is left to
-   its tick. */
-static long long k_waited_socket(KValue work) {
+   has called (21), a connection nothing has arrived on (22, 35), or one with
+   no room for the rest of a write (42, which sets `writing`), found under
+   the chain words (6, 29) around it. A fiber the scheduler holds with one of
+   these at the bottom of its work asked it and was told not yet. An accept
+   the system refused for another reason carries an int and is left to its
+   tick. */
+static long long k_waited_socket(KValue work, int* writing) {
     KDesc* d = k_as_desc(work);
     while (d->dtag == 6 || d->dtag == 29) d = k_as_desc(d->x);
+    *writing = d->dtag == 42;
+    if (d->dtag == 42) return k_as_desc(d->x)->x.payload;
     if (d->dtag == 22 || d->dtag == 35) return d->x.payload;
     if (d->dtag == 21 && d->y.tag != K_INT) return d->x.payload;
     return 0;
@@ -2079,8 +2181,10 @@ static long long k_waited_socket(KValue work) {
    then puts the flag down that brought the scheduler here. */
 static long long k_ms_since(const struct timespec* t0);
 #ifndef __wasm__
-#include <poll.h>
-static int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t0) {
+/* Out of line and cold, as the interpreter's `awaited` is: a program that
+   opens no socket never comes here, and folded into the scheduler's loop
+   this body decided how the loop's own registers were kept. */
+static __attribute__((noinline, cold)) int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t0) {
     struct pollfd* fds = malloc(sizeof(struct pollfd) * (size_t)f->n);
     int* who = malloc(sizeof(int) * (size_t)f->n);
     if (!fds || !who) k_die("out of memory growing a parallel group");
@@ -2089,11 +2193,12 @@ static int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t
     int gone = 0;
     unsigned long long due = 0;
     for (int i = 0; i < f->n; i++) {
-        long long h = k_waited_socket(f->at[i].work);
+        int writing;
+        long long h = k_waited_socket(f->at[i].work, &writing);
         if (h) {
             who[nfds] = i;
             fds[nfds].fd = k_socket_of(h);
-            fds[nfds].events = POLLIN;
+            fds[nfds].events = writing ? POLLOUT : POLLIN;
             fds[nfds].revents = 0;
             if (fds[nfds].fd < 0) gone = 1;
             nfds++;
@@ -2326,7 +2431,17 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
 #endif
             /* a wait on sockets may leave the fiber picked still waiting,
                so the pick is made again */
-            if (k_sock_waiting && k_sched_await(&f, &now, &sched_t0)) continue;
+            if (k_sock_waiting) {
+                /* Copies go to the wait and come back, so the loop's own
+                   table and clock never have their addresses taken and stay
+                   in registers. The wait changes the clock and the fibers'
+                   wake times, which live behind the table's pointer. */
+                KFibers waited = f;
+                unsigned long long then = now;
+                int waited_for = k_sched_await(&waited, &then, &sched_t0);
+                now = then;
+                if (waited_for) continue;
+            }
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
                 if ((long long)f.at[pick].wake <= elapsed) break;

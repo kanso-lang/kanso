@@ -156,8 +156,12 @@ impl Executor for CollectExecutor {
         host().readable(conn)
     }
 
-    fn await_sockets(&mut self, handles: &[i64], ms: Option<u64>) -> Option<Vec<bool>> {
-        host().await_sockets(handles, ms)
+    fn await_sockets(&mut self, on: &[(i64, bool)], ms: Option<u64>) -> Option<Vec<bool>> {
+        host().await_sockets(on, ms)
+    }
+
+    fn send_some(&mut self, conn: i64, raw: &[u8]) -> Result<Option<usize>, String> {
+        host().send_some(conn, raw)
     }
 
     fn receive(&mut self, conn: i64) -> Result<String, String> {

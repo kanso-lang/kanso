@@ -184,6 +184,15 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
             }),
+            // Outside the scheduler there is no other fiber to run, so a send
+            // it began is finished where it stands.
+            Desc::Sending(whole, sent) => {
+                let (conn, raw) = sent_bytes(whole);
+                Ok(match executor.send_bytes(conn, &raw[(*sent).min(raw.len())..]) {
+                    Ok(()) => Value::Done,
+                    Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
+                })
+            }
             Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
                 Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(Text::from(reason)), Raised::default()),
@@ -421,8 +430,9 @@ impl<'a> Interp<'a> {
         wall_start: std::time::Instant,
         executor: &mut dyn Executor,
     ) -> bool {
-        let waits: Vec<Option<i64>> = fibers.iter().map(|f| waited_socket(&f.work)).collect();
-        let on: Vec<i64> = waits.iter().flatten().copied().collect();
+        let waits: Vec<Option<(i64, bool)>> =
+            fibers.iter().map(|f| waited_socket(&f.work)).collect();
+        let on: Vec<(i64, bool)> = waits.iter().flatten().copied().collect();
         self.sock_waiting.set(!on.is_empty());
         if on.is_empty() {
             return false;
@@ -498,6 +508,41 @@ impl<'a> Interp<'a> {
     }
 
     /// One step of anything but a chain word.
+    /// A send, from the byte it has reached. What the connection takes now
+    /// is counted, and when it will take no more the fiber is left holding
+    /// the send and that count, so it picks up where it stopped and no byte
+    /// is copied to remember the rest. The connection is asked at least
+    /// once, so a send of nothing still learns that its handle names none.
+    ///
+    /// Kept out of line and cold, as `awaited` is: the interpreted corpus
+    /// opens no socket.
+    #[cold]
+    #[inline(never)]
+    fn send_on(
+        &self,
+        whole: &Rc<Desc>,
+        mut sent: usize,
+        executor: &mut dyn Executor,
+    ) -> Result<Step, RuntimeError> {
+        let (conn, raw) = sent_bytes(whole);
+        loop {
+            match executor.send_some(conn, &raw[sent.min(raw.len())..]) {
+                Ok(Some(taken)) => sent += taken,
+                Ok(None) => {
+                    self.sock_waiting.set(true);
+                    return Ok(Step::Blocked(1, Rc::new(Desc::Sending(whole.clone(), sent))));
+                }
+                Err(reason) => {
+                    let said = Value::Str(Text::from(reason));
+                    return Ok(Step::Done(err_value(said, Raised::default())));
+                }
+            }
+            if sent >= raw.len() {
+                return Ok(Step::Done(Value::Done));
+            }
+        }
+    }
+
     fn step_leaf(
         &self,
         desc: &Rc<Desc>,
@@ -554,6 +599,11 @@ impl<'a> Interp<'a> {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
                 }
             },
+            // A send the connection has no room for waits the same way, so
+            // one client that has stopped reading holds its own fiber and no
+            // other (#2407).
+            Desc::Send(..) | Desc::SendBytes(..) => self.send_on(desc, 0, executor),
+            Desc::Sending(whole, sent) => self.send_on(whole, *sent, executor),
             // Same shape for a process: start it, then wait by yielding, so
             // the other statements of the group run while it does.
             Desc::Run(cmd, argv) => match executor.start(cmd, argv) {
@@ -611,12 +661,13 @@ struct Group {
     rejoin: Option<Rejoin>,
 }
 
-/// The socket a fiber is waiting on, by its handle: a listener nobody has
-/// called or a connection nothing has arrived on, found under the chain words
+/// The socket a fiber is waiting on, by its handle, and whether it waits to
+/// write: a listener nobody has called, a connection nothing has arrived on,
+/// or one with no room for the rest of a send, found under the chain words
 /// around it. A fiber the scheduler holds with one of these at the bottom of
 /// its work asked it and was told not yet.
 #[cfg(not(target_arch = "wasm32"))]
-fn waited_socket(work: &Rc<Desc>) -> Option<i64> {
+fn waited_socket(work: &Rc<Desc>) -> Option<(i64, bool)> {
     let mut at = work;
     loop {
         match &**at {
@@ -625,10 +676,20 @@ fn waited_socket(work: &Rc<Desc>) -> Option<i64> {
             | Desc::Annotate(inner, _, _)
             | Desc::Insisted(inner, _, _) => at = inner,
             Desc::Accept(handle) | Desc::Receive(handle) | Desc::ReceiveBytes(handle) => {
-                return Some(*handle)
+                return Some((*handle, false))
             }
+            Desc::Sending(whole, _) => return Some((sent_bytes(whole).0, true)),
             _ => return None,
         }
+    }
+}
+
+/// The connection and the bytes of a send, whichever value carries them.
+fn sent_bytes(send: &Desc) -> (i64, &[u8]) {
+    match send {
+        Desc::Send(conn, text) => (*conn, text.as_bytes()),
+        Desc::SendBytes(conn, raw) => (*conn, raw),
+        _ => (-1, &[]),
     }
 }
 
@@ -715,6 +776,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Optio
         Desc::Secure(conn, host) => out.push_str(&format!("  secure {conn} {host:?}\n")),
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::SendBytes(conn, _) => out.push_str(&format!("  send {conn}\n")),
+        Desc::Sending(whole, _) => out.push_str(&format!("  send {}\n", sent_bytes(whole).0)),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
         Desc::Bind(inner, callee) => {
             render_plan(inner, out, step);
