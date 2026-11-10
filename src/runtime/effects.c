@@ -2181,7 +2181,10 @@ static long long k_waited_socket(KValue work, int* writing) {
    then puts the flag down that brought the scheduler here. */
 static long long k_ms_since(const struct timespec* t0);
 #ifndef __wasm__
-static int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t0) {
+/* Out of line and cold, as the interpreter's `awaited` is: a program that
+   opens no socket never comes here, and folded into the scheduler's loop
+   this body decided how the loop's own registers were kept. */
+static __attribute__((noinline, cold)) int k_sched_await(KFibers* f, unsigned long long* now, struct timespec* t0) {
     struct pollfd* fds = malloc(sizeof(struct pollfd) * (size_t)f->n);
     int* who = malloc(sizeof(int) * (size_t)f->n);
     if (!fds || !who) k_die("out of memory growing a parallel group");
@@ -2428,7 +2431,17 @@ static __attribute__((noinline)) KValue k_schedule(KDesc* join) {
 #endif
             /* a wait on sockets may leave the fiber picked still waiting,
                so the pick is made again */
-            if (k_sock_waiting && k_sched_await(&f, &now, &sched_t0)) continue;
+            if (k_sock_waiting) {
+                /* Copies go to the wait and come back, so the loop's own
+                   table and clock never have their addresses taken and stay
+                   in registers. The wait changes the clock and the fibers'
+                   wake times, which live behind the table's pointer. */
+                KFibers waited = f;
+                unsigned long long then = now;
+                int waited_for = k_sched_await(&waited, &then, &sched_t0);
+                now = then;
+                if (waited_for) continue;
+            }
             for (;;) {
                 long long elapsed = k_ms_since(&sched_t0);
                 if ((long long)f.at[pick].wake <= elapsed) break;
