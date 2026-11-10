@@ -32,12 +32,12 @@ description: "senro's views are kata templates compiled to kanso; a component bi
 <span class="k">if</span> viewer == <span class="s">""</span>
   <span class="f">nav</span>.door
     <span class="f">a</span> href=<span class="s">"/session/new"</span> Sign in
-    <span class="f">a</span> href=<span class="s">"/account/new"</span> Make an account
+    <span class="f">a</span> href=<span class="s">"/registration/new"</span> Make an account
 <span class="k">else</span>
   <span class="f">form</span>.out method=<span class="s">"post"</span> action=<span class="s">"/session"</span>
     <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=<span class="s">"DELETE"</span>
     <span class="f">span</span> Signed in as {viewer}.
-    <span class="f">a</span> href=<span class="s">"/account/edit"</span> Your account
+    <span class="f">a</span> href=<span class="s">"/password/edit"</span> Your account
     <span class="f">button</span> Sign out
 <span class="k">if</span> flash != <span class="s">""</span>
   <span class="f">p</span>.flash <span class="o">=</span> flash

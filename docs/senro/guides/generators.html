@@ -402,7 +402,7 @@ generate: cannot read `page:references`: a resource nests under one parent</code
 
 <h2>accounts and signing in</h2>
 
-<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes four modules and three views, appends a <code>users</code> table to the migrations, and changes the entry.</p>
+<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes five modules and three views, appends a <code>users</code> table to the migrations, and changes the entry.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -411,6 +411,7 @@ generate: cannot read `page:references`: a resource nests under one parent</code
   create examples/notebook/registration.kso
   create examples/notebook/resets.kso
   create examples/notebook/session.kso
+  create examples/notebook/user.kso
   create examples/notebook/views/door.kata
   create examples/notebook/views/reset_asked.kata
   create examples/notebook/views/reset_chosen.kata
@@ -418,7 +419,23 @@ generate: cannot read `page:references`: a resource nests under one parent</code
   change examples/notebook/main.kso</code></pre>
 </div>
 
-<p>a user is an address and a digest of the password. <code>registration</code> makes one, at /registration/new, and signs it in. <code>session</code> signs in at /session/new and out with DELETE /session, and <code>resets</code> mails a link that sets a new password. these are the guestbook's modules with less in them: no names, no confirmation, no lock. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
+<p>a user is an address and a digest of the password, and <code>user.kso</code> is its model. the file holds one policy, and the models derivation declares the record from the table's columns.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/user.kso</div>
+  <pre><code><span class="c"># A user, as the `users` table stores them: the address they sign in with</span>
+<span class="c"># and a digest of the password. The password itself is never stored. This</span>
+<span class="c"># module is named for the record, so the models derivation declares `user`</span>
+<span class="c"># here with a field for each column and answers for the table by this</span>
+<span class="c"># module's name.</span>
+<span class="c">#</span>
+<span class="c"># Anyone may make an account, as Devise's registerable lets them. A reset</span>
+<span class="c"># link sets a password as the app, so no policy lets a viewer change one.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
+  <span class="f">true</span></code></pre>
+</div>
+
+<p>three resources work on the model. <code>registration</code> makes a user, at /registration/new, and signs it in. <code>session</code> signs in at /session/new and out with DELETE /session, and <code>resets</code> mails a link that sets a new password. they read and write through <code>user</code> by name, with <code>user/find_by</code>, <code>user/find</code> and <code>user/create</code>, and hold no SQL. nobody is signed in when a reset link is followed, so <code>resets</code> sets the new digest as the app: <code>user/update (models/as_app db) id { "digest":d }</code>. these are the guestbook's modules with less in them: no names, no confirmation, no lock. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session.kso</div>
@@ -431,9 +448,7 @@ generate: cannot read `page:references`: a resource nests under one parent</code
 
 <span class="c"># What a sign-in rests on: the digest the account keeps now. A new password</span>
 <span class="c"># changes it, so a password reset signs out every session made before it.</span>
-<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (<span class="f">db</span> email <span class="o">-&gt;</span> <span class="f">pg/query</span> db digest_by [email] <span class="o">.&gt;</span> kept_of)
-
-digest_by <span class="o">=</span> <span class="s">"select digest from users where email = $1"</span></code></pre>
+<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (<span class="f">db</span> email <span class="o">-&gt;</span> <span class="f">user/find_by</span> db <span class="s">"email"</span> email <span class="o">.&gt;</span> kept_of)</code></pre>
 </div>
 
 <p>the secret that signs every session is 32 random bytes the generator made when it ran, so two apps never share one. keep it out of any repository the public can read; changing it signs every visitor out.</p>
@@ -456,6 +471,7 @@ digest_by <span class="o">=</span> <span class="s">"select digest from users whe
 <span class="k">import</span> <span class="s">"./registration"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./user"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
 <span class="k">derive</span> kata/views
