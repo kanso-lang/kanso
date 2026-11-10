@@ -20,62 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-04 — a parameter handed to a builtin reads as what the builtin takes
-
-Kanso#2288. The hover in `kanso lsp` followed a parameter into every group
-it was passed to and stopped at builtins, because nothing recorded what a
-builtin takes. `fn parts s = text/split s ","` read `s` as the whole union.
-
-`infer::BUILTIN_TAKES` now holds it, beside `infer::builtin_set`, which says
-what a builtin answers. A row is a set per position over the full tag
-vocabulary. The check's own table in `src/check/literals.rs`, written in
-literal kinds, is deleted, and the literal check, the none check and the two
-list checks read the new rows. The hover meets a parameter's set with the
-row's set at each position it is handed to a builtin, so `s` reads
-`string`. `print` keeps one rule in literals.rs, the language's own: the
-check refuses a literal that is not a string, while every engine prints any
-value a program computes.
-
-Each row carries a third field, how many of its leading positions the
-compile-time checks enforce. The first build had the checks read every
-position, and the suite showed what that costs: the none check refused a
-key that may be none in `scripts/welfare_rescore` (40 failures across the
-rescorer's specs), and the literal check refused `delete m 2.5`, which the
-runtime corpus pins as the interpreter's refusal. Refusing more at compile
-time is a change to the language, which #2288 did not ask for, so the
-checks enforce exactly the positions the old table held. The hover reads
-every position.
-
-`tests/a_builtin_refuses_what_its_row_leaves_out.rs` checks every row
-against the interpreter. For each position a row constrains, it hands the
-builtin a value of each of fourteen tags the row leaves out, hidden behind
-an index into a one-element list so no check that reads the row answers
-first, and requires `error[runtime]` under `kanso play --interp`. A control
-with only fillers must run without a refusal. 1019 probes. It went red
-with `BYTES` dropped from `concat`'s first position, and red again in the
-control with a float as `split`'s filler. The golden transcript
-`tests/golden/lsp/builtins` went red with the hover's lookup removed.
-
-Measuring rewrote several rows. `concat`, `push`, `length` and `utf8` take
-bytes, `utf8` takes a list, `write_file` and `net_write` take bytes as text,
-and `put` and `delete` take an int or a string as the key. `length`'s
-refusal now names bytes, which moved two error goldens and the book's
-appendix A sample. The handle positions of `net/read`, `pool/take` and their
-kin are gone from the table: std hands them a record's `handle`, and only
-their own module can build the record, so no program reaches them.
-
-The probe ran native first by mistake, since `kanso play` builds a binary,
-and found native `text/find2` and `text/find2_below` answering for any value
-in their int positions where the interpreter refuses. That is #2310.
-
-The rows are from a job on family 0x19 model 0x1, the recorded silicon.
-compile_instructions fell to 24,090,335 (-10,279), entry_instructions to
-87,188,542 (-3,641), library_instructions to 72,961,337 (-2,870) and
-browser_compile_instructions to 349,295,198 (-62,200). Nothing isolates the
-cause; the check now reads one table through one function, and layout may
-account for some of it. No runtime, text or allocation row moved. Welfare
-rose from 95.627876 to 95.627948, banked.
-
 ## 2026-11-04 — find2 refuses what the interpreter refuses
 
 `text/find2` and `text/find2_below` take bytes and then three or four ints. The
@@ -1959,6 +1903,78 @@ distance to main's reading here. Clang's rows and the tab's are CI's.
 - The tab's run of the compiled corpus, from CI, rises 40,000 to
   `browser_run_instructions` 91,172,686. Its other three rows hold. I
   did not look for where the 40,000 are.
+
+## 2026-11-10 — a lazy binding under two holders keeps its slots in tenure
+
+Fixes #2415.
+
+**What was wrong.** Natively, a lazy binding held by two values could be
+read after its argument had been written over. The interpreter printed
+the program's answer and the native build ran out of stack, on main and
+on a compiler from 2026-11-07.
+
+A cell is malloc'd and keeps its identity, so the copy walk copies its
+slots (its arguments, and its result once forced) and writes them back in
+place. The copy map then says the cell was seen, and a second meeting in
+the same walk returned at once. An ordinary node met first from the carry
+pair and again under tenure is copied a second time, into tenure, because
+the tenured parent is pruned at by the next walk and the pair is written
+over the stage after. The cell had no such second copy. Its slots stayed
+in the pair.
+
+`k_slots_survive` refuses to share a node that holds a cell directly, so
+a tenured list of cells is walked again at every stage. It asks only about
+the immediate interior. A tenured `[[c]]` has an interior of ordinary
+survivors, and every later walk pruned there without reaching the cell.
+
+**How it was found.** Read from the code while the registry was built
+(#2408), and filed as a hazard without a program. Three programs later
+it had one. The first two never tenured anything. The third took the
+shape of a fixture whose counters show tenure, and still answered right.
+A print on the cell arm showed the sequence happening in it all the
+same: first meeting from the pair, second under tenure, and no walk
+after. The answer had stayed right because later laps wrote less into
+the pair than the lap that planted the cell. Carrying a list one string
+longer each lap wrote past the argument, and the program died.
+
+**The fix.** The walk keeps the slots of each cell it meets from the
+pair, as it found them (`k_cellsave`, emptied when the copy map moves
+on). A second meeting under tenure copies them again from that record,
+into tenure, and the map then says the cell is settled. The originals
+are needed because the first meeting wrote over the cell's own slots,
+which an ordinary node's copy never does.
+
+**The specs.** `tests/golden/mem/a_lazy_binding_under_two_holders_outlives_the_first`
+is the program: one cell under `[c]` and `[[c]]`, the first dropped a lap
+later, nineteen more laps each carrying a longer list. Its counters pin
+that the chain staged and tenured (`ten_blocks=1`, `evac_allocs=1806`),
+so a change that stops it reaching the path moves a number.
+`tests/golden/micro/a_lazy_binding_under_tenure_is_read_twice` reads the
+binding at lap 10 as well, when only the tenured holder has it, and
+again at the end. Both were red on main natively.
+
+**Rows.** Counts from this machine set by their distance to main's
+reading here; `work_runbench`, clang's rows and the tab's are CI's.
+- A walk pays about three instructions for each cell it meets from the
+  pair. `work_runbench` rises 47,849 to 952,714,702 and
+  `work_runbench_dev` 47,787 to 2,805,694,975 for the run program's
+  16,050 cells. `work_livebench` rises 459 to 938,655,379,
+  `work_pendbench` 289 to 154,094,164 and `work_scanbench` 2 to 267,927.
+- Seven fall, by layout: `work_encodebench` 1,266 to 2,335,340,193,
+  `work_deepbench` 1,098 to 198,293,720, `work_oneshot` 500 to
+  9,979,351, `work_widebench` 23, `work_digestbench` 18, and
+  `work_jsonbench` and `work_readbench` 3 each.
+- The record is 496 bytes of machine code in every program, and the
+  fourteen text rows sum to `text` 5,926,809.
+- Clang compiles the record: `codegen_instructions_dev` rises 7,036 to
+  116,951,956 and `codegen_instructions_release` 72,166 to 372,142,712.
+- The tab runs the same runtime, and `browser_run_instructions` rises
+  893 to 91,173,579.
+
+**The floor.** Welfare reads 95.09928563621176 with these rows, under the
+95.0994448300099 that #2414 banked. The objective's header sets a fix
+that makes the engines agree outside the sum, so the floor moves to what
+the fix costs and its history says so.
 
 ## 2026-11-10 — gavel: senro's page data and component state travel in a binary encoding
 

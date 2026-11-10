@@ -1,0 +1,69 @@
+# The two-holder shape of tests/golden/mem's
+# a_lazy_binding_under_two_holders_outlives_the_first, with the binding read
+# at lap 10 as well as at the end. By lap 10 only the tenured holder has the
+# cell, so the read forces it there and its result is fresh; the last line
+# reads it again nine stages later (#2415).
+import "std/io"
+import "std/list"
+
+type held_by
+  first
+  old
+  nested
+
+fn wide n
+  fat = (i -> "element {i} with enough bytes in it to be worth a copy")
+  list/to_list (list/map (list/take list/naturals n) fat)
+
+fn built s n
+  "kept {s} {n * 23}"
+
+fn held false _
+  ""
+
+fn held true words
+  words
+
+fn made n
+  s = "seed {n} with enough bytes in it to be seen when it is lost"
+  a = built s n
+  held true a
+
+fn both c st
+  held_by [c] st.old [[c]]
+
+fn stepped 21 st
+  held_by st.first ["old 21 with enough bytes to be worth a copy"] st.nested
+
+fn stepped 20 st
+  both (made 20) st
+
+fn stepped 19 st
+  held_by [] st.old st.nested
+
+fn stepped _ st
+  st
+
+fn inner_weight t w
+  t + length w
+
+fn weight sum inner
+  sum + list/fold inner 0 inner_weight
+
+fn peeked 10 st
+  list/fold st.nested 0 weight
+
+fn peeked _ _
+  0
+
+fn spun 0 pad st seen
+  kept = list/fold st.nested 0 weight
+  io/write "kept {kept} beside {length pad} after {seen}\n"
+
+fn spun n pad st seen
+  drift = length (wide 6000)
+  next = n + 6000 - drift - 1
+  more = seen + peeked n st
+  io/write "" .> (_ -> spun next (wide (length pad + 1)) (stepped n st) more)
+
+pub play = spun 30 (wide 12) (held_by [] [] []) 0
