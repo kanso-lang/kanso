@@ -750,6 +750,15 @@ pub struct Interp<'a> {
     /// Set when the scheduler found every fiber parked on a pool, and cleared
     /// by the next take or give that goes through.
     pool_failing: Cell<bool>,
+    /// Set when an accept found nobody calling or a read found nothing
+    /// arrived, and cleared when the scheduler next looks and finds no fiber
+    /// waiting on a socket. While it is clear the scheduler has no reason to
+    /// look, so a program without sockets pays nothing for the wait (#2405).
+    sock_waiting: Cell<bool>,
+    /// How many times the scheduler waited on the sockets its fibers were
+    /// waiting for (#2405). The native runtime counts the same waits, and
+    /// both report the count when it is not nought.
+    pub sock_waits: Cell<u64>,
     /// Where the last slice of a string with a wider character ended: the
     /// string, a character's position and the byte it starts at. A scan asks
     /// for each next character of one string in turn, so the walk to it goes
@@ -917,6 +926,8 @@ impl<'a> Interp<'a> {
             pools: RefCell::new(Vec::new()),
             pool_moved: Cell::new(false),
             pool_failing: Cell::new(false),
+            sock_waiting: Cell::new(false),
+            sock_waits: Cell::new(0),
             text_cursor: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
             linearity: std::cell::OnceCell::new(),

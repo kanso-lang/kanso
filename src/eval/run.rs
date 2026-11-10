@@ -291,6 +291,20 @@ impl<'a> Interp<'a> {
             }
             let wake = fibers[pick].wake;
             if wake > now {
+                // Every fiber is waiting. Where some wait on sockets the
+                // wait is on those, for as long as the earliest fiber on the
+                // clock allows: asking each socket again every millisecond
+                // answered a read up to a millisecond late and woke an idle
+                // server a thousand times a second (#2405). A socket that is
+                // ready makes its fiber due now, and one that is not stays a
+                // tick away. The clock moves to the time that passed, and no
+                // further than the fiber it was waiting for.
+                #[cfg(not(target_arch = "wasm32"))]
+                if self.sock_waiting.get()
+                    && self.awaited(&mut fibers, &mut now, wall_start, executor)
+                {
+                    continue;
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     let elapsed = wall_start.elapsed().as_millis() as u64;
@@ -389,6 +403,58 @@ impl<'a> Interp<'a> {
         Ok(failures.into_iter().reduce(accumulate_failures).unwrap_or(Value::NoneV))
     }
 
+    /// The scheduler's wait when a fiber is waiting on a socket: `true` when
+    /// it waited, and the pick is to be made again. What each fiber waits on
+    /// is read from the work it has left, so nothing is kept per fiber and
+    /// nothing is done per step. Answers `false`, having waited for nothing,
+    /// when no fiber waits on a socket or the executor cannot wait on one.
+    ///
+    /// Kept out of line and cold: the interpreted corpus opens no socket,
+    /// and it ran longer with this folded into the scheduler's loop.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cold]
+    #[inline(never)]
+    fn awaited(
+        &self,
+        fibers: &mut [Fiber],
+        now: &mut u64,
+        wall_start: std::time::Instant,
+        executor: &mut dyn Executor,
+    ) -> bool {
+        let waits: Vec<Option<i64>> = fibers.iter().map(|f| waited_socket(&f.work)).collect();
+        let on: Vec<i64> = waits.iter().flatten().copied().collect();
+        self.sock_waiting.set(!on.is_empty());
+        if on.is_empty() {
+            return false;
+        }
+        let clocked = fibers.iter().zip(&waits).filter(|(f, w)| w.is_none() && f.wake != PARKED);
+        let due = clocked.map(|(f, _)| f.wake).min();
+        // Until a socket is ready or the fiber on the clock is due. A wait
+        // that comes back a moment early is neither, and waits again, so one
+        // wait is one thing waited for.
+        let ready = loop {
+            let elapsed = wall_start.elapsed().as_millis() as u64;
+            let Some(ready) = executor.await_sockets(&on, due.map(|d| d.saturating_sub(elapsed)))
+            else {
+                return false;
+            };
+            let passed = wall_start.elapsed().as_millis() as u64;
+            if ready.iter().any(|r| *r) || due.is_some_and(|d| passed >= d) {
+                break ready;
+            }
+        };
+        self.sock_waits.set(self.sock_waits.get() + 1);
+        *now = (*now).max(wall_start.elapsed().as_millis() as u64);
+        if let Some(due) = due {
+            *now = (*now).min(due);
+        }
+        let waiting = fibers.iter_mut().zip(&waits).filter(|(_, w)| w.is_some());
+        for ((fiber, _), ready) in waiting.zip(ready) {
+            fiber.wake = if ready { *now } else { *now + 1 };
+        }
+        true
+    }
+
     /// Advance one fiber until it finishes (`Done`) or hits a `sleep`
     /// (`Blocked`, carrying the rest of its work). Blocking threads back up
     /// through `Bind`, so the continuation is always the remaining
@@ -467,7 +533,10 @@ impl<'a> Interp<'a> {
             },
             Desc::Accept(listener) => match executor.accept(*listener) {
                 Ok(Some(handle)) => Ok(Step::Done(Value::int(handle))),
-                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Ok(None) => {
+                    self.sock_waiting.set(true);
+                    Ok(Step::Blocked(1, desc.clone()))
+                }
                 Err(reason) => {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
                 }
@@ -476,7 +545,10 @@ impl<'a> Interp<'a> {
             // can be both ends of a connection: the fiber reading yields, and
             // the one that will write runs.
             Desc::Receive(conn) | Desc::ReceiveBytes(conn) => match executor.readable(*conn) {
-                Ok(false) => Ok(Step::Blocked(1, desc.clone())),
+                Ok(false) => {
+                    self.sock_waiting.set(true);
+                    Ok(Step::Blocked(1, desc.clone()))
+                }
                 Ok(true) => Ok(Step::Done(self.execute(desc, executor)?)),
                 Err(reason) => {
                     Ok(Step::Done(err_value(Value::Str(Text::from(reason)), Raised::default())))
@@ -537,6 +609,27 @@ struct Group {
     failures: Vec<Value>,
     parent: Option<usize>,
     rejoin: Option<Rejoin>,
+}
+
+/// The socket a fiber is waiting on, by its handle: a listener nobody has
+/// called or a connection nothing has arrived on, found under the chain words
+/// around it. A fiber the scheduler holds with one of these at the bottom of
+/// its work asked it and was told not yet.
+#[cfg(not(target_arch = "wasm32"))]
+fn waited_socket(work: &Rc<Desc>) -> Option<i64> {
+    let mut at = work;
+    loop {
+        match &**at {
+            Desc::Bind(inner, _)
+            | Desc::Rescue(inner, _, _)
+            | Desc::Annotate(inner, _, _)
+            | Desc::Insisted(inner, _, _) => at = inner,
+            Desc::Accept(handle) | Desc::Receive(handle) | Desc::ReceiveBytes(handle) => {
+                return Some(*handle)
+            }
+            _ => return None,
+        }
+    }
 }
 
 /// The same chain link with a different subject: the rest of the work once

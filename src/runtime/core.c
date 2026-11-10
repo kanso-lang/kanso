@@ -766,6 +766,9 @@ static long long k_stat_push_mut_slow = 0;
    presence. Printed only by a run that made one, so the many veins that
    never delete in place read as they did before it existed. */
 static long long k_stat_delete_marks = 0;
+/* A wait the scheduler made on the sockets its fibers were waiting for,
+   rather than asking each again a millisecond later (#2405). */
+static long long k_stat_sock_waits = 0;
 
 static void k_stats_dump(void);
 
@@ -838,6 +841,7 @@ static void k_stats_dump(void) {
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
     fprintf(stderr, "spare_peak_bytes=%lld\n", k_stat_spare_peak);
     if (k_stat_delete_marks) fprintf(stderr, "delete_marks=%lld\n", k_stat_delete_marks);
+    if (k_stat_sock_waits) fprintf(stderr, "sock_waits=%lld\n", k_stat_sock_waits);
     if (k_ahead_ran) {
         fprintf(stderr, "ahead_forced=%lld\nahead_dropped=%lld\n",
                 k_stat_ahead_forced, k_stat_ahead_dropped);

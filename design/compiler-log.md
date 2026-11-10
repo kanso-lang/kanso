@@ -20,29 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-03 — gavel: senro is built out under a mandate, and keeps old paths only as aliases
-
-#2280 asked how a senro app keeps an old URL working once every route is
-RESTful. Clay ruled on that and widened it.
-
-- The declaration is `legacy_route_aliases`, a name that marks it as a
-  compatibility measure. Every resource still gets its RESTful route, and an
-  alias can only point at one. A wrong alias is refused while the app
-  compiles.
-- senro gets singular resources, as Rails has them: a resource with no
-  `:id`, such as `/profile`.
-- senro's design is delegated. Clay: "go to town and spend weeks expanding
-  the framework with a clear idea of what my underlying philosophy and
-  principles are, adding authentication a la devise, and basically making
-  this kanso alternative to ruby on rails." Cloud makes senro's design calls
-  and brings the whole to him for review. CLAUDE.md states the rule.
-
-Under the mandate, an alias answers with a permanent 308 redirect to its
-canonical path, so each resource keeps one URL.
-
-Owed: senro's principles written down for Clay to correct, then
-`legacy_route_aliases` and singular resources with specs.
-
 ## 2026-11-03 — gavel: templates are files of their own, and a library compiles them while the program compiles
 
 senro's views were Slim files, each with the kanso file kata generated from it
@@ -1707,3 +1684,127 @@ the dev tier.
 **Open.** A fiber waiting on a socket is asked again every millisecond on
 both engines, so an idle server is never asleep for long and each query a
 request makes costs a millisecond of waiting (#2405).
+
+## 2026-11-10 — a fiber waiting on a socket is waited for
+
+A read that found nothing arrived, or an accept that found nobody calling,
+put its fiber back in the queue to be asked again a millisecond later. Both
+engines did this. Two costs followed, and senro's server showed both
+(#2405). A request that asks Postgres a question waits for the answer, and
+each wait rounded up to the next millisecond. A server with a listener and
+nothing to do woke a thousand times a second.
+
+**What changed.** When every fiber is waiting and at least one waits on a
+socket, the scheduler waits on those sockets with `poll`, for as long as
+the earliest fiber on the clock allows, and for good when no fiber is on
+the clock. A socket that is ready makes its fiber due now. The clock moves
+to the time that passed and no further than the fiber it was waiting for,
+so a sleeping fiber still runs at its own time.
+
+- What a fiber waits on is read from the work it has left. A fiber the
+  scheduler holds with an accept or a read at the bottom of its chain
+  asked it and was told not yet, so the scheduler walks down the chain
+  words to that description and takes the handle from it. Nothing is kept
+  per fiber and nothing is done per step.
+- A flag says whether to look at all. An accept that finds nobody and a
+  read that finds nothing raise it, and the scheduler puts it down when it
+  looks and finds no fiber on a socket. A program without sockets pays one
+  test of the flag each time every fiber is waiting.
+- Natively the wait is `k_sched_await`, which reads each descriptor from
+  the socket table. In the interpreter it is `awaited`, which asks the
+  executor's `await_sockets`. An executor without sockets answers `None`
+  and the scheduler ticks as before, which is what the scripted executor
+  and the tab do.
+- An accept the system refused for a reason other than nobody calling
+  keeps its one-millisecond tick natively, and its description carries an
+  int to say so. The listener stays ready through such a refusal, so a
+  wait on it would come straight back.
+- `libc` becomes a dependency of the compiler on unix, for `poll`. It was
+  already in the lock file.
+
+**The counter.** `sock_waits` counts the scheduler's waits on sockets, on
+both engines, and is printed only when it is not nought, as `delete_marks`
+is, so no golden without a socket carries it.
+`tests/golden/mem/a_reader_waits_on_its_socket` has a reader with nothing
+to read beside a writer that sleeps fifty milliseconds first: two waits,
+one for the writer's clock and one for the bytes. Its `.mem` pins
+`sock_waits=2` natively and
+`tests/a_fiber_waiting_on_a_socket_is_not_asked_again.rs` holds the
+interpreter to the same number. Thirty runs on each engine all read 2.
+With the wait taken out of either engine the count is not printed and the
+spec fails. The trend gate lists it among the counters a fall is a loss
+for.
+
+**The fiber table is one array.** The native scheduler kept its fibers
+as an array per field, so each insert and each remove called `memmove`
+once per field, and a fork does both. It keeps one array of records now
+and moves the fibers after a fork once. runbench forks sixteen thousand
+times and retires 3,089,651 fewer instructions for it, and the tab, which
+runs the interpreted corpus through the same scheduler built for wasm,
+retires 1,244,416 fewer.
+
+**Two specs, and two faults of mine they caught.**
+`a_reader_is_told_when_its_socket_closes` has a reader on a connection
+another fiber closes; that fiber then dials, and the new connection takes
+the descriptor the closed one had. On main both engines tell the reader
+`that is not a connection`. My first native version held the descriptor
+and would have waited on the new connection for good. The interpreter
+held the handle and still hung: it asked `poll` to pass over the missing
+socket and then waited with no time limit. A wait that includes a handle
+naming nothing now returns at once, and the spec that was red on that
+hang is green on both engines.
+
+The second fault was the first design. It kept the awaited handle in a
+field per fiber and cleared it before every step. Native kept it as a
+fourth array, which a fork then moved as well: runbench retired 1,407,682
+more instructions on this machine than the tree under it, and CI read
+`interp_instructions` 153,945 higher.
+Those rows are what the objective counts, and it does not count wall
+time, so the design scored as a loss. Reading the handle from the fiber's
+own work removed the field and the clearing. Left where
+the compiler put it, the interpreter's new function still cost its corpus
+59,991 instructions; kept cold and out of line it costs 9,993.
+
+**Measured.** One sitting, 2026-11-10, in the development container: a
+senro app answering 300 requests over loopback after twenty to warm up,
+each on its own connection, with Postgres on a local socket, served by
+this branch's compiler and by the one before it in turn. Mean time per
+request:
+
+| | before | after |
+|---|---|---|
+| native, no query | 1.25 ms | 0.12 ms |
+| native, one query | 2.48 ms | 0.34 ms |
+| native, five queries | 7.28 ms | 0.66 ms |
+| interpreted, no query | 2.70 ms | 1.82 ms |
+| interpreted, one query | 4.58 ms | 2.50 ms |
+| interpreted, five queries | 12.66 ms | 6.73 ms |
+
+The same app left idle for five seconds used 15 clock ticks of CPU
+natively and 17 interpreted before, and none on either engine after. An
+earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
+1,004 times in a second.
+
+**Rows.** Counted on this machine with the toolchain the goldens name,
+set from each row's distance to main's here, and then counted by CI on
+the golden's own silicon, which agreed with every one. The two codegen
+rows are CI's.
+- Work: all fifteen rows fall. `runbench` 913,657,054 to 910,567,403 and
+  its dev-tier build 2,763,752,866 to 2,759,705,221; the other thirteen
+  by between 194 and 1,713.
+- `browser_run_instructions` 78,426,179 to 77,181,763.
+- `interp_instructions` rises 9,993 to 622,568,308. The corpus opens no
+  socket, so this is the scheduler's loop laid out around one more call.
+  `entry_instructions` rises 12 to 156,082,977 with the binary's layout.
+- Machine code: each benchmark carries 48 fewer bytes of `.text` than on
+  main, and `text` sums to 5,875,561.
+- clang compiles the wait: `codegen_instructions_dev` rises 27,295 over
+  main to 116,882,342 and `codegen_instructions_release` 154,850 to
+  372,180,706.
+
+**Welfare.** The sum rises by 0.0080, from 95.0845 to 95.0925, and is
+banked. The falls in the run program and the tab outweigh the two codegen
+rows and the interpreter's 9,993.
+
+**Open.** `net/write` still blocks the whole program on a client that
+reads slowly.
