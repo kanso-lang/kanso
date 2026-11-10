@@ -1637,6 +1637,9 @@ connected at one moment. Tracked as #2402.
   allows, where it asked for 16.
 - Running children keep their own table of 64 (`K_KIDS`), which they had
   shared a constant with.
+- The lookup, the taking of a slot and the growing are kept out of line,
+  so the function every effect passes through holds a call to them and
+  none of their code.
 
 When the system itself refuses a file, `dial` already answered an err, and
 `accept` already left its fiber waiting and trying again, so a server at
@@ -1659,29 +1662,38 @@ change.
 
 The interpreter passed all three before and after.
 
-**What I got wrong on the way.** The runtime is also built for wasm, where
-the headers name no queue length, and the first build of it failed. I had
-built and tested natively only. The constant is defined when the headers
-leave it out.
+**What I got wrong on the way.**
+- The runtime is also built for wasm, where the headers name no queue
+  length, and the first build of it failed. I had built and tested natively
+  only. The constant is defined when the headers leave it out.
+- The three specs open sockets, which the tab cannot, and I left them off
+  `native_route_gaps.txt`. Three wasm corpus tests went red on the first
+  push.
+- The first version made every benchmark's effects dearer. CI's hosts were
+  not the one the work rows were counted on, so the gate would not compare
+  and I read the differences it printed as the host's. They were mine.
+  Main built here reads each row a constant above its golden, 109 for
+  thirteen of the fifteen, and the branch read deepbench 1,308,377 higher than
+  that, runbench 303,062 and widebench 48,034. All of it was in `k_exec`,
+  the function every effect passes through. The table's lookup, with its
+  remainder by a size that is no longer a constant, had been folded into
+  it. With `k_sock` kept out of line deepbench reads main's number again.
 
-**Rows, from CI.**
+**Rows.**
 - `unpinned_diagnostics.txt` loses the message that no longer exists.
-- Machine code: every one of the fourteen benchmarks carries 1,856 more
-  bytes of `.text`, which is the growing, the moving of each socket to its
-  new slot and the owner test. `text` sums to 5,902,217 across them, from
-  5,876,233.
-- clang compiles a larger runtime: `codegen_instructions_dev` rose 4,150 to
-  116,859,197 and `codegen_instructions_release` rose 29,045 to
-  372,054,901.
-- The tab runs its corpus in 71,987 fewer wasm instructions
-  (`browser_run_instructions` 78,354,192). That corpus opens no socket. I
-  did not isolate what clang did differently with the larger file.
+- Work, counted here and set from each row's distance to main's on this
+  machine: eleven of the fifteen rows are main's. `runbench` rises 469 to
+  913,657,523 and `oneshot` 357 to 9,980,628; `encodebench` falls 350 to
+  2,335,340,431 and `livebench` 161 to 938,655,540. No benchmark opens a
+  socket, so these four are layout.
+- Machine code: each of the fourteen benchmarks carries 512 fewer bytes of
+  `.text` than on main, and `text` sums to 5,869,065 from 5,876,233. The
+  lookup is one function now where it was a copy at each use.
+- The tab runs its corpus in 55,987 fewer wasm instructions
+  (`browser_run_instructions` 78,370,192). That corpus opens no socket. I
+  did not isolate what clang did differently.
 - The three specs join `native_route_gaps.txt`, because the tab has no
   sockets.
-
-**Welfare.** The sum falls by 0.000018 and the floor follows it. Native
-ended a program the interpreter runs, so this is the engines made to
-agree, which welfare.kso sets outside the sum.
 
 **Open.** A fiber waiting on a socket is asked again every millisecond on
 both engines, so an idle server is never asleep for long and each query a
