@@ -288,4 +288,22 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 </div>
 
 <p>open <code>http://localhost:3000</code>, make an account and sign the book. <code>kanso run</code> builds at kanso's development tier; <code>kanso build examples/guestbook</code> makes a release binary, which stretches passwords about fourteen times faster.</p>
+
+<p>the terminal shows the port, then a line for each request as the server answers it: the method, the path, the status and the milliseconds it took. this is a new account being made, confirmed through its mailed link and signed in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">terminal</div>
+  <pre><code>senro on port 3000
+GET / 200 in 3ms
+GET /registration/new 200 in 0ms
+POST /registration 303 in 7ms
+senro jobs: ran deliver
+GET /confirmations/:token/edit 200 in 2ms
+PATCH /confirmations/:token 303 in 6ms
+POST /session 303 in 9ms
+GET / 200 in 3ms
+GET /nothing-here 404 in 1ms</code></pre>
+</div>
+
+<p>the method is the one a form stands for, so the confirmation's button reads <code>PATCH</code>. the query string is left out. a signed token in a path is written <code>:token</code>, and an uploaded file's key <code>:key</code>, so a log that is kept holds no link that would confirm an address, reset a password or open a file.</p>
 </article>
