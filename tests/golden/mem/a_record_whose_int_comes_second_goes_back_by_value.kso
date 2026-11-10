@@ -1,0 +1,32 @@
+# A decoder answers a value and the position after it, and a type that says
+# so declares the value first. The by-value return packs one int beside one
+# value, and it took the int from the first field alone, so a record
+# declared this way went to the heap once for every value read (#2421). The
+# int may be either field now. This loop reads forty bytes through `at` and
+# builds no record: sh_rec is 0, where it read 2,624.
+import "std/text"
+
+type read
+  value
+  next
+
+fn at bs p
+  read bs[p] (p + 1)
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) (acc + worth v)
+
+fn total s
+  bs = text/bytes s
+  summed 40 bs (at bs 1) 0
+
+pub play = print (total "forty bytes of text for a decoder to read")

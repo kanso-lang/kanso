@@ -33,7 +33,7 @@ struct FnEmit {
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
     /// Operands living in the by-value convention, and the record type
     /// each one holds — boxing one back needs to name its type and its id.
-    parsed: crate::hash::Map<String, (String, i64)>,
+    parsed: crate::hash::Map<String, (String, i64, bool)>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -449,7 +449,8 @@ impl FnEmit {
     /// A failure rides in the first two words and comes back as itself: the
     /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
-        let (_, id) = self.parsed[e];
+        let (_, id, back) = self.parsed[e];
+        let rebuild = if back { "k_parsed_box_back" } else { "k_parsed_box" };
         let w0 = self.tmp();
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
         let w1 = self.tmp();
@@ -458,7 +459,7 @@ impl FnEmit {
         self.raw(&format!("{w2} = extractvalue %parsed {e}, 2"));
         let t = self.tmp();
         self.raw(&format!(
-            "{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1}, i64 {w2})"
+            "{t} = call %KValue @{rebuild}(i64 {id}, i64 {w0}, i64 {w1}, i64 {w2})"
         ));
         t.to_string()
     }
@@ -520,8 +521,15 @@ impl FnEmit {
         self.versions.get(name).cloned()
     }
 
-    fn record_parsed(&mut self, operand: &str, ty: &str, id: i64) {
-        self.parsed.insert(operand.to_string(), (ty.to_string(), id));
+    /// `back` says the type's int is its second field, which is all the
+    /// runtime needs to know to build the record the words hold.
+    fn record_parsed(&mut self, operand: &str, ty: &str, id: i64, back: bool) {
+        self.parsed.insert(operand.to_string(), (ty.to_string(), id, back));
+    }
+
+    /// What `record_parsed` was told of an operand, when it is by value.
+    fn parsed_as(&self, operand: &str) -> Option<(String, i64, bool)> {
+        self.parsed.get(operand).cloned()
     }
 
     fn is_parsed(&self, operand: &str) -> bool {

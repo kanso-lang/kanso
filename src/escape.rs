@@ -25,6 +25,10 @@ pub struct EscapeInfo {
     /// `(T ...)` by some arm), by function name: each arity and parameter
     /// index with the type's name.
     carries: HashMap<String, Vec<(usize, usize, String)>>,
+    /// Register-returnable types whose int is their second field. The words
+    /// are the same either way; only which field each is read from and
+    /// built into differs.
+    int_last: HashSet<String>,
 }
 
 // Keyed by name alone so a question borrows the name it is asked with. Keyed
@@ -41,6 +45,12 @@ impl EscapeInfo {
         slots.iter().find(|(a, p, _)| *a == arity && *p == param).map(|(_, _, ty)| ty.as_str())
     }
 
+    /// Whether `ty` packs its second field as the int and its first as the
+    /// value.
+    pub fn int_last(&self, ty: &str) -> bool {
+        self.int_last.contains(ty)
+    }
+
     /// Keeps only the answers whose type `keep` accepts.
     pub fn keep_types(&mut self, keep: impl Fn(&str) -> bool) {
         for groups in self.returns.values_mut() {
@@ -55,9 +65,14 @@ impl EscapeInfo {
         field_count: HashMap<String, usize>,
         returns: HashMap<(String, usize), String>,
         carries: HashMap<(String, usize, usize), String>,
+        int_last: HashSet<String>,
     ) -> Self {
-        let mut info =
-            EscapeInfo { field_count, returns: HashMap::default(), carries: HashMap::default() };
+        let mut info = EscapeInfo {
+            field_count,
+            returns: HashMap::default(),
+            carries: HashMap::default(),
+            int_last,
+        };
         for ((name, arity), ty) in returns {
             info.returns.entry(name).or_default().push((arity, ty));
         }
@@ -105,9 +120,13 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
     let mut field_count = HashMap::default();
     let mut returns = HashMap::default();
     let mut carries = HashMap::default();
+    let mut int_last = HashSet::default();
     for ty in &returnable {
         if let Some(decl) = program.types.iter().find(|t| &t.name == ty) {
             field_count.insert(ty.clone(), decl.fields.len());
+        }
+        if int_field(program, inference, ty) == Some(1) {
+            int_last.insert(ty.clone());
         }
         let mut analysis = Analysis { program, returns_ty: HashSet::default() };
         analysis.compute_returns_ty(ty);
@@ -205,7 +224,27 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
             )
         })
     });
-    EscapeInfo::from_groups(field_count, returns, carries)
+    EscapeInfo::from_groups(field_count, returns, carries, int_last)
+}
+
+/// Which field of `ty` the packed convention carries as its int: the first
+/// when every construction's first argument is an int and nothing else, or
+/// else the second of exactly two on the same test. A bignum is an int whose
+/// word would not survive the shift, so it spills to the heap record the way
+/// a word past 56 bits does.
+fn int_field(program: &Program, inference: &crate::infer::Inference, ty: &str) -> Option<usize> {
+    let fields = program
+        .types
+        .iter()
+        .position(|t| t.name == ty)
+        .and_then(|i| inference.type_fields.get(i))?;
+    let int = |set: &crate::infer::Set| {
+        *set & crate::infer::INT != 0 && *set & !crate::infer::ANY_INT == 0
+    };
+    if fields.first().is_some_and(int) {
+        return Some(0);
+    }
+    (fields.len() == 2 && int(&fields[1])).then_some(1)
 }
 
 /// Record type names that may be returned by value. A type qualifies when:
@@ -279,22 +318,12 @@ impl<'a> Analysis<'a> {
         inference: &crate::infer::Inference,
         values: &HashSet<String>,
     ) -> bool {
-        // The packed convention shifts field 0's payload into the tag word,
+        // The packed convention shifts one field's payload into the tag word,
         // which is only sound for an int: a pointer payload would lose its
         // tag and overflow the shift. Fields carry no written types, so the
-        // question is put to inference — every construction site's first
-        // argument joined, which must be an int and nothing else. A bignum
-        // is an int whose word would not survive the shift, so it spills to
-        // the heap record the way a word past 56 bits does.
-        let first_field_is_int = self
-            .program
-            .types
-            .iter()
-            .position(|t| t.name == ty)
-            .and_then(|idx| inference.type_fields.get(idx))
-            .and_then(|fields| fields.first())
-            .is_some_and(|set| *set & crate::infer::INT != 0 && *set & !crate::infer::ANY_INT == 0);
-        if !first_field_is_int {
+        // question is put to inference, and `int_field` says which field
+        // answers it.
+        if int_field(self.program, inference, ty).is_none() {
             return false;
         }
         // A type stored inside another record escapes through that record.

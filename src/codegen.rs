@@ -769,14 +769,17 @@ fn emit_with(
     // Any other register-returnable record keeps the heap representation.
     let type_index: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let int_last: crate::hash::Set<String> =
+        escape.field_count.keys().filter(|ty| escape.int_last(ty)).cloned().collect();
     escape.field_count.retain(|ty, n| {
+        let (int, value) = if int_last.contains(ty) { (1, 0) } else { (0, 1) };
         *n == 2
             && type_index.get(ty.as_str()).is_some_and(|&i| {
                 inference.type_fields.get(i).is_some_and(|fields| {
                     fields.len() == 2
-                        && fields[0] & INT != 0
-                        && fields[0] & !infer::ANY_INT == 0
-                        && fields[1] & FAIL == 0
+                        && fields[int] & INT != 0
+                        && fields[int] & !infer::ANY_INT == 0
+                        && fields[value] & FAIL == 0
                 })
             })
     });
@@ -1734,14 +1737,9 @@ impl<'a> Backend<'a> {
             // the convention. A failure in the slot is its own two words, and
             // the runtime hands them over unread rather than reading fields
             // off a value that has none.
-            let u = f.tmp();
-            f.line_fmt(format_args!("{u} = call %KValue @k_parsed_words(%KValue {e})"));
-            let w0 = f.tmp();
-            f.line_fmt(format_args!("{w0} = extractvalue %KValue {u}, 0"));
-            let w1 = f.tmp();
-            f.line_fmt(format_args!("{w1} = extractvalue %KValue {u}, 1"));
-            let w2 = f.tmp();
-            f.line_fmt(format_args!("{w2} = call i64 @k_parsed_int(%KValue {e})"));
+            let back =
+                self.escape.carries_ty(callee, arity, i).is_some_and(|ty| self.escape.int_last(ty));
+            let (w0, w1, w2) = boxed_words(f, e, back);
             let p = parsed_of(f, &w0, &w1, &w2);
             format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
@@ -2642,7 +2640,7 @@ impl<'a> Backend<'a> {
             .collect();
         let sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
         let records: Vec<Option<&str>> =
-            emitted.iter().map(|e| f.parsed.get(e).map(|(ty, _)| ty.as_str())).collect();
+            emitted.iter().map(|e| f.parsed.get(e).map(|(ty, _, _)| ty.as_str())).collect();
         let mut budget = 256;
         !covered(&arms, &sets, &records, &mut budget)
     }

@@ -37,8 +37,9 @@ impl<'a> Backend<'a> {
                 // pattern already refuses a failure and sends it to the same
                 // label, asking the whole word first is a second test of one
                 // fact, made once for every record a parser returns.
+                let (int_at, value_at) = self.packed_order(ty);
                 let value_refuses = matches!(
-                    fields.get(1),
+                    fields.get(value_at),
                     Some(
                         Pattern::Var(..)
                             | Pattern::Wildcard(_)
@@ -63,12 +64,12 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
                 // The position is an int whatever the word held, so its
                 // pattern has no failure to refuse.
-                self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
+                self.emit_pattern_known(f, &poskv, &fields[int_at], fail, TOP & !FAIL)?;
                 let va = f.tmp();
                 f.line_fmt(format_args!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
                 let vkv = f.tmp();
                 f.line_fmt(format_args!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
-                self.emit_pattern(f, &vkv, &fields[1], fail)?;
+                self.emit_pattern(f, &vkv, &fields[value_at], fail)?;
                 if let Some(named) = whole {
                     f.bind(&named.0, status);
                 }
@@ -76,6 +77,15 @@ impl<'a> Backend<'a> {
             }
         }
         self.emit_pattern_known(f, status, pattern, fail, TOP)
+    }
+
+    /// Which of a packed type's two fields is the int and which the value.
+    fn packed_order(&self, ty: &str) -> (usize, usize) {
+        if self.escape.int_last(ty) {
+            (1, 0)
+        } else {
+            (0, 1)
+        }
     }
 
     /// Return a failure in the group's ABI shape: wrapped in a `%parsed` when the
@@ -149,14 +159,17 @@ impl<'a> Backend<'a> {
         args: &[Expr],
         ty: &str,
     ) -> Result<String, String> {
-        let pos = self.emit_expr(f, &args[0])?;
-        self.bail_on_failure(f, &pos);
-        let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_failure(f, &value);
+        // The fields are evaluated as written, whichever is the int.
+        let first = self.emit_expr(f, &args[0])?;
+        self.bail_on_failure(f, &first);
+        let second = self.emit_expr(f, &args[1])?;
+        self.bail_on_failure(f, &second);
+        let back = self.escape.int_last(ty);
+        let (pos, value) = if back { (second, first) } else { (first, second) };
         let pid = self.type_ids[ty];
         let (w0, w1, w2) = pack_words(f, &pos, &value);
         let p = parsed_of(f, &w0, &w1, &w2);
-        f.record_parsed(&p, ty, pid);
+        f.record_parsed(&p, ty, pid, back);
         Ok(p.to_string())
     }
 
@@ -168,10 +181,16 @@ impl<'a> Backend<'a> {
     /// evaluated and two failures merge, the way two failing operands of an
     /// operator do. Bailing on the first one skipped the second field
     /// entirely and handed back one reason where the oracle carried two.
-    fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
-        let pos = self.emit_expr(f, &args[0])?;
-        let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_pair_failure(f, &pos, &value);
+    fn emit_parsed_construction(
+        &mut self,
+        f: &mut FnEmit,
+        ty: &str,
+        args: &[Expr],
+    ) -> Result<(), String> {
+        let first = self.emit_expr(f, &args[0])?;
+        let second = self.emit_expr(f, &args[1])?;
+        self.bail_on_pair_failure(f, &first, &second);
+        let (pos, value) = if self.escape.int_last(ty) { (second, first) } else { (first, second) };
         let (w0, w1, w2) = pack_words(f, &pos, &value);
         let p = parsed_of(f, &w0, &w1, &w2);
         f.line_fmt(format_args!("ret %parsed {p}"));

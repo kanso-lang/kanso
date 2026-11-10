@@ -562,7 +562,7 @@ impl<'a> Backend<'a> {
                     // the callee's side, and a constant is evaluated once.
                     let t = match self.escape.returns_ty(name, 0) {
                         Some(ty) if callee_ret == "%parsed" => {
-                            f.record_parsed(&t, ty, self.type_ids[ty]);
+                            f.record_parsed(&t, ty, self.type_ids[ty], self.escape.int_last(ty));
                             self.as_value(f, &t)
                         }
                         _ => t.to_string(),
@@ -1119,7 +1119,7 @@ impl<'a> Backend<'a> {
                 // by-value %parsed result directly — no heap allocation.
                 if let Some(&nfields) = self.escape.field_count.get(name.as_str()) {
                     if f.ret_ty == "%parsed" && args.len() == nfields {
-                        return self.emit_parsed_construction(f, args);
+                        return self.emit_parsed_construction(f, name.as_str(), args);
                     }
                 }
                 // A demoted tail entry: emitted as a plain call so the
@@ -1358,22 +1358,85 @@ impl<'a> Backend<'a> {
                                     .collect();
                                 let mut carry = |f: &mut FnEmit, emitted: &mut [String]| {
                                     f.line("call void @k_carry_reset()");
-                                    for (&j, stage) in positions.iter().zip(&stages) {
-                                        f.line_fmt(format_args!(
-                                            "call void @{stage}(%KValue {})",
-                                            emitted[j]
-                                        ));
+                                    // A record held by value crosses as its
+                                    // two fields, a slot each, and is packed
+                                    // again on the far side: staged whole it
+                                    // would have to be built on the heap,
+                                    // once a lap, which is what holding it by
+                                    // value is for avoiding. It comes back by
+                                    // value either way, so a way round the
+                                    // rewind merges with one through it. When
+                                    // the fields would not fit the buffer the
+                                    // record is staged built.
+                                    let held: Vec<Option<(String, i64, bool)>> =
+                                        positions.iter().map(|&j| f.parsed_as(&emitted[j])).collect();
+                                    let apart = positions.len() + held.iter().flatten().count()
+                                        <= CARRY_SLOTS;
+                                    for ((&j, stage), by_value) in
+                                        positions.iter().zip(&stages).zip(&held)
+                                    {
+                                        if by_value.is_none() || !apart {
+                                            f.line_fmt(format_args!(
+                                                "call void @{stage}(%KValue {})",
+                                                emitted[j]
+                                            ));
+                                            continue;
+                                        }
+                                        let p = &emitted[j];
+                                        let w0 = f.tmp();
+                                        f.line_fmt(format_args!("{w0} = extractvalue %parsed {p}, 0"));
+                                        let w1 = f.tmp();
+                                        f.line_fmt(format_args!("{w1} = extractvalue %parsed {p}, 1"));
+                                        let w2 = f.tmp();
+                                        f.line_fmt(format_args!("{w2} = extractvalue %parsed {p}, 2"));
+                                        let (ptag, n, vtag, vpay) = unpack_words(f, &w0, &w1, &w2);
+                                        for (tag, word) in [(vtag, vpay), (ptag, n)] {
+                                            let a = f.tmp();
+                                            f.line_fmt(format_args!(
+                                                "{a} = insertvalue %KValue undef, i64 {tag}, 0"
+                                            ));
+                                            let v = f.tmp();
+                                            f.line_fmt(format_args!(
+                                                "{v} = insertvalue %KValue {a}, i64 {word}, 1"
+                                            ));
+                                            f.line_fmt(format_args!(
+                                                "call void @k_carry_stage(%KValue {v})"
+                                            ));
+                                        }
                                     }
                                     f.line("call void @k_beat_lap_carry()");
-                                    for (slot, &j) in positions.iter().enumerate() {
+                                    let mut slot = 0;
+                                    let mut take = |f: &mut FnEmit| {
                                         let t = f.tmp();
                                         f.line_fmt(format_args!(
                                             "{t} = call %KValue @k_carry_take(i64 {slot})"
                                         ));
-                                        // the copy is the value it was handed
-                                        let set = f.set_of(&emitted[j]);
-                                        f.record(&t, set);
-                                        emitted[j] = t.to_string();
+                                        slot += 1;
+                                        t.to_string()
+                                    };
+                                    for (&j, by_value) in positions.iter().zip(&held) {
+                                        let Some((ty, id, back)) = by_value else {
+                                            let t = take(f);
+                                            // the copy is the value it was handed
+                                            let set = f.set_of(&emitted[j]);
+                                            f.record(&t, set);
+                                            emitted[j] = t;
+                                            continue;
+                                        };
+                                        let (w0, w1, w2) = match apart {
+                                            true => {
+                                                let value = take(f);
+                                                let pos = take(f);
+                                                pack_words(f, &pos, &value)
+                                            }
+                                            false => {
+                                                let built = take(f);
+                                                boxed_words(f, &built, *back)
+                                            }
+                                        };
+                                        let p = parsed_of(f, &w0, &w1, &w2);
+                                        f.record_parsed(&p, ty, *id, *back);
+                                        emitted[j] = p;
                                     }
                                 };
                                 let failing: Vec<usize> = (0..emitted.len())
@@ -1460,7 +1523,7 @@ impl<'a> Backend<'a> {
                         ));
                         if let Some(ty) = self.escape.returns_ty(name, n) {
                             if callee_ret == "%parsed" {
-                                f.record_parsed(&t, ty, self.type_ids[ty]);
+                                f.record_parsed(&t, ty, self.type_ids[ty], self.escape.int_last(ty));
                             }
                         }
                         self.emit_ret(f, &t);

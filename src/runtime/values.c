@@ -417,6 +417,29 @@ long long k_parsed_int(KValue v) {
     if (!k_not_failure(v)) return 0;
     return k_field(v, 0).payload;
 }
+/* The same three for a record whose int is its second field and whose value
+   is its first. The words are laid out as above, so only the field each is
+   read from and built into differs. */
+KValue k_parsed_box_back(long long type_id, long long w0, long long w1, long long w2) {
+    KValue words; words.tag = w0; words.payload = w1;
+    if (!k_not_failure(words)) return words;
+    KValue fields[2];
+    fields[0].tag = w0 & 255; fields[0].payload = w1;
+    fields[1].tag = (unsigned long long)w0 >> 8; fields[1].payload = w2;
+    return k_rec(type_id, 2, fields);
+}
+KValue k_parsed_words_back(KValue v) {
+    if (!k_not_failure(v)) return v;
+    KValue f0 = k_field(v, 0), f1 = k_field(v, 1);
+    KValue out;
+    out.tag = (long long)((unsigned long long)f1.tag << 8) | f0.tag;
+    out.payload = f0.payload;
+    return out;
+}
+long long k_parsed_int_back(KValue v) {
+    if (!k_not_failure(v)) return 0;
+    return k_field(v, 1).payload;
+}
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* An err's three readers, `.reason`, `.cause` and `.origin` — the second
