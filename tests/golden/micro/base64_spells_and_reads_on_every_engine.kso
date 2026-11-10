@@ -1,0 +1,44 @@
+# `std/base64` is spelled and read by the runtime (#2420), and this pins what
+# it answers on every engine: RFC 4648's vectors both ways, bytes that are
+# not text, a list of byte values in place of bytes, and the edges of what
+# reading takes. It is as lenient as the library was while it was written in
+# kanso: an `=` third ends a group after one byte whatever follows it, a
+# padded group may have more groups after it, and the bits a padded group
+# leaves over need not be zero. Anything else is none, and `decode!` says
+# which of the two reasons it was.
+import "std/base64"
+import "std/io"
+import "std/list"
+import "std/text"
+
+fn back s
+  shown (base64/decode s)
+
+fn shown none
+  "none"
+
+fn shown bs
+  "{bs}"
+
+fn insisted s
+  read = (bs -> io/write "{s} reads {bs}\n")
+  base64/decode! s .> read .? (u -> io/write "{s} fails: {u.reason}\n")
+
+fn spelled s
+  base64/encode (text/bytes s)
+
+fn line v
+  "[{v}] spells {spelled v} reads {back (spelled v)}"
+
+pub play =
+  vectors = ["" "f" "fo" "foo" "foob" "fooba" "foobar"]
+  print (text/join (list/to_list (list/map vectors line)) "\n")
+  print (base64/encode (text/to_bytes [0 255 254 63 191]))
+  print (base64/encode [0 255 254 63 191])
+  print (back "AP/+P78=")
+  print "a pad third: {back "Zg=A"} then more: {back "Zg==Zm8="}"
+  print "bits left over: {back "Zh=="} {back "Zm9="}"
+  print "ragged: {back "Zg="} {back "Z"} stray: {back "Z!=="} {back "=g=="}"
+  print "a pad first or second: {back "=m9v"} {back "Z=9v"}"
+  print "not ascii: {back "Zé="} url letters: {back "Zm-_"}"
+  insisted "Zm9v" .> (_ -> insisted "Zg=") .> (_ -> insisted "Z!==")

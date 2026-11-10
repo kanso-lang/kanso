@@ -1,0 +1,18 @@
+[] spells  reads []
+[f] spells Zg== reads [102]
+[fo] spells Zm8= reads [102 111]
+[foo] spells Zm9v reads [102 111 111]
+[foob] spells Zm9vYg== reads [102 111 111 98]
+[fooba] spells Zm9vYmE= reads [102 111 111 98 97]
+[foobar] spells Zm9vYmFy reads [102 111 111 98 97 114]
+AP/+P78=
+AP/+P78=
+[0 255 254 63 191]
+a pad third: [102] then more: [102 102 111]
+bits left over: [102] [102 111]
+ragged: none none stray: none none
+a pad first or second: none none
+not ascii: none url letters: none
+Zm9v reads [102 111 111]
+Zg= fails: base64 comes in groups of four characters
+Z!== fails: that is not base64
