@@ -40,6 +40,21 @@ impl<'a> DemandInfo<'a> {
     }
 }
 
+/// Whether an expression reads `name` anywhere inside it.
+fn mentions(e: &Expr, name: &str) -> bool {
+    matches!(e, Expr::Ident(id, _, _) | Expr::Partial(id, _) if id == name)
+        || crate::any_child(e, |c| mentions(c, name))
+}
+
+/// Whether a callback written in `e` reads `name`. The callback is a value
+/// the frame hands on, and it is called after the frame has returned.
+fn captured(e: &Expr, name: &str) -> bool {
+    match e {
+        Expr::Lambda { body, .. } => mentions(body, name),
+        _ => crate::any_child(e, |c| captured(c, name)),
+    }
+}
+
 /// Occurrences of a bound parameter that cannot leak its cell past the
 /// callee's frame: forced positions (operands, index bases and keys,
 /// interpolations — codegen forces each when a thunk may arrive) and the
@@ -83,7 +98,9 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
             Expr::Join { lhs: a, rhs: b, .. } => {
                 expr_safe(a, name, false) && expr_safe(b, name, false)
             }
-            Expr::Lambda { body, .. } => expr_safe(body, name, false),
+            // A callback is called after this frame has gone, so one that
+            // reads the parameter holds its cell past the frame.
+            Expr::Lambda { body, .. } => !mentions(body, name),
         }
     }
     fn param_stays_local_at(body: &[Stmt], name: &str, result_ok: bool) -> bool {
@@ -432,13 +449,15 @@ pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
                 continue;
             }
             let mut targets = Vec::new();
+            let mut kept = false;
             for later in &decl.body[i + 1..] {
                 let e = match later {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 };
                 use_targets(e, name, &mut targets);
+                kept |= captured(e, name);
             }
-            let ok = targets.iter().all(|(g, a, p)| safe_position(program, g, *a, *p));
+            let ok = !kept && targets.iter().all(|(g, a, p)| safe_position(program, g, *a, *p));
             let slot = verdicts.entry(key).or_insert(true);
             *slot = *slot && ok;
         }
