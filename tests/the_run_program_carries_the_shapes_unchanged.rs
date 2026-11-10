@@ -38,7 +38,8 @@ const CARRIED: &[(&str, &str)] = &[
 /// 2026-10-29, measured on main before kanso#2214's, `forked` on
 /// 2026-11-01, measured on main before kanso#2268's, `carried` and
 /// `stretched` on 2026-11-04, measured on main before kanso#2299's, and
-/// `deferred` on 2026-11-10, measured on main before kanso#2408's.
+/// `deferred` on 2026-11-10, measured on main before kanso#2408's, and
+/// `sealed` later that day, measured on main before kanso#2420's.
 const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/admitted/admitted.kso",
     "bench/runbench/runbench/appended/appended.kso",
@@ -67,6 +68,7 @@ const BORN_HERE: &[&str] = &[
     "bench/runbench/runbench/rested/rested.kso",
     "bench/runbench/runbench/rewind/rewind.kso",
     "bench/runbench/runbench/scatter/scatter.kso",
+    "bench/runbench/runbench/sealed/sealed.kso",
     "bench/runbench/runbench/stack/stack.kso",
     "bench/runbench/runbench/stretched/stretched.kso",
     "bench/runbench/runbench/worded/worded.kso",

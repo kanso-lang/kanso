@@ -1,3 +1,4 @@
+import "std/base64"
 import "std/json"
 import "std/list"
 import "std/text"
@@ -24,7 +25,9 @@ pub play =
   nest = "{nested 1000} {appended 6000} {bucketed 1500} {rested 70}"
   texts = "{grown 3000} {scanned 1000} {lasted 70} {relayed 1500}"
   told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
-  served 2000 .> (_ -> deferred 2000) .> (_ -> print "interp {told}")
+  trips = sealed 15 0
+  shown = (_ -> print "interp {told} {trips}")
+  served 2000 .> (_ -> deferred 2000) .> shown
 
 fn rounds n
   source = document 220
@@ -273,3 +276,24 @@ fn deferred 0
 fn deferred n
   deferring n
   time/sleep 0 .> (_ -> deferred (n - 1))
+
+# A session's trip through base64, as a server makes one for each request
+# that carries a cookie: its bytes spelled and read back.
+fn cookie n
+  text/bytes "viewer={n}&token=k3v9Qm2xLr8TzW1bHs6Yd0Pc&flash=saved&kept=true"
+
+fn weighed none
+  0
+
+fn weighed bs
+  length bs
+
+fn trip n
+  spelled = base64/encode (cookie n)
+  length spelled + weighed (base64/decode spelled)
+
+fn sealed 0 acc
+  acc
+
+fn sealed n acc
+  sealed (n - 1) (acc + trip n)
