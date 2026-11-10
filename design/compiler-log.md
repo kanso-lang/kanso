@@ -2147,3 +2147,8 @@ distance to main's reading here. Clang's rows and the tab's are CI's.
 - The write's step and the wait as a function are 928 bytes of machine
   code in every program, and the fourteen text rows sum to `text`
   5,919,865.
+- Clang's rows, from CI: `codegen_instructions_release` falls 109,950 to
+  372,070,546 and `codegen_instructions_dev` rises 5,675 to 116,944,920.
+- The tab's run of the compiled corpus, from CI, rises 40,000 to
+  `browser_run_instructions` 91,172,686. Its other three rows hold. I
+  did not look for where the 40,000 are.
