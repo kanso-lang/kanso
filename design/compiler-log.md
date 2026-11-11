@@ -2237,13 +2237,13 @@ the layout of the grown runtime: work_encodebench down 425 to
 2,335,340,622, work_oneshot down 768 to 9,978,737, work_livebench up 324
 to 938,655,255, work_runbench down 502 to 1,059,837,979 and
 work_runbench_dev down 32 to 3,057,251,699. Clang compiles the longer
-runtime: codegen_instructions_dev is written at 117,030,424 and
-codegen_instructions_release at 372,225,412, this container's rise added
-to the rows below, for CI to replace. The work rows are this container's
-readings less the 109 CI has read under it. No allocation counter, compile
+runtime: CI read codegen_instructions_dev at 117,031,054, up 17,215, and
+codegen_instructions_release at 372,173,775, up 38,890. The work rows are
+this container's readings less the 109 CI has read under it, and CI
+agreed with every one. No allocation counter, compile
 row, interpreter row or browser row moved here.
 
-Welfare reads 95.34292976, under the 95.34299175 the kernel banked. The
+Welfare reads 95.34294930, under the 95.34299175 the kernel banked. The
 objective's header leaves a fix that makes the engines agree outside the
 sum, so the floor moves to what the fix costs and its history says so.
 
@@ -2491,7 +2491,7 @@ allocated, and pruning the library differently moved the names. The
 same table moved the row for `text/replace`. It is #2444.
 
 **Welfare.** Over this entry and the two before it welfare rises
-95.34292976 -> 95.39062234, and the floor is banked there.
+95.34294930 -> 95.39064189, and the floor is banked there.
 
 **Not done.** `std/derive` is still compiled twice on the entry corpus,
 and that was not looked into.
