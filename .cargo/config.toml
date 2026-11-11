@@ -32,3 +32,8 @@
 # and goes red if a crate bump moves the switch.
 [env]
 CFLAGS = { value = "-DMI_NO_ALIGNED_HINT", force = true }
+
+# Every test binary runs under scripts/bounded.sh, which says why. The path is
+# read from this file's checkout, not from where cargo was started.
+[target.'cfg(target_os = "linux")']
+runner = "scripts/bounded.sh"
