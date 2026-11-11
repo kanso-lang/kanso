@@ -367,8 +367,13 @@ fn standing acc false
 
 # Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
 # author is working in and two rows cannot see each other's damage.
+#
+# Everything started here may allocate what scripts/bounded.sh allows,
+# whatever the gate is: a test, a script that counts under valgrind, a
+# browser, or the compiler itself. A mutation can make a program allocate
+# without end, and without the limit the kernel ends the runner with it.
 fn shell dir cmd
-  os/run "sh" ["-c" "cd {dir} && {cmd}"]
+  os/run "sh" ["-c" ". scripts/bounded.sh; cd {dir} && {cmd}"]
 
 # A mutation that still applies can still prove nothing. kanso#1157 put an
 # early return above the line compile_allocs_unwatched.sh patches, and the
