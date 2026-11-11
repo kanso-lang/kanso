@@ -1644,16 +1644,17 @@ held_box = row
 
 rows_c1zzzzzzzm = list/concat rows_c1zzzzzzzn [held_box]
 
-# The interpreter's caches take their slots from an object's place inside its
-# allocator slice. Taking the frame slot from the whole address again makes
-# the row read one number with the heap where valgrind puts it and another
-# with the heap started at 48 MiB, and the gate compares the two.
+# The interpreter's tables are indexed by numbers the program decides
+# (kanso#2444). Letting an address decide whether the callee table is asked
+# makes the row read one number with the heap where valgrind puts it and
+# another with the heap started at 48 MiB, and the gate compares the two:
+# 814,862,444 against 742,306,491 on 2026-11-11.
 slice_slot = row
-  "a frame slot read off its address"
+  "a table asked by where a name landed"
   true
   interp_gate
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_frame_slot_read_off_its_address")
+  (breaking "a_table_asked_by_where_a_name_landed")
   release
 
 rows_c1zzzzzzzk = list/concat rows_c1zzzzzzzm [slice_slot]
