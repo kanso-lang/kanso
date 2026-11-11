@@ -252,6 +252,8 @@ choice to report instead of continuing.
   diagnostics, micro goldens for one construct, the mem vein for allocation
   shape. A bug with no home there is a gap, and adding the home is part of the
   fix.
+- **Run the library's own tests before a push that touches `src/` or `lib/`**:
+  `cargo test --lib`. It takes seconds, and no integration test runs them.
 - **Pin the number, never a band.** `== 10`, not `< 1024`. A number that looks
   noisy is measured several times, and either it is stable and pinned or the
   variance is the finding. The compile-memory gate's 2% is a measured
