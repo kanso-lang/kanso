@@ -1,0 +1,58 @@
+# A page's values through an HTML escape. kanso has no call that replaces
+# one text with another, so the escape a template leans on splits a value at
+# each character it rewrites and joins the pieces around the replacement
+# (#2427). This is that escape as senro writes it: three searches for the
+# five characters, a value with none handed back as it came, and a split and
+# a join for each search that found something.
+#
+# A row is the mix one of senro's listing pages has: a title holding four of
+# the five characters, an excerpt holding an apostrophe, and seven values
+# with nothing to rewrite.
+import "std/text"
+
+fn escape s
+  cs = text/bytes s
+  past = length cs
+  amp = text/find2 cs 1 38 38 <= past
+  angle = text/find2 cs 1 60 62 <= past
+  quote = text/find2 cs 1 34 39 <= past
+  return s if not (amp or angle or quote)
+  a = swapped s amp "&" "&amp;"
+  b = swapped a angle "<" "&lt;"
+  c = swapped b angle ">" "&gt;"
+  d = swapped c quote "\"" "&quot;"
+  swapped d quote "'" "&#39;"
+
+fn swapped s false _ _
+  s
+
+fn swapped s true from to
+  text/join (text/split s from) to
+
+fn title n
+  "salt & vinegar <batch {n}> the \"house\" crisps"
+
+fn excerpt n
+  "the cook's notes on batch {n}, kept for the next one"
+
+fn plain n k
+  "row {n} column {k}, a value with nothing in it to rewrite"
+
+fn plains _ 0 acc
+  acc
+
+fn plains n k acc
+  plains n (k - 1) (acc + length (escape (plain n k)))
+
+fn row n
+  marked = length (escape (title n)) + length (escape (excerpt n))
+  plains n 7 marked
+
+fn rows 0 acc
+  acc
+
+fn rows n acc
+  rows (n - 1) (acc + row n)
+
+pub fn total n
+  rows n 0

@@ -385,6 +385,21 @@
 # the heap for every caller the decoder had. The column is the 64 reads
 # through the value and the 128 direct reads going back to the heap with
 # them: sh_rec rises 18,432,000, 1,500 passes of 192 reads at 64 bytes.
+#
+# One more joined on 2026-11-11, measured before either of kanso#2427's
+# leads was tried. Its column is the whole program with it, 1,067,867,192,
+# less the whole without, 1,020,737,416, and its share is of the former.
+#
+#   replaced  4,000 rows of a page through an escape      47,129,776  4.41%
+#
+# `replaced` is the escape a template leans on for every value it writes.
+# kanso has no call that replaces one text with another, so the escape
+# splits a value at each character it rewrites and joins the pieces around
+# the replacement: a list of the pieces, then a string from the list. A row
+# is a title holding four of the five characters, an excerpt holding an
+# apostrophe, and seven values with nothing to rewrite, so 4,000 rows run
+# the split and the join 28,000 times and 20,000 of those find something to
+# rewrite. The phase adds 263,919 allocations, 66 a row.
 import "./admitted"
 import "./appended"
 import "./bag"
@@ -412,6 +427,7 @@ import "./padded"
 import "./pend"
 import "./reentered"
 import "./relayed"
+import "./replaced"
 import "./restate"
 import "./rested"
 import "./rewind"
@@ -507,6 +523,8 @@ sealed_passes = 800
 
 taken_passes = 1500
 
+replaced_rows = 4000
+
 fn decoded _ 0 sofar
   sofar
 
@@ -573,8 +591,9 @@ fn tally raw doc a b
   ported23 = ported22 + carried/total carried_hashes
   ported24 = ported23 + sealed/total sealed_passes
   ported25 = ported24 + taken/total taken_passes
+  ported26 = ported25 + replaced/total replaced_rows
   rest = digested raw digest_bytes
-  on = (k -> scanned .> (s -> k + shapes + s + ported + ported25 + rest))
+  on = (k -> scanned .> (s -> k + shapes + s + ported + ported26 + rest))
   bulk .> on
 
 fn shaped raw doc a
