@@ -2316,7 +2316,8 @@ text. With the unsized branch taken out the native build prints
 `0 bytes, last <none>` where the interpreter prints `5000 bytes, last
 255`.
 
-What moves. Every program links the reader, 320 bytes of machine code.
+What moves. Every program links the reader, 320 bytes of machine code,
+and summed over the fourteen text 6,010,505 -> 6,014,985.
 The four benchmarks that read a file pay 16 instructions for the
 question: work_jsonbench 549,338,015, work_widebench 28,701,603,
 work_digestbench 3,107,795 and work_readbench 4,583,700. Five move with
