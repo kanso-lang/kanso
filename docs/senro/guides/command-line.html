@@ -1,0 +1,143 @@
+---
+layout: default
+title: "the senro command"
+description: "senro's command: making an app, the generators and how to add your own, listing routes, migrating and serving."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>the command line</h1>
+
+<p>senro has one command, <code>senro</code>, as Rails has <code>rails</code>. it makes an app, writes the parts of one, lists its routes, brings its database up to date and serves it. this guide goes through each. the command is a shell script, <code>bin/senro</code> in senro's repository, and it works once that directory is on your PATH.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro
+senro: usage: senro new &lt;app&gt;
+       senro generate &lt;generator&gt; &lt;word&gt;...   (or `senro g`)
+       senro generate                         lists the generators
+       senro routes                           lists the routes
+       senro server                           (or `senro s`)
+       senro migrate</code></pre>
+</div>
+
+<p>the command runs kanso programs, so it needs kanso. it uses the <code>kanso</code> on your PATH, or the one <code>KANSO</code> names.</p>
+
+<h2>a new app</h2>
+
+<p><code>senro new</code> writes an app in a directory named for it: an entry, a home page, a layout and an empty <code>migrations</code> directory. it refuses a directory that is there already.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro new notebook
+  create notebook/main.kso
+  create notebook/home.kso
+  create notebook/migrations/.keep
+  create notebook/views/layout.kata
+  create notebook/views/home.kata</code></pre>
+</div>
+
+<p>the entry imports senro by the path from the new app to senro's own directory, so the app compiles where it stands. every other command is run from inside the app.</p>
+
+<h2>generators</h2>
+
+<p><code>senro generate</code>, or <code>senro g</code>, writes code. with nothing after it, it lists the generators it can find.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro generate
+  scaffold
+  model
+  controller
+  migration
+  mailer
+  authentication</code></pre>
+</div>
+
+<p>each takes words after its name. the <a href="generators.html">generators guide</a> reads what <code>scaffold</code> and <code>authentication</code> write, file by file, and the <a href="migrations.html">migrations guide</a> covers <code>migration</code>. in short:</p>
+
+<ul>
+  <li><code>scaffold note title:text pages:int</code> writes a whole resource: its model, its migration, the seven actions and three views.</li>
+  <li><code>model tag name:text</code> writes a model and its migration, and nothing that serves it.</li>
+  <li><code>controller pages index show</code> writes a module with those actions and a view for each that shows a page.</li>
+  <li><code>migration add_rating_to_notes rating:int</code> writes a migration, reading what it does from its name.</li>
+  <li><code>mailer account welcome</code> writes <code>account_mailer.kso</code> with a function for each letter.</li>
+  <li><code>authentication</code> adds accounts: signing up, in and out, and resetting a lost password by mail.</li>
+</ul>
+
+<p>every generator prints each file it writes or changes. none writes over a file that is there: one that would stops before it writes anything, and says which file.</p>
+
+<h2>generators of your own</h2>
+
+<p>a generator senro does not ship is a kanso program at <code>generators/&lt;name&gt;.kso</code>, or <code>generators/&lt;name&gt;/main.kso</code> when it needs more than one file. senro looks in the app, and beside each library the app's entry imports by path: an import of <code>../lib/shop/carts</code> looks in <code>../lib/shop/generators</code>. so a library can ship the generators that go with it, as a Rails engine does.</p>
+
+<p>the program is run in the app's directory, and the words that followed its name are its arguments. this one says what it was given.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">generators/greeting.kso, in the app</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="f">os/args</span> <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">io/write</span> <span class="s">"greeting: {a}\n"</span>)</code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro generate greeting one two
+greeting: ["one" "two"]</code></pre>
+</div>
+
+<p><code>senro generate</code> lists it with where it was found. senro's own generators are looked for first, so one from outside cannot take the place of <code>scaffold</code>.</p>
+
+<h2>routes</h2>
+
+<p><code>senro routes</code> lists every route the app answers, as <code>rails routes</code> does: the verb, the path and the action. these are the first lines for the notebook, after two scaffolds.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro routes
+GET     /                               home/index
+GET     /notes                          notes/index
+POST    /notes                          notes/create
+GET     /notes/new                      notes/new
+GET     /notes/:id                      notes/show
+PATCH   /notes/:id                      notes/update
+DELETE  /notes/:id                      notes/destroy
+GET     /notes/:id/edit                 notes/edit</code></pre>
+</div>
+
+<p>behind a sign-in, a route that asks for none is marked <code>open</code>, and one that counts its calls is marked <code>limited</code>.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">later lines, once the app has accounts</div>
+  <pre><code>POST    /registration                   registration/create  open
+POST    /session                        session/create       open, limited
+DELETE  /session                        session/destroy</code></pre>
+</div>
+
+<p>the routes are not written anywhere to be listed. an action's name places it, as the <a href="routing.html">routing guide</a> describes, and the table is worked out while the app compiles. so the command compiles the app and reads the table; it opens no database. an app that does not compile says why instead.</p>
+
+<h2>migrate and server</h2>
+
+<p><code>senro migrate</code> brings the database up to the app's migrations, checks the tables against the schema the app was compiled with, and stops. <code>senro server</code>, or <code>senro s</code>, does the same and then serves on port 3000. both run the app itself, so they read the same <code>PGHOST</code>, <code>PGPORT</code>, <code>PGUSER</code>, <code>PGDATABASE</code> and <code>PGPASSWORD</code> it does.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro migrate
+migrated
+$ senro server
+senro on port 3000</code></pre>
+</div>
+
+<p>a table that differs from the schema stops both before anything is served, with each difference named. the <a href="models.html">models guide</a> says what is compared.</p>
+
+</article>

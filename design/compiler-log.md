@@ -20,41 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-08 — a module calls an arm a derivation writes
-
-An entry that derives loads its modules twice: once to describe them to its
-derivations, with the refusals a derivation could answer set aside, and once
-with what the derivations wrote. A call to a name nothing defines yet waited
-for the second load, which is how a module calls kata's `views/...`. A call
-to a function that exists, at an arity only a derivation supplies, did not:
-the first load refused it before the derivation ran. senro's data providers
-hit this. A browser action calls `stock/low 3`, and a derivation writes the
-one-argument `low` beside the server's `low viewer db n` (#2389).
-
-The first load now sets aside a refusal of an arity no arm takes, as it does
-an unknown name, and the second load checks the call against every arm the
-module and the derivations wrote. `tests/golden/derive/a_module_calls_an_arm_a_derivation_writes`
-prints `short 1` on both engines, and main's binary refuses it.
-`a_module_calls_an_arm_no_derivation_writes` still refuses a call at an arity
-nothing writes, and the refusal names every arity the module has once the
-derivation's arm is in: `(arms take 2, 3)`.
-
-A second refusal stood behind it. A derived arm's import is written from the
-derivation's module and rewritten from the module it joins. When that module
-is a file named bare beside an entry run from its own directory, as `stock.kso`
-is when an app runs `kanso run .`, its parent is the empty path, which does not
-canonicalize, and the import was left as written: `../data` from senro's
-`data` module read from the app's directory found nothing. An empty parent is
-now the current directory. `tests/derivations_run_beside.rs` runs each case in
-`tests/golden/derive_here` from its own directory, which `tests/golden/derive`,
-run from the repository root, cannot; main's binary refuses
-`a_derived_arm_imports_beside_a_bare_module` with "cannot resolve import
-\"../words\"".
-
-`browser_compile_instructions` rose from 352,264,424 to 352,264,564. The
-browser corpus derives nothing, so the 140 instructions are the new code in
-the compiler the tab runs. Every other row is where it was.
-
 ## 2026-11-10 — gavel: an app goes through its models, never through pg/query
 
 The guestbook's list page on the senro site read `pg/query db newest []`.
@@ -2519,3 +2484,58 @@ every line wears a declared token and no hex. Watched fail with a token
 taken out of the dark block and with one line given a hex.
 
 No counter moved.
+
+## 2026-11-11 — senro gets its command, its migration files and a page's check (#2455)
+
+The first four items of the 2026-11-11 directive are built in senro, and
+the site's guides follow them. senro's design is cloud's (#2280), so each
+choice below was made where it came up and is recorded here and on #2455.
+
+**The command.** `bin/senro` is a shell launcher over `senro.kso`. `new`,
+`generate` and `routes` are kanso; `server` and `migrate` are handed to
+`kanso run .`, because a child kanso starts has no terminal (`os/run`
+captures a child's output and `os/start` drops it). `senro routes` reads
+the table from what `kanso derived` prints, so listing routes compiles the
+app and opens no database. A generator from outside senro is a kanso
+program at `generators/<name>.kso`, in the app or beside a library its
+entry imports by path.
+
+**Migrations are files.** `migrations/<stamp>_<name>.kso` holds one pub
+constant, a change or a list of changes, and the stamp is fourteen digits
+of UTC. The order is the files' names. That needed one thing of the
+compiler, `sources` on a derivation's module (the entry above), since a
+module's files share one namespace and nothing else says which file a
+constant is in. The models derivation defines `migrations/all` from the
+files, so an entry is written as before, and a migration is recorded under
+its stamp. Two things were decided against. A stamp in the constant's name
+would have ordered them with no compiler change and made every migration's
+name ugly. A list the app keeps by hand was what senro had, and two
+branches that each add a migration conflict on it every time.
+
+Rolling a migration back is not built. A migration is a list of changes
+with no inverse written down, and that design is open on #2455.
+
+**A page's check.** A module's `admits action viewer db` says who may
+reach its actions. A provider's request names its page, and the server
+answers it as it would the page: the page's module must lean on a module
+that asks for the provider (worked out from the app's calls), a page that
+asks for a sign-in answers only a visitor who has one, and `admits` is
+asked once for the batched request. Before this the provider route was
+open to anyone, which the README did not say. A token signed when the
+page renders was weighed and dropped: a permission taken away afterwards
+would have kept working until the token aged out. The hook is `admits`
+and not `admits?` because a `?` function answers a plain true or false,
+and this one may read the database.
+
+**Generators.** `controller`, `model`, `migration` and `mailer` join
+`scaffold` and `authentication`. `new` now runs a mail worker beside the
+server, so a mailer in an app without accounts has something to send its
+letters.
+
+**Still owed on #2455.** Confirmation, lockout, sign-in tracking and an
+inactivity timeout are hand-written in the guestbook and belong in what
+the `authentication` generator turns on. `job` and `resource` generators.
+Server components' actions are not yet answered as their page is. Guides
+for controllers, mailers, testing, configuration, deployment and security.
+
+No counter moved in kanso: the work is in senro and on the site.

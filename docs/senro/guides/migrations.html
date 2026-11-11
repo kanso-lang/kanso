@@ -1,0 +1,177 @@
+---
+layout: default
+title: "migrations in senro"
+description: "how senro keeps an app's migrations one to a file, orders them by the stamp in each name, runs and records them, and writes them with a generator."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>migrations</h1>
+
+<p>a migration is a change to the database's tables, kept in the app so that every copy of the database is built the same way. senro keeps each in a file of its own, as Rails keeps them in <code>db/migrate</code>, and the file's name says when it was written. this guide covers the files, the order they run in, how a run is recorded, and the generator that writes them. the <a href="models.html">models guide</a> covers what the app does with the schema they build.</p>
+
+<h2>a file to a migration</h2>
+
+<p>an app's migrations live in its <code>migrations</code> directory. the guestbook has seven.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ ls examples/guestbook/migrations
+20261030014602_create_signatures.kso
+20261104045753_create_accounts.kso
+20261105044946_add_email_to_accounts.kso
+20261105050729_add_confirmed_to_accounts.kso
+20261105065821_add_lock_to_accounts.kso
+20261105070000_add_sign_ins_to_accounts.kso
+20261105100325_add_photo_to_signatures.kso</code></pre>
+</div>
+
+<p>a file is named <code>&lt;stamp&gt;_&lt;name&gt;.kso</code>. the stamp is the moment the file was written, as fourteen digits: the year, month, day, hour, minute and second, in UTC. the name says what the migration does. the file holds one pub constant with that name, and its value is the change.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations/20261030014602_create_signatures.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+
+<span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
+  (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
+]</code></pre>
+</div>
+
+<p>a migration that makes several changes holds a list of them. this one adds five columns to <code>accounts</code>. the directory is one kanso module, so its files share their names, and a name a file keeps for itself, such as <code>sign_in_count</code> here, is spelled so that no other migration uses it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations/20261105070000_add_sign_ins_to_accounts.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+
+<span class="c"># How many times the account has signed in, and when and from where the</span>
+<span class="c"># latest sign-in and the one before it came, as Devise's trackable keeps them.</span>
+<span class="k">pub</span> <span class="f">add_sign_ins_to_accounts</span> <span class="o">=</span> [
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> sign_in_count)
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> (<span class="f">models/column</span> <span class="s">"current_sign_in_at"</span> blank_text))
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> (<span class="f">models/column</span> <span class="s">"last_sign_in_at"</span> blank_text))
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> (<span class="f">models/column</span> <span class="s">"current_sign_in_ip"</span> blank_text))
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> (<span class="f">models/column</span> <span class="s">"last_sign_in_ip"</span> blank_text))
+]
+
+sign_in_count <span class="o">=</span> <span class="f">models/column</span> <span class="s">"sign_in_count"</span> <span class="s">"integer not null default 0"</span>
+
+blank_text <span class="o">=</span> <span class="s">"text not null default ''"</span></code></pre>
+</div>
+
+<h2>the changes</h2>
+
+<p>a change is a call of senro's <code>models</code> module. there are six.</p>
+
+<ul>
+  <li><code>models/create_table name columns</code> makes a table. a column is <code>models/column name kind</code>, where the kind is what Postgres is told, such as <code>"text"</code> or <code>"integer not null default 0"</code>. <code>models/created_at</code> and <code>models/updated_at</code> are the two columns Rails' <code>t.timestamps</code> adds.</li>
+  <li><code>models/add_column table column</code> adds a column to a table that is there.</li>
+  <li><code>models/rename_column table from to</code> renames one.</li>
+  <li><code>models/drop_column table name</code> removes one.</li>
+  <li><code>models/add_foreign_key table column parent</code> makes the column hold a row of <code>parent</code>, and removes the row when its parent is removed.</li>
+  <li><code>models/add_unique_index table column</code> lets a value appear once in the column.</li>
+</ul>
+
+<p>each does nothing when its work is already done: a table is made if it is not there, a column added if the table lacks it. a database that was built before its migrations were recorded takes them all safely the first time.</p>
+
+<h2>the order they run in</h2>
+
+<p>migrations run in the order of their files' names, and the stamp at the front of each name makes that the order they were written in. the order does not depend on the machine, on what the constants are called, or on the order the compiler reads the files in. two people who build a database from the same files get the same tables.</p>
+
+<p>the app's entry does not list the files. it asks for <code>migrations/all</code>, and <code>derive models/tables</code> writes <code>all</code> into the module from the files it finds: each stamp, beside what its file holds, oldest first. the same derivation folds the migrations, in the same order, into the schema the app is compiled against. so there is no schema file to keep in step, and a migration that renames a column the app still reads is a compile error at the read until the app is changed with it.</p>
+
+<p>a file whose name is not its stamp and its constant's name has no place in that order, and the app does not compile.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/errors/migration_misnamed/migrations/create_notes.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../../models"</span>
+
+<span class="k">pub</span> <span class="f">create_notes</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
+  (<span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>)
+]</code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso check .</div>
+  <pre><code>error[derive]: migrations/create_notes.kso holds `create_notes`, so it is named &lt;yyyymmddhhmmss&gt;_create_notes.kso
+  --&gt; ./migrations/create_notes.kso:3:5
+   3 | pub create_notes = models/create_table "notes" [
+           ^</code></pre>
+</div>
+
+<p>a second file with a stamp another has is refused the same way, since a stamp is what one migration is recorded under.</p>
+
+<h2>running them</h2>
+
+<p>the entry runs <code>models/migrated db app migrations/all</code> as the app starts, so a server never answers a request against tables older than its code. <code>senro migrate</code> runs the same thing and stops, for a deploy that migrates before it restarts.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro migrate
+migrated</code></pre>
+</div>
+
+<p>each migration runs in a transaction of its own and is recorded in a <code>senro_migrations</code> table when it has run: the app's name, the migration's stamp, and the SQL it ran. a later start runs only the ones the table does not list. because they are found by stamp, a migration that arrives late, from a branch merged after newer ones were written, is still run.</p>
+
+<p>a migration that has run is history. if its file is edited afterwards, the SQL it would run no longer matches what was recorded, and the app refuses to start and says which one. a new change is a new migration.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">a start after a migration was edited</div>
+  <pre><code>notebook's migration 2 has changed since it ran:
+  ran: alter table notes add column if not exists body text
+  now: alter table notes add column if not exists body varchar(80)</code></pre>
+</div>
+
+<p>that message is from an app that keeps its migrations in one file, where each is known by its place in the list. an app with a file to a migration is told the stamp.</p>
+
+<h2>writing one</h2>
+
+<p><code>senro generate migration</code> writes a migration's file, stamped with now. it reads what to write from the name, as Rails' generator does.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro generate migration create_labels name:text
+  create ./migrations/20261111180513_create_labels.kso
+$ senro generate migration add_color_to_tags color:text post:references
+  create ./migrations/20261111180514_add_color_to_tags.kso
+$ senro generate migration rename_color_to_shade_in_tags
+  create ./migrations/20261111180515_rename_color_to_shade_in_tags.kso
+$ senro generate migration remove_shade_from_tags shade
+  create ./migrations/20261111180516_remove_shade_from_tags.kso</code></pre>
+</div>
+
+<p><code>create_&lt;table&gt;</code> makes a table with an id, a column for each field and the timestamps. <code>add_&lt;something&gt;_to_&lt;table&gt;</code> adds a column for each field, with a foreign key for a <code>references</code> field and a unique index for one marked <code>:uniq</code>. <code>remove_&lt;something&gt;_from_&lt;table&gt;</code> drops each column named. <code>rename_&lt;old&gt;_to_&lt;new&gt;_in_&lt;table&gt;</code> renames one.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">the file the second command wrote</div>
+  <pre><code>import "&lt;senro&gt;/models"
+
+pub add_color_to_tags = [
+  (models/add_column "tags" (models/column "color" "text"))
+  (models/add_column "tags" (models/column "post_id" "integer not null"))
+  (models/add_foreign_key "tags" "post_id" "posts")
+]</code></pre>
+</div>
+
+<p>any other name makes a migration with no changes in it and a comment listing the six calls, for the app to fill in. a field is written as <code>scaffold</code> reads it, <code>name:text</code>, <code>name:int</code>, <code>name:references</code> or <code>name:attachment</code>. a migration's name is lowercase words joined by underscores, at most 48 characters. two migrations written in the same second take that second and the next, so they keep the order they were written in.</p>
+
+<h2>one file, for a small app</h2>
+
+<p>a module that is a single file, <code>migrations.kso</code>, and writes <code>pub all = [...]</code> itself is read as it is, and each change is recorded by its place in the list. senro's own specs use this for apps of a few lines. the generators write files, and leave an app that keeps one file alone.</p>
+
+<h2>what is not here</h2>
+
+<p>there is no command to roll a migration back. a migration is a list of changes and nothing records how to undo one: renaming a column back is clear, and what a dropped column held is gone. the way to undo a change today is to write the migration that reverses it.</p>
+
+</article>
