@@ -60,6 +60,7 @@ senro: usage: senro new &lt;app&gt;
   controller
   migration
   mailer
+  job
   authentication</code></pre>
 </div>
 
@@ -71,7 +72,8 @@ senro: usage: senro new &lt;app&gt;
   <li><code>controller pages index show</code> writes a module with those actions and a view for each that shows a page.</li>
   <li><code>migration add_rating_to_notes rating:int</code> writes a migration, reading what it does from its name.</li>
   <li><code>mailer account welcome</code> writes <code>account_mailer.kso</code> with a function for each letter.</li>
-  <li><code>authentication</code> adds accounts: signing up, in and out, and resetting a lost password by mail.</li>
+  <li><code>job tidy</code> writes <code>tidy_job.kso</code>, a job the worker beside the server performs.</li>
+  <li><code>authentication</code> adds accounts: signing up, in and out, locking an account after a run of wrong passwords, and resetting a lost password by mail.</li>
 </ul>
 
 <p>every generator prints each file it writes or changes. none writes over a file that is there: one that would stops before it writes anything, and says which file.</p>

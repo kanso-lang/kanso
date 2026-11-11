@@ -366,6 +366,32 @@ a:hover {
   user-select: none;
 }
 
+/* An output panel that stands on its own in an article, as the senro
+   guides use it, is a panel in its own right. Nested in a code panel it
+   stays that panel's lower half. */
+.prose > .code-output {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 6px;
+  margin: 1.5rem 0;
+  overflow: hidden;
+}
+
+.prose > .code-output pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: 0.5rem 1.25rem 1.1rem;
+}
+
+.prose > .code-output code {
+  background: none;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  padding: 0;
+}
+
 /* syntax tokens */
 .k { color: var(--tok-kw); }
 .f { color: var(--tok-fn); font-weight: 500; }

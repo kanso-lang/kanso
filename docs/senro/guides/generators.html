@@ -74,7 +74,7 @@ generate: cannot read `title:words`: a field is name:text, name:int, name:refere
 connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pre>
 </div>
 
-<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends by serving on port 3000 with a worker beside the server, which sends the mail the app queues. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
+<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends by serving on port 3000 with two workers beside the server: one sends the mail the app queues, and one performs the app's own jobs. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
 
 <h2>the migration</h2>
 
@@ -433,6 +433,63 @@ generate: cannot read `page:references`: a resource nests under one parent</code
 
 <p>the secret that signs every session is 32 random bytes the generator made when it ran, so two apps never share one. keep it out of any repository the public can read; changing it signs every visitor out.</p>
 
+<p>the sign-in locks an account after five wrong passwords in a row, for an hour, as Devise's <code>lockable</code> does, and counts and stamps each sign-in, as its <code>trackable</code> does. the counting is senro's, in the <code>accounts</code> module; the generated file holds the two numbers and says what each outcome answers.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session.kso</div>
+  <pre><code><span class="c"># Five wrong passwords in a row lock an account for an hour, as Devise's</span>
+<span class="c"># `lockable` does. A right password ends the run of wrong ones, and each</span>
+<span class="c"># sign-in is counted and stamped, as its `trackable` does (`accounts`).</span>
+<span class="k">pub</span> <span class="f">locks_after</span> <span class="o">=</span> 5
+
+<span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> 60
+
+<span class="c"># A locked account answers a wrong password as any wrong password is</span>
+<span class="c"># answered, and tells only the holder of the right one that it is locked.</span>
+<span class="k">fn</span> <span class="f">entered</span> req db email a password t
+  right <span class="o">=</span> <span class="f">passwords/matches?</span> password a.digest
+  <span class="k">return</span> effect (shut req email right) <span class="k">if</span> still_locked? a t
+  <span class="k">return</span> missed req db email a t <span class="k">if</span> <span class="k">not</span> right
+  <span class="f">accounts/arrived</span> req db <span class="f">user/user_model</span> a.id a.was_at a.was_ip t
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> signed req a)
+
+<span class="k">fn</span> <span class="f">still_locked?</span> a t
+  <span class="f">accounts/locked?</span> a.locked locked_minutes t
+
+<span class="k">fn</span> <span class="f">shut</span> req email true
+  told <span class="o">=</span> <span class="s">"This account is locked. Try again in {locked_minutes} minutes."</span>
+  opened req email { <span class="s">"password"</span>:told } 403
+
+<span class="k">fn</span> <span class="f">shut</span> req email false
+  refused req email
+
+<span class="c"># A wrong password counts against the account, and the one that makes the</span>
+<span class="c"># run long enough locks it.</span>
+<span class="k">fn</span> <span class="f">missed</span> req db email a t
+  <span class="k">return</span> effect (refused req email) <span class="k">if</span> a.id <span class="o">==</span> <span class="s">""</span>
+  <span class="f">accounts/missed</span> db <span class="f">user/user_model</span> a.id a.locked
+    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> locking req db email a counted t)
+
+<span class="k">fn</span> <span class="f">locking</span> req _ email _ _:<span class="f">web/absent</span> _
+  effect (refused req email)
+
+<span class="k">fn</span> <span class="f">locking</span> req db email a counted t
+  <span class="k">return</span> effect (refused req email) <span class="k">if</span> counted.failures <span class="o">!=</span> locks_after
+  <span class="f">accounts/locked_at</span> db <span class="f">user/user_model</span> a.id t
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (refused req email))</code></pre>
+</div>
+
+<p>a locked account answers a wrong password with the same 422 as ever, and tells only the holder of the right one that it is locked. the migration the generator writes for <code>users</code> holds the columns these functions keep, which <code>accounts/columns</code> lists. senro's spec drives the generated app to a lock:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">four wrong passwords, then five</div>
+  <pre><code>four wrong passwords: 422 422 422 422
+the right one then: 303
+five wrong passwords: 422 422 422 422 422
+the right one then: 403 This account is locked. Try again in 60 minutes.
+a wrong one then: 422</code></pre>
+</div>
+
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../jobs"</span>
@@ -454,9 +511,10 @@ generate: cannot read `page:references`: a resource nests under one parent</code
 <span class="k">import</span> <span class="s">"./user"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
-<span class="k">derive</span> kata/views
-<span class="k">derive</span> models/tables
-<span class="k">derive</span> routes/rest
+<span class="k">derive</span> <span class="f">jobs/performers</span>
+<span class="k">derive</span> <span class="f">kata/views</span>
+<span class="k">derive</span> <span class="f">models/tables</span>
+<span class="k">derive</span> <span class="f">routes/rest</span>
 
 <span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
 <span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
@@ -464,20 +522,23 @@ generate: cannot read `page:references`: a resource nests under one parent</code
 connected <span class="o">=</span> <span class="f">pg/from_env</span>
 
 <span class="c"># Every action asks for a sign-in unless its module lists it in</span>
-<span class="c"># `without_sign_in`, and a worker beside the server sends the mail the app</span>
-<span class="c"># queues.</span>
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes session/secret session/signed_against
+<span class="c"># `without_sign_in`.</span>
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes <span class="f">session/secret</span> <span class="f">session/signed_against</span>
 
-serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n">3000</span> signed connected
+<span class="c"># Two workers run beside the server. One sends the mail the app queues,</span>
+<span class="c"># and the other does the jobs its `_job` modules perform.</span>
+serving <span class="o">=</span> <span class="f">web/serve</span> 3000 signed connected
 
-<span class="f">connected</span>
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> migrations/all)
+working <span class="o">=</span> <span class="f">jobs/beside</span> connected <span class="f">jobs/default_queue</span> performers serving
+
+connected
+  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> <span class="f">migrations/all</span>)
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> mail/performers serving)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> <span class="f">mail/performers</span> working)</code></pre>
 </div>
 
-<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the worker <code>new</code> set beside the server sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
+<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the mail worker <code>new</code> set beside the server sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
 
 <p>senro's spec serves the generated app on both engines and uses it as a visitor would: it makes an account, works with notes and pages, signs out, and resets the password through the mail the app writes.</p>
 
@@ -496,7 +557,7 @@ serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n
   authentication</code></pre>
 </div>
 
-<p><code>model</code> takes what <code>scaffold</code> takes and writes the model alone: the module named for the record and the migration that makes its table. <code>controller</code> takes a plural name and the actions it should have, each one of the seven the routing convention places, and writes a module with those actions and a view for each that shows a page. <code>migration</code> writes a migration from its name, as the migrations guide describes. <code>mailer</code> takes a name and its letters and writes <code>&lt;name&gt;_mailer.kso</code>, with a function for each letter that composes it and queues it for the worker.</p>
+<p><code>model</code> takes what <code>scaffold</code> takes and writes the model alone: the module named for the record and the migration that makes its table. <code>controller</code> takes a plural name and the actions it should have, each one of the seven the routing convention places, and writes a module with those actions and a view for each that shows a page. <code>migration</code> writes a migration from its name, as the migrations guide describes. <code>mailer</code> takes a name and its letters and writes <code>&lt;name&gt;_mailer.kso</code>, with a function for each letter that composes it and queues it for the worker. <code>job</code> takes a name and writes <code>&lt;name&gt;_job.kso</code>, whose <code>perform</code> the second worker calls; the <a href="jobs.html">background jobs guide</a> covers how a job is found and queued.</p>
 
 <p>a generator senro does not ship is a kanso program at <code>generators/&lt;name&gt;.kso</code>, in the app or beside a library the app's entry imports by path. <code>senro generate &lt;name&gt;</code> runs it in the app's directory with the words that followed, and the list above shows it with where it was found. senro's own are looked for first, so one from outside cannot take the place of <code>scaffold</code>.</p>
 
