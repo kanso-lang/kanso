@@ -2362,8 +2362,9 @@ Three rows rise. The cache keeps a module once a second import asks for
 it under the same key, and a second import now shares a key where the
 count used to separate it. On the module corpus that keeps copies no
 third import comes for: `compile_allocs` 13,956 -> 14,016,
-`compile_peak_bytes` 599,057 -> 612,423, and the tab's compile peak
-984,597 -> 985,156. Welfare weighs the two together and rises
+`compile_peak_bytes` 599,057 -> 612,423, and in the tab
+`browser_compile_peak_bytes` 984,597 -> 985,156. Welfare weighs the falls
+and the rises together and rises
 95.34294665 -> 95.35566837, banked.
 
 **Not done.** A module is still compiled once for each pruning the load
