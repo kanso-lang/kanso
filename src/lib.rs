@@ -713,7 +713,7 @@ fn compile_library_beside(
     // What the file wrote itself is what can read as an import left unused.
     // The entry beside a test file lends it the rest: each import the test
     // did not write, under the name the entry gave it.
-    let written = program.imports.clone();
+    let written = around.map(|_| program.imports.clone());
     let lent = around.iter().flat_map(|entry| &entry.program.imports);
     for import in lent {
         if !program.imports.iter().any(|mine| mine.path == import.path) {
@@ -736,40 +736,40 @@ fn compile_library_beside(
             renames: Vec::new(),
         });
     }
-    let (loaded, deferred) = match deriving {
-        None => (load_dependencies(&base, &import_list, &mut crate::hash::Set::default()), false),
-        Some(_) => load_to_describe(&base, &import_list),
-    };
-    let (mut dep_program, mut exports, mut surfaced) = loaded?;
     // The entry's derivations run over the entry, as they do when it is the
     // program, and what they declare is declared for the test file.
-    if let Some(entry) = deriving {
-        let named = root_name(std::path::Path::new(&entry.file));
-        let made = derive::derive(&entry.program, &named, &base, &dep_program, &exports)
-            .map_err(|d| render_merged(&d, &entry.file, &entry.source))?;
-        if !made.definitions.is_empty() || deferred {
-            (dep_program, exports, surfaced) =
-                load_with_definitions(&base, &import_list, &made.definitions)?;
-        }
-        let stamp: std::sync::Arc<str> = std::sync::Arc::from(entry.file.as_str());
-        program.fns.extend(made.constants.into_iter().map(|mut d| {
-            d.file = std::sync::Arc::clone(&stamp);
-            d
-        }));
-        if !made.types.is_empty() {
-            program.types.extend(made.types.into_iter().map(|mut t| {
-                t.file = std::sync::Arc::clone(&stamp);
-                t
+    let (mut dep_program, exports, surfaced) = match deriving {
+        None => load_dependencies(&base, &import_list, &mut crate::hash::Set::default())?,
+        Some(entry) => {
+            let (loaded, deferred) = load_to_describe(&base, &import_list);
+            let mut loaded = loaded?;
+            let named = root_name(std::path::Path::new(&entry.file));
+            let made = derive::derive(&entry.program, &named, &base, &loaded.0, &loaded.1)
+                .map_err(|d| render_merged(&d, &entry.file, &entry.source))?;
+            if !made.definitions.is_empty() || deferred {
+                loaded = load_with_definitions(&base, &import_list, &made.definitions)?;
+            }
+            let stamp: std::sync::Arc<str> = std::sync::Arc::from(entry.file.as_str());
+            program.fns.extend(made.constants.into_iter().map(|mut d| {
+                d.file = std::sync::Arc::clone(&stamp);
+                d
             }));
-            synthesize_getters(&mut program);
+            if !made.types.is_empty() {
+                program.types.extend(made.types.into_iter().map(|mut t| {
+                    t.file = std::sync::Arc::clone(&stamp);
+                    t
+                }));
+                synthesize_getters(&mut program);
+            }
+            loaded
         }
-    }
+    };
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
-    let mut diags = unused_imports(&written, &quals);
+    let mut diags = unused_imports(written.as_deref().unwrap_or(&program.imports), &quals);
     // After the import is credited and before the surface is judged: the door
     // resolves to the owner's spelling, so crediting that owner would leave
     // the import the caller wrote reading as unused, and asking whether
