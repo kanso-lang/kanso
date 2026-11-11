@@ -108,7 +108,7 @@ fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Outpu
     command.output().expect("kanso binary runs")
 }
 
-/// What a program a golden runs may allocate is 4 GiB, set by
+/// What a program a golden runs may allocate is 6 GiB, set by
 /// `scripts/bounded.sh` on the test binary and inherited from there. The
 /// corpus's programs want megabytes, so a program that reaches the limit is
 /// one a wrong compiler built, and it fails its golden by name.
@@ -132,7 +132,7 @@ fn a_program_a_golden_runs_may_allocate_only_so_much() {
         let output = run_kanso_env(&program, extra, &[]);
         assert_eq!(
             String::from_utf8_lossy(&output.stdout),
-            "4194304\n",
+            "6291456\n",
             "a program run with {extra:?} was handed another limit: {}",
             String::from_utf8_lossy(&output.stderr)
         );

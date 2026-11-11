@@ -49,7 +49,7 @@ bound_probe = row
 
 /// A worktree of HEAD carrying this checkout's ratchet and limit script, with
 /// one more row at the end of the table. Its gate prints the limit it runs
-/// under and passes when that is 4 GiB and the mutation's file is absent.
+/// under and passes when that is 6 GiB and the mutation's file is absent.
 fn staged() -> PathBuf {
     let tree = std::env::temp_dir().join("kanso-ratchet-bound");
     discarded(&tree);
@@ -79,7 +79,7 @@ fn staged() -> PathBuf {
     std::fs::write(&rows, joined).expect("the staged table writes");
 
     let gate = "echo \"limit $(ulimit -d)\"\n\
-                test \"$(ulimit -d)\" = 4194304 && test ! -e probe_broken\n";
+                test \"$(ulimit -d)\" = 6291456 && test ! -e probe_broken\n";
     std::fs::write(tree.join("probe_gate.sh"), gate).expect("the gate writes");
     std::fs::write(tree.join("scripts/ratchet/mutations/probe_breaks.sh"), "touch probe_broken\n")
         .expect("the mutation writes");

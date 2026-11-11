@@ -2261,12 +2261,17 @@ The number. With the mutation that ended the runner applied,
 memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
 seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
 nearly all of its limit by the time it is refused, so the limit is what one
-such program costs the machine. It is 4 GiB. A release build of the
-compiler, Chromium, callgrind, the compile sweep, the counter sweep and the
-golden suite were each run under 4 GiB first. A second program, one that
-pushes onto a list without end, was run under 1 GiB on both engines: the
-native binary says `out of memory` and exits 1, and the interpreter panics
-and exits 101.
+such program costs the machine, and it should be no larger than the tests
+need. A release build of the compiler, Chromium, callgrind, the compile
+sweep, the counter sweep and the golden suite were each run under 4 GiB, and
+the first push set the limit there. CI then failed one test:
+`an_answer_above_two_gibibytes_reads_back` in `tests/wasm_engine.rs` grows a
+wasm memory past two gibibytes inside the test process, and the engine
+could not grow it. Run alone it fails under 4 GiB and passes under 5, 6 and
+8. The limit is 6 GiB. The runaway fixture was not run again at 6. A second
+program, one that pushes onto a list without end, was run under 1 GiB on
+both engines: the native binary says `out of memory` and exits 1, and the
+interpreter panics and exits 101.
 
 It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
 limit from a shell a program starts, on both engines, and reads `unlimited`
