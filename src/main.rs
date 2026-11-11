@@ -706,6 +706,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
             if std::env::var_os("KANSO_COUNTERS").is_some() {
                 eprint!("{}", self.0.thunk_stats.render());
                 eprint!("{}", interpreter_counters());
+                eprintln!("interp_callee_lookups={}", self.0.callee_lookups.get());
+                eprintln!("interp_frames_made={}", self.0.frames_made.get());
                 // Reported when it is not nought, as the native runtime
                 // reports it, so no golden without a socket carries it.
                 if self.0.sock_waits.get() > 0 {

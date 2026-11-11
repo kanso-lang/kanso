@@ -3,7 +3,7 @@
 impl<'a> Interp<'a> {
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         match callee {
-            Value::FnRef(name) => self.call_ref(&name, args, span, frame),
+            Value::FnRef(name, at) => self.call_ref(&name, at, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             Value::TableFn(handle) => foreign_call(handle, args, span, false),
             Value::Partial(callee, supplied) => {
@@ -39,7 +39,7 @@ impl<'a> Interp<'a> {
             // takes the count the checker holds for it. Answering only for
             // groups left `(&pt 2) "y"` and `(&length) [1 2]` growing into
             // partials that printed `<fn>` where native ran `length`.
-            Value::FnRef(name) => match self.callee_of_ref(name) {
+            Value::FnRef(name, at) => match self.callee_of_ref(name, *at) {
                 Callee::Group(decls) => {
                     let mut found: Vec<usize> = decls.iter().map(|d| d.params.len()).collect();
                     found.sort_unstable();
@@ -217,53 +217,50 @@ impl<'a> Interp<'a> {
         }
     }
 
-    /// A call through a function reference, remembered by the reference's
-    /// address rather than by hashing its text. Every `Value::FnRef` is made
-    /// in `resolve`, whose answer `names` keeps for the interpreter's life,
-    /// so one name reaches here through one address. The entry holds its own
-    /// count on the name as well, so no other name can come to live at an
-    /// address the table knows. Hashing the name was about a hundred
+    /// A call through a function reference, answered from the reference's
+    /// number without hashing its text. Hashing the name was about a hundred
     /// instructions of every interpreted call.
-    fn call_ref(&self, name: &Rc<str>, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
-        let callee = self.callee_of_ref(name);
+    fn call_ref(
+        &self,
+        name: &Rc<str>,
+        at: u32,
+        args: Vec<Value>,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let callee = self.callee_of_ref(name, at);
         self.call_callee(callee, name, args, span, frame)
     }
 
-    /// What a function reference calls, by its address; see `call_ref`.
+    /// What a function reference calls, read at the reference's number.
     ///
-    /// The map's probe was most of what a call through a reference paid, so a
-    /// direct-mapped table of the last callee per address slot answers first.
-    /// A slot holds a key only while the map does, and the map pins the name,
-    /// so an address in the table cannot have been handed to another name.
-    fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
-        let key = Rc::as_ptr(name) as *const u8 as usize;
-        let slot = recent_slot(in_slice(key), RECENT_CALLEES);
-        if let (k, Some(callee)) = &self.recent_callees.borrow()[slot] {
-            if *k == key {
-                return callee.clone();
-            }
+    /// `resolve` numbers a name the first time the run meets it, in the
+    /// order the program reaches its names, so a reference's place in the
+    /// table is the program's doing and two names never share one. Until
+    /// 2026-11-11 the place came from the address of the name's text, and
+    /// the count of instructions a run took moved with whatever the front
+    /// end had allocated before it (kanso#2444).
+    fn callee_of_ref(&self, name: &Rc<str>, at: u32) -> Callee<'a> {
+        if let Some(Some(callee)) = self.callees_by_number.borrow().get(at as usize) {
+            return callee.clone();
         }
-        self.callee_missed(name, key, slot)
+        self.callee_missed(name, at)
     }
 
-    /// The table did not hold the reference; kept out of line so a hit pays
-    /// for no frame.
+    /// The first call through a number, or a call through a reference with
+    /// none; kept out of line so a hit pays for no frame.
     #[inline(never)]
-    fn callee_missed(&self, name: &Rc<str>, key: usize, slot: usize) -> Callee<'a> {
-        let placed = Placed { at: key, stable: in_slice(key) };
-        let known = self.callees_by_ref.borrow().get(&placed).map(|(_, callee)| callee.clone());
-        if let Some(callee) = &known {
-            self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
-        }
-        match known {
-            Some(callee) => callee,
-            None => {
-                let callee = self.callee_named(name);
-                self.callees_by_ref.borrow_mut().insert(placed, (name.clone(), callee.clone()));
-                self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
-                callee
+    fn callee_missed(&self, name: &Rc<str>, at: u32) -> Callee<'a> {
+        let callee = self.callee_named(name);
+        self.callee_lookups.set(self.callee_lookups.get() + 1);
+        if at != UNNUMBERED {
+            let mut known = self.callees_by_number.borrow_mut();
+            if known.len() <= at as usize {
+                known.resize(at as usize + 1, None);
             }
+            known[at as usize] = Some(callee.clone());
         }
+        callee
     }
 
     fn call_callee(
