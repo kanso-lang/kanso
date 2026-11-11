@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a declaration cannot take a nullary value's name
-
-A library could declare a constant named `done`. std/list's iterators answer
-`done` when they run out, and with the constant declared that answer read
-the constant, so a fold elsewhere in the program found no arm for it and
-failed at run time (#2338). senro's jobs module found it with a SQL string
-named `done`. An entry already refused the name, because there it is a
-binding and the shadow check holds the nullary values as globals; a library
-declares it instead, and `collect_globals` checked declarations against the
-ambient names and the types only.
-
-A declaration named `done`, `none`, `true` or `false` is now refused as a
-name already taken. The one program in the tree that declared one was
-`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
-`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
-declares `done` and `none`, and checked clean before the change.
-
-Rows: the new check costs every compile a little. `compile_instructions`
-rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
-`library_instructions` 1,497 to 73,495,778 and
-`browser_compile_instructions` 3,822 to 350,291,185, and
-`browser_run_instructions` did not move. The rule is part of the language,
-so the welfare floor moves down by exactly the check's cost.
-
 ## 2026-11-05 — directive: a model's fields come from its table
 
 Clay: "we need the fields for the model to be auto-magic like in ruby." He
@@ -2215,6 +2191,60 @@ The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.32525328 before and 95.32525334 after.
 
+## 2026-11-11 — one limit for every test and every ratchet gate
+
+#2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
+may map, after one ratchet row ended CI's runner twice. Every other test
+that starts kanso, and every ratchet gate that is a script, still ran with
+no limit.
+
+The issue asked for a helper in `tests/support/` that the tests starting
+kanso would call. The committee's reading is on the issue: 153 files start
+kanso, a helper covers the ones that remember to call it, and it leaves the
+ratchet's script gates out. A limit is inherited by a child process, so it
+is set once on the way in. `scripts/bounded.sh` sets it. Cargo runs every
+test binary through that script on Linux (`runner` in `.cargo/config.toml`),
+and the ratchet sources it before each command it runs in a worktree.
+`tests/golden.rs` loses its own.
+
+Two measurements changed what #2431 chose.
+
+The kind of limit. #2431 limited address space. Headless Chromium does not
+start under that at 8 GiB: Playwright's launch fails. Two ratchet gates run
+a browser, so the same limit in the ratchet would have turned them red
+before any mutation. Under a limit on data, `ulimit -d`, Chromium starts and
+makes a wasm memory, and callgrind runs under either. The limit is on data.
+
+The number. With the mutation that ended the runner applied,
+`micro/a_greedy_run_of_one_character_backs_off_in_order` says `out of
+memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
+seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
+nearly all of its limit by the time it is refused, so the limit is what one
+such program costs the machine, and it should be no larger than the tests
+need. A release build of the compiler, Chromium, callgrind, the compile
+sweep, the counter sweep and the golden suite were each run under 4 GiB, and
+the first push set the limit there. CI then failed one test:
+`an_answer_above_two_gibibytes_reads_back` in `tests/wasm_engine.rs` grows a
+wasm memory past two gibibytes inside the test process, and the engine
+could not grow it. Run alone it fails under 4 GiB and passes under 5, 6 and
+8. The limit is 6 GiB. The runaway fixture was not run again at 6. A second
+program, one that pushes onto a list without end, was run under 1 GiB on
+both engines: the native binary says `out of memory` and exits 1, and the
+interpreter panics and exits 101.
+
+It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
+limit from a shell a program starts, on both engines, and reads `unlimited`
+with the `runner` line removed. `tests/the_ratchet_bounds_what_it_starts.rs`
+stages one row whose gate is green only under the limit and runs the real
+`prove` over it, started with the limit lifted. With the ratchet's line
+removed the baseline reads `ALREADY RED`, and the gate's own words are
+`limit unlimited`. Neither spec has a ratchet row: the ratchet bounds the
+gate that would read the first, and the second runs `prove`.
+
+No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
+script directly, the cost-goldens job among them, go through neither cargo
+nor the ratchet and have no limit.
+
 ## 2026-11-11 — one text written as another, in one pass
 
 #2427's first lead, on the corpus the entry before this one added.
@@ -2291,13 +2321,12 @@ emitted_other_calls 22,353 -> 22,356 and emitted_other_lines 186,392 ->
 and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
 compile_instructions 24,154,945 -> 24,168,284, entry_instructions
 156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
-73,647,363. codegen_instructions_dev is written at 117,014,851 and
-codegen_instructions_release at 372,088,332, this container's readings
-plus the difference CI has shown before, for CI to replace. Four work rows
+73,647,363. CI read codegen_instructions_dev at 117,013,839 and
+codegen_instructions_release at 372,134,885. Four work rows
 move with the layout of the grown runtime: work_encodebench up 154 to
 2,335,341,047, work_oneshot down 854 to 9,979,505, work_pendbench up 37
-to 154,094,201 and work_livebench down 518 to 938,654,959. Welfare rises
-95.32525334 -> 95.34300865, and the floor is banked there.
+to 154,094,201 and work_livebench down 546 to 938,654,931. Welfare rises
+95.32525334 -> 95.34299175, and the floor is banked there.
 
 Checked against the interpreter. `micro/text_replace_answers_what_split_and_join_did`
 prints the call beside the idiom on every engine: occurrences at either
