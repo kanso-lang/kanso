@@ -20,24 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: no for loops, in kanso or in kata
-
-kata, senro's template language, wrote a loop as `for e in signatures`. Clay:
-"we NEVER EVER EVER EVER want 'for' loops in kanso. we use collection
-pipeline constructs like each and map."
-
-kanso has no `for`, and kata's row compiled to kanso's `each xs (x -> ...)`
-already, so the template syntax was the only `for` in the project. The ruling
-covers the language and every template or configuration language built on
-it: a collection is walked with `each`, `map` and their kin, and a `for` is
-refused. kata's row is rewritten as an `each` and a `for` row is an error at
-its template line (#2395).
-
-The committee kept the spelling `each signatures e ->`, collection first,
-two seats to one over `each signatures as e`: it is the call kanso would
-write with the parentheses the indentation makes redundant. `std` has no
-`each`, so kata's README calls it a helper kata writes.
-
 ## 2026-11-10 — directive: senro may ask the language for more
 
 Clay, on the model finders: "this real world use case for kanso may lead to
@@ -2547,3 +2529,91 @@ testing, and the tour's sentence on what a test is now allows an effect.
 system when it is not. A suite has no setup or teardown; a test that needs
 a clean table makes one.
 senro's testing helpers are built on this next.
+
+## 2026-11-11 — senro: jobs by convention, an API generator, an idle window, Secure cookies, four more guides (#2455)
+
+More of the 2026-11-11 directive, built in senro and written up on the
+site. senro's design is cloud's (#2280); each choice is recorded here and
+on #2455.
+
+**Jobs by convention** (senro#122). An app's own work had no convention:
+it built a table of performers by hand, and a job's name was a string
+nothing checked. A module named `<name>_job` is now the job `<name>` and
+its `perform db args` is the work. `derive jobs/performers` gives the
+entry the table, found from the modules it imports as `routes/rest` finds
+actions. `jobs/perform_later db name args` queues one, and a name written
+as a string that is no job's is refused at the call while the app
+compiles, as `routes/path_to` refuses a route that is not there. `senro
+new` writes a second worker for these beside the one that sends mail, and
+`jobs/beside` starts no worker for a table with no performers, so an app
+with no jobs pays nothing for the line. One queue, `default`; a job's own
+queue is left until an app needs one.
+
+**Lockout and tracking in what the generator writes** (senro#121). The
+guestbook's hand-written lockout and sign-in tracking moved into an
+`accounts` module, and `senro generate authentication` writes a sign-in
+built on it: five wrong passwords in a row lock an account for an hour,
+and each sign-in is counted and stamped. Five and an hour were chosen
+because the generated app unlocks by time alone for now, and the address
+limit beside it already allows ten tries in three minutes. The columns the
+module writes are `accounts/columns`, read by the generator, so the list
+has one home. Confirmation by mail and the unlock link are still the
+guestbook's alone.
+
+**A resource with no pages** (senro#124). `senro generate resource` writes
+an API over a model, as `rails g scaffold --api` does: the model and its
+migration as `scaffold` writes them, and five actions that answer JSON.
+`web/input` reads a posted form or a JSON object by the request's content
+type, and the generated module keeps only the fields it was told about.
+Two faults turned up while driving it. An update answered the row as the
+model guessed it would be, so an int sent as JSON came back as a string;
+`pg/update_by_id` now returns the stored row. And an update that changed
+no field built an SQL statement with nothing to set; it now answers the
+row as it stands.
+
+**An inactivity window** (senro#125). `web/idle_after held minutes` ends
+a session after that long with no request, as Devise's timeoutable does.
+The cookie carries when the session was last seen, and an answer rewrites
+it once a second has passed, so a page that makes several requests at
+once does not rewrite it for each. The alternative was to keep the last
+moment in the database, which would cost every signed-in request a write.
+The generator does not turn the window on.
+
+**Secure cookies** (senro#123). Reading `web` to write the security guide
+found that the session cookie was `HttpOnly` and `SameSite=Lax` and never
+`Secure`. The server speaks HTTP behind a proxy, and cannot see the
+scheme the visitor used. It now reads `X-Forwarded-Proto` and marks every
+cookie in the answer `Secure` when the header says `https`. The
+alternative was a setting, which every deploy would have to remember. A
+client that sends the header falsely gets cookies its own browser will
+not send back, so trusting it costs nothing.
+
+**The guides.** Four are new: controllers and actions, mailers, security,
+and configuration and deployment. The jobs guide gains the convention,
+and the sessions guide's lockout and tracking sections now quote
+`accounts`. Mail's transports are described in the mailers guide alone;
+the sessions guide points at it. The generators and command-line guides
+gain the resource generator and the sessions guide the inactivity window.
+Every panel is checked against senro at 70dc382 by `senro_quotes`.
+
+A standalone output panel had no style of its own: `.code-output` was
+written for the lower half of a code panel, and the senro guides use it
+by itself. It drew pale text on the page with no background, and a long
+line widened the whole page: the jobs guide measured 2,344 pixels across
+in a 1,280-pixel window. `docs/style.css` now makes one that stands
+alone in an article a panel with its own horizontal scroll. Ten guides
+were rendered through the layout and measured at 1,280 and 390 pixels,
+and each now stays inside its window.
+
+Clay, reading the site: "the web site has what looks like a not equal
+sign. it should just be != i think. you don't need to render it in a
+fancy way that's not what real code looks like." JetBrains Mono joins
+`!=` and `->` into one glyph each. The stylesheet now turns the font's
+ligatures off for code everywhere, and `site_smoke` asks the browser what
+it settled on for a line of code under that stylesheet. Watched red
+before the rule: `code is shown with ligatures (normal)`.
+
+**Open.** A guide to testing waits on #2460 and on senro's testing
+helpers. A component's server action answered as its page, rolling a
+migration back, and confirmation and unlock mail in what the generator
+writes are still owed.

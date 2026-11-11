@@ -1,0 +1,122 @@
+---
+layout: default
+title: "configuration and deployment in senro"
+description: "what a senro app reads from its environment and what it keeps in its code, how to build it into one binary, and how to migrate and run it in production."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>configuration and deployment</h1>
+
+<p>a senro app is configured in two places. what differs from one machine to the next, such as the database and the mail server, comes from the environment. what is true of the app wherever it runs, such as its port and its limits, is written in its code. this guide lists both, then builds the app into one file and runs it.</p>
+
+<h2>the environment</h2>
+
+<p>an app reads these variables when it starts, or when it first needs one.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">variable, what it sets, and its value when unset</div>
+  <pre><code>PGHOST                 the database's host                127.0.0.1
+PGPORT                 its port                           5432
+PGUSER                 the role to connect as             postgres
+PGDATABASE             the database                       the role's name
+PGPASSWORD             the role's password                ""
+SENRO_URL              the site, for links in mail        http://127.0.0.1:3000
+SENRO_MAIL             how mail is sent                   standard error
+SENRO_STORAGE          where uploads are kept             storage
+SENRO_PASSWORD_ROUNDS  the cost of a password digest      100000
+SENRO_ONLY             "migrate" stops after migrating    unset</code></pre>
+</div>
+
+<p>the five <code>PG</code> variables are the ones libpq reads, so an app connects wherever its host already points them. a password of <code>""</code> is for a server that trusts the connection, as a development container's Postgres does. any other password is sent by SCRAM-SHA-256, which never puts the password itself on the wire.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pg/pg.kso</div>
+  <pre><code><span class="c"># A session with the Postgres the environment names, as libpq reads it:</span>
+<span class="c"># PGHOST, PGPORT, PGUSER, PGDATABASE and PGPASSWORD, each with libpq's</span>
+<span class="c"># default when it is unset or empty. An app that connects this way runs</span>
+<span class="c"># against whatever database its host sets, with nothing to edit.</span>
+<span class="k">pub</span> <span class="f">from_env</span> <span class="o">=</span> <span class="f">os/env</span> <span class="s">"PGHOST"</span> <span class="o">.&gt;</span> (h <span class="o">-&gt;</span> port_from (or_default h <span class="s">"127.0.0.1"</span>))</code></pre>
+</div>
+
+<p><code>SENRO_URL</code> matters as soon as the app sends mail with a link in it, because the link is built from it and from nothing a request carries. <a href="mailers.html">mailers</a> covers that and <code>SENRO_MAIL</code>.</p>
+
+<p><code>SENRO_PASSWORD_ROUNDS</code> is how many rounds of PBKDF2 a new password digest is stretched by. the default is 100,000. each digest records its own rounds, so changing the number leaves the passwords already kept working. senro's specs lower it so that signing in is quick; a production app leaves it unset or raises it.</p>
+
+<h2>what the app's code says</h2>
+
+<p>the rest is in the app, where a change to it is reviewed and versioned with everything else.</p>
+
+<ul>
+  <li><strong>the port.</strong> the entry calls <code>web/serve 3000 routes connected</code>. change the number there.</li>
+  <li><strong>the session secret.</strong> <code>senro generate authentication</code> writes 32 random bytes into <code>session.kso</code> as <code>secret</code>. it signs every session and every link the app mails, so keep the file out of a public repository, and know that changing it signs every visitor out.</li>
+  <li><strong>limits.</strong> a module's <code>rate_limits</code> says how often one client may call an action.</li>
+  <li><strong>who gets in.</strong> <code>without_sign_in</code> and <code>admits</code> are declarations in each module, covered in <a href="sessions.html">sessions and sign-in</a> and <a href="authorization.html">authorization</a>.</li>
+  <li><strong>the schema.</strong> the migrations are compiled into the app. there is no separate schema file to deploy.</li>
+</ul>
+
+<h2>building</h2>
+
+<p><code>senro server</code> compiles the app and runs it, which suits development. a deploy builds a binary once and copies it to where it runs.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ cd notebook
+$ kanso build . --release
+built ./notebook (llvm ir at notebook.ll)</code></pre>
+</div>
+
+<p><code>kanso build . --release</code> writes one native file named for the app's directory. the views, the routes, the migrations and senro itself are compiled into it. the machine it runs on needs no kanso and no copy of the source.</p>
+
+<p>three things stay outside the binary, in the directory it is started from.</p>
+
+<ul>
+  <li><code>public/</code> holds the files the server hands out as they are: stylesheets, images, and the browser modules of an app that has components.</li>
+  <li><code>storage/</code> holds uploaded files, unless <code>SENRO_STORAGE</code> names another directory.</li>
+  <li>the environment, as above.</li>
+</ul>
+
+<h2>a deploy</h2>
+
+<p>the entry migrates the database, checks the schema against what the app was compiled for, and then serves. starting the new binary is therefore a complete deploy for a small app. a deploy that wants the migration to finish before the old server stops runs it as its own step: with <code>SENRO_ONLY=migrate</code> the app migrates, says so and exits, without opening a port. that is what <code>senro migrate</code> does in development.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ SENRO_ONLY=migrate ./notebook
+migrated
+$ ./notebook
+senro on port 3000</code></pre>
+</div>
+
+<p>a migration that was edited after it ran stops the app at that step, before it serves anything, and says which one. <a href="migrations.html">migrations</a> covers why.</p>
+
+<p>the server speaks HTTP. in production it sits behind a proxy that holds the certificate and forwards requests to its port, as a Rails app sits behind nginx or a load balancer.</p>
+
+<h2>what a running app uses</h2>
+
+<p>a server keeps four database sessions for requests and lends one to each request while it is answered. each worker beside the server holds one more, and so does the listener that tells open pages about changes. a request that finds all four lent waits for one to come back.</p>
+
+<p>several servers can run against one database. the jobs table hands each job to one worker, however many there are. a rate limit is counted in each server's memory, so two servers each allow the limit; an app that needs one count for all of them puts the limit in the proxy. uploaded files are on disk, so servers that share uploads share the <code>storage</code> directory.</p>
+
+<h2>logs</h2>
+
+<p>the server writes a line to standard output for each request it answers, and writes failures and each job's outcome to standard error. it keeps no log files of its own; whatever runs the binary collects the two streams.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">a server's two streams</div>
+  <pre><code>senro on port 3000
+GET /notes 200 in 2ms
+POST /resets 303 in 3ms
+senro jobs: ran deliver</code></pre>
+</div>
+
+</article>

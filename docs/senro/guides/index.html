@@ -27,9 +27,13 @@ description: "guides to senro, the web framework for kanso: getting started, and
   <li><a href="generators.html">generators</a><p>write an app and a resource with <code>senro new</code> and <code>senro generate scaffold</code>, and read what each file they write holds.</p></li>
   <li><a href="migrations.html">migrations</a><p>a file to a migration, ordered by the stamp in its name: the changes, how they run and are recorded, and the generator that writes one.</p></li>
   <li><a href="routing.html">routing</a><p>how an action's name places it: the seven actions, ids, singular and nested resources, naming a route from code, keeping an old URL, and reading a query string.</p></li>
+  <li><a href="controllers.html">controllers and actions</a><p>what an action is handed, reading a form and a query string, and the answers it gives: a page, a redirect with a notice, JSON, and what to say when a write is refused.</p></li>
   <li><a href="sessions.html">sessions and sign-in</a><p>the signed session, making an account, how passwords are kept, signing in without saying which names exist, limiting attempts, pages that ask for a sign-in, sending mail, resetting a lost password, confirming an address, and refusing requests from other sites.</p></li>
   <li><a href="authorization.html">authorization</a><p>who may reach a page, said once by its module, and how that check covers the data the page asks the server for afterwards.</p></li>
   <li><a href="uploads.html">file uploads</a><p>a form with a file in it: reading the request as bytes, the form an action sees, where the files are kept, and serving them back.</p></li>
+  <li><a href="mailers.html">mailers</a><p>a letter and the link it carries, sending it now or from a queue, where <code>SENRO_MAIL</code> sends it, reading mail in development, and what is refused.</p></li>
   <li><a href="jobs.html">background jobs</a><p>work an app does after the request, kept in Postgres: queueing a job, the worker that claims it, retrying a failure, and mail sent later.</p></li>
+  <li><a href="security.html">security</a><p>the attacks a web app has to expect and what senro does about each: sessions, requests from other sites, passwords, guessing, links in mail, injection, uploads and authorization.</p></li>
+  <li><a href="deployment.html">configuration and deployment</a><p>what an app reads from its environment and what it keeps in its code, building it into one binary, and migrating and running it in production.</p></li>
 </ul>
 </article>

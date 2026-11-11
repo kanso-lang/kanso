@@ -1,0 +1,199 @@
+---
+layout: default
+title: "controllers and actions in senro"
+description: "what a senro action is handed, how it reads a form and a query string, and the answers it gives: a page, a redirect with a notice, JSON, and what to say when a write is refused."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>controllers and actions</h1>
+
+<p>a Rails controller is a class whose methods are actions. in senro it is a module: <code>notes.kso</code> holds the actions for notes, and each is a pub function named for what it does. the <a href="routing.html">routing guide</a> covers how an action's name places it at a path. this guide covers what an action is handed, how it reads what the browser sent, and the answers it can give. the examples are from the module that <code>senro generate scaffold note title:text pages:int cover:attachment</code> writes.</p>
+
+<h2>what an action is handed</h2>
+
+<p>an action takes the request and a database session, and an action on one row takes the row's id after them. it answers an effect that yields the response.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db id:int
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown req r))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+  effect (form req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} 200)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  given <span class="o">=</span> sent (<span class="f">web/form</span> req.body)
+  <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (made req w))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
+  <span class="f">note/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (gone w))</code></pre>
+</div>
+
+<p><code>req</code> is the request as kanso's <code>std/net/http</code> parsed it. <code>req.method</code> and <code>req.path</code> are text, <code>req.headers</code> is a map keyed by each header's name in lowercase, and <code>req.body</code> is what a form posted. <code>db</code> is a Postgres session the server lends the action from its pool and takes back when the action has answered, so two requests never share one. an action names a parameter <code>_</code> when it has no use for it, as <code>new</code> does with the session.</p>
+
+<p>an <code>id:int</code> is the number in the path. a request for <code>/notes/seven</code> is answered 404 before the action is called, so <code>show</code> never checks that its id is a number.</p>
+
+<h2>reading what was sent</h2>
+
+<p>a form posts its fields in the request's body. <code>web/form req.body</code> reads them into a map from each field's name to its value, and <code>web/value</code> reads one field from that map, answering <code>""</code> for a field the form did not send.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">sent</span> f
+  {
+    <span class="s">"cover"</span>:(<span class="f">web/value</span> f <span class="s">"cover"</span>)
+    <span class="s">"pages"</span>:(<span class="f">web/value</span> f <span class="s">"pages"</span>)
+    <span class="s">"title"</span>:(<span class="f">web/value</span> f <span class="s">"title"</span>)
+  }</code></pre>
+</div>
+
+<p><code>sent</code> names each field the action takes, which is the job Rails gives to strong parameters. a field the form was not meant to carry is never read, so a visitor who adds one to the request changes nothing. the values are still text as the visitor typed them; the model's rules decide whether they will do, as the <a href="models.html">models guide</a> describes.</p>
+
+<p>a query string is read the same way. <code>web/query req</code> is the map, so <code>/notes?page=2</code> gives the list its page number.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
+  <span class="f">note/paged</span> db number per_page <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> effect (listing req p))
+
+<span class="c"># How many rows a page of the list shows.</span>
+per_page <span class="o">=</span> 25</code></pre>
+</div>
+
+<p>a form with a file in it arrives in a different encoding, and the <a href="uploads.html">uploads guide</a> covers how an action reads one.</p>
+
+<h2>answering with a page</h2>
+
+<p>an action that shows a page asks the app's <code>views</code> module to draw it. <code>views/answer req page</code> answers 200, and <code>views/answer_as req code page</code> answers with a status of the action's choosing. the page is usually a view placed in the layout.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="c"># The form a note is made and changed with: its fields as typed, and the</span>
+<span class="c"># problem with each, if any.</span>
+<span class="k">fn</span> <span class="f">form</span> req path method fields problems code
+  page <span class="o">=</span> <span class="f">views/note_form_view</span> path method fields problems
+  <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+</div>
+
+<p>the scaffold shares one form between <code>new</code> and <code>edit</code>, and shows it again with a 422 when a write is refused. a program that posts the form learns from the status that it was not accepted, without reading the page.</p>
+
+<h2>redirecting, and leaving a notice</h2>
+
+<p>an action that changed something answers <code>web/redirect path</code>. that is a 303, which tells the browser to ask for the path with a GET, so reloading the page that follows posts nothing a second time.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">made</span> req w:<span class="f">models/invalid</span>
+  form req <span class="s">"/notes"</span> <span class="s">"POST"</span> (filled w.record) w.problems 422
+
+<span class="k">fn</span> <span class="f">made</span> _ w:<span class="f">web/denied</span>
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">made</span> _ w
+  <span class="f">web/redirect</span> <span class="s">"/notes/{w.id}"</span></code></pre>
+</div>
+
+<p><code>web/noticed</code> wraps an answer and leaves a message for the request after it, as <code>redirect_to path, notice: message</code> does in Rails. the next action reads it with <code>web/notice req</code> and hands it to its view, and the server forgets it once that request is answered. signing out of the generated app leaves one.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session.kso</div>
+  <pre><code><span class="c"># Signing out keeps the rest of the session and forgets the sign-in.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
+  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req secret)
+  r <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) <span class="s">"Signed out."</span>
+  effect (<span class="f">web/kept</span> r secret s)</code></pre>
+</div>
+
+<h2>answering JSON</h2>
+
+<p>the same action can answer a program. <code>web/wants_json? req</code> is true when the path ends in <code>.json</code> or the request's <code>Accept</code> header names <code>application/json</code>, and <code>web/json status value</code> answers a map or a list of maps. the route is matched without the <code>.json</code>, so <code>/notes/3.json</code> reaches the action <code>/notes/3</code> does.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">listing</span> req p
+  as_json <span class="o">=</span> <span class="f">note/note_attributes</span>
+  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p.rows as_json)
+  <span class="k">return</span> <span class="f">web/json</span> 200 mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
+  page <span class="o">=</span> <span class="f">views/notes_index_view</span> p.rows p.number p.more
+  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
+</div>
+
+<p><code>note/note_attributes</code> is the row as a map of its columns, which the models derivation writes for every model.</p>
+
+<h2>when a write is refused</h2>
+
+<p>a model's write answers the row it wrote, or one of three other things. <code>models/invalid</code> means a rule failed, and carries the record as sent and the problem with each field. <code>web/denied</code> means the model's policy said this viewer may not make the change. <code>web/absent</code> means the row is not there. an action has an arm for each it can meet, and the last arm is the write that worked.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
+  given <span class="o">=</span> picked (<span class="f">web/form</span> req.body)
+  <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (changed req id w))
+
+<span class="k">fn</span> <span class="f">changed</span> req id w:<span class="f">models/invalid</span>
+  form req <span class="s">"/notes/{id}"</span> <span class="s">"PATCH"</span> (filled w.record) w.problems 422
+
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/denied</span>
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/absent</span>
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">changed</span> _ id _
+  <span class="f">web/redirect</span> <span class="s">"/notes/{id}"</span></code></pre>
+</div>
+
+<p><code>web/refusal</code> turns a denial into a 403 and an absence into a 404. an action may also answer either value as it stands, and the server writes the same response for it. a read that finds no row answers <code>none</code>, and the action answers <code>http/not_found</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">shown</span> _ none
+  <span class="f">http/not_found</span>
+
+<span class="k">fn</span> <span class="f">shown</span> req record
+  attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
+  <span class="k">return</span> <span class="f">web/json</span> 200 attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
+  page <span class="o">=</span> <span class="f">views/note_shown_view</span> record
+  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+</div>
+
+<h2>what a module can say about its actions</h2>
+
+<p>three declarations in a module change how its actions are reached, and each has its own guide.</p>
+
+<ul>
+  <li><code>rate_limits</code> maps an action to how often one client may call it, such as <code>{ "create":"10 per 3 minutes" }</code>. a call past the limit is answered 429 without reaching the action. see <a href="sessions.html">sessions and sign-in</a>.</li>
+  <li><code>without_sign_in</code> lists the actions a visitor may reach before signing in, in an app whose entry asks for a sign-in everywhere else. see <a href="sessions.html">sessions and sign-in</a>.</li>
+  <li><code>admits action viewer db</code> says who may reach each action, and is asked once for a page and the data it loads. see <a href="authorization.html">authorization</a>.</li>
+</ul>
+
+<h2>what the server does around an action</h2>
+
+<p>the server writes a line for each request it answers: the method, the path, the status and how long the answer took.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">what the server prints</div>
+  <pre><code>GET /notes 200 in 2ms
+POST /notes 422 in 2ms
+POST /notes 303 in 2ms
+GET /notes/1 200 in 1ms
+GET /notes/1.json 200 in 3ms
+GET /resets/:token/edit 200 in 2ms</code></pre>
+</div>
+
+<p>a path segment that is a signed token, such as the one in a password reset link, is written as <code>:token</code>, so a log never holds a link someone could follow.</p>
+
+<p>an action that fails with an error it did not plan for does not stop the server. the reason goes to standard error, the browser is answered 500, and the next request is served as usual. an action that answers something that is no response is reported the same way, so a missing arm shows up in the log the first time it is reached.</p>
+
+</article>
