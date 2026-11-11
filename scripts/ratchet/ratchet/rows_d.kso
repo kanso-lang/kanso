@@ -1774,4 +1774,16 @@ step_unbounded = row
 
 rows_dq64 = list/concat rows_dq63 [step_unbounded]
 
-rows_d = list/concat rows_dq64 [itself]
+# An entry with a derive line imports std/derive without writing it, and the
+# survey that counts imports reads text (2026-11-11, kanso#2442's last repeat).
+derive_counted = row
+  "an entry's unwritten import of std/derive left out of the count"
+  true
+  "cargo test --release --test an_entry_that_derives_compiles_derive_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_derive_line_counted_as_no_import")
+  no_setup
+
+rows_dq65 = list/concat rows_dq64 [derive_counted]
+
+rows_d = list/concat rows_dq65 [itself]

@@ -20,26 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-07 — the entry corpus is shaped like an app (#2373)
-
-`kanso check` of senro's pantry compiled its 27 modules 1,094 times, because
-the loader compiled a module once for every import that reached it. No row
-welfare reads could see that. `compile_corpus` is one module whose imports
-each arrive once, and `bench/entry_corpus` imported std modules and two local
-files that import nothing from each other.
-
-This change gives `bench/entry_corpus` four local modules, models, views,
-routes and mail. Each imports the corpus's own `shared` module and std/text
-and std/list, the way a senro app's modules all import its models and pg.
-The entry calls one function from each. On the compiler of this tree,
-`KANSO_PHASES=1` prints 46 module loads for it.
-
-`entry_instructions` rises by the new modules' cost, from 87,930,129 to
-177,925,530 instructions on CI. It is a
-corpus change and not a compiler change, so welfare's `compile_instructions`
-baseline is scaled by the same ratio and the floor holds, as #2269 did for
-the forking shape. The fix this baselines for is kanso#2374.
-
 ## 2026-11-07 — each module is compiled once per load (#2373)
 
 `kanso run` of senro's pantry took 8.4 s to answer its first request after a
@@ -2491,3 +2471,36 @@ same table moved the row for `text/replace`. It is #2444.
 
 **Not done.** `std/derive` is still compiled twice on the entry corpus,
 and that was not looked into.
+
+## 2026-11-11 — a derive line is an import the survey counts
+
+The last repeat #2442 left: the entry corpus loaded `std/derive` twice.
+The entry above says that was not looked into, and this is the look.
+
+An entry with a `derive` line imports `std/derive` without writing the
+import; `compile_entry_program` adds it. The module that declares the
+derivation imports `std/derive` too. The survey counts imports by reading
+the program's text, and a module two imports name is kept from its first
+compile. It read one import where there were two, so the first compile
+was not kept and the entry's own import compiled the module again.
+
+`from_entry` now hands the survey the line the entry did not write, when
+the entry's source has a line that starts with `derive `. Nothing else
+changes: the import was already made, and the survey only counts it.
+
+**Spec.** `tests/an_entry_that_derives_compiles_derive_once.rs` checks the
+smallest program in the derive corpus with `KANSO_PHASES=1` and counts the
+loader's lines: `std/derive` once, and 2 with the line withheld. A second
+test counts `std/list`, so the first cannot pass on a loader that prints
+nothing. The ratchet row is `derive_counted`.
+
+**Rows.** `entry_instructions` 119,661,348 -> 119,206,191, and the entry
+corpus loads 18 modules where it loaded 19. Two rows move with the
+binary's layout and nothing they count: `compile_instructions` 22,652,638
+-> 22,652,656 and `library_instructions` 63,632,847 -> 63,634,723.
+Neither corpus has a derive line. The first version cloned the entry's
+directory path whether or not it was needed, which the interpreter's
+corpus read as one allocation more; the clone is made for an entry that
+derives and for no other.
+
+**Welfare.** 95.39064215 -> 95.39098937, banked.
