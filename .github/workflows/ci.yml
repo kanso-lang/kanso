@@ -237,7 +237,13 @@ jobs:
     name: sanitizer sweep (the corpus under AddressSanitizer)
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 for origin/main. The sweep runs scripts/ratchet like
+      # any other program, and its cover applies a mutation that resets the
+      # goldens from main; without main it reads that mutation as stale,
+      # exits 1, and the sweep counts a program that did not finish.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
