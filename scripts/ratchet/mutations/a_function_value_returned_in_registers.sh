@@ -8,7 +8,7 @@
 # caller reads the first register as a record.
 set -e
 f=src/codegen.rs
-grep -q "fn simple_fn_value" "$f"
+grep -q "fn simple_fn_value" src/codegen.rs
 grep -qF '                .filter(|_| self.ret_ty(name, arity) == "%parsed")' "$f" || {
   echo "the wrapper's boxing of a by-value answer moved; this mutation needs rewriting" >&2
   exit 1
