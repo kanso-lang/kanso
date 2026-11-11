@@ -457,6 +457,36 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 
 <p>a sign-in rests on something the account holds, which the guestbook takes to be the password's digest. <code>session/create</code> hands it to <code>web/signed_in</code>, which keeps an HMAC of it in the session beside the viewer's name. at every action, <code>bound_of db name</code> reads what the account holds now, and the guestbook's <code>session/signed_against</code> reads the account by its name and answers the digest. when the HMAC does not match it, the sign-in is over. an action that asks for a sign-in sends the visitor to the sign-in form. an open one, such as the book's front page or a component's remove button, runs as if nobody had signed in, and its answer tells the browser to forget the sign-in, so a stolen cookie cannot act through an open action either. setting a new password changes the digest, so it ends every sign-in made before it, on every browser, as devise does. an app whose sign-ins rest on nothing passes <code>web/unbound</code> as <code>bound_of</code> and <code>""</code> to <code>web/signed_in</code>.</p>
 
+<h2>ending an idle session</h2>
+
+<p>a sign-in lasts fourteen days from the request that made it. an app that wants it to end sooner when nobody is using it gives the session an inactivity window, as Devise's timeoutable does. <code>web/idle_after held minutes</code> answers the session with the window set, and the session is then signed in as usual. this is the sign-in of the app senro's spec serves to check it, where the window is three seconds:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/idle/session.kso</div>
+  <pre><code><span class="c"># How long a sign-in lasts with no request: three seconds, as minutes.</span>
+<span class="k">pub</span> <span class="f">idle_minutes</span> <span class="o">=</span> 0.05
+
+<span class="c"># Anyone who asks is signed in as ada, for as long as she keeps asking.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
+  s <span class="o">=</span> <span class="f">web/idle_after</span> (<span class="f">web/session</span> req secret) idle_minutes
+  effect (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/notes"</span>) secret s <span class="s">"ada"</span> <span class="s">""</span>)</code></pre>
+</div>
+
+<p>each answer to a signed-in request rewrites the cookie with the time the session was last seen, once a second has passed since the time it holds. a request that arrives after the window has run out reads without its viewer, so a page that asks for a sign-in sends the visitor to the sign-in form. the window is measured by the time the server stamps on each request, as the fourteen days are.</p>
+
+<p>the spec signs in and asks for a page four times. the first request comes at once and is answered without touching the cookie. the next two come a second and a half and then two seconds later, three and a half seconds after the sign-in: each is answered and moves the window on. the last comes after four quiet seconds and is sent to sign in:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/serve/idle.out</div>
+  <pre><code>HTTP/1.1 303 See Other, setting a session to /notes
+HTTP/1.1 200 OK: every note, read by ada
+HTTP/1.1 200 OK, setting a session: every note, read by ada
+HTTP/1.1 200 OK, setting a session: every note, read by ada
+HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
+</div>
+
+<p>the window is off unless an app sets it, and <code>senro generate authentication</code> does not set one.</p>
+
 <h2>changing a password</h2>
 
 <p>a signed-in visitor changes the password from the account page, as Devise's registrations edit lets them. the <code>password</code> resource is singular, since a visitor only ever changes their own. <code>password/edit</code> answers GET /password/edit with a form that asks for the current password and a new one, and <code>password/update</code> answers PATCH /password. it checks the current password with <code>passwords/matches?</code>, ten tries in three minutes like signing in, and sets the new digest with <code>account/update db a.id { "digest":d }</code>. the holder is signed in, so the write goes through the model as the holder, and the model's <code>update?</code> allows it. the new digest ends every sign-in that rested on the old one. the browser that made the change is signed in again on the new digest, keeping whatever else its session held, so it stays signed in and the others do not.</p>

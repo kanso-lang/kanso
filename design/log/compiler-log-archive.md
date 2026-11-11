@@ -114790,3 +114790,21 @@ newcomer) and decided, on #2394:
 
 Open: the account reads that run before anyone is signed in, which need a
 read that asks as the app itself.
+
+## 2026-11-10 — gavel: no for loops, in kanso or in kata
+
+kata, senro's template language, wrote a loop as `for e in signatures`. Clay:
+"we NEVER EVER EVER EVER want 'for' loops in kanso. we use collection
+pipeline constructs like each and map."
+
+kanso has no `for`, and kata's row compiled to kanso's `each xs (x -> ...)`
+already, so the template syntax was the only `for` in the project. The ruling
+covers the language and every template or configuration language built on
+it: a collection is walked with `each`, `map` and their kin, and a `for` is
+refused. kata's row is rewritten as an `each` and a `for` row is an error at
+its template line (#2395).
+
+The committee kept the spelling `each signatures e ->`, collection first,
+two seats to one over `each signatures as e`: it is the call kanso would
+write with the parentheses the indentation makes redundant. `std` has no
+`each`, so kata's README calls it a helper kata writes.

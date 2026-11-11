@@ -380,6 +380,95 @@ $ senro generate scaffold book note:references page:references
 generate: cannot read `page:references`: a resource nests under one parent</code></pre>
 </div>
 
+<h2>a resource with no pages</h2>
+
+<p><code>resource</code> writes an API over a model, as <code>rails g scaffold --api</code> does. it takes a name and fields as <code>scaffold</code> does and writes the model and its migration the same way. where <code>scaffold</code> writes seven actions and three views, <code>resource</code> writes five actions that answer JSON.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro generate resource reading title:text minutes:int
+  create ./reading.kso
+  create ./readings.kso
+  create ./migrations/20261111180515_create_readings.kso
+  change ./main.kso</code></pre>
+</div>
+
+<p>the five actions are the ones the routing convention places without a form: the list, one row, and the three that write.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/readings.kso</div>
+  <pre><code><span class="c"># The readings, as an API: each action answers JSON, and `create` and</span>
+<span class="c"># `update` read a posted form or a JSON object (`web/input`).</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
+  <span class="f">reading/paged</span> db number per_page <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> effect (listing p))
+
+<span class="c"># How many rows a page of the list holds.</span>
+per_page <span class="o">=</span> 25
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ db id:int
+  <span class="f">reading/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown r))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+  given <span class="o">=</span> taken (<span class="f">web/input</span> req)
+  <span class="f">reading/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (made w))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
+  given <span class="o">=</span> taken (<span class="f">web/input</span> req)
+  <span class="f">reading/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (changed w))
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
+  <span class="f">reading/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (gone w))</code></pre>
+</div>
+
+<p><code>create</code> and <code>update</code> read what was sent with <code>web/input</code>, which answers the fields of a posted form or of a JSON object, by the request's content type. <code>taken</code> keeps the fields the resource names and drops the rest, so a request cannot set a column the generator was not told about. an update changes the fields a request sends and leaves the others as they are.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/readings.kso</div>
+  <pre><code><span class="c"># The fields a request may set. One it does not send is left as it is.</span>
+fields <span class="o">=</span> [<span class="s">"minutes"</span> <span class="s">"title"</span>]
+
+<span class="k">fn</span> <span class="f">taken</span> sent
+  <span class="f">list/fold</span> fields {} (acc n <span class="o">-&gt;</span> kept acc n sent[n])
+
+<span class="k">fn</span> <span class="f">kept</span> acc _ none
+  acc
+
+<span class="k">fn</span> <span class="f">kept</span> acc n v
+  put acc n v</code></pre>
+</div>
+
+<p>each write answers by what came back from the model. a row that breaks a rule is answered 422 with the problem of each field, and a write the model's policy turns down, or one for a row that is not there, is answered as <code>web/refusal</code> answers it.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/readings.kso</div>
+  <pre><code><span class="c"># A row that breaks a rule answers 422 with the problem of each field.</span>
+<span class="k">fn</span> <span class="f">made</span> w:<span class="f">models/invalid</span>
+  <span class="f">web/json</span> 422 w.problems
+
+<span class="k">fn</span> <span class="f">made</span> w:<span class="f">web/denied</span>
+  <span class="f">web/refusal</span> w
+
+<span class="k">fn</span> <span class="f">made</span> w
+  <span class="f">web/json</span> 201 (<span class="f">reading/reading_attributes</span> w)</code></pre>
+</div>
+
+<p>senro's spec uses the generated readings over HTTP on both engines. these are lines of its golden, where an id reads as N and a time as T:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/generate/served.out</div>
+  <pre><code>a reading made with json: {"created_at":"T","id":N,"minutes":45,"title":"Dune","updated_at":"T"} 201
+one made with a form: {"created_at":"T","id":N,"minutes":30,"title":"Emma","updated_at":"T"} 201
+minutes that are no number: {"minutes":"Give a whole number."} 422
+it is read: {"created_at":"T","id":N,"minutes":45,"title":"Dune","updated_at":"T"}
+changed in part: {"created_at":"T","id":N,"minutes":50,"title":"Dune","updated_at":"T"}
+changed by nothing: {"created_at":"T","id":N,"minutes":50,"title":"Dune","updated_at":"T"}
+removed: 204
+read again: 404</code></pre>
+</div>
+
+<p>a resource's fields are text and int. a file or a field that refers to another table is <code>scaffold</code>'s to write, and <code>resource</code> says so and writes nothing when it is given one.</p>
+
 <h2>accounts and signing in</h2>
 
 <p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes five modules and three views, the migration that makes a <code>users</code> table, and changes the entry.</p>
@@ -505,6 +594,8 @@ a wrong one then: 422</code></pre>
 <span class="k">import</span> <span class="s">"./notes"</span>
 <span class="k">import</span> <span class="s">"./page"</span>
 <span class="k">import</span> <span class="s">"./pages"</span>
+<span class="k">import</span> <span class="s">"./reading"</span>
+<span class="k">import</span> <span class="s">"./readings"</span>
 <span class="k">import</span> <span class="s">"./registration"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
@@ -550,14 +641,16 @@ connected
   <div class="code-panel-title">shell</div>
   <pre><code>$ senro generate
   scaffold
+  resource
   model
   controller
   migration
   mailer
+  job
   authentication</code></pre>
 </div>
 
-<p><code>model</code> takes what <code>scaffold</code> takes and writes the model alone: the module named for the record and the migration that makes its table. <code>controller</code> takes a plural name and the actions it should have, each one of the seven the routing convention places, and writes a module with those actions and a view for each that shows a page. <code>migration</code> writes a migration from its name, as the migrations guide describes. <code>mailer</code> takes a name and its letters and writes <code>&lt;name&gt;_mailer.kso</code>, with a function for each letter that composes it and queues it for the worker. <code>job</code> takes a name and writes <code>&lt;name&gt;_job.kso</code>, whose <code>perform</code> the second worker calls; the <a href="jobs.html">background jobs guide</a> covers how a job is found and queued.</p>
+<p><code>resource</code> is covered above. <code>model</code> takes what <code>scaffold</code> takes and writes the model alone: the module named for the record and the migration that makes its table. <code>controller</code> takes a plural name and the actions it should have, each one of the seven the routing convention places, and writes a module with those actions and a view for each that shows a page. <code>migration</code> writes a migration from its name, as the migrations guide describes. <code>mailer</code> takes a name and its letters and writes <code>&lt;name&gt;_mailer.kso</code>, with a function for each letter that composes it and queues it for the worker. <code>job</code> takes a name and writes <code>&lt;name&gt;_job.kso</code>, whose <code>perform</code> the second worker calls; the <a href="jobs.html">background jobs guide</a> covers how a job is found and queued.</p>
 
 <p>a generator senro does not ship is a kanso program at <code>generators/&lt;name&gt;.kso</code>, in the app or beside a library the app's entry imports by path. <code>senro generate &lt;name&gt;</code> runs it in the app's directory with the words that followed, and the list above shows it with where it was found. senro's own are looked for first, so one from outside cannot take the place of <code>scaffold</code>.</p>
 
