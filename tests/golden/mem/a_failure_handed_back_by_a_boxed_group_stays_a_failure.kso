@@ -1,0 +1,43 @@
+# A decoder that answers its record in registers can end in a call to a
+# group that stays boxed: here a bare `first`, a name `std/list` exports
+# too, so the call goes to the module's own overload space (#2432). What
+# comes back is a built record, and the return reads the record's words
+# off it. A failure comes back the same way, and the read has to ask
+# first: a failure has no fields, and its own two words are what travel.
+# Without the ask the words are read off a value that holds none, the
+# caller's record arm matches, and the sum goes on past the end.
+#
+# The loop is the one a_failure_crosses_a_beat_carry_in_two_words runs.
+# That fixture reached the same ask through the carry until the carry
+# began staging a record's two fields (#2421), which is why this one
+# exists. The failure is this file's own, so std/testing's `when_failed`
+# reads its reason.
+import "std/list"
+import "std/testing"
+import "std/text"
+
+type read
+  next
+  value
+
+fn at bs p
+  first bs[p] (p + 1)
+
+fn first none _
+  err "end of input"
+
+fn first b p
+  read p b
+
+fn summed bs (read p v) acc
+  summed bs (at bs p) (acc + v)
+
+fn report reason
+  "stopped: {reason}"
+
+fn told s
+  two = length (list/to_list (list/take list/naturals 2))
+  bs = text/bytes s
+  "{testing/when_failed (summed bs (at bs 1) 0) report} after {two}"
+
+pub play = print (told "abc")

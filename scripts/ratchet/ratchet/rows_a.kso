@@ -71,9 +71,10 @@ raised_err = row
   no_setup
 
 # A failure crossing a beat carry in the two-word record convention was boxed
-# as a record and read back out of one; the mutation puts the read back and
-# the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
-# where the interpreter answers.
+# as a record and read back out of one. The read asks first wherever a built
+# record is unpacked; the mutation takes the ask out and the mem fixture
+# a_failure_handed_back_by_a_boxed_group_stays_a_failure dies on native where
+# the interpreter answers.
 carry_failure = row
   "a failure read as a record on the far side of a carry"
   true

@@ -2202,3 +2202,18 @@ such use anywhere costs every read. The first is senro's to write
 differently, with a record of two ints for a count and `:int` where a
 position comes in from outside; the other two are the next piece of
 #2421 here.
+
+Two ratchet rows moved with the change, and the ratchet's own run found
+both. `a thunk site returns a record unboxed` patched one line that is six
+since the field order became an argument, so its mutation no longer
+applied; it takes the call from its opening to its close now, and clang
+refuses `micro/a_lazy_record_call_somebody_makes_still_builds` under it
+as before. `a failure read as a record on the far side of a carry` had
+gone blind. Its mutation takes out the ask `k_parsed_words` makes before
+it reads a record's fields, and its fixture reached that ask through the
+carry, which unpacks no built record now that it stages the two fields.
+The ask is still needed wherever a built record is unpacked, and a
+failure a boxed group hands back to a by-value return is one such place:
+`mem/a_failure_handed_back_by_a_boxed_group_stays_a_failure` prints
+`stopped: end of input` with the ask and stops on a runtime error
+without it.
