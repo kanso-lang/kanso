@@ -2171,6 +2171,12 @@ calls the value reads one boxed word as before. The analysis no longer
 asks whether a group is handed out, and the walk that collected every
 name used as a value is gone.
 
+The ratchet row for this, `a function value returned in registers`, broke
+the check the analysis no longer makes, so its mutation would not apply.
+It now breaks the wrapper: called as though every group answered a boxed
+word, `micro/a_decoder_handed_out_answers_like_one_called` prints nothing
+natively and the row reads red.
+
 What a handed-out decoder still needs is its position said: `at bs p:int`.
 A function handed out can be called with anything, so inference gives its
 parameters every type, the position worked out from one may be a float as
