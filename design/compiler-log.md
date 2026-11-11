@@ -2605,6 +2605,14 @@ alone in an article a panel with its own horizontal scroll. Ten guides
 were rendered through the layout and measured at 1,280 and 390 pixels,
 and each now stays inside its window.
 
+Clay, reading the site: "the web site has what looks like a not equal
+sign. it should just be != i think. you don't need to render it in a
+fancy way that's not what real code looks like." JetBrains Mono joins
+`!=` and `->` into one glyph each. The stylesheet now turns the font's
+ligatures off for code everywhere, and `site_smoke` asks the browser what
+it settled on for a line of code under that stylesheet. Watched red
+before the rule: `code is shown with ligatures (normal)`.
+
 **Open.** A guide to testing waits on #2460 and on senro's testing
 helpers. A component's server action answered as its page, rolling a
 migration back, and confirmation and unlock mail in what the generator

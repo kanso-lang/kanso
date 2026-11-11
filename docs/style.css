@@ -314,6 +314,19 @@ a:hover {
 
 /* ---------- code panels ---------- */
 
+/* Code is shown as it is typed. JetBrains Mono joins `!=`, `->` and their
+   kin into one glyph each, which is not what a reader types or what an
+   editor without the font shows. `calt` is the feature the font does it
+   with, so it is turned off by name as well. */
+code,
+pre,
+kbd,
+samp,
+textarea {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
 .code-panel {
   background: var(--code-bg);
   border: 1px solid var(--code-border);

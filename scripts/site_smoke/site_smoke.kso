@@ -315,8 +315,16 @@ paint = """
     const lines = ['type person', '  name:string', 'type post_body:string',
                    '# who they are', 'x = "hi" "yo"', '  shout s . print'];
     const painted = lines.map((l) => window.KansoEngine.highlight(l));
-    return \{painted, above: await above()};
+    return \{painted, above: await above(), joined: joined()};
   };
+  // Code is shown as it is typed. The code font joins `!=` and `->` into
+  // one glyph each unless the stylesheet turns its ligatures off, and this
+  // asks the browser what it settled on for a line of code under that
+  // stylesheet.
+  function joined() \{
+    const shown = document.getElementById('shown');
+    return getComputedStyle(shown).fontVariantLigatures;
+  }
   // The engine answers pointers as wasm i32s, and past two gibibytes the top
   // bit is set: read as signed, an answer the program produced lands at a
   // negative offset and the page throws. The playground keeps what a run
@@ -629,7 +637,11 @@ fn missing_reader read acc
 
 fn missing_paint read acc
   faults = paint_faults read["painted"] acc 1
-  missing_above read faults
+  missing_above read (missing_plain read faults)
+
+fn missing_plain read acc
+  why = "code is shown with ligatures ({read["joined"]}), so `!=` is one glyph"
+  noted acc why (read["joined"] == "none")
 
 # 2 * 2^23 characters and the newline print adds.
 fn missing_above read acc
@@ -724,6 +736,7 @@ wanted_files = [
   # The runtime a compiled program links against, which the pages fetch beside
   # the engine. Without it every run on these pages would be interpreted.
   "docs/kanso-runtime.wasm"
+  "docs/style.css"
 ]
 
 pub play = read_each wanted_files 1 []
@@ -751,7 +764,7 @@ fn read_one path
   os/read_file! path
 
 fn with_all bodies
-  return io/write "site_smoke: fewer than eleven files\n" if length bodies < 11
+  return io/write "site_smoke: fewer than twelve files\n" if length bodies < 12
   header = bodies[5]
   index = document "" header bodies[6] "" landing
   shown = document "" header bodies[7] "" board
@@ -766,9 +779,17 @@ fn assembled bodies shown read drawn index
   js = bodies[4]
   book = bodies[8]
   runtime = bodies[11]
-  painted = document "" "" "" engine_tag paint
+  painted = document "" (styled bodies[12]) "" engine_tag paint
   set = pages shown book read drawn engine hero index painted js wasm runtime
   wanted set
+
+# A line of code under the site's own stylesheet, for the paint page to ask
+# the browser about.
+fn styled none
+  ""
+
+fn styled sheet
+  "<style>{sheet}</style><pre><code id=\"shown\">a != b</code></pre>"
 
 fn wanted set
   os/env "KANSO_CHROME" .> (told_where -> chosen set told_where)
