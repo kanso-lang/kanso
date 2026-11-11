@@ -1,0 +1,31 @@
+# A loop that rewinds its arena each lap stages what the next lap needs in a
+# side buffer. A record built at the call for a slot that takes it by value
+# is packed into words where it is written and has no operand of its own, and
+# the staging named the operand anyway: the line it wrote had nothing after
+# the type, clang refused the module, and this program did not build. The
+# packed words cross as the record's two fields now, like any record held by
+# value, and no lap builds one. The one record sh_rec counts is the one
+# `total` builds to enter the loop, outside tail position.
+import "std/text"
+
+type span
+  left
+  at
+
+fn walked _ (span 0 _) sum
+  sum
+
+fn walked bs (span n p) sum
+  taken bs bs[p] n p sum
+
+fn taken _ none _ _ sum
+  sum
+
+fn taken bs b n p sum
+  walked bs (span (n - 1) (p + 1)) (sum + b)
+
+fn total s
+  bs = text/bytes s
+  walked bs (span (length bs) 1) 0
+
+pub play = print (total "a loop that hands a record on by value")

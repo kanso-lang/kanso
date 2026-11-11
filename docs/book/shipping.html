@@ -17,17 +17,17 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=366</code></pre>
+  <pre><code>allocs=365</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea10.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=1309</code></pre>
+  <pre><code>allocs=1308</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 kanso run wordfreq -- tea100.txt 2&gt;&amp;1 | grep '^allocs='</div>
-  <pre><code>allocs=15864</code></pre>
+  <pre><code>allocs=15863</code></pre>
 </div>
 
 <p>the count grows in step with the input: about 160 allocations for each copy of a three-line text, or about 6 for each of its 26 words. growth in proportion to the input is the shape you want, since anything faster would mean work repeated for every word already seen. 6 allocations a word is still more than splitting and counting need.</p>
@@ -49,7 +49,7 @@ extra_css: /book/book.css
   <span class="o">.&gt;</span> (ws <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{length ws}</span> words"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 kanso run split.kso &lt; tea100.txt 2&gt;&amp;1 | grep -E '^allocs=|words$'</div>
-    <pre><code>allocs=15685
+    <pre><code>allocs=15684
 2600 words</code></pre>
   </div>
 </div>

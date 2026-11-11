@@ -17,9 +17,10 @@
 # first, and a failure comes out of the carry as the failure that went in.
 # It is this file's own, so std/testing's `when_failed` reads its reason.
 #
-# The record built for the carry is the reason `sh_rec` reads 64,000 here
-# and not 0: a thousand scans, sixty-four bytes each. A beat that could
-# stage the words themselves would not build them, and does not yet.
+# The carry built that record once a lap, and `sh_rec` read 64,000 here: a
+# thousand scans, sixty-four bytes each. It stages the record's two fields
+# now, a slot each, and packs them again on the far side, so `sh_rec` is 0
+# (#2421). A failure crosses the same way, as the value of the two.
 import "std/testing"
 
 type parsed

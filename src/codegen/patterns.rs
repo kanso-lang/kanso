@@ -37,8 +37,9 @@ impl<'a> Backend<'a> {
                 // pattern already refuses a failure and sends it to the same
                 // label, asking the whole word first is a second test of one
                 // fact, made once for every record a parser returns.
+                let (int_at, value_at) = self.packed_order(ty);
                 let value_refuses = matches!(
-                    fields.get(1),
+                    fields.get(value_at),
                     Some(
                         Pattern::Var(..)
                             | Pattern::Wildcard(_)
@@ -63,12 +64,12 @@ impl<'a> Backend<'a> {
                 f.line_fmt(format_args!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
                 // The position is an int whatever the word held, so its
                 // pattern has no failure to refuse.
-                self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
+                self.emit_pattern_known(f, &poskv, &fields[int_at], fail, TOP & !FAIL)?;
                 let va = f.tmp();
                 f.line_fmt(format_args!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
                 let vkv = f.tmp();
                 f.line_fmt(format_args!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
-                self.emit_pattern(f, &vkv, &fields[1], fail)?;
+                self.emit_pattern(f, &vkv, &fields[value_at], fail)?;
                 if let Some(named) = whole {
                     f.bind(&named.0, status);
                 }
@@ -76,6 +77,62 @@ impl<'a> Backend<'a> {
             }
         }
         self.emit_pattern_known(f, status, pattern, fail, TOP)
+    }
+
+    /// A field of a record held by value, read from its words. Reading it
+    /// the general way builds the record on the heap and asks the runtime
+    /// for the field by name. A failure riding in the words comes back as
+    /// itself, as it does from the runtime's read. A name that is not one of
+    /// the type's two fields is left to that read, which is what says so.
+    fn emit_parsed_field(&self, f: &mut FnEmit, record: &str, name: &str) -> Option<String> {
+        let (ty, _, back) = f.parsed_as(record)?;
+        // An err answers to these three whatever record was expected, and
+        // its getter hands back the piece, so they are the getter's to read.
+        if crate::ast::ERR_READERS.contains(&name) {
+            return None;
+        }
+        let decl = self.program.types.iter().find(|t| t.name == ty)?;
+        let at = decl.fields.iter().position(|(field, _, _)| field == name)?;
+        let w0 = f.tmp();
+        f.line_fmt(format_args!("{w0} = extractvalue %parsed {record}, 0"));
+        let w1 = f.tmp();
+        f.line_fmt(format_args!("{w1} = extractvalue %parsed {record}, 1"));
+        let (tag, word) = if (at == 1) == back {
+            // The int: its tag sits above the value's, and a failure's first
+            // word has nothing there, so a failure is asked for by name.
+            let w2 = f.tmp();
+            f.line_fmt(format_args!("{w2} = extractvalue %parsed {record}, 2"));
+            let failed = f.tmp();
+            f.line_fmt(format_args!("{failed} = icmp eq i64 {w0}, {K_ERR}"));
+            let above = f.tmp();
+            f.line_fmt(format_args!("{above} = lshr i64 {w0}, 8"));
+            let tag = f.tmp();
+            f.line_fmt(format_args!("{tag} = select i1 {failed}, i64 {K_ERR}, i64 {above}"));
+            let word = f.tmp();
+            f.line_fmt(format_args!("{word} = select i1 {failed}, i64 {w1}, i64 {w2}"));
+            (tag.to_string(), word.to_string())
+        } else {
+            // The value: a failure's first word is the err tag and nothing
+            // else, so its low byte and the second word are the failure.
+            let tag = f.tmp();
+            f.line_fmt(format_args!("{tag} = and i64 {w0}, 255"));
+            (tag.to_string(), w1.to_string())
+        };
+        let a = f.tmp();
+        f.line_fmt(format_args!("{a} = insertvalue %KValue undef, i64 {tag}, 0"));
+        let v = f.tmp();
+        f.line_fmt(format_args!("{v} = insertvalue %KValue {a}, i64 {word}, 1"));
+        f.record(&v, TOP);
+        Some(v.to_string())
+    }
+
+    /// Which of a packed type's two fields is the int and which the value.
+    fn packed_order(&self, ty: &str) -> (usize, usize) {
+        if self.escape.int_last(ty) {
+            (1, 0)
+        } else {
+            (0, 1)
+        }
     }
 
     /// Return a failure in the group's ABI shape: wrapped in a `%parsed` when the
@@ -90,16 +147,28 @@ impl<'a> Backend<'a> {
     }
 
     /// Return a KValue in the current function's ABI shape. A `%parsed`-returning
-    /// function only reaches here with a failure (its record tails are built
-    /// directly), so the failure's two words become the `%parsed`.
+    /// function builds its record tails directly, so what reaches here as a
+    /// value is a failure, whose two words become the `%parsed`, or a record
+    /// a group that stays boxed handed back, as a module's bare overload
+    /// space does when a local name is also an import's. That record's words
+    /// are read off it. Taken for a failure, its tag and pointer went back as
+    /// the value word, and the caller read the whole record where a field
+    /// belonged (#2432).
     ///
     /// A `%KValue` function can be handed a register-returned record to
     /// return: a thunk site is emitted outside the analysis that gives a tail
     /// caller its callee's return shape, so its tail call comes back `%parsed`
     /// and is boxed here.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
+        let built = f.built_as(value);
         let value = release_cells(f, value);
-        if f.ret_ty == "%parsed" {
+        if f.ret_ty == "%parsed" && f.is_parsed(&value) {
+            f.line_fmt(format_args!("ret %parsed {value}"));
+        } else if let ("%parsed", Some(back)) = (f.ret_ty.as_str(), built) {
+            let (w0, w1, w2) = boxed_words(f, &value, back);
+            let p = parsed_of(f, &w0, &w1, &w2);
+            f.line_fmt(format_args!("ret %parsed {p}"));
+        } else if f.ret_ty == "%parsed" {
             self.emit_parsed_from_failure(f, &value);
         } else {
             let value = self.as_value(f, &value);
@@ -149,14 +218,17 @@ impl<'a> Backend<'a> {
         args: &[Expr],
         ty: &str,
     ) -> Result<String, String> {
-        let pos = self.emit_expr(f, &args[0])?;
-        self.bail_on_failure(f, &pos);
-        let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_failure(f, &value);
+        // The fields are evaluated as written, whichever is the int.
+        let first = self.emit_expr(f, &args[0])?;
+        self.bail_on_failure(f, &first);
+        let second = self.emit_expr(f, &args[1])?;
+        self.bail_on_failure(f, &second);
+        let back = self.escape.int_last(ty);
+        let (pos, value) = if back { (second, first) } else { (first, second) };
         let pid = self.type_ids[ty];
         let (w0, w1, w2) = pack_words(f, &pos, &value);
         let p = parsed_of(f, &w0, &w1, &w2);
-        f.record_parsed(&p, ty, pid);
+        f.record_parsed(&p, ty, pid, back);
         Ok(p.to_string())
     }
 
@@ -168,10 +240,16 @@ impl<'a> Backend<'a> {
     /// evaluated and two failures merge, the way two failing operands of an
     /// operator do. Bailing on the first one skipped the second field
     /// entirely and handed back one reason where the oracle carried two.
-    fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
-        let pos = self.emit_expr(f, &args[0])?;
-        let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_pair_failure(f, &pos, &value);
+    fn emit_parsed_construction(
+        &mut self,
+        f: &mut FnEmit,
+        ty: &str,
+        args: &[Expr],
+    ) -> Result<(), String> {
+        let first = self.emit_expr(f, &args[0])?;
+        let second = self.emit_expr(f, &args[1])?;
+        self.bail_on_pair_failure(f, &first, &second);
+        let (pos, value) = if self.escape.int_last(ty) { (second, first) } else { (first, second) };
         let (w0, w1, w2) = pack_words(f, &pos, &value);
         let p = parsed_of(f, &w0, &w1, &w2);
         f.line_fmt(format_args!("ret %parsed {p}"));

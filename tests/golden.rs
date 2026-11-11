@@ -105,7 +105,70 @@ fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Outpu
     for (key, value) in envs {
         command.env(key, value);
     }
+    bounded(&mut command);
     command.output().expect("kanso binary runs")
+}
+
+/// What a program a golden runs may map: 8 GiB, in bytes. The corpus's
+/// largest program maps a small fraction of that.
+///
+/// A golden is run to read what it prints, and a compiler that is wrong can
+/// make a program that never stops allocating. With no bound the kernel ends
+/// it only once the machine is out of memory, and on a CI runner that takes
+/// the runner: the job dies with a shutdown signal and a log nobody can read.
+/// It happened twice to one ratchet row on 2026-11-11, whose mutation makes a
+/// regexp fixture allocate for ever. With the bound the program is refused
+/// its next allocation, says `out of memory`, and the golden fails by name.
+#[cfg(target_os = "linux")]
+const ADDRESS_SPACE: u64 = 8 << 30;
+
+/// kanso inherits the limit and so does the binary it builds and runs.
+/// macOS does not enforce RLIMIT_AS, so the bound is Linux's, where CI's
+/// ratchet runs.
+#[cfg(target_os = "linux")]
+fn bounded(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: setrlimit is async-signal-safe and the closure touches nothing
+    // the parent shares.
+    unsafe {
+        command.pre_exec(|| {
+            let limit = libc::rlimit { rlim_cur: ADDRESS_SPACE, rlim_max: ADDRESS_SPACE };
+            match libc::setrlimit(libc::RLIMIT_AS, &limit) {
+                0 => Ok(()),
+                _ => Err(std::io::Error::last_os_error()),
+            }
+        });
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn bounded(_command: &mut Command) {}
+
+/// The bound is read from inside a program, on both engines: the shell a
+/// program starts prints the limit it was handed, in kibibytes. Natively that
+/// shell is a grandchild of this test, so the number also says the limit
+/// passed through kanso and through the binary kanso built.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_program_a_golden_runs_may_map_only_so_much() {
+    let stage = std::env::temp_dir().join("kanso-bounded-golden");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).expect("the staging directory is made");
+    let program = stage.join("bounded.kso");
+    let text = "import \"std/io\"\nimport \"std/os\"\n\n\
+                os/run \"sh\" [\"-c\" \"ulimit -v\"] .> (ran -> io/write ran.stdout)\n";
+    std::fs::write(&program, text).expect("the program writes");
+
+    for extra in [&[][..], &["--interp"][..]] {
+        let output = run_kanso_env(&program, extra, &[]);
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            format!("{}\n", ADDRESS_SPACE / 1024),
+            "a program run with {extra:?} was handed another limit: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let _ = std::fs::remove_dir_all(&stage);
 }
 
 fn expected(path: &Path, extension: &str) -> String {

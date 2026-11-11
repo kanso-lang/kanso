@@ -496,8 +496,10 @@ rows_d1zzzzzzy0 = list/concat rows_d1zzzzzzy1 [test_stack]
 
 # A record goes back to its caller in two words only when every arm of its
 # group answers that record or a failure (2026-10-09). The mutation skips the
-# check, and the two micro fixtures built from `list/take` print the wrong
-# thing or fail.
+# check, and a regexp fixture's native binary then allocates without end. The
+# golden harness's bound refuses it, so it prints nothing and the corpus says
+# which fixture. Until 2026-11-11 the first to fail were the two fixtures
+# built from `list/take`, and nothing bounded a program a golden ran.
 parsed_arms = row
   "a group answering other values by value"
   true

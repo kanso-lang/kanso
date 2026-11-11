@@ -1,0 +1,127 @@
+# A decoder's answer, a value and the position after it, travels in three
+# registers when nothing needs it built (#2421), and every engine has to
+# read it the way the interpreter reads the record. This walks the places
+# the two could part: a short read that answers a kept constant, a guard
+# that answers early, a field read off a bound name, the record handed
+# whole to a function and kept in a list, a string carried round a loop
+# that rewinds, a position too wide for a word, and a failure where the
+# record was expected.
+import "std/testing"
+import "std/text"
+
+type read
+  value
+  next
+
+lost = read none 0
+
+fn at bs p
+  first bs[p] bs (p + 1)
+
+fn first none _ _
+  lost
+
+fn first b bs p
+  return read b p if b < 128
+  second (b - 128) bs[p] (p + 1)
+
+fn second _ none _
+  lost
+
+fn second low b p
+  read (low + 128 * b) p
+
+fn word s p
+  cut s p p
+
+fn cut s from to
+  return read (text/slice s from (to - 1)) (to + 1) if spaced? s to
+  cut s from (to + 1)
+
+fn spaced? s to
+  to > length s or text/slice s to to == " "
+
+fn strict bs p
+  must bs[p] p
+
+fn must none _
+  err "past the end"
+
+fn must b p
+  read b (p + 1)
+
+fn far n
+  read "far" (n + 1)
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn shown none
+  "none"
+
+fn shown v
+  "{v}"
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) (acc + worth v)
+
+fn read_out _ _ 0 acc
+  acc
+
+fn read_out bs p n acc
+  r = at bs p
+  read_out bs r.next (n - 1) (acc + worth r.value)
+
+fn both bs p
+  r = at bs p
+  "{shown r.value} then {r.next}"
+
+fn whole r
+  "{shown r.value}/{r.next}"
+
+fn words _ _ 0 acc
+  acc
+
+fn words s p n acc
+  w = word s p
+  words s w.next (n - 1) "{acc}[{w.value}]"
+
+fn kept bs p
+  r = at bs p
+  [r r]
+
+fn reasoned bs p
+  r = strict bs p
+  "{shown r.value} then {r.next}"
+
+fn strictly _ _ 0 acc
+  acc
+
+fn strictly bs p n acc
+  r = strict bs p
+  strictly bs r.next (n - 1) (acc + r.value)
+
+fn report reason
+  "failed: {reason}"
+
+told =
+  bs = text/to_bytes [5 200 3 7 250]
+  s = "a few words carried round the loop by value"
+  e = far (4611686018427387904 * 4)
+  a = "{read_out bs 1 3 0} {summed 3 bs (at bs 1) 0}"
+  b = "{both bs 1} | {both bs 2} | {both bs 5} | {both bs 6}"
+  c = "{whole (at bs 4)} {whole (at bs 9)} {length (kept bs 1)}"
+  d = "{words s 1 9 ""} | {e.value} {e.next}"
+  g = reasoned bs 2
+  h = testing/when_failed (reasoned bs 6) report
+  i = strictly bs 1 5 0
+  j = testing/when_failed (strictly bs 1 9 0) report
+  "{a}\n{b}\n{c}\n{d}\n{g} | {h}\n{i} | {j}"
+
+pub play = print told

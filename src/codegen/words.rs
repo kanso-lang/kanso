@@ -188,8 +188,19 @@ fn unless_failing(
         if emitted[j] == old[j] {
             continue;
         }
-        let set = f.set_of(&emitted[j]);
         let v = f.tmp();
+        // A record held by value is three words on both ways in: the carry
+        // hands one back the way it took it.
+        if let Some((ty, id, back)) = f.parsed_as(&emitted[j]) {
+            f.line_fmt(format_args!(
+                "{v} = phi %parsed [ {}, %{before} ], [ {}, %{ran} ]",
+                old[j], emitted[j]
+            ));
+            f.record_parsed(&v, &ty, id, back);
+            emitted[j] = v.to_string();
+            continue;
+        }
+        let set = f.set_of(&emitted[j]);
         f.line_fmt(format_args!(
             "{v} = phi %KValue [ {}, %{before} ], [ {}, %{ran} ]",
             old[j], emitted[j]
@@ -615,6 +626,28 @@ fn unpack_words(f: &mut FnEmit, w0: &str, w1: &str, w2: &str) -> (String, String
     let vtag = f.tmp();
     f.line_fmt(format_args!("{vtag} = and i64 {w0}, 255"));
     (ptag.to_string(), w2.to_string(), vtag.to_string(), w1.to_string())
+}
+
+/// How many values the runtime's carry buffer holds, its `K_CARRY_MAX`.
+const CARRY_SLOTS: usize = 8;
+
+/// The three words of a record that is built: the runtime reads its two
+/// fields, and hands a failure over as its own two words. `back` says the
+/// int is the second field.
+fn boxed_words(f: &mut FnEmit, built: &str, back: bool) -> (String, String, String) {
+    let (words, int) = match back {
+        true => ("k_parsed_words_back", "k_parsed_int_back"),
+        false => ("k_parsed_words", "k_parsed_int"),
+    };
+    let u = f.tmp();
+    f.line_fmt(format_args!("{u} = call %KValue @{words}(%KValue {built})"));
+    let w0 = f.tmp();
+    f.line_fmt(format_args!("{w0} = extractvalue %KValue {u}, 0"));
+    let w1 = f.tmp();
+    f.line_fmt(format_args!("{w1} = extractvalue %KValue {u}, 1"));
+    let w2 = f.tmp();
+    f.line_fmt(format_args!("{w2} = call i64 @{int}(%KValue {built})"));
+    (w0.to_string(), w1.to_string(), w2.to_string())
 }
 
 /// A `%parsed` built from its three words.

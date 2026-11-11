@@ -33,7 +33,10 @@ struct FnEmit {
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
     /// Operands living in the by-value convention, and the record type
     /// each one holds — boxing one back needs to name its type and its id.
-    parsed: crate::hash::Map<String, (String, i64)>,
+    parsed: crate::hash::Map<String, (String, i64, bool)>,
+    /// Operands that may be a built record of the type the function answers
+    /// in registers, with whether its int is the second field.
+    built: crate::hash::Map<String, bool>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -172,6 +175,7 @@ impl FnEmit {
             versions: HashMap::default(),
             sets: HashMap::default(),
             parsed: crate::hash::Map::default(),
+            built: crate::hash::Map::default(),
             origin_prefix: String::new(),
             hako: String::new(),
             file: crate::ast::unstamped(),
@@ -449,7 +453,8 @@ impl FnEmit {
     /// A failure rides in the first two words and comes back as itself: the
     /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
-        let (_, id) = self.parsed[e];
+        let (_, id, back) = self.parsed[e];
+        let rebuild = if back { "k_parsed_box_back" } else { "k_parsed_box" };
         let w0 = self.tmp();
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
         let w1 = self.tmp();
@@ -457,9 +462,7 @@ impl FnEmit {
         let w2 = self.tmp();
         self.raw(&format!("{w2} = extractvalue %parsed {e}, 2"));
         let t = self.tmp();
-        self.raw(&format!(
-            "{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1}, i64 {w2})"
-        ));
+        self.raw(&format!("{t} = call %KValue @{rebuild}(i64 {id}, i64 {w0}, i64 {w1}, i64 {w2})"));
         t.to_string()
     }
 
@@ -520,8 +523,15 @@ impl FnEmit {
         self.versions.get(name).cloned()
     }
 
-    fn record_parsed(&mut self, operand: &str, ty: &str, id: i64) {
-        self.parsed.insert(operand.to_string(), (ty.to_string(), id));
+    /// `back` says the type's int is its second field, which is all the
+    /// runtime needs to know to build the record the words hold.
+    fn record_parsed(&mut self, operand: &str, ty: &str, id: i64, back: bool) {
+        self.parsed.insert(operand.to_string(), (ty.to_string(), id, back));
+    }
+
+    /// What `record_parsed` was told of an operand, when it is by value.
+    fn parsed_as(&self, operand: &str) -> Option<(String, i64, bool)> {
+        self.parsed.get(operand).cloned()
     }
 
     fn is_parsed(&self, operand: &str) -> bool {
@@ -530,6 +540,18 @@ impl FnEmit {
 
     fn record(&mut self, operand: &str, set: Set) {
         self.sets.insert(operand.to_string(), set);
+    }
+
+    /// An operand that may be a built record of the type this function
+    /// answers in registers: what a group that stays boxed handed back.
+    /// `back` says the type's int is its second field.
+    fn note_built(&mut self, operand: &str, back: bool) {
+        self.built.insert(operand.to_string(), back);
+    }
+
+    /// What `note_built` was told of an operand.
+    fn built_as(&self, operand: &str) -> Option<bool> {
+        self.built.get(operand).copied()
     }
 
     fn set_of(&self, operand: &str) -> Set {

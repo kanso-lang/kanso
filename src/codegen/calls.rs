@@ -1327,8 +1327,11 @@ impl<'a> Backend<'a> {
         };
         if let Some(ty) = self.escape.returns_ty(name, n) {
             if callee_ret == "%parsed" {
-                f.record_parsed(&result, ty, self.type_ids[ty]);
+                f.record_parsed(&result, ty, self.type_ids[ty], self.escape.int_last(ty));
             }
+        }
+        if let Some(ty) = self.escape.answers_built(name, n) {
+            f.note_built(&result, self.escape.int_last(ty));
         }
         let returned = self.group_return_set(name, n) | fails;
         f.record(&result, returned);

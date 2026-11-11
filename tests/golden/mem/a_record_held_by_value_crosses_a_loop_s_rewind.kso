@@ -1,0 +1,33 @@
+# A loop that rewinds its arena each lap carries what the next lap needs
+# through a side buffer. A record held by value was staged there built, and
+# on the way that skips the rewind, taken when another argument is a
+# failure, it stayed three words: the two ways met in one phi of two types
+# and clang refused the module, so this program did not build. The record
+# crosses as its two fields now and comes back by value on both ways, and
+# no lap builds one: sh_rec is 0.
+import "std/text"
+
+type read
+  next
+  value
+
+fn at bs p
+  read (p + 1) bs[p]
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read p v) acc
+  summed (n - 1) bs (at bs p) (acc + worth v)
+
+fn total s
+  bs = text/bytes s
+  summed 40 bs (at bs 1) 0
+
+pub play = print (total "forty bytes of text for a decoder to read")
