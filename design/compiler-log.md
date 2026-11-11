@@ -20,39 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — the dev tier's run joins the development side
-
-`kanso run` and a bare `kanso build` hand a developer a binary built at `-O0`,
-and no welfare term counted how fast that binary runs. kanso#2304 is where the
-gap showed: 100,000 rounds of PBKDF2 take 0.22 seconds at the release tier and
-3.0 at the dev tier, and a fix for the dev tier had no term to score on. The
-2026-10-06 ruling puts a term under every environment kanso runs in. Under the
-2026-09-05 corpus-first gavel the term lands first, measured on the compiler
-that still has the gap.
-
-The workload is bench/runbench, the program the production side counts.
-build_benchmarks.sh builds it a second time at the dev tier as `runbench_dev`,
-and instructions.sh counts that binary beside the other rows. On CI the dev
-build reads 2,955,847,773 instructions against the release build's
-915,613,360, a little over three times as many; the other fourteen rows read
-as their golden does, so the job counted on the recorded silicon.
-
-The term is `dev_run_instructions`, at 0.10 of the development side and
-satiation 1.0, the interpreter's. A dev run and an interpreted run are the same
-wait from a developer's chair, so the new term carries about what interpreter
-speed carries. The seven terms already on the side keep their shares
-multiplied by 0.9, so every ratio between them is what it was.
-
-There is no memory term. A dev build of runbench with `--counters` prints the
-same counters, byte for byte, as bench/cost_golden_run.txt, which the release
-build writes. The dev tier links the same runtime and allocates the same way,
-so a second memory term would weigh `run_peak_bytes` twice.
-
-The new term starts at its baseline, where it earns half its weight, while the
-side's other terms sit far above theirs. So the meta falls by 0.65 with no
-counter moving, and the floor re-bases by that amount; the `--set` records
-why.
-
 ## 2026-11-05 — the dev tier stops paying a call for each bitwise op
 
 A dev build leaves the runtime's helper twins out of line (`emit_ir_dev` has
@@ -2235,3 +2202,48 @@ limit from a shell the program starts, on both engines, and reads
 test that starts kanso some other way has no bound yet (#2436). The spec's
 first draft read `/proc/self/limits` and found that the native runtime
 reads such a file as empty (#2435).
+
+## 2026-11-11 — a decoder handed out joins the corpus
+
+#2421 again, corpus first. The phase that reads a stream through an
+exported decoder took the record off the heap in #2431 for the two ways it
+was read: bound to a name across a module, and taken apart in a parameter.
+senro's `wire` reads a third way, and it is the one that keeps its record
+on the heap. A list's reader is handed the function that reads one item:
+`wire` hands `at` to its own list reader, and kata hands that reader the
+function it wrote for a record. No benchmark handed a decoder out.
+
+`framed/each` is that reader. It is handed `at` and reads the stream
+through it, and `taken` adds it to each pass. `at` says its position is a
+whole number, `p:int`, because a function handed out can be called with
+anything and the record goes by value only when its position is an int.
+The interpreter's corpus carries the same loop as `through`.
+
+The baseline shows what handing a decoder out costs. A function handed out
+is called through a wrapper that answers one boxed word, so the analysis
+keeps the type on the heap for every caller the decoder has. Handing `at`
+out once puts all three readers back on the heap: run_sh_rec 4,723,168 ->
+23,155,168, which is 1,500 passes of 192 reads at 64 bytes more, the 64
+through the value and the 128 direct reads #2431 had freed. run_allocs
+2,349,662 -> 2,637,662, run_alloc_bytes 256,552,163 -> 274,984,163,
+run_beat_iters 390,812 -> 582,812, run_evac_allocs 2,617 -> 5,617 and
+run_evac_bytes 4,625,408 -> 4,721,408.
+
+The run program's work rises: work_runbench 982,946,782 -> 1,035,809,998
+and work_runbench_dev 2,894,927,376 -> 3,028,058,391, both this
+container's readings less 109. The reader is 52,863,216 of the program,
+5.10%. runbench's emitted code reads defines=982 calls=10293
+branches=9278 lines=80296, the summed rows emitted_other_defines 2,411,
+emitted_other_calls 22,245, emitted_other_branches 19,794 and
+emitted_other_lines 185,367, and its machine code is 905,969 bytes, so
+the summed text is 5,978,073.
+
+The interpreter's corpus rises: interp_instructions 711,444,159 ->
+724,216,921, with interp_allocs 1,038,038 and interp_peak_bytes 1,496,663.
+The tab's rows rise with it: browser_compile_instructions 393,730,774 ->
+398,181,377, browser_compile_peak_bytes 965,297 -> 968,782 and
+browser_run_instructions 93,283,820 -> 95,675,366.
+
+The floor is re-based. The baselines of the seven rows that read the two
+programs are scaled by what each rose, and welfare stays where it was,
+95.29096728 before and 95.29096738 after.

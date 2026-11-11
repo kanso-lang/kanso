@@ -113990,3 +113990,36 @@ name test is a suffix compare. That left 122K, the second walk a lambda takes
 when its answer widens its accumulator. Seeding each lambda from its last
 visit's accumulator cost more than it saved and was dropped. Welfare rose by
 0.0016 and the floor is banked.
+
+## 2026-11-05 — the dev tier's run joins the development side
+
+`kanso run` and a bare `kanso build` hand a developer a binary built at `-O0`,
+and no welfare term counted how fast that binary runs. kanso#2304 is where the
+gap showed: 100,000 rounds of PBKDF2 take 0.22 seconds at the release tier and
+3.0 at the dev tier, and a fix for the dev tier had no term to score on. The
+2026-10-06 ruling puts a term under every environment kanso runs in. Under the
+2026-09-05 corpus-first gavel the term lands first, measured on the compiler
+that still has the gap.
+
+The workload is bench/runbench, the program the production side counts.
+build_benchmarks.sh builds it a second time at the dev tier as `runbench_dev`,
+and instructions.sh counts that binary beside the other rows. On CI the dev
+build reads 2,955,847,773 instructions against the release build's
+915,613,360, a little over three times as many; the other fourteen rows read
+as their golden does, so the job counted on the recorded silicon.
+
+The term is `dev_run_instructions`, at 0.10 of the development side and
+satiation 1.0, the interpreter's. A dev run and an interpreted run are the same
+wait from a developer's chair, so the new term carries about what interpreter
+speed carries. The seven terms already on the side keep their shares
+multiplied by 0.9, so every ratio between them is what it was.
+
+There is no memory term. A dev build of runbench with `--counters` prints the
+same counters, byte for byte, as bench/cost_golden_run.txt, which the release
+build writes. The dev tier links the same runtime and allocates the same way,
+so a second memory term would weigh `run_peak_bytes` twice.
+
+The new term starts at its baseline, where it earns half its weight, while the
+side's other terms sit far above theirs. So the meta falls by 0.65 with no
+counter moving, and the floor re-bases by that amount; the `--set` records
+why.
