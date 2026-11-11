@@ -709,7 +709,7 @@ impl<'a> Backend<'a> {
             }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
-            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes") {
+            if crate::inline::BIRTHS_ERR.contains(&name) {
                 args_ir.push(self.origin_arg(f, span));
             }
             // A push the linearity analysis proved unique extends its list in
