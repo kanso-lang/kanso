@@ -66,3 +66,9 @@ rustup target add wasm32-unknown-unknown
 # native's layout. The ratchet runs that job's specs, so it carries both.
 sudo apt-get install -y -qq --no-install-recommends wasi-libc
 sudo ln -sf /usr/bin/wasm-ld-19 /usr/local/bin/wasm-ld
+
+# The sanitizer job links every corpus program with -fsanitize=address, and
+# the sanitizer's runtime is a package apart from clang. Without it
+# scripts/asan/sweep.sh refuses to start, which exits non-zero and would read
+# here as the sweep going red.
+sudo apt-get install -y -qq --no-install-recommends libclang-rt-19-dev
