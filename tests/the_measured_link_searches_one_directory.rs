@@ -9,7 +9,7 @@
 //! difference had been read as the CPU for a day because the two images
 //! happened to sit on different machines.
 //!
-//! The codegen gate stages a directory holding the five libraries the link
+//! The codegen gate stages a directory holding the libraries the link
 //! resolves and names it in `KANSO_LINK_DIR`. kanso replaces the link's `-L`
 //! list with it and adds `-nostdlib`, without which gold still read its four
 //! built-in defaults and the added file still moved the row by 1,864.

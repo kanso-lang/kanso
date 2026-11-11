@@ -2489,9 +2489,13 @@ interpreted row no sweep read on 2026-09-18, and the library change of
 trend gate's excuse for the one golden without counters is said in the
 gate, and its test no longer repeats it.
 
-Left on the issue: the two greps that count rulings, which the compiler
-page tells as a dated story, and "five libraries the link resolves",
-written in four places.
+The link's staged directory was said to hold "five libraries" in two
+scripts, a test and the page. The list is the loop in
+`scripts/gates/codegen_box.sh`, and the other three now say "the
+libraries the link resolves". One copy is left as it is: the compiler
+page gives the two greps that count rulings as part of a dated story,
+with the counts they returned that day, and CLAUDE.md holds them as the
+rule.
 
 The chart's palette had a second copy too (#2447, its first item):
 `tests/the_chart_palette_is_the_one_that_was_measured.rs` held all the
