@@ -39,6 +39,16 @@ on:
 env:
   RUST_TOOLCHAIN: "1.98.1"
 
+# Every step starts under scripts/bounded.sh, the limit on what a program may
+# allocate (kanso#2441). Cargo's runner and the ratchet put tests and gates
+# under it; this puts the steps that run a script directly under it as well.
+# A job's first steps run before the checkout has brought the file, and start
+# as they always did. The step's own script still runs as `bash -e`, which is
+# what a step with no shell named gets.
+defaults:
+  run:
+    shell: bash -c "if [ -f $GITHUB_WORKSPACE/scripts/bounded.sh ]; then . $GITHUB_WORKSPACE/scripts/bounded.sh; fi; exec bash -e {0}"
+
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
 jobs:
@@ -82,6 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # the workflow's default shell sources scripts/bounded.sh; this reads
+      # the limit from inside a step, against the number that file sets
+      - name: a step starts under the limit
+        run: test "$(ulimit -S -d)" = "$(sed -n 's/^ulimit -S -d \([0-9]*\).*/\1/p' scripts/bounded.sh)"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}

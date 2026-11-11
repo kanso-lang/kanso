@@ -34,6 +34,16 @@ on:
 env:
   RUST_TOOLCHAIN: "1.98.1"
 
+# Every step starts under scripts/bounded.sh, the limit on what a program may
+# allocate (kanso#2441). Cargo's runner and the ratchet put tests and gates
+# under it; this puts the steps that run a script directly under it as well.
+# A job's first steps run before the checkout has brought the file, and start
+# as they always did. The step's own script still runs as `bash -e`, which is
+# what a step with no shell named gets.
+defaults:
+  run:
+    shell: bash -c "if [ -f $GITHUB_WORKSPACE/scripts/bounded.sh ]; then . $GITHUB_WORKSPACE/scripts/bounded.sh; fi; exec bash -e {0}"
+
 jobs:
   prove:
     name: every mutation turns its gate red (shard ${{ matrix.shard }} of 8)
