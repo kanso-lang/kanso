@@ -15,7 +15,7 @@ pub fn add acc v
   return text/append acc v if v < 128
   text/append (text/append acc (128 + (v & 127))) (bits/shr v 7)
 
-pub fn at bs p
+pub fn at bs p:int
   first bs[p] bs (p + 1)
 
 fn first none _ _
@@ -48,3 +48,20 @@ fn weighed none
 
 fn weighed v
   v
+
+# The stream summed by a reader that is handed the function that reads one
+# value, which is how a list's items are read: senro's `wire` hands `at` to
+# its list reader, and kata hands it the reader it wrote for a record. A
+# function handed out can be called with anything, so `at` says its position
+# is a whole number.
+pub fn each bs count
+  listed bs 1 count at 0
+
+fn listed _ _ 0 _ acc
+  acc
+
+fn listed bs p n one acc
+  item bs (one bs p) (n - 1) one acc
+
+fn item bs (read v p) n one acc
+  listed bs p n one (acc + weighed v)

@@ -3,7 +3,8 @@
 # answers to a name and reads the two fields from it, once for every value.
 # This is how the readers senro derives call its `wire` module (#2421). Each
 # pass also has the library sum the stream itself, where the record is taken
-# apart in a parameter.
+# apart in a parameter, and once more through a reader the decoder is handed
+# to as a value.
 import "../framed"
 import "std/text"
 
@@ -33,7 +34,8 @@ fn passes _ 0 acc
 
 fn passes bs n acc
   inside = framed/sum bs held
-  passes bs (n - 1) (acc + read_out bs 1 held 0 + inside)
+  handed = framed/each bs held
+  passes bs (n - 1) (acc + read_out bs 1 held 0 + inside + handed)
 
 pub fn total n
   passes (written held (text/bytes "")) n 0

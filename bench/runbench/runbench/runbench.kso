@@ -372,6 +372,19 @@
 # first as its type declares it. Both build a record on the heap for every
 # number. The phase adds 12,288,064 to sh_rec: 1,500 passes of 128 reads at
 # 64 bytes, and one record more.
+#
+# The phase gained a third reader the next day, measured after kanso#2431
+# had taken the record off the heap for the first two. Its column is the
+# whole program with it, 1,035,810,107, less the whole without, 982,946,891.
+#
+#   handed    the same 1,500 passes, read through a value  52,863,216  5.10%
+#
+# A list's reader is handed the function that reads one item, so the third
+# reader hands the decoder out as a value. A function handed out is called
+# through a wrapper that answers one boxed word, and that kept the record on
+# the heap for every caller the decoder had. The column is the 64 reads
+# through the value and the 128 direct reads going back to the heap with
+# them: sh_rec rises 18,432,000, 1,500 passes of 192 reads at 64 bytes.
 import "./admitted"
 import "./appended"
 import "./bag"

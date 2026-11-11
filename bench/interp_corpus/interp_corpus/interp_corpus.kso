@@ -310,7 +310,8 @@ fn sealed n acc
 # a number under 128 is one byte and a larger one two, and each read answers
 # a `frame`. A caller in another module cannot take a record apart, so it
 # binds the frame and reads its two fields, which `unframed` does; `inside`
-# is the same loop where the frame is taken apart in a parameter.
+# is the same loop where the frame is taken apart in a parameter, and
+# `through` is handed the decoder as a value, as a list's reader is.
 fn frame_add acc low 0
   text/append acc low
 
@@ -323,7 +324,7 @@ fn framed 0 acc
 fn framed n acc
   framed (n - 1) (frame_add acc (n * 37 % 128) (n % 3))
 
-fn frame_at bs p
+fn frame_at bs p:int
   frame_first bs[p] bs (p + 1)
 
 fn frame_first none _ _
@@ -358,10 +359,20 @@ fn inside 0 _ (frame _ _) acc
 fn inside n bs (frame v p) acc
   inside (n - 1) bs (frame_at bs p) (acc + worth v)
 
+fn through _ _ 0 _ acc
+  acc
+
+fn through bs p n one acc
+  met bs (one bs p) (n - 1) one acc
+
+fn met bs (frame v p) n one acc
+  through bs p n one (acc + worth v)
+
 fn taken 0 acc
   acc
 
 fn taken n acc
   bs = framed 64 (text/bytes "")
   apart = inside 64 bs (frame_at bs 1) 0
-  taken (n - 1) (acc + unframed bs 1 64 0 + apart)
+  handed = through bs 1 64 frame_at 0
+  taken (n - 1) (acc + unframed bs 1 64 0 + apart + handed)
