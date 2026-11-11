@@ -4,7 +4,7 @@
 //! resolving on the runners for hours, and every job that installs a
 //! package died in the install, in three repositories, before any test ran.
 //! `scripts/apt_ready.sh` runs before each install and rewrites the list
-//! when the first name does not resolve.
+//! when the first name does not resolve, to every other mirror that does.
 //!
 //! The script is run here against a list and a resolver of this test's
 //! own, so what is pinned is the list it leaves behind.
@@ -31,6 +31,7 @@ fn after(case: &str, known: &[&str]) -> (String, String) {
     let out = Command::new("sh")
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/apt_ready.sh"))
         .env("KANSO_APT_MIRRORS", &list)
+        .env("KANSO_APT_RETRIES", stage.join("fetch-again"))
         .env("KANSO_APT_LOOKUP", format!("sh {}", lookup.display()))
         .env("KANSO_APT_SUDO", "")
         .env("KANSO_APT_PAUSE", "0")
@@ -53,14 +54,32 @@ fn a_first_mirror_that_resolves_is_left_alone() {
 #[test]
 fn a_first_mirror_that_does_not_resolve_gives_way_to_one_that_does() {
     let (list, said) = after("away", &["archive.ubuntu.com", "mirrors.kernel.org"]);
-    assert_eq!(list, "http://archive.ubuntu.com/ubuntu/\tpriority:1\n");
+    assert_eq!(
+        list,
+        "http://archive.ubuntu.com/ubuntu/\tpriority:1\n\
+         http://mirrors.kernel.org/ubuntu/\tpriority:2\n"
+    );
     assert!(said.contains("azure.archive.ubuntu.com does not resolve"), "{said}");
+    let again = std::env::temp_dir().join("kanso-apt-ready-away/fetch-again");
+    assert_eq!(
+        std::fs::read_to_string(again).expect("apt is told to fetch again"),
+        "Acquire::Retries \"4\";\n"
+    );
 }
 
+/// What the runners answered on 2026-11-11: neither of Ubuntu's own names,
+/// and the others. One mirror alone then failed to connect for one package,
+/// so every mirror that resolves is listed.
 #[test]
-fn the_second_fallback_is_taken_when_the_first_is_away_too() {
-    let (list, _) = after("further", &["mirrors.kernel.org"]);
-    assert_eq!(list, "http://mirrors.kernel.org/ubuntu/\tpriority:1\n");
+fn every_other_mirror_that_resolves_is_listed_in_order() {
+    let known = ["mirrors.kernel.org", "mirrors.mit.edu", "mirrors.ocf.berkeley.edu"];
+    let (list, _) = after("further", &known);
+    assert_eq!(
+        list,
+        "http://mirrors.kernel.org/ubuntu/\tpriority:1\n\
+         http://mirrors.mit.edu/ubuntu/\tpriority:2\n\
+         http://mirrors.ocf.berkeley.edu/ubuntu/\tpriority:3\n"
+    );
 }
 
 #[test]
@@ -68,4 +87,5 @@ fn with_no_mirror_resolving_the_list_is_left_for_the_install_to_report() {
     let (list, said) = after("none", &[]);
     assert_eq!(list, LIST);
     assert!(said.contains("no other mirror resolves"), "{said}");
+    assert!(!std::env::temp_dir().join("kanso-apt-ready-none/fetch-again").exists());
 }
