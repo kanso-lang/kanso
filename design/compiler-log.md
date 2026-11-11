@@ -2651,6 +2651,21 @@ turned off: `unknown name` for each of the entry's names, and for the
 broken entry the test file's own `unknown name` where the syntax error was
 expected.
 
+**The rows.** CI's first reading had `library_instructions` 2,304 above
+its golden. A file's import list was copied on every library compile, to
+know which imports the file wrote itself once an entry had lent it more.
+The copy is now made only when an entry is beside the file, and the row is
+63,634,563 -> 63,634,689: 126 instructions for the question "is there an
+entry beside this file" on a path where the answer is no.
+`entry_instructions` is 119,166,280 -> 119,166,322. Nothing on the entry's
+path changed, so that is the binary's layout. The browser's compile row
+went the other way by two, 412,081,307 -> 412,081,305.
+
+The welfare floor is lowered by what this costs, under the exception for
+building a ruled part of the language: #2460 is the committee's decision,
+and the floor's history says so: 95.39230414088809 ->
+95.3923041102071.
+
 **Open.** Each test file beside an entry compiles the app again. One test
 file beside senro's `examples/notebook` took 1.9 s in this container from
 start to finish, and nothing here measures an app with many of them.
