@@ -2,20 +2,13 @@
 //! sweeps, so a container cannot read "nothing moved" off a board that is
 //! missing a row.
 //!
-//! There are three sweeps and between them they looked like the whole board.
-//! On 2026-09-18 they were not: `all_counters.sh` printed that every cost
-//! vein and the lazy tier agreed with their goldens, on a tree whose
-//! interpreted row had moved 18,540,440 instructions. `interp_instructions`
-//! was in neither that list nor `all_compile.sh`'s, along with `interp_memory`,
-//! `startup_instructions` and `instructions` -- the last being retired
-//! instructions per benchmark, the dimension every allocation counter is blind
-//! to. The change was deliberate and CI measured it, so nothing was lost that
-//! day. What it showed is that two green sweeps did not mean what a reader
-//! would take them to mean.
+//! Two green sweeps once read as the whole board and were not. The header
+//! of `scripts/gates/all_interp.sh` tells that day, 2026-09-18.
 //!
 //! This is the third spec in the family and the widest. The counter sweep
 //! reads its veins from the `*_counters.sh` gates themselves, the compile sweep
-//! reads its gates from the scripts that name a compile golden, and
+//! reads its gates from the scripts that name a compile golden, the third
+//! sweep takes every gate that names a golden and belongs to neither, and
 //! `the_compile_sweep_names_every_compile_gate.rs` pins that every
 //! compile-side golden is read by something the compile sweep runs. Both are
 //! scoped to one sweep, and the gap they left was the gates belonging to
@@ -36,7 +29,6 @@ fn root() -> &'static Path {
 }
 
 const CI: &str = include_str!("../.github/workflows/ci.yml");
-const INTERP: &str = include_str!("../scripts/gates/all_interp.sh");
 
 /// Every `scripts/gates/<name>.sh` the workflow invokes.
 fn ci_runs() -> BTreeSet<String> {
@@ -55,20 +47,9 @@ fn ci_runs() -> BTreeSet<String> {
     found
 }
 
-/// The text between `word="` and its closing quote.
-fn quoted<'a>(script: &'a str, word: &str) -> &'a str {
-    script
-        .split_once(&format!("{word}=\""))
-        .unwrap_or_else(|| panic!("the script declares {word}"))
-        .1
-        .split_once('"')
-        .expect("the declaration is closed")
-        .0
-}
-
-/// The first word of each line a sweep's `--list` prints. The counter sweep
-/// and the compile sweep find their gates in `scripts/gates` rather than
-/// declaring them, so they are run rather than read.
+/// The first word of each line a sweep's `--list` prints. Each sweep finds
+/// its gates in `scripts/gates` rather than declaring them, so it is run
+/// rather than read.
 fn listed(sweep: &str) -> Vec<String> {
     let out = std::process::Command::new("sh")
         .arg(format!("scripts/gates/{sweep}"))
@@ -97,9 +78,7 @@ fn swept() -> BTreeSet<String> {
         names.insert(format!("{vein}_counters"));
     }
     names.extend(listed("all_compile.sh"));
-    for gate in quoted(INTERP, "gates").split_whitespace() {
-        names.insert(gate.to_string());
-    }
+    names.extend(listed("all_interp.sh"));
     names
 }
 
@@ -118,6 +97,11 @@ fn reads_a_golden(gate: &str) -> bool {
             .chars()
             .take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_' || *c == '.')
             .collect();
+        // A sentence that ends on the file's name leaves its full stop in the
+        // scan, and `browser_golden.txt.` then names no golden: the browser
+        // gate read as naming none from the day it was written, and no sweep
+        // ran it.
+        let name = name.trim_end_matches('.');
         name.contains("golden") && name.ends_with(".txt")
     })
 }
@@ -155,7 +139,7 @@ fn the_sweeps_are_not_empty() {
     assert!(counter_veins().len() >= 4, "all_counters.sh reads fewer than four veins");
     assert!(listed("all_compile.sh").len() >= 4, "all_compile.sh names fewer than four gates");
     assert!(
-        quoted(INTERP, "gates").split_whitespace().count() >= 4,
+        listed("all_interp.sh").len() >= 4,
         "all_interp.sh names fewer than four rows, which is not a sweep"
     );
 }

@@ -2,13 +2,8 @@
 //!
 //! There are three of them and they run in three different CI jobs:
 //! `golden_prose` under the welfare job, `page_drift` under the docs job,
-//! `prose_check` under its own. Nothing named them together, so a session
-//! editing docs/compiler.html ran the two it remembered. On kanso#1328 the
-//! page's `front_end_visits` span still carried the number its golden had
-//! moved past; page_drift and prose_check both pass on that tree, because
-//! neither reads a `data-golden` span. golden_prose turned two jobs red — its
-//! own, and welfare, which runs it last and so reported ALREADY RED and could
-//! prove nothing about the three rows sharing that gate.
+//! `prose_check` under its own. What running two of the three cost, on
+//! kanso#1328, is told in the header of `scripts/gates/all_pages.sh`.
 //!
 //! `scripts/gates/all_pages.sh` runs the three. A sweep that named two of
 //! three would be the same failure with a shorter command, so the table is

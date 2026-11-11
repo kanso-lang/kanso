@@ -114637,3 +114637,81 @@ kata needed nothing of its own. The page as data already kept the inner
 record's fields that a template reads, so senro's `spec/runs/nested_reads`
 prints the same page three ways: rendered from the records, as data, and
 rendered from the data.
+
+## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
+
+A compile error in code a derivation wrote named the module's derived file,
+`views.derived.kso`, which is not on disk. senro's kata listed this among
+what it does not do yet: a typo in `views/list.kata` was reported at a line
+of the derived source.
+
+The committee chose a comment convention over carrying positions through the
+derive API (#2380). A derivation may write `# from <file>:<line>` above what
+it writes, naming the file within the module. When a diagnostic falls in a
+derived file, the renderer looks up to the nearest such comment in the same
+definition, or among the comments right above its header, and adds
+`= written from <module>/<file>:<line>` under the quoted line. The derive API
+and the span type stay as they were, and a derivation that writes no such
+comment gets the message it got before. The quote of the derived line stays,
+because it shows what kanso read.
+
+`tests/golden/derive/a_template_mistake_names_its_template_line` writes a
+template that misspells `name`, under one `# from` comment above the
+function. Both of its refusals, the unused parameter at the header and the
+unknown name in the body, carry `= written from …/views/greeting.tpl:1` on
+both engines. Main's binary prints them without the note.
+
+Tried and dropped: one refusal quotes nothing in derived source. The
+travelling-call check in `lib/travel.rs` ("no module in this program writes
+`shout` for a type it owns") reads the file it quotes from disk, and a
+derived file is not there. Reading the derivation's text first fixes it, but
+the change moved rows whose corpora never run that code. Inlined, it
+read `browser_compile_instructions` at 352,264,417 against main's
+352,264,415, and reverting it alone restored 415. Out of line in a cold
+helper, the browser row fell to 352,264,411 and `entry_instructions` rose
+from 156,082,962 to 156,082,993, which together read below the welfare
+floor. The fix waits for a change to that function that pays for its own
+layout.
+
+## 2026-11-08 — a list with a comment among its elements spans lines
+
+A list or map spans lines only when it cannot fit on one (the 2026-10-13
+gavel on #1882). The width check measured a span with its comment lines
+dropped, so a short list with a comment above an element was refused as
+fitting on one line, and the line it asked for cannot be written: a comment
+runs to the end of its line. senro's kata hit this once each literal sat
+under its own `# from` comment (#2380). Two short literals in one `joined [ ]`
+were refused, and a template like that could not compile.
+
+The lexer now notes when a span holds a comment line, and such a span skips
+the fits-on-one-line refusal; a nested span's comment counts for the span
+around it. A span with no comment is judged as before, so the corpus's two
+refusals, `a_list_that_fits_on_one_line_does_not_span` and its map twin, still
+read the same. `tests/golden/micro/a_list_with_comments_spans_lines` holds a
+short list and a short map, each with a comment above every element, and
+prints `["<p>" "</p>"] { "a":1 "b":2 }` on every engine; main's binary
+refuses both literals. Appendix C says so beside the width rule.
+
+## 2026-11-08 — the travelling-call refusal quotes derived source
+
+#2380 rules that a diagnostic falling in a `.derived.kso` file carries
+`= written from <file>:<line>`. One refusal still missed it: the
+travelling-call check in `lib/travel.rs` ("no module in this program writes
+`perimeter` for a type it owns"). It read the file it quotes from disk, and a
+derived file is not there, so in derived source it printed the header alone.
+It now renders through `render_merged`, which every merged-check refusal
+already uses and which reads a derivation's text before the disk. The line is
+quoted and the note follows.
+
+`tests/golden/derive/a_traveling_call_in_a_template_names_its_template_line`
+writes a template that calls `perimeter` on a circle whose module writes only
+`area`. Both engines quote `views.derived.kso:3` and name `views/one.tpl:1`;
+main's binary prints the header alone.
+
+No corpus reaches this refusal, and the change still moves two rows through
+layout, as CI measured them: `browser_compile_instructions` rose from
+352,264,415 to 352,264,424 and `entry_instructions` from 156,082,962 to
+156,082,965. Every other row read as before. #2382 dropped the fix to keep
+the floor, and that was the wrong call: the refusal is part of what #2380
+ruled, and a ruled feature's cost lowers the floor by exactly what it
+measures. The floor moves by that amount here (#2383).

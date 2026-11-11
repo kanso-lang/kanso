@@ -241,8 +241,8 @@ tune=$tune:glibc.malloc.tcache_count=7
 # KANSO_LINK_DIR IS THE THIRD, and it reaches what the link searches. `ld.gold`
 # reads every `-L` directory whole, so the dev row counted the runner image's
 # `/usr/lib/x86_64-linux-gnu`: two values on one binary that followed the
-# image version. codegen_box.sh stages a directory holding the five libraries
-# the link resolves, and kanso puts it in place of the driver's `-L` list.
+# image version. codegen_box.sh stages a directory holding the libraries the
+# link resolves, and kanso puts it in place of the driver's `-L` list.
 # codegen_box.sh has the measurements.
 #
 # The two travel together on every `env -i` line here, and

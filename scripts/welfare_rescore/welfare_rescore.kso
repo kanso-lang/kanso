@@ -8,9 +8,9 @@
 # had never reached the perf-history branch. That was true when he first
 # looked and had already been fixed: the file landed with row 499. The actual
 # reason is worse and is why the two-line design could not be rescued. The
-# replay refused any row missing a counter, and eighteen of the objective's
-# twenty-four counters exist in the last two rows of five hundred — so the
-# line it could draw was two points long.
+# replay refused any row missing a counter, and on that day eighteen of the
+# objective's twenty-four counters existed only in the last two rows of five
+# hundred, so the line it could draw was two points long.
 #
 # ONE COLUMN, ONE LINE. Every row is scored by the formula in scripts/welfare,
 # on the counters that row already carries. Nothing is invented, and nothing is

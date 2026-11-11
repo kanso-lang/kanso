@@ -86,7 +86,7 @@ no_setup = "true"
 
 release = "cargo build --release"
 
-# The work vein reads the eleven binaries, so they have to exist and be
+# The work vein reads the benchmarks' binaries, so they have to exist and be
 # rebuilt from the mutated runtime before the gate can see anything.
 benches = "cargo build --release && sh scripts/gates/build_benchmarks.sh"
 
@@ -494,8 +494,8 @@ fn read_it mode files list at acc r s
 # as well as vanishing -- and this read `grep -q` only, so three mutations that
 # guard better than their neighbours were the ones it could not see.
 #
-# Widening it is measured, not assumed: over the 112 mutations on disk it takes
-# the count that satisfies the predicate from 69 to 72, and the three are
+# Widening it is measured, not assumed: over the 112 mutations then on disk it
+# took the count that satisfies the predicate from 69 to 72, and the three are
 # exactly the three that were blind. Nothing else changes, so this cannot
 # over-select.
 fn guarding s
@@ -613,11 +613,11 @@ fn asked? scope r
 #
 # So every gate is read once on an unmutated worktree first, and a baseline
 # that is not green stops the run rather than colouring it. Deduplicated
-# because the 62 rows name 50 distinct (gate, setup) pairs — nine rows share
-# the diagnostic-coverage gate and four share the trend gate — so the baseline
-# costs 50 gate runs beside the 62 the proving already pays. One worktree
-# serves the whole pass: nothing mutates it, so there is nothing to restore
-# between pairs and only the first setup's build is cold.
+# because rows share gates. When this was written 62 rows named 50 distinct
+# (gate, setup) pairs, nine sharing the diagnostic-coverage gate and four the
+# trend gate, so the baseline cost 50 gate runs beside the 62 of the proving.
+# One worktree serves the whole pass: nothing mutates it, so there is nothing
+# to restore between pairs and only the first setup's build is cold.
 #
 # It reads HEAD before any row runs, so it answers for the tree and not for
 # what a row leaves behind: a mutation that dirties a shared scratch path and

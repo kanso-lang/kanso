@@ -1825,4 +1825,17 @@ declared_in = row
 
 rows_dq68 = list/concat rows_dq67 [declared_in]
 
-rows_d = list/concat rows_dq68 [itself]
+# The sanitizer sweep runs on every change (2026-11-11, kanso#2449). Run by
+# hand it had come to build its runtime on the wrong calling convention, and
+# its programs stopped before they reached the memory it watches.
+freed_read = row
+  "a tenure block read after it is freed"
+  true
+  "sh scripts/asan/sweep.sh"
+  "sanitizer sweep (the corpus under AddressSanitizer)"
+  (breaking "a_tenure_block_read_after_its_free")
+  release
+
+rows_dq69 = list/concat rows_dq68 [freed_read]
+
+rows_d = list/concat rows_dq69 [itself]

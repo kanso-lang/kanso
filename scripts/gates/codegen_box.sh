@@ -18,8 +18,8 @@ cargo build --release
 cp target/release/kanso "$box/kanso"
 cp -r bench/codegen_corpus "$box/pkg/"
 
-# AND THE LINK SEARCHES ONE DIRECTORY, staged here, holding the five libraries
-# the link resolves and nothing else. `ld.gold` reads each `-L` directory whole
+# AND THE LINK SEARCHES ONE DIRECTORY, staged here, holding the libraries the
+# link resolves and nothing else: the ones the loop below names. `ld.gold` reads each `-L` directory whole
 # before it looks a library up, so the dev row counted how many files the
 # runner image had installed in `/usr/lib/x86_64-linux-gnu`: one file added
 # there moved it 3,559 instructions, and on CI it took two values on one

@@ -20,84 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
-
-A compile error in code a derivation wrote named the module's derived file,
-`views.derived.kso`, which is not on disk. senro's kata listed this among
-what it does not do yet: a typo in `views/list.kata` was reported at a line
-of the derived source.
-
-The committee chose a comment convention over carrying positions through the
-derive API (#2380). A derivation may write `# from <file>:<line>` above what
-it writes, naming the file within the module. When a diagnostic falls in a
-derived file, the renderer looks up to the nearest such comment in the same
-definition, or among the comments right above its header, and adds
-`= written from <module>/<file>:<line>` under the quoted line. The derive API
-and the span type stay as they were, and a derivation that writes no such
-comment gets the message it got before. The quote of the derived line stays,
-because it shows what kanso read.
-
-`tests/golden/derive/a_template_mistake_names_its_template_line` writes a
-template that misspells `name`, under one `# from` comment above the
-function. Both of its refusals, the unused parameter at the header and the
-unknown name in the body, carry `= written from …/views/greeting.tpl:1` on
-both engines. Main's binary prints them without the note.
-
-Tried and dropped: one refusal quotes nothing in derived source. The
-travelling-call check in `lib/travel.rs` ("no module in this program writes
-`shout` for a type it owns") reads the file it quotes from disk, and a
-derived file is not there. Reading the derivation's text first fixes it, but
-the change moved rows whose corpora never run that code. Inlined, it
-read `browser_compile_instructions` at 352,264,417 against main's
-352,264,415, and reverting it alone restored 415. Out of line in a cold
-helper, the browser row fell to 352,264,411 and `entry_instructions` rose
-from 156,082,962 to 156,082,993, which together read below the welfare
-floor. The fix waits for a change to that function that pays for its own
-layout.
-
-## 2026-11-08 — a list with a comment among its elements spans lines
-
-A list or map spans lines only when it cannot fit on one (the 2026-10-13
-gavel on #1882). The width check measured a span with its comment lines
-dropped, so a short list with a comment above an element was refused as
-fitting on one line, and the line it asked for cannot be written: a comment
-runs to the end of its line. senro's kata hit this once each literal sat
-under its own `# from` comment (#2380). Two short literals in one `joined [ ]`
-were refused, and a template like that could not compile.
-
-The lexer now notes when a span holds a comment line, and such a span skips
-the fits-on-one-line refusal; a nested span's comment counts for the span
-around it. A span with no comment is judged as before, so the corpus's two
-refusals, `a_list_that_fits_on_one_line_does_not_span` and its map twin, still
-read the same. `tests/golden/micro/a_list_with_comments_spans_lines` holds a
-short list and a short map, each with a comment above every element, and
-prints `["<p>" "</p>"] { "a":1 "b":2 }` on every engine; main's binary
-refuses both literals. Appendix C says so beside the width rule.
-
-## 2026-11-08 — the travelling-call refusal quotes derived source
-
-#2380 rules that a diagnostic falling in a `.derived.kso` file carries
-`= written from <file>:<line>`. One refusal still missed it: the
-travelling-call check in `lib/travel.rs` ("no module in this program writes
-`perimeter` for a type it owns"). It read the file it quotes from disk, and a
-derived file is not there, so in derived source it printed the header alone.
-It now renders through `render_merged`, which every merged-check refusal
-already uses and which reads a derivation's text before the disk. The line is
-quoted and the note follows.
-
-`tests/golden/derive/a_traveling_call_in_a_template_names_its_template_line`
-writes a template that calls `perimeter` on a circle whose module writes only
-`area`. Both engines quote `views.derived.kso:3` and name `views/one.tpl:1`;
-main's binary prints the header alone.
-
-No corpus reaches this refusal, and the change still moves two rows through
-layout, as CI measured them: `browser_compile_instructions` rose from
-352,264,415 to 352,264,424 and `entry_instructions` from 156,082,962 to
-156,082,965. Every other row read as before. #2382 dropped the fix to keep
-the floor, and that was the wrong call: the refusal is part of what #2380
-ruled, and a ruled feature's cost lowers the floor by exactly what it
-measures. The floor moves by that amount here (#2383).
-
 ## 2026-11-08 — a module calls an arm a derivation writes
 
 An entry that derives loads its modules twice: once to describe them to its
@@ -2485,3 +2407,115 @@ convention falls back on the names and answers `["apple" "zebra"]`.
 field. The interpreter's and the browser's rows did not move.
 
 **Welfare.** 95.39228290 -> 95.39230414, banked.
+
+## 2026-11-11 — the sanitizer sweep is a job
+
+#2449, from the weekly sweep: `scripts/asan/sweep.sh` was named by no job,
+script or test. It builds every program in the memory corpus and every
+benchmark against a runtime compiled with AddressSanitizer and runs them.
+The entry that added it (2026-09-22, in the archive) left it to be run by
+hand.
+
+Run by hand today, on clang 19, its own `--prove` failed: a read after
+free put there on purpose went unreported. The compiler emits closures on
+`preserve_none` when clang takes the convention, and builds its runtime
+with `-DKANSO_PRESERVE_NONE` to match. The sweep built its runtime without
+the flag, so a closure read its arguments from the wrong registers and the
+fixture stopped with a run-time error of its own before it freed anything.
+The sweep looked only for a sanitizer report, so a program that stops
+that way read CLEAN.
+
+Four changes to the script:
+
+- The runtime is built on the convention the program's IR uses, read off
+  the IR. Clang will not compile a `preserve_none` function with the
+  sanitizer's fake stack, so that build turns use-after-return detection
+  off and keeps the heap checks.
+- A program has to finish. A fixture's output is compared with its
+  `.stdout` golden, under the seed `tests/golden.rs` pins, and a benchmark
+  has to exit zero. Either failing is `DIED` and fails the sweep.
+- Benchmark directories are copied with their links followed. `runbench`
+  links to the other benchmarks' files and was skipped as unbuildable.
+- It lifts the 6 GiB data limit for itself. A sanitized binary reserves
+  its shadow as private mappings, which that limit counts, and under it
+  no sanitized program starts.
+
+It is a job in `ci.yml` now, on clang 19 with `libclang-rt-19-dev`. The
+ratchet row is `freed_read`: one byte read from a tenure block after
+`k_ten_release` frees it. No golden sees that. The sweep reports it in
+eight fixtures. The row replaces `--prove`, which made the same patch on a
+copy of the runtime.
+
+On this tree the sweep reads 163 programs clean and none reported. Ten are
+skipped by name: the `work_ahead_*` fixtures hold definitions beside bare
+statements, which `kanso play` runs and `kanso build` refuses, and the
+sweep links what `build` emits. The guarded sixteen-byte tail read in
+`k_b_find2_raw`, which `runbench` and `scanbench` reported in September,
+was reported by no program. Why is not established.
+
+The sweep cannot see a read that strays from one value into its neighbour
+inside an arena block, because the whole block is live memory to the
+sanitizer.
+
+No counter moved.
+
+## 2026-11-11 — the third sweep reads its gates, and the browser gate joins it
+
+#2447, its fourth item. `all_interp.sh` listed its four gates by hand, and
+`tests/every_golden_is_swept_by_something.rs` existed partly to keep that
+list honest against what CI runs. The sweep now reads its gates from
+`scripts/gates` the way `all_compile.sh` does: a script that names a
+golden under `bench/` and that neither other sweep runs is its own.
+`--list` prints them, and the test asks the sweep.
+
+Deriving the list found a fifth. CI runs `browser_cost.sh` against
+`bench/browser_golden.txt`, and no sweep ran it. The test should have
+said so. It decides whether a gate reads a golden by scanning the script
+for a file name, and the only place that script names its golden is a
+comment that ends the sentence there, so the scan read
+`browser_golden.txt.` and took the full stop for part of the name. With
+the stop trimmed the test fails and names `browser_cost`; with the
+derived list it passes.
+
+The interpreter sweep is slower by a wasm build and the browser test. No
+counter moved.
+
+## 2026-11-11 — two limits live where they are enforced
+
+#2448, from the weekly sweep. Not a compiler change.
+
+The live log's limit was written in `scripts/archive_log.sh`, three
+times in its test, in the test's file name and in CLAUDE.md. It is now
+the script's `keep=` line and nowhere else:
+`tests/the_live_log_holds_what_the_script_keeps.rs` reads the number
+from the script, builds its scratch log two entries past it, and
+CLAUDE.md names the script. Watched fail with `keep=41`: the test says
+the log holds 40 and the script keeps 41. The page-drift budget is
+`budget` in `scripts/page_drift/page_drift.kso`; CLAUDE.md and the
+compiler page name it without the number.
+
+Three stories were told twice, in a sweep's header and again in its
+test's doc comment: the span that cost a round on kanso#1328, the
+interpreted row no sweep read on 2026-09-18, and the library change of
+2026-09-05. Each stays in the script, and the test points at it. The
+trend gate's excuse for the one golden without counters is said in the
+gate, and its test no longer repeats it.
+
+The link's staged directory was said to hold "five libraries" in two
+scripts, a test and the page. The list is the loop in
+`scripts/gates/codegen_box.sh`, and the other three now say "the
+libraries the link resolves". One copy is left as it is: the compiler
+page gives the two greps that count rulings as part of a dated story,
+with the counts they returned that day, and CLAUDE.md holds them as the
+rule.
+
+The chart's palette had a second copy too (#2447, its first item):
+`tests/the_chart_palette_is_the_one_that_was_measured.rs` held all the
+colours of `docs/numbers.html` and asserted the page equalled them. The
+chart draws one panel to a counter, so colour tells no two lines apart.
+The copy is gone, and `tests/a_chart_line_wears_a_token_both_modes_declare.rs`
+checks the page against itself: both modes declare the same tokens, and
+every line wears a declared token and no hex. Watched fail with a token
+taken out of the dark block and with one line given a hex.
+
+No counter moved.

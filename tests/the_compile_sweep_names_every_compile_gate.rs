@@ -1,14 +1,10 @@
 //! The compile-side sweep reads every compile-side golden.
 //!
-//! `scripts/gates/all_counters.sh` walks the RUNTIME cost goldens and nothing
-//! else. The compile side is separate gates, two of whose counters are
-//! welfare terms, and a change under `lib/` moves every one of them because
-//! the library is `include_str!`'d into the compiler. On 2026-09-05 a
-//! twelve-line library change read as a welfare RISE with those veins stale and
-//! a FALL once they were regenerated, and nothing in the sweep beside them
-//! would have said so.
+//! `scripts/gates/all_counters.sh` walks the runtime cost goldens and nothing
+//! else. Why the compile side needs a sweep of its own is told in the header
+//! of `scripts/gates/all_compile.sh`.
 //!
-//! `all_compile.sh` closes that. It finds its gates in `scripts/gates` by the
+//! The sweep finds its gates in `scripts/gates` by the
 //! goldens they name, as `all_counters.sh` finds its veins, so there is no list
 //! here to keep in step with it (kanso#2345). What this file pins is the
 //! plumbing: `--list` runs and names gates that exist, every compile golden on

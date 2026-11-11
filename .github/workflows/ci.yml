@@ -229,6 +229,43 @@ jobs:
           cargo build --release
           ./target/release/kanso run scripts/utf8_differential
 
+  # Every program in the memory corpus and every benchmark, built against a
+  # runtime compiled with AddressSanitizer and run to its end. The goldens
+  # see what a program prints and counts; this sees a read of memory the
+  # runtime has already given back, which changes neither.
+  sanitizer:
+    name: sanitizer sweep (the corpus under AddressSanitizer)
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 for origin/main. The sweep runs scripts/ratchet like
+      # any other program, and its cover applies a mutation that resets the
+      # goldens from main; without main it reads that mutation as stale,
+      # exits 1, and the sweep counts a program that did not finish.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # clang 19 because that is the clang the measured binaries are built
+      # with, and on it closures take the preserve_none convention, so the
+      # sweep reads the code that ships. The sanitizer's runtime is a
+      # package of its own, and without it the link fails.
+      - name: clang 19 and its sanitizer runtime
+        run: |
+          sh scripts/apt_ready.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld libclang-rt-19-dev
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          clang --version | head -1 | grep -q 'clang version 19' || {
+            echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
+            exit 1
+          }
+      - name: the sweep
+        run: |
+          cargo build --release
+          sh scripts/asan/sweep.sh
+
   fingerprints:
     name: asset digests (every reference rewritten, site still runs)
     runs-on: ubuntu-latest

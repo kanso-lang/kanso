@@ -3,7 +3,7 @@ import "std/list"
 import "std/os"
 import "std/text"
 
-# The welfare gate already forces a sentence when one of its seven terms
+# The welfare gate already forces a sentence when one of its terms
 # regresses, and the cost goldens already refuse silent movement. The seam
 # between them: a PR can regenerate a golden, bank a welfare rise, and still
 # worsen a counter the chart shows — permanent slots, emitted lines — with no
