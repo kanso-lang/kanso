@@ -114254,3 +114254,36 @@ little, because the helper runs on each file's diagnostics.
 `browser_compile_instructions` fell 799 to 350,296,781, by layout. The
 directive is a part of the language Clay asked for, so the welfare floor
 moves down by exactly that cost.
+
+## 2026-11-05 — a field read through an annotated name answers its own type
+
+**DONE (#2350).** Two record types in one program that both have a `body`
+field share one getter group, `Get_body`, with an arm for each type. Infer
+gave the group the join of its arms, so when one type's `body` could be none,
+reading `body` from the other type's value was refused as possibly none, even
+where the parameter was annotated with the other type. A senro model module
+with a `letter` and a `note` hit it, and `size_of` in http.kso was worked
+around for it in #2351.
+
+Infer now remembers the type of a binding that carries an annotation, and a
+field read whose one argument is such a name considers only the arm whose
+first pattern is that type's constructor. An unannotated read still joins
+every arm, which is the old answer and still a sound one.
+
+`tests/golden/field_reads/its_own_type` reads a `letters` body that is never
+none beside a `notes` body that can be, and prints `8` and `7`; the compiler
+before the change refused it. `another_types_none` reads the `notes` body
+through a name of that type and is still refused, at the same line.
+`tests/a_field_read_answers_its_own_type.rs` runs both.
+
+Rows: the first version stored the annotation in each environment entry,
+which grew the entry from 24 bytes to 40 and raised every compile row about
+0.28%. The types now sit in a side vector that stays empty in a function with
+no annotated parameters. Against main, `compile_instructions` fell 4,266 to
+24,110,987, `entry_instructions` 47,358 to 87,917,589,
+`library_instructions` 35,277 to 73,461,118 and `emit_instructions` 174 to
+5,613,223. `browser_compile_instructions` rose 270,018 to 350,566,799, and
+the side vector's first push is three more front-end allocations
+(`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
+(`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
+lets a correct program compile, so the floor moves down by that cost.

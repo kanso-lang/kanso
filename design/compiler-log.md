@@ -20,39 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a field read through an annotated name answers its own type
-
-**DONE (#2350).** Two record types in one program that both have a `body`
-field share one getter group, `Get_body`, with an arm for each type. Infer
-gave the group the join of its arms, so when one type's `body` could be none,
-reading `body` from the other type's value was refused as possibly none, even
-where the parameter was annotated with the other type. A senro model module
-with a `letter` and a `note` hit it, and `size_of` in http.kso was worked
-around for it in #2351.
-
-Infer now remembers the type of a binding that carries an annotation, and a
-field read whose one argument is such a name considers only the arm whose
-first pattern is that type's constructor. An unannotated read still joins
-every arm, which is the old answer and still a sound one.
-
-`tests/golden/field_reads/its_own_type` reads a `letters` body that is never
-none beside a `notes` body that can be, and prints `8` and `7`; the compiler
-before the change refused it. `another_types_none` reads the `notes` body
-through a name of that type and is still refused, at the same line.
-`tests/a_field_read_answers_its_own_type.rs` runs both.
-
-Rows: the first version stored the annotation in each environment entry,
-which grew the entry from 24 bytes to 40 and raised every compile row about
-0.28%. The types now sit in a side vector that stays empty in a function with
-no annotated parameters. Against main, `compile_instructions` fell 4,266 to
-24,110,987, `entry_instructions` 47,358 to 87,917,589,
-`library_instructions` 35,277 to 73,461,118 and `emit_instructions` 174 to
-5,613,223. `browser_compile_instructions` rose 270,018 to 350,566,799, and
-the side vector's first push is three more front-end allocations
-(`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
-(`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
-lets a correct program compile, so the floor moves down by that cost.
-
 ## 2026-11-06 — a derived definition opens with the imports it needs
 
 **DONE.** A module's files share their declarations and not their imports, so
@@ -2374,3 +2341,62 @@ the final roots and compile it once. That needs the import graph before
 any compile, which the loader does not have. The reach itself measured
 3.8% of a check of the module corpus, most of it hashing the words of
 declarations it has kept.
+
+## 2026-11-11 — a program's words are read before its first shipped module
+
+#2434's open lead, built. A shipped module is pruned against the words
+read so far, and a compile read them as it went. `std/text` imported from
+three of a program's files was pruned three ways, each a little larger
+than the last, and compiled three times.
+
+A root compile now reads the program's own modules first. It follows
+their `import` lines as text, which it can because imports open a file,
+adds each module's words to the roots, and counts how many imports name
+each module, shipped ones included. Two things follow. The imports of one
+shipped module from the program's files ask for one pruning. And a module
+two imports name is kept from its first compile: the cache kept a module
+only once a second import asked for it, so the second import compiled it
+again before anything was shared.
+
+The survey passes over what it cannot read, and the compile still adds
+words as it goes, so a module the survey misses costs the compile it would
+have saved and nothing else. What the compiler emits is unchanged:
+`emitted_code` and `machine_code` agree with their goldens.
+
+**Rows.** The entry corpus loads 25 modules where it loaded 31, and
+`entry_instructions` 138,221,281 -> 125,827,812, a fall of 9.0%.
+`compile_instructions` 24,164,654 -> 23,782,898. `compile_allocs` 14,016
+-> 13,767 and `compile_peak_bytes` 612,423 -> 606,357, the two rows the
+entry before this one raised. In the tab `browser_compile_instructions`
+413,661,765 -> 413,249,135. `interp_instructions` 744,801,948 ->
+744,801,747 and `interp_allocs` 1,068,402 -> 1,068,177. In
+`bench/compile_golden_modules.txt` the `shared` sample reads rounds=6
+visits=1676 loads=6 where it read rounds=8 visits=2190 loads=11, and
+`apart` loads=5 where it read 6. With the survey skipped that golden goes
+red on `shared` at loads=11.
+
+One row rises: `library_instructions` 71,598,427 -> 71,987,077, 0.5%.
+Counting the imports shipped modules make of each other is what costs it.
+Whole-process counts under callgrind, survey off, counting only the
+program's own imports, and counting both: the library corpus reads
+72,990,673, 73,020,598 and 73,309,958, and the compile corpus 25,395,776,
+25,405,957 and 24,964,355. Counting both costs the library corpus 289,360
+and saves the compile corpus 441,602, and it is what is kept.
+
+**Tried and dropped.** Pruning every shipped module the program names to
+a fixed point inside the survey, so each has one pruning and one compile.
+The entry corpus fell to 19 loads. The pass itself cost 3.4 million
+instructions on the compile corpus, 28,771,479 against 25,395,776, and the
+entry corpus read 132,716,479 with it against 127,955,878 without.
+
+**Not done.** `std/text` and `std/list` are still compiled more than once
+in a load: on the entry corpus, list four times and text three. Every word
+of the program's own is in hand before the first of those, so the words
+that change the pruning come from declarations other shipped modules
+kept. A trace of what each pruning kept shows it. `std/list` goes from 26
+declarations to 33 by gaining the seven private helpers of its merge
+sort, with neither `sort` nor `sort_by` kept: `span` is one of the
+helpers, and `lib/text/span.kso` spells the word nine times. Reach is by
+bare word over one set for the whole load. Letting a shipped module's
+words keep another module's declarations only when they are written
+qualified is #2442.
