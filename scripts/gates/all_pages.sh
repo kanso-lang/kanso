@@ -21,8 +21,8 @@
 # gives: each gate reads a different property of the same pages, and the first
 # to fail hides the rest -- which is the shape of the round above.
 #
-# prose_check owns about 28 of the sweep's 30 seconds. It reads all 29 pages
-# with a regexp engine written in kanso; the figure is here so a reader waiting
+# prose_check owns about 28 of the sweep's 30 seconds. It reads every page
+# with a regexp engine written in kanso and prints how many; the figure is here so a reader waiting
 # on it knows it has not hung.
 set -e
 write=0

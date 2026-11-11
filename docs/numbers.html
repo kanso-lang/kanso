@@ -14,7 +14,7 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <p>an older row holds fewer counters than the formula reads, because the counter set grew with the project. each term is scored on the counters the row carries; a term with none of them is dropped and the remaining weights are renormalized, so a row that scores well on what it has reads like a full row that scores well. a row carrying none of the counters any term reads gets no welfare column at all, and the line has a gap where it sits. every row records the three things that say what scored it: <code>scored_by</code> names the formula, <code>scored_weight</code> gives the share of that formula's weight the row's counters cover, and <code>scored_base</code> names the epoch its baseline was measured in. the compile counters have been re-measured three times on smaller workloads, and a row is scored against the baseline as it stood before the next of those changes ahead of it; a row past all three reads <code>as measured</code>.</p>
 
-<p>read <code>scored_weight</code> before reading a step in the line. the formula reads five counters and an older row carries fewer of them. compile allocations and compile memory go back to the first row, 2026-08-09, minus the stretch between 2026-08-13 and 2026-08-24 that the miscompilation below cost; compile instructions joins on 2026-09-03; the run program's retired instructions and its peak bytes join on 2026-09-06, when the objective's run side became one consolidated program. a row holding two of the five is scored at coverage 0.28, four at 0.74, all five at 1.00, and a row holding none of them has no score at all. the chart marks every one of those changes with a dashed rule and draws the score faded wherever the coverage is below 1.00, because a step across one of them is a change in what was recorded rather than in what the compiler costs. there are two, and these are their figures on 2026-09-09. compile instructions joining on 2026-09-03 takes 0.28 to 0.74 and the score from 88.28 to 62.67. the run peak joining on 2026-09-06 takes 0.74 to 1.00 and the score from 64.95 to 56.73, because the compile terms carry the advantage they have accumulated since august while the run terms start at parity against a baseline measured on the day they joined. the forty-eight rows at 0.74 hold four of the five rather than three because their run instruction count is REBUILT from the eight per-phase counters that were the measurement before runbench existed, not taken on the day; the rebuild is what the second dashed rule sits beside. neither is the compiler. every other fall in the file is a counter that got worse.</p>
+<p>read <code>scored_weight</code> before reading a step in the line. the formula reads many counters and an older row carries fewer of them. compile allocations and compile memory go back to the first row, 2026-08-09, minus the stretch between 2026-08-13 and 2026-08-24 that the miscompilation below cost; compile instructions joins on 2026-09-03; the run program's retired instructions and its peak bytes join on 2026-09-06, when the objective's run side became one consolidated program. a row holding two of the five is scored at coverage 0.28, four at 0.74, all five at 1.00, and a row holding none of them has no score at all. the chart marks every one of those changes with a dashed rule and draws the score faded wherever the coverage is below 1.00, because a step across one of them is a change in what was recorded rather than in what the compiler costs. there are two, and these are their figures on 2026-09-09. compile instructions joining on 2026-09-03 takes 0.28 to 0.74 and the score from 88.28 to 62.67. the run peak joining on 2026-09-06 takes 0.74 to 1.00 and the score from 64.95 to 56.73, because the compile terms carry the advantage they have accumulated since august while the run terms start at parity against a baseline measured on the day they joined. the forty-eight rows at 0.74 hold four of the five rather than three because their run instruction count is REBUILT from the eight per-phase counters that were the measurement before runbench existed, not taken on the day; the rebuild is what the second dashed rule sits beside. neither is the compiler. every other fall in the file is a counter that got worse.</p>
 
 <p>a change to the scoring function is a change to what the project says it wants, and it is the one thing allowed to lower the number. every such change is in the history of <code>bench/welfare_floor.json</code> with the reason written beside it.</p>
 
@@ -55,7 +55,7 @@ divided by the weight those terms carry, times a hundred.</p>
 
 <h2 id="counters"><span class="sec-num">counters</span>what every commit costs</h2>
 
-<p>the chart shows shape; these are the numbers themselves, as ci recorded them on the last push to main. each is deterministic, so a change here is somebody's deliberate edit rather than weather. the panel opens with the seven lines the chart draws, in the chart's order, so a line you cannot pick out up there can be read off down here.</p>
+<p>the chart shows shape; these are the numbers themselves, as ci recorded them on the last push to main. each is deterministic, so a change here is somebody's deliberate edit rather than weather. the panel opens with the lines the chart draws, in the chart's order, so a line you cannot pick out up there can be read off down here.</p>
 
 <p>the numbers above were measured by hand on a named day. these are measured by ci on every push to main, and they are the deterministic ones — allocation counts, arena blocks, rewind iterations, kernel presence, and what the compiler spent deciding and emitting. a noisy runner cannot move any of them, so a change in this panel is somebody's deliberate edit rather than weather. select a row to read what the counter measures and why it is worth watching.</p>
 
@@ -66,7 +66,7 @@ divided by the weight those terms carry, times a hundred.</p>
 <p>the counts rise across the span because the corpus does: the basket gained a hundred-thousand-element accumulator and a fifty-kilobyte text workload, the encode vein gained lib/json, and each widening was re-baselined so the score read the same either side. these are the cost of the work as it stands each day, not of a frozen file.</p>
 
 <style>
-/* The seven series. One palette was drawn on both surfaces until 2026-09-09,
+/* The series. One palette was drawn on both surfaces until 2026-09-09,
    and it was picked for the dark one: on the light page every line sat under
    3:1 against #fcfbf7, yellow at 1.48, and three of the seven crowded the blue
    band. These are stepped for each surface separately and validated as a set
@@ -216,7 +216,7 @@ divided by the weight those terms carry, times a hundred.</p>
   // rather than committing an svg is what lets the series extend without a
   // write: ci appends a row to the history branch and the next reader sees it.
   //
-  // THE FIVE COUNTERS THE OBJECTIVE READS EACH GET A LINE. That list lives in
+  // EVERY COUNTER THE OBJECTIVE READS GETS A LINE. That list lives in
   // bench/objective_sources.txt, and tests/the_chart_draws_the_objective.rs
   // replays it against this array, in both directions: a counter that joins
   // the objective and is not drawn turns it red, and so does a line here that
@@ -312,7 +312,7 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'welfare', hue: 'var(--series-welfare)', byCoverage: true,
       label: 'welfare', read: (r) => (r.welfare == null ? null : parseFloat(r.welfare)),
       show: (v) => v.toFixed(4),
-      note: 'The score the five terms roll up into. It is an index and not a percentage \u2014 the ceiling is a hundred, where every term costs nothing, and the origin is arbitrary. Only its direction and the size of its moves mean anything.' },
+      note: 'The score the terms roll up into. It is an index and not a percentage \u2014 the ceiling is a hundred, where every term costs nothing, and the origin is arbitrary. Only its direction and the size of its moves mean anything.' },
   ];
   // Where the share of the formula a row's counters cover changes. A step in
   // the welfare line across one of these is a change in what was recorded and
@@ -487,7 +487,7 @@ divided by the weight those terms carry, times a hundred.</p>
       .join(' ');
     return `<svg class="perf-spark" viewBox="0 0 110 30" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
   };
-  // The chart's seven series lead the panel, built from TREND rather than
+  // The chart's series lead the panel, built from TREND rather than
   // listed again here. The table is what makes the chart legal on the light
   // page -- three of the seven lines sit under 3:1 against it, and a faint
   // line is readable only if its numbers are written down somewhere -- so a

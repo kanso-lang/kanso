@@ -80,13 +80,13 @@ floor_path = "bench/welfare_floor.json"
 # compile memory better than three to one.
 #
 # The weights come from what teams shipping software pay for, recorded with
-# their sources in design/compiler-log.md. Runtime carries 0.60 because it
-# recurs per request forever. Compile carries 0.40 rather than the third it
-# looks like from inside, because 45% of people who stopped using rust named
-# long compile times among their reasons — that is whether anyone stays, not
-# whether they are comfortable. Inside compile, speed outweighs memory better
-# than two to one: the complaint that dominates every survey is waiting for an
-# incremental rebuild, not footprint.
+# their sources in the log (design/log/compiler-log-archive.md). Runtime
+# carries 0.60 because it recurs per request forever. Compile carries 0.40
+# rather than the third it looks like from inside, because 45% of people who
+# stopped using rust named long compile times among their reasons — that is
+# whether anyone stays, not whether they are comfortable. Inside compile, speed
+# outweighs memory better than two to one: the complaint that dominates every
+# survey is waiting for an incremental rebuild, not footprint.
 #
 # Satiation is a different question from weight — it says how long a dimension
 # keeps paying for improvement. Runtime at 2.0: a decoder eight times faster is
@@ -968,7 +968,7 @@ fn routed now base held value args setting _
 # than in the rescorer for the reason the formula date is: a second copy of the
 # model keeps its old value through the gavel that moves it, and every row then
 # claims to have been scored by a definition that no longer exists. The
-# rescorer reads nine terms, two sides and one meta out of this text and holds
+# rescorer reads every term, each side and the meta out of this text and holds
 # none of them.
 fn term_line t
   listed_counters = text/join t.counters ","
@@ -1100,10 +1100,10 @@ fn cut s n true
 fn cut s _ false
   s
 
-# THE TWO SIDES UNDER THE META, printed because the meta alone cannot say which
+# THE SIDES UNDER THE META, printed because the meta alone cannot say which
 # way a trade went. They are diagnostics in the same sense the per-term
-# breakdown is: neither carries a floor, and neither is a thing to optimise
-# against the other.
+# breakdown is: none carries a floor, and none is a thing to optimise
+# against another.
 fn sides now base
   p = score_prod now base
   d = score_dev now base
