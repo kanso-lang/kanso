@@ -1,0 +1,7 @@
+# Three modules trim a text, and each brings words of its own that name
+# nothing in std/text. The library module is compiled for the first two and
+# handed to the third as it stands (#2434).
+import "std/text"
+
+pub fn tidied s
+  text/trim s

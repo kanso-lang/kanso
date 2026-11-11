@@ -198,33 +198,91 @@ const COMPILER_ROOTS: [&str; 5] = ["fold", "bump", "file_under", "to_string", "t
 /// `past?` (src/flat.rs).
 const IMPLIED_ROOTS: [(&str, &[&str]); 1] = [("slice!", &["past?"])];
 
-/// Adds every word `text` spells to `into`: a run of letters, digits and
-/// underscores, with and without a trailing `!` or `?`. It reads more than
-/// names (keywords, words in strings and comments), which can only keep a
-/// declaration that is not needed.
+/// Adds every word `text` spells as code to `into`: a run of letters,
+/// digits and underscores, with and without a trailing `!` or `?`.
+///
+/// A comment's words are left out, from a `#` to the end of its line, and so
+/// is the text of a string outside its `{...}` interpolations. Until #2434
+/// the reach read both, so a comment that said `first` in passing or an err
+/// that said `nothing to find` kept that group of the shipped library, and
+/// the whole front end then read it. Text holding a `"""` block keeps its
+/// comments' words, because a block's lines are text whatever they open
+/// with.
+///
+/// It still reads more than names (keywords, a field's name), which can only
+/// keep a declaration that is not needed.
 fn reach_words(text: &str, into: &mut crate::hash::Set<String>) {
     let bytes = text.as_bytes();
+    // whether the text holds a block, asked at the first `#` and not before:
+    // most declarations have no `#` to ask about
+    let mut blocks = None;
     let mut i = 0;
     while i < bytes.len() {
         let b = bytes[i];
-        if !(b.is_ascii_alphabetic() || b == b'_') {
-            i += 1;
+        if b.is_ascii_alphabetic() || b == b'_' {
+            i = reach_word(text, i, into);
             continue;
         }
-        let start = i;
-        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-            i += 1;
-        }
-        if !into.contains(&text[start..i]) {
-            into.insert(text[start..i].to_string());
-        }
-        if i < bytes.len() && (bytes[i] == b'!' || bytes[i] == b'?') {
-            if !into.contains(&text[start..=i]) {
-                into.insert(text[start..=i].to_string());
+        match b {
+            b'"' => i = reach_string(text, i + 1, into),
+            b'#' if !*blocks.get_or_insert_with(|| text.contains("\"\"\"")) => {
+                i = crate::compare::byte_from(bytes, i, b'\n');
             }
-            i += 1;
+            _ => i += 1,
         }
     }
+}
+
+/// Adds the word that starts at `start` and answers where it ends. Inlined:
+/// as a call it cost the module corpus 65,929 instructions.
+#[inline(always)]
+fn reach_word(text: &str, start: usize, into: &mut crate::hash::Set<String>) -> usize {
+    let bytes = text.as_bytes();
+    let mut i = start;
+    while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1;
+    }
+    if !into.contains(&text[start..i]) {
+        into.insert(text[start..i].to_string());
+    }
+    if i < bytes.len() && (bytes[i] == b'!' || bytes[i] == b'?') {
+        if !into.contains(&text[start..=i]) {
+            into.insert(text[start..=i].to_string());
+        }
+        i += 1;
+    }
+    i
+}
+
+/// Adds the words a string's interpolations spell, from just past its opening
+/// quote, and answers where the string ends. The braces nest as the lexer
+/// counts them, a backslash takes the byte after it, and the end of the line
+/// closes a string nothing else closed. A string inside an interpolation is
+/// read whole, which reads more than it must.
+fn reach_string(text: &str, mut i: usize, into: &mut crate::hash::Set<String>) -> usize {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match b {
+            b'\n' => return i,
+            b'\\' if depth == 0 => i += 2,
+            b'"' if depth == 0 => return i + 1,
+            b'{' => {
+                depth += 1;
+                i += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                i += 1;
+            }
+            _ if depth > 0 && (b.is_ascii_alphabetic() || b == b'_') => {
+                i = reach_word(text, i, into);
+            }
+            _ => i += 1,
+        }
+    }
+    i
 }
 
 /// Blanks every `fn` declaration of a shipped module that no reached text
@@ -238,7 +296,7 @@ fn reach_words(text: &str, into: &mut crate::hash::Set<String>) {
 fn prune_shipped(
     sources: &mut [(String, String)],
     roots: &mut crate::hash::Set<String>,
-) -> Vec<bool> {
+) -> (Vec<bool>, Vec<bool>) {
     struct Decl {
         file: usize,
         start: usize,
@@ -336,7 +394,7 @@ fn prune_shipped(
         }
         *source = out;
     }
-    pruned
+    (pruned, kept)
 }
 
 /// Runs a root compile with the shipped library read only as far as the
@@ -688,7 +746,43 @@ fn compile_module_inner(
     if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
-    let key = module_key(&canon, require_entry, embedded.is_some());
+    // A shipped module is pruned before it is looked up: what it was pruned
+    // to is what a compile of it depends on, and that is the key. An import
+    // that finds as many roots as an earlier import of the module found
+    // prunes to the same declarations, so it asks the cache under those
+    // first and reads no source when the compile is there.
+    let prunes = prunes(embedded.is_some());
+    let reached = REACH.with(|r| r.borrow().as_ref().map_or(0, |s| s.len()));
+    let before = match prunes {
+        true => PRUNINGS.with(|p| p.borrow().get(&canon).and_then(|m| m.at(reached))),
+        false => None,
+    };
+    if let Some(kept) = before {
+        let key = module_key(&canon, require_entry, embedded.is_some(), kept);
+        if let Some(done) = MODULE_CACHE.with(|c| c.borrow().get(&key).cloned()) {
+            visited.remove(&canon);
+            return Ok(done);
+        }
+    }
+    let shipped = match prunes {
+        true => match shipped_pruned(dir, embedded) {
+            Ok(pruned) => pruned,
+            Err(refused) => {
+                visited.remove(&canon);
+                return Err(refused);
+            }
+        },
+        false => None,
+    };
+    let (sources, kept) = match shipped {
+        Some((sources, pruned, kept)) => {
+            let kept = PRUNINGS
+                .with(|p| p.borrow_mut().entry(canon.clone()).or_default().noted(reached, kept));
+            (Some((sources, pruned)), kept)
+        }
+        None => (None, usize::MAX),
+    };
+    let key = module_key(&canon, require_entry, embedded.is_some(), kept);
     if let Some(done) = MODULE_CACHE.with(|c| c.borrow().get(&key).cloned()) {
         visited.remove(&canon);
         return Ok(done);
@@ -702,7 +796,7 @@ fn compile_module_inner(
         eprintln!("load {}", dir.display());
     }
     MODULE_LOADS.with(|c| c.set(c.get() + 1));
-    let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
+    let loaded = compile_module_loaded(dir, require_entry, visited, embedded, sources);
     visited.remove(&canon);
     if let (true, Ok(program)) = (again, &loaded) {
         MODULE_CACHE.with(|c| c.borrow_mut().insert(key, program.clone()));
@@ -713,19 +807,87 @@ fn compile_module_inner(
 /// What a module's compile depends on besides its own sources, which no
 /// compile in one load changes: where the module is, whether it must be an
 /// entry, where its sources came from, the flags its importer sets around
-/// it, and, for a shipped module, how many words it is pruned against. The
-/// root set only grows, so a module compiled against as many roots as before
-/// was pruned against the same ones.
+/// it, and, for a shipped module, which of its declarations the pruning
+/// kept.
+///
+/// The key held the number of words reached so far until #2434. That number
+/// grows with every module a load reads, so two imports of `std/text` a few
+/// modules apart never shared a compile, though the words that arrived
+/// between them named nothing in it: the entry corpus compiled `std/text`
+/// and `std/list` ten times each. A module's kept declarations name
+/// everything it reaches in the modules it imports, and the roots only grow,
+/// so a compile kept under the same declarations holds what this import
+/// needs. The key holds which of the module's prunings this is, counted in
+/// the order they were first seen (`Prunings`), and `usize::MAX` for a
+/// module that is not pruned.
 type ModuleKey = (std::path::PathBuf, bool, bool, bool, bool, bool, bool, usize);
 
-fn module_key(canon: &std::path::Path, require_entry: bool, embedded: bool) -> ModuleKey {
-    // Only a shipped module is pruned against the roots (see
-    // `compile_module_loaded`); any other compiles the same against any.
-    let pruned = SHIPPED_STD.with(|c| c.get()) && embedded && !CHECK_SHIPPED.with(|c| c.get());
-    let roots = match pruned {
-        true => REACH.with(|r| r.borrow().as_ref().map_or(usize::MAX, |s| s.len())),
-        false => 0,
-    };
+/// The ways one shipped module has been pruned in this load: each distinct
+/// set of kept declarations once, and which of them the roots gave when
+/// they numbered so many. The roots only grow, so as many roots are the
+/// same roots.
+#[derive(Default)]
+struct Prunings {
+    sets: Vec<Vec<bool>>,
+    at: Vec<(usize, usize)>,
+}
+
+impl Prunings {
+    fn at(&self, reached: usize) -> Option<usize> {
+        self.at.iter().find(|(r, _)| *r == reached).map(|(_, set)| *set)
+    }
+
+    fn noted(&mut self, reached: usize, kept: Vec<bool>) -> usize {
+        let set = match self.sets.iter().position(|s| *s == kept) {
+            Some(set) => set,
+            None => {
+                self.sets.push(kept);
+                self.sets.len() - 1
+            }
+        };
+        self.at.push((reached, set));
+        set
+    }
+}
+
+/// Whether a module loaded now is a shipped one read only as far as the
+/// program reaches (see `compile_module_loaded`); any other compiles the same
+/// against any roots.
+fn prunes(embedded: bool) -> bool {
+    SHIPPED_STD.with(|c| c.get())
+        && embedded
+        && !CHECK_SHIPPED.with(|c| c.get())
+        && REACH.with(|r| r.borrow().is_some())
+}
+
+/// A module's sources as `(file, text)`, and for each whether it lost a
+/// declaration to the pruning.
+type PrunedSources = (Vec<(String, String)>, Vec<bool>);
+
+/// A shipped module's sources pruned against the roots, with which files
+/// lost a declaration and which declarations were kept. `None` when no root
+/// compile asked for pruning.
+type Pruned = (Vec<(String, String)>, Vec<bool>, Vec<bool>);
+
+fn shipped_pruned(
+    dir: &std::path::Path,
+    embedded: Option<&[(&str, &str)]>,
+) -> Result<Option<Pruned>, String> {
+    let mut sources = module_sources(dir, embedded)?;
+    Ok(REACH.with(|r| {
+        let mut r = r.borrow_mut();
+        let roots = r.as_mut()?;
+        let (pruned, kept) = prune_shipped(&mut sources, roots);
+        Some((sources, pruned, kept))
+    }))
+}
+
+fn module_key(
+    canon: &std::path::Path,
+    require_entry: bool,
+    embedded: bool,
+    kept: usize,
+) -> ModuleKey {
     (
         canon.to_path_buf(),
         require_entry,
@@ -734,7 +896,7 @@ fn module_key(canon: &std::path::Path, require_entry: bool, embedded: bool) -> M
         CHECK_SHIPPED.with(|c| c.get()),
         ENTRY_COMPILE.with(|c| c.get()),
         HAKO_EMBEDDED.with(|c| c.get()),
-        roots,
+        kept,
     )
 }
 
@@ -749,6 +911,10 @@ thread_local! {
         std::cell::RefCell::new(crate::hash::Map::default());
     static MODULE_SEEN: std::cell::RefCell<crate::hash::Set<ModuleKey>> =
         std::cell::RefCell::new(crate::hash::Set::default());
+    /// How each shipped module has been pruned in this load. Emptied with
+    /// the cache.
+    static PRUNINGS: std::cell::RefCell<crate::hash::Map<std::path::PathBuf, Prunings>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
     static LOAD_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
@@ -884,19 +1050,22 @@ fn compile_module_loaded(
     require_entry: bool,
     visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
+    shipped: Option<PrunedSources>,
 ) -> Result<ast::Program, String> {
-    let mut sources = module_sources(dir, embedded)?;
-    let pruned = REACH.with(|r| {
-        let mut r = r.borrow_mut();
-        let roots = r.as_mut()?;
-        let shipped =
-            SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
-        if shipped {
-            return Some(prune_shipped(&mut sources, roots));
+    // a shipped module arrives pruned, because its key needed that; any
+    // other adds its words to what the shipped ones are pruned against
+    let (mut sources, pruned) = match shipped {
+        Some((sources, pruned)) => (sources, Some(pruned)),
+        None => {
+            let sources = module_sources(dir, embedded)?;
+            REACH.with(|r| {
+                if let Some(roots) = r.borrow_mut().as_mut() {
+                    sources.iter().for_each(|(_, s)| reach_words(s, roots));
+                }
+            });
+            (sources, None)
         }
-        sources.iter().for_each(|(_, s)| reach_words(s, roots));
-        None
-    });
+    };
     // a file with declarations blanked out of it can leave an import that
     // only they used, and the whole file's imports are checked where the
     // shipped modules are

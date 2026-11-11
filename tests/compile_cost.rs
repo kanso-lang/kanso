@@ -77,7 +77,7 @@ fn loads_for_module(name: &str) -> u64 {
 }
 
 /// Directory samples, measured the same way and reported in the same file.
-const MODULES: &[&str] = &["module", "shared"];
+const MODULES: &[&str] = &["module", "shared", "apart"];
 
 /// Counts that move only when the emitter's output does.
 fn shape(ir: &str) -> (usize, usize, usize, usize) {

@@ -20,55 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — directive: a model's fields come from its table
-
-Clay: "we need the fields for the model to be auto-magic like in ruby." He
-named two ways: generate the model files the way the schema is kept, or a
-primitive that maps data such as a schema to code the compiler can still
-check. kanso already has the second. A derivation runs during the build,
-reads the app's own data and answers declarations that are checked like
-code someone wrote (#2186). senro's models derivation read the migrations
-and checked each hand-written record against its table, so every column was
-named twice.
-
-`derive/define` writes source into a module as one more of its files, and the
-source can be a `type`. What stopped a module from using one was the first
-load of the app's modules, which describes them to the derivations before
-any has run. A module that annotated `p:post` and read `p.title` was refused
-there, because nothing had declared `post` yet. #2265 met the same problem
-for functions and set an unknown name aside in that load. The load now also
-sets aside an unknown type name and a field read no record has, in the
-per-file checks and in the merged check; one helper, `set_aside`, holds all
-of them. The second load, with the derived source joined in, refuses
-whatever is still unknown with the message it always gave.
-
-Three cases in tests/golden/derive pin it.
-`a_module_reads_a_record_its_derivation_declares` prints its bylines on both
-engines, and the binary before the change refused it with "no type is called
-`post`". `a_module_reads_a_field_its_derived_record_lacks` and
-`a_module_names_a_record_nothing_declares` are still refused.
-
-senro builds on it: a module named for a table gets the table's record
-declared in it, with a field for each column in the table's order, and a
-module that declares the record keeps its own. `kanso derived` prints the
-declared type, so the generated code can be read without being kept on disk.
-Files written by a generator would drift from the schema until someone ran
-it again; a derivation runs on every build.
-
-Go's embedding was raised in the same message, as a way to put validations
-and helpers on top of the generated fields. A kanso record carries no
-methods, and the module's functions that take the record sit beside it, so
-there is nothing to delegate through. The question and the committee's
-reading are on #2356.
-
-Rows: the describe load's added set-asides cost every derive-free compile a
-little, because the helper runs on each file's diagnostics.
-`compile_instructions` rose 290 to 24,115,253, `entry_instructions` 2,156 to
-87,964,947 and `library_instructions` 617 to 73,496,395.
-`browser_compile_instructions` fell 799 to 350,296,781, by layout. The
-directive is a part of the language Clay asked for, so the welfare floor
-moves down by exactly that cost.
-
 ## 2026-11-05 — a field read through an annotated name answers its own type
 
 **DONE (#2350).** Two record types in one program that both have a `body`
@@ -2319,3 +2270,91 @@ row, interpreter row or browser row moved here.
 Welfare reads 95.34294665, under the 95.34300865 the kernel banked. The
 objective's header leaves a fix that makes the engines agree outside the
 sum, so the floor moves to what the fix costs and its history says so.
+
+## 2026-11-11 — the reach reads code, and a pruning is compiled once
+
+#2434, from its loose end. The issue measured 1.67M instructions for a
+library group no program called and guessed that a word in a comment had
+kept it. The reach that prunes the shipped library read every word a file
+spells: code, comments and the text of strings alike. Three things came
+of following that.
+
+**A comment keeps nothing.** `reach_words` stops at a `#`, where the
+lexer stops reading. Text holding a `"""` block keeps its comments'
+words, because a block's lines are text whatever they open with.
+
+**A string's text keeps nothing.** The issue's cost was one word. The
+arm it added to `text/replace` answered `err "replace needs something to
+find"`, and `find` kept every group of that name. Measured on the
+interpreter's corpus: the arm costs 1,306,636 instructions to check with
+that message and 153,551 with `something to look for`. So the reach
+walks a string for its interpolations alone. The braces nest as the
+lexer counts them and a backslash takes the byte after it. Derived code
+is unaffected, because a derivation's text reaches the compiler as a
+source file and is read as code there: senro's suite, whose views are
+generated from strings, builds the same programs to the same rows.
+
+**The key.** Leaving comments out made `entry_instructions` rise by
+432,052, and that led to the largest of the three. A compile of a
+shipped module was kept under the number of words the program had
+reached so far (kanso#2373), because a module pruned against as many
+roots was pruned against the same ones. That number grows with every
+module a load reads. Two imports of `std/text` a few modules apart never
+shared a compile, though nothing that arrived between them named
+anything in it, and the entry corpus compiled `std/text` and `std/list`
+ten times each. With fewer words reached up front the count changed at
+one more import, which is where the 432,052 came from.
+
+The key is now which of the module's prunings this is. The module is
+pruned first, and the declarations it kept are what its compile depends
+on: they name everything it reaches in the modules it imports, and the
+roots only grow, so a compile kept under the same declarations holds
+what a later import needs. Each distinct set is held once for a module
+and the key carries its place in that list. An import that finds as many
+roots as an earlier import of the module found asks the cache under that
+pruning before it reads any source. The entry corpus compiles the two
+modules six times each.
+
+**Two versions taken back.** The first comment scan tracked the string
+state on every byte and gave back half of what it saved: 288,000
+instructions of bookkeeping against 577,000 of library no longer read.
+The first key held the kept declarations themselves, a vector hashed and
+copied at every lookup, and the module corpus read 11,140 instructions
+more with it than with the place in a list that replaced it. Splitting
+the scan into functions cost that corpus 65,929 until the one a word
+goes through was inlined.
+
+**Specs.** `an_import_reads_what_the_program_names` gains five programs:
+a comment that says `pad_start`, above the code and beside it; a string
+that says it; a `#` inside a string with the only `trim` after it; a
+`trim` inside a string inside an interpolation; and a `lowercase` after
+an escaped brace. With comments read the first held `text/pad_start`,
+`text/padding` and `text/filled`, and with strings read as code the
+second held `text/pad_start`. `tests/golden/compile/apart` is three modules that each trim
+a text and bring words of their own: `loads=6`, and 7 under the old key.
+Every corpus and module test passes in a debug build, where a pruned
+compile the whole library would have accepted is refused out loud.
+
+**Rows.** `entry_instructions` 156,165,133 -> 138,221,281, a fall of
+11.5%. `library_instructions` 73,647,363 -> 71,598,427. The tab's
+compile 416,189,723 -> 413,661,765. `interp_instructions` 745,491,463 ->
+744,801,948, `interp_allocs` 1,069,565 -> 1,068,402 and
+`interp_peak_bytes` 1,524,780 -> 1,512,615, from library the corpus's
+comments and strings used to keep. `compile_instructions` 24,168,284 ->
+24,164,654 and `emit_instructions` 5,633,371 -> 5,632,066.
+
+Three rows rise. The cache keeps a module once a second import asks for
+it under the same key, and a second import now shares a key where the
+count used to separate it. On the module corpus that keeps copies no
+third import comes for: `compile_allocs` 13,956 -> 14,016,
+`compile_peak_bytes` 599,057 -> 612,423, and the tab's compile peak
+984,597 -> 985,156. Welfare weighs the two together and rises
+95.34294665 -> 95.35566837, banked.
+
+**Not done.** A module is still compiled once for each pruning the load
+happens to pass through. Gathering every word the program's own modules
+spell before the first shipped module is read would prune each against
+the final roots and compile it once. That needs the import graph before
+any compile, which the loader does not have. The reach itself measured
+3.8% of a check of the module corpus, most of it hashing the words of
+declarations it has kept.

@@ -21,6 +21,7 @@ fn load_dependencies(
     if outermost {
         MODULE_CACHE.with(|c| c.borrow_mut().clear());
         MODULE_SEEN.with(|s| s.borrow_mut().clear());
+        PRUNINGS.with(|p| p.borrow_mut().clear());
     }
     loaded
 }
