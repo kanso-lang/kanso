@@ -23,9 +23,12 @@ description: "guides to senro, the web framework for kanso: getting started, and
   <li><a href="getting-started.html">getting started</a><p>build the guestbook one file at a time: the schema, a model, the actions and a view, then run it against Postgres.</p></li>
   <li><a href="models.html">models and migrations</a><p>where the schema comes from, how a model is checked against its table, and the policies and rules that guard each write.</p></li>
   <li><a href="views.html">views and components</a><p>kata templates, layouts, components whose actions run in the browser or on the server, providers that answer the browser from the database, and pages rendered in the browser from data.</p></li>
-  <li><a href="generators.html">generators</a><p>write an app and a resource with <code>generate new</code> and <code>generate scaffold</code>, and read what each file they write holds.</p></li>
+  <li><a href="command-line.html">the command line</a><p>the <code>senro</code> command: a new app, the generators and how to add your own, listing routes, migrating and serving.</p></li>
+  <li><a href="generators.html">generators</a><p>write an app and a resource with <code>senro new</code> and <code>senro generate scaffold</code>, and read what each file they write holds.</p></li>
+  <li><a href="migrations.html">migrations</a><p>a file to a migration, ordered by the stamp in its name: the changes, how they run and are recorded, and the generator that writes one.</p></li>
   <li><a href="routing.html">routing</a><p>how an action's name places it: the seven actions, ids, singular and nested resources, naming a route from code, keeping an old URL, and reading a query string.</p></li>
   <li><a href="sessions.html">sessions and sign-in</a><p>the signed session, making an account, how passwords are kept, signing in without saying which names exist, limiting attempts, pages that ask for a sign-in, sending mail, resetting a lost password, confirming an address, and refusing requests from other sites.</p></li>
+  <li><a href="authorization.html">authorization</a><p>who may reach a page, said once by its module, and how that check covers the data the page asks the server for afterwards.</p></li>
   <li><a href="uploads.html">file uploads</a><p>a form with a file in it: reading the request as bytes, the form an action sees, where the files are kept, and serving them back.</p></li>
   <li><a href="jobs.html">background jobs</a><p>work an app does after the request, kept in Postgres: queueing a job, the worker that claims it, retrying a failure, and mail sent later.</p></li>
 </ul>

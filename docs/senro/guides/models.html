@@ -21,92 +21,36 @@ description: "senro's schema is folded from migrations while the app compiles; a
 
 <h2>migrations are the schema</h2>
 
-<p>an app's migrations are a list of values in one module, oldest first. each is built from a fixed set of changes, <code>models/create_table</code> and <code>models/add_column</code> here, so a migration written a year ago cannot break when a model changes today.</p>
+<p>an app keeps its migrations one to a file, in <code>migrations</code>. a file is named <code>&lt;stamp&gt;_&lt;name&gt;.kso</code>, where the stamp is the moment it was written, and holds one constant, <code>&lt;name&gt;</code>: a change or a list of changes. each is built from a fixed set of changes, <code>models/create_table</code> and <code>models/add_column</code> here, so a migration written a year ago cannot break when a model changes today. the <a href="migrations.html">migrations guide</a> covers the files, their order and the generator that writes them.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/migrations.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+  <div class="code-panel-title">examples/guestbook/migrations/20261030014602_create_signatures.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
-<span class="c"># The guestbook's schema, as the changes that built it, oldest first. The</span>
-<span class="c"># models derivation folds these into the schema the app is compiled against.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [
-  <span class="f">signed</span>
-  <span class="f">joined</span>
-  <span class="f">emailed</span>
-  <span class="f">confirmable</span>
-  <span class="f">counted</span>
-  <span class="f">lockable</span>
-  <span class="f">tracked</span>
-  <span class="f">arrived</span>
-  <span class="f">arrived_before</span>
-  <span class="f">arrived_from</span>
-  <span class="f">arrived_from_before</span>
-  <span class="f">pictured</span>
-]
+<span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
+  (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
+]</code></pre>
+</div>
 
-signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
+<p>a later migration changes a table that is there. this one adds two columns to <code>accounts</code>, and keeps the kind they share under a name of its own.</p>
 
-id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
-
-joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
-
-<span class="c"># The address a reset link is sent to.</span>
-emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
-
-<span class="c"># When the address was confirmed, or empty until it is.</span>
-confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/migrations/20261105065821_add_lock_to_accounts.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
 <span class="c"># How many wrong passwords in a row the account has had, and when too many</span>
 <span class="c"># of them locked it, or empty while it is open.</span>
-counted <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> failures
+<span class="k">pub</span> <span class="f">add_lock_to_accounts</span> <span class="o">=</span> [
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> failures)
+  (<span class="f">models/add_column</span> <span class="s">"accounts"</span> (<span class="f">models/column</span> <span class="s">"locked"</span> blank_text))
+]
 
-lockable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> locked
-
-<span class="c"># How many times the account has signed in, and when and from where the</span>
-<span class="c"># latest sign-in and the one before it came, as Devise's trackable keeps them.</span>
-tracked <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> sign_in_count
-
-arrived <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> current_sign_in_at
-
-arrived_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_at
-
-arrived_from <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> current_sign_in_ip
-
-arrived_from_before <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> last_sign_in_ip
-
-<span class="c"># The key of the photo a signer chose, or empty for an entry without one.</span>
-pictured <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"signatures"</span> photo
-
-name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>
-
-message <span class="o">=</span> <span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>
-
-digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span>
-
-email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
-
-confirmed <span class="o">=</span> <span class="f">models/column</span> <span class="s">"confirmed"</span> <span class="s">"text"</span>
-
-failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span>
-
-locked <span class="o">=</span> <span class="f">models/column</span> <span class="s">"locked"</span> <span class="s">"text not null default ''"</span>
-
-sign_in_count <span class="o">=</span> <span class="f">models/column</span> <span class="s">"sign_in_count"</span> <span class="s">"integer not null default 0"</span>
-
-current_sign_in_at <span class="o">=</span> <span class="f">models/column</span> <span class="s">"current_sign_in_at"</span> blank_text
-
-last_sign_in_at <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_at"</span> blank_text
-
-current_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"current_sign_in_ip"</span> blank_text
-
-last_sign_in_ip <span class="o">=</span> <span class="f">models/column</span> <span class="s">"last_sign_in_ip"</span> blank_text
-
-photo <span class="o">=</span> <span class="f">models/column</span> <span class="s">"photo"</span> blank_text
-
-blank_text <span class="o">=</span> <span class="s">"text not null default ''"</span></code></pre>
+failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span></code></pre>
 </div>
 
-<p><code>derive models/tables</code> folds the list into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts. it runs the migrations the database has not yet run, in order, and records each in a <code>senro_migrations</code> table under the app's name and its place in the list, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change goes at the end of the list. each change does nothing when its work is already done, so a database made before migrations were recorded takes the list safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
+<p><code>derive models/tables</code> folds the files, in the order of their names, into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts, where <code>all</code> is the same files in the same order, written into the module by the derivation. it runs the migrations the database has not yet run and records each in a <code>senro_migrations</code> table under the app's name and its stamp, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change is a new migration. each change does nothing when its work is already done, so a database made before migrations were recorded takes them safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
 
 <p>a table that lists <code>models/timestamps</code> among its columns gets <code>created_at</code> and <code>updated_at</code>, the two columns Rails' <code>t.timestamps</code> adds. each is <code>timestamptz not null default now()</code>, so Postgres sets both when a row is made. a change written through the model sets <code>updated_at</code>, and neither making a record nor changing one takes a form's value for either column, so a request cannot backdate a row. the two are also <code>models/created_at</code> and <code>models/updated_at</code>, one at a time, which is how the scaffold ends every table it makes.</p>
 

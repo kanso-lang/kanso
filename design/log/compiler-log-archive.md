@@ -114715,3 +114715,38 @@ layout, as CI measured them: `browser_compile_instructions` rose from
 the floor, and that was the wrong call: the refusal is part of what #2380
 ruled, and a ruled feature's cost lowers the floor by exactly what it
 measures. The floor moves by that amount here (#2383).
+
+## 2026-11-08 — a module calls an arm a derivation writes
+
+An entry that derives loads its modules twice: once to describe them to its
+derivations, with the refusals a derivation could answer set aside, and once
+with what the derivations wrote. A call to a name nothing defines yet waited
+for the second load, which is how a module calls kata's `views/...`. A call
+to a function that exists, at an arity only a derivation supplies, did not:
+the first load refused it before the derivation ran. senro's data providers
+hit this. A browser action calls `stock/low 3`, and a derivation writes the
+one-argument `low` beside the server's `low viewer db n` (#2389).
+
+The first load now sets aside a refusal of an arity no arm takes, as it does
+an unknown name, and the second load checks the call against every arm the
+module and the derivations wrote. `tests/golden/derive/a_module_calls_an_arm_a_derivation_writes`
+prints `short 1` on both engines, and main's binary refuses it.
+`a_module_calls_an_arm_no_derivation_writes` still refuses a call at an arity
+nothing writes, and the refusal names every arity the module has once the
+derivation's arm is in: `(arms take 2, 3)`.
+
+A second refusal stood behind it. A derived arm's import is written from the
+derivation's module and rewritten from the module it joins. When that module
+is a file named bare beside an entry run from its own directory, as `stock.kso`
+is when an app runs `kanso run .`, its parent is the empty path, which does not
+canonicalize, and the import was left as written: `../data` from senro's
+`data` module read from the app's directory found nothing. An empty parent is
+now the current directory. `tests/derivations_run_beside.rs` runs each case in
+`tests/golden/derive_here` from its own directory, which `tests/golden/derive`,
+run from the repository root, cannot; main's binary refuses
+`a_derived_arm_imports_beside_a_bare_module` with "cannot resolve import
+\"../words\"".
+
+`browser_compile_instructions` rose from 352,264,424 to 352,264,564. The
+browser corpus derives nothing, so the 140 instructions are the new code in
+the compiler the tab runs. Every other row is where it was.

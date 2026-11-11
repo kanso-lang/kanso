@@ -29,15 +29,16 @@ description: "senro keeps the work an app does after a request as rows of a Post
 <span class="k">import</span> <span class="s">"std/io"</span>
 <span class="k">import</span> <span class="s">"std/json"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
 <span class="c"># A job as its row holds it.</span>
-<span class="k">type</span> queued_job
-  <span class="f">id</span>
-  <span class="f">name</span>
-  <span class="f">args</span>
-  <span class="f">attempts</span>
+<span class="k">type</span> <span class="f">queued_job</span>
+  id
+  name
+  args
+  attempts
 
 <span class="c"># Work an app does after the request that asked for it, as Rails' Active Job</span>
 <span class="c"># runs it on Solid Queue: each job is a row of `senro_jobs`, so it outlives</span>
@@ -55,17 +56,17 @@ description: "senro keeps the work an app does after a request as rows of a Post
 <span class="c">#</span>
 <span class="c"># `prepared` makes the table jobs live in when it is missing.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">prepared</span> db
-  <span class="f">pg/run</span> db ledger <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)
+  <span class="f">pg/run</span> db ledger <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect db)
 
 ledger <span class="o">=</span> <span class="s">""</span>"
-  <span class="f">create</span> table if not exists senro_jobs (
-    <span class="f">id</span> bigserial primary key,
-    <span class="f">queue</span> text not null,
-    <span class="f">name</span> text not null,
-    <span class="f">args</span> text not null,
-    <span class="f">run_at</span> bigint not null,
-    <span class="f">attempts</span> int not null default <span class="n">0</span>,
-    <span class="f">failure</span> text not null default ''
+  create table <span class="k">if</span> <span class="k">not</span> exists senro_jobs (
+    id bigserial primary key,
+    queue text <span class="k">not</span> null,
+    name text <span class="k">not</span> null,
+    args text <span class="k">not</span> null,
+    run_at bigint <span class="k">not</span> null,
+    attempts int <span class="k">not</span> null default 0,
+    failure text <span class="k">not</span> null default ''
   )
 <span class="s">""</span>"</code></pre>
 </div>
@@ -79,21 +80,21 @@ ledger <span class="o">=</span> <span class="s">""</span>"
 <div class="code-panel">
   <div class="code-panel-title">jobs/jobs.kso</div>
   <pre><code><span class="c"># A job as its row holds it.</span>
-<span class="k">type</span> queued_job
-  <span class="f">id</span>
-  <span class="f">name</span>
-  <span class="f">args</span>
-  <span class="f">attempts</span>
+<span class="k">type</span> <span class="f">queued_job</span>
+  id
+  name
+  args
+  attempts
 
 <span class="c"># Queues the job `name` with `args` on `queue`, to run at `t` (milliseconds</span>
 <span class="c"># since the epoch) or after.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">later</span> db queue name args t
-  given <span class="o">=</span> [queue name (<span class="f">json/encode</span> args) <span class="s">"<span class="i">{t}</span>"</span>]
-  <span class="f">pg/query</span> db queued given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)
+  given <span class="o">=</span> [queue name (<span class="f">json/encode</span> args) <span class="s">"{t}"</span>]
+  <span class="f">pg/query</span> db queued given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect db)
 
 queued <span class="o">=</span> <span class="s">""</span>"
-  <span class="f">insert</span> into senro_jobs (queue, name, args, run_at)
-  <span class="f">values</span> ($<span class="n">1</span>, $<span class="n">2</span>, $<span class="n">3</span>, $<span class="n">4</span>::bigint)
+  insert into senro_jobs (queue, name, args, run_at)
+  values ($1, $2, $3, $4::bigint)
 <span class="s">""</span>"</code></pre>
 </div>
 
@@ -104,28 +105,28 @@ queued <span class="o">=</span> <span class="s">""</span>"
 <div class="code-panel">
   <div class="code-panel-title">jobs/jobs.kso</div>
   <pre><code><span class="c"># The attempts a job gets, and how long a claim holds it.</span>
-<span class="k">pub</span> <span class="f">attempts_allowed</span> <span class="o">=</span> <span class="n">5</span>
+<span class="k">pub</span> <span class="f">attempts_allowed</span> <span class="o">=</span> 5
 
-lease_ms <span class="o">=</span> <span class="n">5</span> <span class="o">*</span> <span class="n">60</span> <span class="o">*</span> <span class="n">1000</span>
+lease_ms <span class="o">=</span> 5 <span class="o">*</span> 60 <span class="o">*</span> 1000
 
 <span class="c"># Claims one job on `queue` that is due at `t`, and runs it. `performers` maps</span>
 <span class="c"># a job's name to a function of the session and the job's arguments that</span>
 <span class="c"># answers an effect. The answer says what happened: `none` when no job was</span>
 <span class="c"># due, or a line naming the job and how it went.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">worked</span> db queue performers t
-  given <span class="o">=</span> [queue <span class="s">"<span class="i">{t}</span>"</span> <span class="s">"<span class="i">{t + lease_ms}</span>"</span> <span class="s">"<span class="i">{attempts_allowed}</span>"</span>]
-  <span class="f">pg/query</span> db claimed given <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">ran</span> db performers t (<span class="f">list/first</span> r<span class="o">.</span>rows))
+  given <span class="o">=</span> [queue <span class="s">"{t}"</span> <span class="s">"{t + lease_ms}"</span> <span class="s">"{attempts_allowed}"</span>]
+  <span class="f">pg/query</span> db claimed given <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> ran db performers t (<span class="f">list/first</span> r.rows))
 
 claimed <span class="o">=</span> <span class="s">""</span>"
-  <span class="f">update</span> senro_jobs set run_at <span class="o">=</span> $<span class="n">3</span>::bigint, attempts <span class="o">=</span> attempts <span class="o">+</span> <span class="n">1</span>
-  <span class="f">where</span> id <span class="o">=</span> (
-    <span class="f">select</span> id from senro_jobs
-    <span class="f">where</span> queue <span class="o">=</span> $<span class="n">1</span> and run_at <span class="o">&lt;=</span> $<span class="n">2</span>::bigint and attempts <span class="o">&lt;</span> $<span class="n">4</span>::int
-    <span class="f">order</span> by run_at, id
-    <span class="f">for</span> update skip locked
-    <span class="f">limit</span> <span class="n">1</span>
+  update senro_jobs set run_at <span class="o">=</span> $3::bigint, attempts <span class="o">=</span> attempts <span class="o">+</span> 1
+  where id <span class="o">=</span> (
+    select id from senro_jobs
+    where queue <span class="o">=</span> $1 <span class="k">and</span> run_at <span class="o">&lt;=</span> $2::bigint <span class="k">and</span> attempts <span class="o">&lt;</span> $4::int
+    order by run_at, id
+    for update skip locked
+    limit 1
   )
-  <span class="f">returning</span> id, name, args, attempts
+  returning id, name, args, attempts
 <span class="s">""</span>"</code></pre>
 </div>
 
@@ -134,23 +135,23 @@ claimed <span class="o">=</span> <span class="s">""</span>"
 <div class="code-panel">
   <div class="code-panel-title">jobs/jobs.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">ran</span> _ _ _ none
-  <span class="f">effect</span> none
+  effect none
 
 <span class="c"># A performer's failure was born in the app, so the worker may rescue it.</span>
 <span class="c"># A job whose name has no performer is the worker's own finding, and is</span>
 <span class="c"># recorded the same way without being raised.</span>
 <span class="k">fn</span> <span class="f">ran</span> db performers t row
-  j <span class="o">=</span> <span class="f">job_of</span> row
-  <span class="f">run_by</span> db performers[j<span class="o">.</span>name] j t
+  j <span class="o">=</span> job_of row
+  run_by db performers[j.name] j t
 
 <span class="k">fn</span> <span class="f">run_by</span> db none j t
-  <span class="f">failed</span> db j t <span class="s">"no performer is named <span class="i">{j.name}</span>"</span>
+  failed db j t <span class="s">"no performer is named {j.name}"</span>
 
 <span class="k">fn</span> <span class="f">run_by</span> db perform j t
-  <span class="f">perform</span> db j<span class="o">.</span><span class="f">args</span>
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">pg/query</span> db finished [j<span class="o">.</span>id])
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> <span class="s">"ran <span class="i">{j.name}</span>"</span>)
-    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">failed</span> db j t u<span class="o">.</span>reason)
+  perform db j.args
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">pg/query</span> db finished [j.id])
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect <span class="s">"ran {j.name}"</span>)
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> failed db j t u.reason)
 
 finished <span class="o">=</span> <span class="s">"delete from senro_jobs where id = $1::bigint"</span></code></pre>
 </div>
@@ -164,15 +165,15 @@ finished <span class="o">=</span> <span class="s">"delete from senro_jobs where 
   <pre><code><span class="c"># A failed attempt is kept with its reason, and the job waits attempts^4 + 2</span>
 <span class="c"># seconds before it may run again.</span>
 <span class="k">fn</span> <span class="f">failed</span> db j t reason
-  n <span class="o">=</span> <span class="f">j</span><span class="o">.</span><span class="f">attempts</span>
-  wait <span class="o">=</span> (n <span class="o">*</span> n <span class="o">*</span> n <span class="o">*</span> n <span class="o">+</span> <span class="n">2</span>) <span class="o">*</span> <span class="n">1000</span>
-  given <span class="o">=</span> [j<span class="o">.</span><span class="f">id</span> reason <span class="s">"<span class="i">{t + wait}</span>"</span>]
-  said <span class="o">=</span> <span class="s">"failed <span class="i">{j.name}</span> on attempt <span class="i">{n}</span>: <span class="i">{reason}</span>"</span>
-  <span class="f">pg/query</span> db kept given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> said)
+  n <span class="o">=</span> j.attempts
+  wait <span class="o">=</span> (n <span class="o">*</span> n <span class="o">*</span> n <span class="o">*</span> n <span class="o">+</span> 2) <span class="o">*</span> 1000
+  given <span class="o">=</span> [j.id reason <span class="s">"{t + wait}"</span>]
+  said <span class="o">=</span> <span class="s">"failed {j.name} on attempt {n}: {reason}"</span>
+  <span class="f">pg/query</span> db kept given <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect said)
 
 kept <span class="o">=</span> <span class="s">""</span>"
-  <span class="f">update</span> senro_jobs set failure <span class="o">=</span> $<span class="n">2</span>, run_at <span class="o">=</span> $<span class="n">3</span>::bigint
-  <span class="f">where</span> id <span class="o">=</span> $<span class="n">1</span>::bigint
+  update senro_jobs set failure <span class="o">=</span> $2, run_at <span class="o">=</span> $3::bigint
+  where id <span class="o">=</span> $1::bigint
 <span class="s">""</span>"</code></pre>
 </div>
 
@@ -255,25 +256,32 @@ at 100000000: nothing due
 <span class="c"># a second's sleep when none is. Each job's outcome goes to standard error.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">worker</span> db queue performers
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">worked</span> db queue performers t)
-    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> <span class="f">told</span> said)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">worker</span> db queue performers)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> worked db queue performers t)
+    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> told said)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> worker db queue performers)
 
 <span class="c"># Runs `served`, such as `web/serve`, with a worker on `queue` beside it in a</span>
 <span class="c"># fiber of its own, on a session `connect` opens. The worker makes the jobs</span>
 <span class="c"># table when it is missing before it starts.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">beside</span> connect queue performers served
-  <span class="f">connect</span> <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">prepared</span> db) <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">worker</span> db queue performers)
-  <span class="f">served</span>
+  <span class="f">os/env</span> <span class="s">"SENRO_ONLY"</span> <span class="o">.&gt;</span> (only <span class="o">-&gt;</span> started only connect queue performers served)
+
+<span class="c"># Under `senro migrate` there is nothing to work beside (web/serve).</span>
+<span class="k">fn</span> <span class="f">started</span> <span class="s">"migrate"</span> _ _ _ served
+  served
+
+<span class="k">fn</span> <span class="f">started</span> _ connect queue performers served
+  connect <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> prepared db) <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> worker db queue performers)
+  served
 
 <span class="k">fn</span> <span class="f">told</span> none
-  <span class="f">time/sleep</span> <span class="n">1000</span>
+  <span class="f">time/sleep</span> 1000
 
 <span class="k">fn</span> <span class="f">told</span> said
-  <span class="f">io/write_err</span> <span class="s">"senro jobs: <span class="i">{said}</span>\n"</span></code></pre>
+  <span class="f">io/write_err</span> <span class="s">"senro jobs: {said}\n"</span></code></pre>
 </div>
 
-<p>a bare line in a function body runs as a fiber, so <code>beside</code> starts the worker and then answers <code>served</code>, and the two run together for as long as the process does. more workers on more processes can share the queue, because the claim skips rows another worker holds.</p>
+<p>a bare line in a function body runs as a fiber, so <code>started</code> starts the worker and then answers <code>served</code>, and the two run together for as long as the process does. more workers on more processes can share the queue, because the claim skips rows another worker holds.</p>
 
 <h2>mail sent later</h2>
 

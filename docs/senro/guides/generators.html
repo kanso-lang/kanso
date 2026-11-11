@@ -21,41 +21,42 @@ description: "how senro's generators write an app and a resource, and what each 
 
 <h2>running them</h2>
 
-<p>the generators run from senro's own directory, and take the app's path relative to it. the files they write import senro by climbing back up that path, one <code>..</code> for each directory it names, so an app two directories down imports <code>../../models</code>. an app kept outside senro's repository names senro by its repository instead, as in <code>import "kanso-lang/senro/models"</code>, and <code>kanso install</code> fetches it.</p>
+<p>the generators are run with <code>senro</code>, senro's command, which sits in the <code>bin</code> directory of senro's repository. with that directory on your PATH, <code>senro new</code> writes an app where you are, and every other command runs from inside the app. the files it writes import senro by the path from the app to senro's own directory, so an app beside a copy of senro imports <code>../senro/models</code>; the notebook, two directories down in senro's own repository, imports <code>../../models</code>. the <a href="command-line.html">command line guide</a> covers the rest of the command.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
-  <pre><code>$ kanso run generate -- new examples/notebook
-  create examples/notebook/main.kso
-  create examples/notebook/home.kso
-  create examples/notebook/migrations.kso
-  create examples/notebook/views/layout.kata
-  create examples/notebook/views/home.kata
-$ kanso run generate -- scaffold examples/notebook note title:text pages:int cover:attachment
-  create examples/notebook/note.kso
-  create examples/notebook/notes.kso
-  create examples/notebook/views/notes_index.kata
-  create examples/notebook/views/note_shown.kata
-  create examples/notebook/views/note_form.kata
-  change examples/notebook/migrations.kso
-  change examples/notebook/main.kso
-$ kanso run generate -- scaffold examples/notebook page body:text note:references
-  create examples/notebook/page.kso
-  create examples/notebook/pages.kso
-  create examples/notebook/views/pages_index.kata
-  create examples/notebook/views/page_shown.kata
-  create examples/notebook/views/page_form.kata
-  change examples/notebook/migrations.kso
-  change examples/notebook/main.kso</code></pre>
+  <pre><code>$ senro new notebook
+  create notebook/main.kso
+  create notebook/home.kso
+  create notebook/migrations/.keep
+  create notebook/views/layout.kata
+  create notebook/views/home.kata
+$ cd notebook
+$ senro generate scaffold note title:text pages:int cover:attachment
+  create ./note.kso
+  create ./notes.kso
+  create ./views/notes_index.kata
+  create ./views/note_shown.kata
+  create ./views/note_form.kata
+  create ./migrations/20261111180512_create_notes.kso
+  change ./main.kso
+$ senro generate scaffold page body:text note:references
+  create ./page.kso
+  create ./pages.kso
+  create ./views/pages_index.kata
+  create ./views/page_shown.kata
+  create ./views/page_form.kata
+  create ./migrations/20261111180513_create_pages.kso
+  change ./main.kso</code></pre>
 </div>
 
-<p>each line names a file and what happened to it. <code>scaffold</code> changes two files that <code>new</code> wrote: it adds the migration to the end of the migrations list, and the imports of the model and the resource to the entry. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
+<p>each line names a file and what happened to it. <code>scaffold</code> writes its migration as a file of its own and changes one file that <code>new</code> wrote, the entry, which gains the resource's import. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
-  <pre><code>$ kanso run generate -- scaffold examples/notebook note title:text
-generate: examples/notebook/notes.kso is there already
-$ kanso run generate -- scaffold examples/notebook book title:words
+  <pre><code>$ senro generate scaffold note title:text
+generate: ./notes.kso is there already
+$ senro generate scaffold book title:words
 generate: cannot read `title:words`: a field is name:text, name:int, name:references or name:attachment</code></pre>
 </div>
 
@@ -73,68 +74,47 @@ generate: cannot read `title:words`: a field is name:text, name:int, name:refere
 connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pre>
 </div>
 
-<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends with <code>web/serve 3000 routes connected</code>. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
+<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends by serving on port 3000 with a worker beside the server, which sends the mail the app queues. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
 
 <h2>the migration</h2>
 
+<p><code>scaffold</code> writes the migration that makes the resource's table as a file under <code>migrations</code>, named for the moment it was written and for what it does.</p>
+
 <div class="code-panel">
-  <div class="code-panel-title">examples/notebook/migrations.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+  <div class="code-panel-title">examples/notebook/migrations/20261111180512_create_notes.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
-<span class="c"># The app's schema, as the changes that built it, oldest first.</span>
-<span class="k">pub</span> <span class="f">all</span> <span class="o">=</span> [notes_made pages_made pages_to_notes users_made users_email_unique]
-
-notes_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
-  <span class="f">notes_id</span>
-  <span class="f">notes_title</span>
-  <span class="f">notes_pages</span>
-  <span class="f">notes_cover</span>
+<span class="k">pub</span> <span class="f">create_notes</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>)
+  (<span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span>)
+  (<span class="f">models/column</span> <span class="s">"cover"</span> <span class="s">"text not null default ''"</span>)
   <span class="f">models/created_at</span>
   <span class="f">models/updated_at</span>
-]
-
-notes_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
-
-notes_title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>
-
-notes_pages <span class="o">=</span> <span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span>
-
-notes_cover <span class="o">=</span> <span class="f">models/column</span> <span class="s">"cover"</span> <span class="s">"text not null default ''"</span>
-
-pages_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [
-  <span class="f">pages_id</span>
-  <span class="f">pages_body</span>
-  <span class="f">pages_note_id</span>
-  <span class="f">models/created_at</span>
-  <span class="f">models/updated_at</span>
-]
-
-pages_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
-
-pages_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
-
-pages_body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>
-
-pages_note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>
-
-users_made <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"users"</span> [
-  <span class="f">users_id</span>
-  <span class="f">users_email</span>
-  <span class="f">users_digest</span>
-  <span class="f">models/created_at</span>
-  <span class="f">models/updated_at</span>
-]
-
-users_email_unique <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"users"</span> <span class="s">"email"</span>
-
-users_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>
-
-users_email <span class="o">=</span> <span class="f">models/column</span> <span class="s">"email"</span> <span class="s">"text"</span>
-
-users_digest <span class="o">=</span> <span class="f">models/column</span> <span class="s">"digest"</span> <span class="s">"text"</span></code></pre>
+]</code></pre>
 </div>
 
-<p>each column is a value named for its table, so two tables that both have a <code>title</code> never declare the same name. <code>scaffold</code> appends <code>notes_made</code> to <code>all</code>, and a later change goes after it, as <code>pages_made</code> and <code>users_made</code> do; the models guide says how the list is run and recorded. each table ends with <code>models/created_at</code> and <code>models/updated_at</code>, as a Rails scaffold ends with <code>t.timestamps</code>, and <code>users_email_unique</code> is the index <code>email:text:uniq</code> asks for.</p>
+<p>the table ends with <code>models/created_at</code> and <code>models/updated_at</code>, as a Rails scaffold ends with <code>t.timestamps</code>. a resource nested under another needs a second change, the key to its parent, so its migration is a list: the table under a name of its own, then the key.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/migrations/20261111180513_create_pages.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+
+<span class="k">pub</span> <span class="f">create_pages</span> <span class="o">=</span> [
+  pages_table
+  (<span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>)
+]
+
+pages_table <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>)
+  (<span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>)
+  <span class="f">models/created_at</span>
+  <span class="f">models/updated_at</span>
+]</code></pre>
+</div>
+
+<p>the files run in the order of their names, so the notes are made before the pages that point at them. the <a href="migrations.html">migrations guide</a> says how they are ordered, run and recorded, and how <code>senro generate migration</code> writes one that changes a table that is there.</p>
 
 <h2>the model</h2>
 
@@ -348,7 +328,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <h2>a resource under another</h2>
 
-<p>a field written <code>name:references</code> nests the resource under another, as Rails' generator reads it. the third command above makes pages that belong to a note. it writes a model, <code>page.kso</code>, and a resource, <code>pages.kso</code>, as the second command did for notes. the migration gains two changes: <code>pages_made</code> makes the table with a <code>note_id</code> column that may not be empty, and <code>pages_to_notes</code>, written with <code>models/add_foreign_key</code>, has Postgres refuse a page whose note is not there and remove a note's pages along with the note.</p>
+<p>a field written <code>name:references</code> nests the resource under another, as Rails' generator reads it. the second <code>scaffold</code> above makes pages that belong to a note. it writes a model, <code>page.kso</code>, and a resource, <code>pages.kso</code>, as the first did for notes. its migration holds two changes: <code>pages_table</code> makes the table with a <code>note_id</code> column that may not be empty, and the call of <code>models/add_foreign_key</code> has Postgres refuse a page whose note is not there and remove a note's pages along with the note.</p>
 
 <p>each of the resource's actions takes the note's id right after the database, which is how the <a href="routing.html">routing guide</a> places a nested resource: <code>pages/index</code> answers GET /notes/:note_id/pages, and <code>pages/show</code> GET /notes/:note_id/pages/:id.</p>
 
@@ -394,29 +374,29 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
-  <pre><code>$ kanso run generate -- scaffold examples/notebook chapter body:text volume:references
-generate: examples/notebook has no volumes to nest chapters under
-$ kanso run generate -- scaffold examples/notebook book note:references page:references
+  <pre><code>$ senro generate scaffold chapter body:text volume:references
+generate: . has no volumes to nest chapters under
+$ senro generate scaffold book note:references page:references
 generate: cannot read `page:references`: a resource nests under one parent</code></pre>
 </div>
 
 <h2>accounts and signing in</h2>
 
-<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes five modules and three views, appends a <code>users</code> table to the migrations, and changes the entry.</p>
+<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes five modules and three views, the migration that makes a <code>users</code> table, and changes the entry.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
-  <pre><code>$ kanso run generate -- authentication examples/notebook
-  create examples/notebook/password_mailer.kso
-  create examples/notebook/registration.kso
-  create examples/notebook/resets.kso
-  create examples/notebook/session.kso
-  create examples/notebook/user.kso
-  create examples/notebook/views/door.kata
-  create examples/notebook/views/reset_asked.kata
-  create examples/notebook/views/reset_chosen.kata
-  change examples/notebook/migrations.kso
-  change examples/notebook/main.kso</code></pre>
+  <pre><code>$ senro generate authentication
+  create ./password_mailer.kso
+  create ./registration.kso
+  create ./resets.kso
+  create ./session.kso
+  create ./user.kso
+  create ./views/door.kata
+  create ./views/reset_asked.kata
+  create ./views/reset_chosen.kata
+  create ./migrations/20261111180514_create_users.kso
+  change ./main.kso</code></pre>
 </div>
 
 <p>a user is an address and a digest of the password, and <code>user.kso</code> is its model. the file holds one policy, and the models derivation declares the record from the table's columns.</p>
@@ -497,9 +477,28 @@ serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n
   <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> mail/performers serving)</code></pre>
 </div>
 
-<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. <code>jobs/beside</code> runs a worker next to the server that sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
+<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the worker <code>new</code> set beside the server sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
 
 <p>senro's spec serves the generated app on both engines and uses it as a visitor would: it makes an account, works with notes and pages, signs out, and resets the password through the mail the app writes.</p>
+
+<h2>the other generators</h2>
+
+<p><code>senro generate</code> with nothing after it lists the generators.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ senro generate
+  scaffold
+  model
+  controller
+  migration
+  mailer
+  authentication</code></pre>
+</div>
+
+<p><code>model</code> takes what <code>scaffold</code> takes and writes the model alone: the module named for the record and the migration that makes its table. <code>controller</code> takes a plural name and the actions it should have, each one of the seven the routing convention places, and writes a module with those actions and a view for each that shows a page. <code>migration</code> writes a migration from its name, as the migrations guide describes. <code>mailer</code> takes a name and its letters and writes <code>&lt;name&gt;_mailer.kso</code>, with a function for each letter that composes it and queues it for the worker.</p>
+
+<p>a generator senro does not ship is a kanso program at <code>generators/&lt;name&gt;.kso</code>, in the app or beside a library the app's entry imports by path. <code>senro generate &lt;name&gt;</code> runs it in the app's directory with the words that followed, and the list above shows it with where it was found. senro's own are looked for first, so one from outside cannot take the place of <code>scaffold</code>.</p>
 
 <h2>after generating</h2>
 

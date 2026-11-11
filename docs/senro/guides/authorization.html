@@ -1,0 +1,126 @@
+---
+layout: default
+title: "authorization in senro"
+description: "how a senro module says who may reach its pages, and how that one check covers the data a page asks the server for afterwards."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>authorization</h1>
+
+<p>authentication says who a visitor is, and the <a href="sessions.html">sessions guide</a> covers it. authorization says what that visitor may do. senro puts the question in two places. a module says who may reach its pages, once, the way a Rails controller's <code>before_action</code> does. a model says who may write a record and which records a viewer may see. this guide covers the first, and how it carries over to the data a page fetches after it has loaded.</p>
+
+<h2>who may reach a page</h2>
+
+<p>an app behind <code>web/requiring_sign_in</code> asks every action for a visitor who has signed in, except the ones its module lists in <code>without_sign_in</code>. that settles signed in or not. to say more, a module defines <code>admits</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/ledger.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../data"</span>
+<span class="k">import</span> <span class="s">"./books"</span>
+<span class="k">import</span> <span class="s">"std/net/http"</span>
+
+<span class="c"># Only the bookkeeper, viewer 1, may reach the ledger.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">admits</span> _ viewer _
+  effect (viewer <span class="o">==</span> <span class="s">"1"</span>)
+
+<span class="c"># The ledger asks the server for the books' total, as a component's action</span>
+<span class="c"># would from the browser.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _
+  asks <span class="o">=</span> <span class="f">data/asking?</span> (<span class="f">books/total</span> 3)
+  effect (<span class="f">http/text_page</span> <span class="s">"the ledger, which asks the server: {asks}"</span>)</code></pre>
+</div>
+
+<p><code>admits</code> takes the action's name, the viewer's id and a database session, and answers an effect of true or false. it is asked once a request is past the sign-in, before the action runs. a viewer it refuses is answered 403, and the action does not run. a module with no <code>admits</code> admits whoever the sign-in does.</p>
+
+<p>the first parameter is the action's name, so a module that guards only some actions writes an arm for each and one for the rest. the session asks as the viewer, so a check can read what it needs, such as the viewer's own row, through the models. that is why it answers an effect.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">a module that guards one action</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">admits</span> <span class="s">"destroy"</span> viewer _
+  effect (viewer <span class="o">==</span> <span class="s">"1"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">admits</span> _ _ _
+  effect true</code></pre>
+</div>
+
+<h2>what a page asks the server for</h2>
+
+<p>a page is not finished when its HTML arrives. a component on it may ask the server for data through a provider, as the <a href="views.html">views guide</a> describes, and that request arrives on its own, some time after the page. it would be easy to check the viewer again inside every provider, and easy to forget one.</p>
+
+<p>senro answers a provider's request as it would answer the page it came from. the page's script sends the page's path with the request. the server finds that page and checks three things, once for the request, however many providers it calls:</p>
+
+<ul>
+  <li>the page uses each provider called. this is worked out while the app compiles, from its calls: the page's module must lean on a module that asks for the provider, meaning the module itself or one its calls reach, as an action reaches the component whose action asks.</li>
+  <li>when the page asks for a sign-in, the visitor has one.</li>
+  <li>the page's module admits the viewer, by the same <code>admits</code> the page itself is held to.</li>
+</ul>
+
+<p>so a provider is written with no check of its own for what the page has checked.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/books.kso</div>
+  <pre><code><span class="c"># A provider: what the books hold for a number of years, read for whoever</span>
+<span class="c"># asks. It checks nothing about the viewer, since the page that asks for it</span>
+<span class="c"># has been checked already.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">total</span> viewer _ years
+  effect <span class="s">"{years} years of books, read for viewer {viewer}"</span></code></pre>
+</div>
+
+<p>senro's spec for this serves a small app. the ledger above admits only viewer 1 and asks for <code>books/total</code>. the desk admits anyone who has signed in, and shows what the ledger shows, so it leans on the ledger's module.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/desk.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"./ledger"</span>
+
+<span class="c"># The desk shows what the ledger shows, to anyone who has signed in, so it</span>
+<span class="c"># leans on the module that asks for the books' total.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  <span class="f">ledger/index</span> req db</code></pre>
+</div>
+
+<p>the front page is open to all and asks the server for nothing. the entry names the providers and then puts the table behind the sign-in; either order works.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/main.kso</div>
+  <pre><code>answering <span class="o">=</span> <span class="f">web/providers</span> routes <span class="f">session/secret</span> <span class="f">books/provided</span>
+
+guarded <span class="o">=</span> <span class="f">web/requiring_sign_in</span> answering <span class="f">session/secret</span> <span class="f">web/unbound</span></code></pre>
+</div>
+
+<p>the spec then sends ten requests and records each answer.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">what the ten requests were answered</div>
+  <pre><code>HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 200 OK: ["3 years of books, read for viewer 2"]
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 200 OK: the ledger, which asks the server: true
+HTTP/1.1 200 OK: ["3 years of books, read for viewer 1"]
+HTTP/1.1 404 Not Found: not found</code></pre>
+</div>
+
+<p>line by line: a visitor who has not signed in asks for the books from the desk, which wants a sign-in, and from the front page, which does not use them, and is refused both times. viewer 2 signs in and asks for the ledger page, and is refused by <code>admits</code>. viewer 2 then asks for the books from the ledger and is refused by the same check; from the desk, and is answered, because the desk admits anyone signed in; from the front page, and is refused because that page does not use them; and without naming a page, and is refused. viewer 1 gets the ledger page, and the books from it. the last request names a provider the app does not have, which is not found.</p>
+
+<h2>what stays with the provider</h2>
+
+<p>a page decides which providers it calls, and it also chooses their arguments. a page that may list the viewer's own notes could be made to ask for somebody else's by id. that question belongs to the record, and the model answers it: a provider that reads through a model, as every read in an app does, gets only what the model's <code>visible?</code> lets that viewer see, as the <a href="models.html">models guide</a> describes. the page's check covers whether the viewer may be here, and the model's covers which rows are theirs.</p>
+
+<h2>what is not here</h2>
+
+<p>a server component's actions, the ones that write to the database from a click without a page load, are open to any visitor and rely on their models' policies to refuse a write. they are not yet answered as their page is.</p>
+
+</article>

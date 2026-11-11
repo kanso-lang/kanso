@@ -27,20 +27,14 @@ description: "senro (線路): a web framework for kanso in the tradition of Rail
       </div>
     </div>
 <div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/migrations.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+  <div class="code-panel-title">examples/guestbook/migrations/20261030014602_create_signatures.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
-signed <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [id name message]
-
-id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>
-
-joined <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"accounts"</span> [id name digest]
-
-<span class="c"># The address a reset link is sent to.</span>
-emailed <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> email
-
-<span class="c"># When the address was confirmed, or empty until it is.</span>
-confirmable <span class="o">=</span> <span class="f">models/add_column</span> <span class="s">"accounts"</span> confirmed</code></pre>
+<span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
+  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
+  (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
+]</code></pre>
 </div>
   </div>
 </section>
