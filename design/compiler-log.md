@@ -2405,11 +2405,16 @@ decides. With both changes, the gate's build read the same on both tiers
 before and after a comment was added to `main.rs`. That was read in this
 container, whose codegen numbers are not CI's.
 
-**Rows.** `codegen_instructions_release` 372,173,775 -> 372,059,349 and
-`codegen_instructions_dev` 117,031,054 -> 117,027,519. The build does
-the same work as before; the rows read less because of what they no
-longer read. No other compile row moved, and neither did the
-interpreter's or the browser's.
+**Rows.** In CI `codegen_instructions_release` 372,173,775 ->
+372,208,803 and `codegen_instructions_dev` 117,031,054 -> 117,027,868.
+The release row rose by 35,028 and the dev row fell by 3,186. In this
+container both fell, by 114,443 and 3,535, so the size and the direction
+of the move belong to the host's clang and linker. The change swaps a
+source file clang opens for text it reads from a pipe, and changes the
+names the link reads; which of the two the 35,028 is was not separated.
+Both rows are re-based on CI's reading, as #2017 rules for a row that
+stops reading outside state. No other compile row moved, and neither did
+the interpreter's or the browser's.
 
 **Spec.** `tests/the_measured_link_names_its_runtime.rs` reads the link's
 line from a measured build of each tier and from an unmeasured one, and
@@ -2421,8 +2426,10 @@ runtime's source onto the shared path in place. No build writes that
 file now, so there is nothing for a second build to truncate, and
 `tests/concurrent_build.rs` still races eight cold builds.
 
-**Welfare.** 95.39229249 -> 95.39234298, banked. The rise is the two
-codegen rows, less the browser row's 1,181 from the derive check.
+**Welfare.** 95.39229249 -> 95.39228290, a re-base. The fall is the
+release row's 35,028 and the browser row's 1,181 from the derive check,
+which the bank before this one had not read, less the dev row's 3,186.
+Main's floor is 95.39064215, so the pull request as a whole is a rise.
 
 ## 2026-11-11 — the sanitizer sweep is a job
 
