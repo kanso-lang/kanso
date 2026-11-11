@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: an app goes through its models, never through pg/query
-
-The guestbook's list page on the senro site read `pg/query db newest []`.
-Clay: "this is crazy. you shoudn't have to call something like db/query. you
-just use the model. clay = models/user/find params.id or something along
-those lines." On how the session reaches the call: "that's the kind of thing
-that the framework would do and inject somehow into the controller actions
-perhaps. you can figure out something elegant for that. like maybe it passes
-in a DB object that you pass to the model method. or maybe it sets those up
-preconfigured so you get it already from the imported finder object that's
-analogous to the class with its class methods in rails."
-
-senro had model writes (`models/created`) and two reads (`found`, `where`),
-each taking the viewer and the session apart, and no read of a whole table.
-The three example apps wrote SQL by hand at 34 sites. The ruling is that app
-code holds none. The design, the first of Clay's two options, is on #2394:
-the session an action is handed already knows who is signed in, and each
-model's module answers its reads and writes by name. Clay also asked that
-such designs go by the committee, "to find beauty and elegance".
-
-The committee read it from three seats (a kanso purist, a Rails veteran, a
-newcomer) and decided, on #2394:
-
-- `db` is passed to the model's function. All three preferred it to a finder
-  value handed to the action, which would shadow the module it stands for.
-- The reads are `find`, `find_by`, `all`, `newest`, `ordered`, `where` and
-  `paged`. `ordered` takes a column and nothing else: the first draft's
-  `ordered db "id desc"` put a small language inside a string, and `newest`
-  covers the case that wanted it.
-- `where` keeps one field and one value. A map of conditions was declined
-  because the derivation can check a field written as a string against the
-  table's columns and cannot read a map literal's keys.
-- The writes are `create`, `update` and `destroy` per model, over the
-  purist's `created`, `updated`, `destroyed`.
-- The scaffold is split into `note.kso`, the model, and `notes.kso`, the
-  actions.
-
-Open: the account reads that run before anyone is signed in, which need a
-read that asks as the app itself.
-
 ## 2026-11-10 — gavel: no for loops, in kanso or in kata
 
 kata, senro's template language, wrote a loop as `for e in signatures`. Clay:
@@ -2539,3 +2499,51 @@ Server components' actions are not yet answered as their page is. Guides
 for controllers, mailers, testing, configuration, deployment and security.
 
 No counter moved in kanso: the work is in senro and on the site.
+
+## 2026-11-11 — `kanso test` performs a test whose value is an effect (#2458)
+
+senro's guides owe a page on testing an app (#2455), and an app's actions
+take a database session and answer an effect. `kanso test` could not test
+one. It evaluated each `test_*` constant and passed the ones whose value
+was `true`, so a test whose value was an effect read
+`FAILED (returned <io>)`.
+
+**The search.** The log's entries on the test verb (2026-10-14, the module
+a test is run inside; 2026-10-29, std/expect in the binary) say nothing of
+effects. The archive's first design of the verb says "a test is a constant
+named `test_*` whose value is `true`. no framework, no assertion dsl". The
+book says a test's value is a boolean in chapter 01, chapter 07 and the
+tour. No fixture under `tests/golden/test_verb` held an effect, and no
+issue asked. What the runner printed for an effect was what it prints for
+any value that is not `true`, and nobody had decided it.
+
+**The decision**, by the committee, recorded on #2458. A test stays a
+constant and `true` stays the only passing value. An effect is a value, a
+description an executor performs, so a test whose value is a description
+has not said true or false yet. The runner performs it, with the executor
+`kanso run --interp` uses, and judges what it yields as it judges any
+test's value. An err the effect ends in fails the test and prints its
+reason and where it was born, as an entry's unhandled err does. Tests
+still run one at a time in the order the file declares them.
+
+Two alternatives were turned down. A second kind of test, under another
+prefix or another verb, makes two ideas of one. Judging the plan in place
+of performing it yields nothing to compare: a plan lists the effects that
+would run, and a test of a query needs the rows.
+
+**Built.** `run_tests_on_stack` executes a test whose value is a `Desc`
+and matches on what comes back. `tests/golden/test_verb/performed` holds a
+pure test, an effect that yields true, one that yields false, one that
+yields a string, one that ends in an err, and one after the err to show
+the runner went on; `performed.out` and `performed.stderr` are what it
+prints. Watched red on the old runner: all five effectful tests read
+`FAILED (returned <io>)`.
+
+The book's effects chapter gains a paragraph after its two levels of
+testing, and the tour's sentence on what a test is now allows an effect.
+
+**Open.** Each effectful test gets an executor of its own, seeded as
+`run --interp` seeds one: from `KANSO_SEED` when it is set, and from the
+system when it is not. A suite has no setup or teardown; a test that needs
+a clean table makes one.
+senro's testing helpers are built on this next.

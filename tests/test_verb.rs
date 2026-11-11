@@ -208,3 +208,26 @@ fn a_sibling_is_named_from_where_the_test_runs() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
     assert_eq!(output.status.code(), Some(2));
 }
+
+/// A test whose value is an effect is performed, and what it yields is
+/// judged as any test's value is (#2458): true passes, false and any other
+/// value fail and are printed, and an err the effect ends in fails the test
+/// and says where it was born. The pure test beside them is untouched, and
+/// the test after the err still runs. Watched red on the runner that only
+/// evaluated: every effectful test read `FAILED (returned <io>)`.
+#[test]
+fn a_test_that_is_an_effect_is_performed_and_judged() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["test", "performed"])
+        .env("KANSO_SPEC_WORD", "quiet")
+        .env_remove("KANSO_SPEC_UNSET")
+        .current_dir(fixture_dir())
+        .output()
+        .expect("kanso binary runs");
+    let out = std::fs::read_to_string(fixture_dir().join("performed.out")).expect("golden");
+    let err = std::fs::read_to_string(fixture_dir().join("performed.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(String::from_utf8_lossy(&output.stderr), err);
+    assert_eq!(output.status.code(), Some(1));
+}
