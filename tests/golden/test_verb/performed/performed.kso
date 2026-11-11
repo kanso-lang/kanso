@@ -1,0 +1,18 @@
+import "std/os"
+import "std/text"
+
+# What a test of an effect needs: functions that read the world and answer
+# a description. `shouted` reads an environment variable and answers it in
+# capitals, or a word of its own when the variable is unset. `refusing`
+# reads one too, and then fails.
+pub fn shouted name
+  os/env name .> (v -> effect (loud v))
+
+pub fn refusing reason
+  os/env "KANSO_SPEC_WORD" .> (_ -> err reason)
+
+fn loud none
+  "NOTHING"
+
+fn loud v
+  text/uppercase v

@@ -1,0 +1,7 @@
+test_pure ... ok
+test_yields_true ... ok
+test_yields_false ... FAILED (returned false)
+test_yields_a_value ... FAILED (returned "NOTHING")
+test_yields_an_err ... FAILED
+test_after_an_err ... ok
+3 passed, 3 failed
