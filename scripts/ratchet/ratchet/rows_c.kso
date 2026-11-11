@@ -1401,8 +1401,9 @@ lazy_sub = row
 
 rows_c1zzzzv = list/concat rows_c1zzzzs [lazy_sub]
 
-# A group handed out as a function value keeps its record boxed, because the
-# wrapper a function value is called through answers one boxed word.
+# A group handed out as a function value answers its record in registers, and
+# the wrapper a function value is called through builds the one boxed word its
+# caller reads.
 fn_value_boxed = row
   "a function value returned in registers"
   true

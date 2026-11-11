@@ -1,0 +1,99 @@
+# A decoder handed out as a value is called through a wrapper that builds
+# the record its direct callers get in registers (#2421), and every engine
+# has to answer the way the interpreter does whichever way it is reached.
+# This walks the ways: called by name, called through a parameter, through
+# a partial, out of a list, chosen by a function that answers one of three,
+# with a short read that answers a kept constant, a position too wide for a
+# word, and a failure where the record was expected.
+import "std/list"
+import "std/testing"
+import "std/text"
+
+type read
+  value
+  next
+
+lost = read none 0
+
+fn at bs p:int
+  opening bs[p] bs (p + 1)
+
+fn opening none _ _
+  lost
+
+fn opening b bs p
+  return read b p if b < 128
+  closing (b - 128) bs[p] (p + 1)
+
+fn closing _ none _
+  lost
+
+fn closing low b p
+  read (low + 128 * b) p
+
+fn exact bs p:int
+  needed bs[p] p
+
+fn needed none _
+  err "past the end"
+
+fn needed b p
+  read b (p + 1)
+
+fn far _ p:int
+  read "far" (p * 4611686018427387904)
+
+fn shown none
+  "none"
+
+fn shown v
+  "{v}"
+
+fn whole r
+  "{shown r.value}/{r.next}"
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) "{acc}{shown v} "
+
+fn listed _ _ 0 _ acc
+  acc
+
+fn listed bs p n one acc
+  item bs (one bs p) (n - 1) one acc
+
+fn item bs r n one acc
+  listed bs r.next n one "{acc}{shown r.value} "
+
+fn way 1
+  at
+
+fn way 2
+  exact
+
+fn way _
+  far
+
+fn each_way bs p
+  ways = [(way 1) (way 2) (way 3)]
+  one = (held -> whole (held bs p))
+  text/join (list/to_list (list/map ways one)) " "
+
+fn report reason
+  "failed: {reason}"
+
+told =
+  bs = text/to_bytes [5 200 3 7 250]
+  from = &at bs
+  a = "{summed 3 bs (at bs 1) ""}| {listed bs 1 3 at ""}"
+  direct = at bs 4
+  b = "{whole direct} {whole (from 4)} {whole (from 5)} {whole (from 9)}"
+  c = "{each_way bs 1} | {each_way bs 2}"
+  d = "{listed bs 1 5 (way 2) ""}| {whole ((way 1) bs 2)}"
+  e = testing/when_failed (listed bs 4 3 exact "") report
+  g = testing/when_failed (whole ((way 2) bs 6)) report
+  "{a}\n{b}\n{c}\n{d}\n{e} | {g}"
+
+pub play = print told
