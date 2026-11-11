@@ -1,0 +1,3 @@
+error[runtime]: replace takes three strings
+  failed in text/replace at std/text/text.kso:226
+  called from replace_takes_three_strings.kso:9

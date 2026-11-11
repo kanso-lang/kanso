@@ -380,9 +380,9 @@ fn taken n acc
 
 # A page's values through an HTML escape, as a template writes one (#2427):
 # three searches for the five characters, a value with none handed back as
-# it came, and a split and a join for each search that found something. A
-# row is a heading holding four of the five, an excerpt holding an
-# apostrophe, and seven values with nothing to rewrite.
+# it came, and a `text/replace` for each search that found something. A row
+# is a heading holding four of the five, an excerpt holding an apostrophe,
+# and seven values with nothing to rewrite.
 fn escaped s
   cs = text/bytes s
   past = length cs
@@ -400,7 +400,7 @@ fn swapped s false _ _
   s
 
 fn swapped s true from to
-  text/join (text/split s from) to
+  text/replace s from to
 
 fn heading n
   "salt & vinegar <batch {n}> the \"house\" crisps"

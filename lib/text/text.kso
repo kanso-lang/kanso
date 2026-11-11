@@ -216,3 +216,11 @@ fn inside piece _ _
 # that `slice!` hands straight to a door (#1943).
 fn past? s from to
   length s < to or from < 1 or length s + 1 < from
+
+# Every occurrence of `from` becomes `to`. Occurrences are found left to
+# right and the search takes up again after the end of each, so the answer
+# is what `join (split s from) to` gives, in one pass and without the list
+# of pieces between. An empty `from` occurs everywhere, so it is a mistake
+# here as it is for `split`, and the builtin answers the err itself.
+pub fn replace s from to
+  builtin_replace s from to

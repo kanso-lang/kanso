@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: "replace needs something to find"
+  born in text/replace at std/text/text.kso:226

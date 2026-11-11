@@ -31,7 +31,7 @@ use num_traits::Zero;
 /// cost the tab's compiler and the interpreter more than the scan it
 /// replaced. `AMBIENT` and `BUILTIN_ARITY` come off it sorted, as they were
 /// written.
-pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 95] = [
+pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 96] = [
     ("annotate", Some(2), BUILTIN | BARE),
     ("built_text", Some(1), BUILTIN),
     ("append", Some(2), BUILTIN),
@@ -84,6 +84,7 @@ pub const BUILTIN_TABLE: [(&str, Option<usize>, u8); 95] = [
     ("slice", Some(3), BUILTIN),
     ("rest_from", Some(2), BUILTIN),
     ("slice_in", Some(3), BUILTIN),
+    ("replace", Some(3), BUILTIN),
     ("split", Some(2), BUILTIN),
     ("sqrt", Some(1), BUILTIN),
     ("bit_and", Some(2), BUILTIN),
@@ -204,7 +205,7 @@ const fn counts<const N: usize>() -> [(&'static str, usize); N] {
     out
 }
 
-pub const BUILTINS: [&str; 89] = names(BUILTIN);
+pub const BUILTINS: [&str; 90] = names(BUILTIN);
 
 /// The bare-name subset: what resolves without an import. Everything else
 /// in BUILTINS is internal, reached only through std wrapper modules. The
@@ -214,7 +215,7 @@ pub const BUILTINS: [&str; 89] = names(BUILTIN);
 pub const AMBIENT: [&str; 14] = sorted_names(BARE);
 
 /// What each builtin takes, read off the table and sorted by name.
-pub const BUILTIN_ARITY: [(&str, usize); 94] = counts();
+pub const BUILTIN_ARITY: [(&str, usize); 95] = counts();
 
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.

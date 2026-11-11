@@ -1,0 +1,9 @@
+# Two modules use std/list on either side of one that slices a text.
+# `text/slice` has an arm for a span, and `span` is also the name of a
+# private helper of the list library's sort. std/text does not import
+# std/list, so the word keeps nothing there, and the third module takes the
+# compile the first one's import made (#2442).
+import "std/list"
+
+pub fn turned xs
+  list/reverse xs

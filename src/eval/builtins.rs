@@ -873,6 +873,31 @@ impl<'a> Interp<'a> {
                     .collect::<Vec<_>>();
                 Ok(Value::List(Rc::new(list)))
             }
+            // `text/replace`: what `join (split text from) to` answers,
+            // without the list of pieces between. A text that holds no
+            // occurrence is handed back as it came, and an empty text to
+            // find answers an err born here.
+            b"replace" => {
+                let [text, from, to] = arity(args, name, span)?;
+                let (Value::Str(held), Value::Str(from), Value::Str(to)) = (&text, &from, &to)
+                else {
+                    return Err(RuntimeError {
+                        at: None,
+                        message: "replace takes three strings".to_string(),
+                        span,
+                    });
+                };
+                if from.is_empty() {
+                    return Ok(err_value(
+                        Value::Str(Text::from("replace needs something to find".to_string())),
+                        origin_at(frame, span),
+                    ));
+                }
+                Ok(match crate::replace::replaced(held.as_str(), from.as_str(), to.as_str()) {
+                    Some(out) => Value::Str(Text::from(out)),
+                    None => text.clone(),
+                })
+            }
             b"chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {

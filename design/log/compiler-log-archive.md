@@ -114205,3 +114205,184 @@ rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
 `browser_compile_instructions` 3,822 to 350,291,185, and
 `browser_run_instructions` did not move. The rule is part of the language,
 so the welfare floor moves down by exactly the check's cost.
+
+## 2026-11-05 — directive: a model's fields come from its table
+
+Clay: "we need the fields for the model to be auto-magic like in ruby." He
+named two ways: generate the model files the way the schema is kept, or a
+primitive that maps data such as a schema to code the compiler can still
+check. kanso already has the second. A derivation runs during the build,
+reads the app's own data and answers declarations that are checked like
+code someone wrote (#2186). senro's models derivation read the migrations
+and checked each hand-written record against its table, so every column was
+named twice.
+
+`derive/define` writes source into a module as one more of its files, and the
+source can be a `type`. What stopped a module from using one was the first
+load of the app's modules, which describes them to the derivations before
+any has run. A module that annotated `p:post` and read `p.title` was refused
+there, because nothing had declared `post` yet. #2265 met the same problem
+for functions and set an unknown name aside in that load. The load now also
+sets aside an unknown type name and a field read no record has, in the
+per-file checks and in the merged check; one helper, `set_aside`, holds all
+of them. The second load, with the derived source joined in, refuses
+whatever is still unknown with the message it always gave.
+
+Three cases in tests/golden/derive pin it.
+`a_module_reads_a_record_its_derivation_declares` prints its bylines on both
+engines, and the binary before the change refused it with "no type is called
+`post`". `a_module_reads_a_field_its_derived_record_lacks` and
+`a_module_names_a_record_nothing_declares` are still refused.
+
+senro builds on it: a module named for a table gets the table's record
+declared in it, with a field for each column in the table's order, and a
+module that declares the record keeps its own. `kanso derived` prints the
+declared type, so the generated code can be read without being kept on disk.
+Files written by a generator would drift from the schema until someone ran
+it again; a derivation runs on every build.
+
+Go's embedding was raised in the same message, as a way to put validations
+and helpers on top of the generated fields. A kanso record carries no
+methods, and the module's functions that take the record sit beside it, so
+there is nothing to delegate through. The question and the committee's
+reading are on #2356.
+
+Rows: the describe load's added set-asides cost every derive-free compile a
+little, because the helper runs on each file's diagnostics.
+`compile_instructions` rose 290 to 24,115,253, `entry_instructions` 2,156 to
+87,964,947 and `library_instructions` 617 to 73,496,395.
+`browser_compile_instructions` fell 799 to 350,296,781, by layout. The
+directive is a part of the language Clay asked for, so the welfare floor
+moves down by exactly that cost.
+
+## 2026-11-05 — a field read through an annotated name answers its own type
+
+**DONE (#2350).** Two record types in one program that both have a `body`
+field share one getter group, `Get_body`, with an arm for each type. Infer
+gave the group the join of its arms, so when one type's `body` could be none,
+reading `body` from the other type's value was refused as possibly none, even
+where the parameter was annotated with the other type. A senro model module
+with a `letter` and a `note` hit it, and `size_of` in http.kso was worked
+around for it in #2351.
+
+Infer now remembers the type of a binding that carries an annotation, and a
+field read whose one argument is such a name considers only the arm whose
+first pattern is that type's constructor. An unannotated read still joins
+every arm, which is the old answer and still a sound one.
+
+`tests/golden/field_reads/its_own_type` reads a `letters` body that is never
+none beside a `notes` body that can be, and prints `8` and `7`; the compiler
+before the change refused it. `another_types_none` reads the `notes` body
+through a name of that type and is still refused, at the same line.
+`tests/a_field_read_answers_its_own_type.rs` runs both.
+
+Rows: the first version stored the annotation in each environment entry,
+which grew the entry from 24 bytes to 40 and raised every compile row about
+0.28%. The types now sit in a side vector that stays empty in a function with
+no annotated parameters. Against main, `compile_instructions` fell 4,266 to
+24,110,987, `entry_instructions` 47,358 to 87,917,589,
+`library_instructions` 35,277 to 73,461,118 and `emit_instructions` 174 to
+5,613,223. `browser_compile_instructions` rose 270,018 to 350,566,799, and
+the side vector's first push is three more front-end allocations
+(`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
+(`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
+lets a correct program compile, so the floor moves down by that cost.
+
+## 2026-11-06 — a derived definition opens with the imports it needs
+
+**DONE.** A module's files share their declarations and not their imports, so
+an arm that `derive/define` added could call only what its own module
+happened to import. senro's next convenience is a reader each way for every
+foreign key, as Rails' `has_many` and `belongs_to` give, and those readers
+call senro's `models`. A definition may now open with `import` lines. The
+module's derived file opens with all of them, once each and sorted, since
+the parser refuses imports anywhere else or out of order.
+
+A relative path in a definition is written from the derivation's own
+module, as that module's own imports are, and the compiler rewrites it from
+the module the definition joins. senro writes `import "../models"` from
+`models/`; the notebook's `pages`, two directories away from senro, reads
+it as `../../models`. The derivation's path is the one the entry imports it
+by (`written_from` in src/derive.rs), and the rewrite is `reread` in
+src/lib/modules.rs.
+
+`tests/golden/derive/a_defined_arm_opens_with_its_imports` gives a module
+that imports nothing two arms: one calls a sibling of the derivation's
+module through a path written from there, and one imports `std/list` and
+`std/text`. Both engines print `["HELLO!" "AGAIN!"]` and `HELLO AGAIN`. The
+compiler before the change refused it, at the import in the middle of the
+derived file.
+
+Rows: `entry_instructions` rose 12,540 to 87,930,129 and
+`emit_instructions` 270 to 5,613,493; `browser_compile_instructions` fell
+17 to 350,566,782. The compile and library rows did not move. The change
+came with the binary and with four more comment lines in lib/derive, and
+nothing here isolates one from the other. It builds the derivations ruling
+(#2186), so the welfare floor moves down by exactly that.
+
+## 2026-11-06 — directive: the language committee decides, and nothing blocks on Clay
+
+Clay, on #2356: "nothing needs me you can just ask the language committee
+like I said. I will give you feedback once I see what you've built perhaps
+but you don't have to block anything for me."
+
+A design question, including one about kanso the language, is now decided
+by the committee and recorded on its issue and here. The work goes ahead on
+that decision. Clay's later feedback overrides it and is recorded as a
+ruling. `needs-clay` stays for what the committee cannot settle: a refusal
+from the harness, a permission, or a question Clay has said he wants put to
+him. CLAUDE.md states the rule under The tracker, and the places that sent
+decisions to him now point there.
+
+The first decision under it is #2356, whether an application model should
+get Go-style embedding. The committee chose no implicit delegation. A model
+is the record its table derives plus the functions in its module, and a
+delegator is an ordinary function. A field group that several models share,
+timestamps most likely, uses the `&` merge of the 2026-07-25 gavel, and its
+open parts (acceptance where the parent is expected, the collision rule,
+variance) are built when a second model shares one. Promotion was declined:
+it needs depth and ambiguity rules, and it lets a function match a type it
+was not written for by a rule the call site cannot see. #2356 is closed.
+
+#2284, how browser code calls a JavaScript library, stays parked until an
+app needs one, which is when the committee takes it up.
+
+## 2026-11-06 — `kanso run` hands SIGTERM and SIGHUP to its program
+
+**DONE.** `kanso run` builds a native binary and waits on it as a child. A
+SIGTERM sent to the driver, which is what `kill` and process supervisors
+send, ended the driver alone. The program went on running, reparented, and a
+server went on listening on its port. senro's specs start each app with
+`kanso run`, stop it with `kill`, and start the next on the same port, so a
+later spec could reach a server an earlier one left behind. Four orphaned
+servers were found on port 3000 in one container. They explain a
+password-reset mail delivered to an old server's outbox and a JSON request
+answered by a server built before the branch that added JSON.
+
+`execute` in src/main.rs now spawns the program and, while it waits, passes
+SIGTERM and SIGHUP on to it. SIGINT already reached the program, because a
+terminal sends it to the whole process group. When the program dies of a
+signal the driver handed on, the driver raises that signal on itself and
+prints nothing, so whoever sent it sees the driver end by it. A program
+killed by a signal the driver never received is reported as before; the
+first version re-raised any signal and turned `a_program_the_system_killed`
+red. The handlers are installed once. With no program running, the handler
+puts the default back and raises the signal itself, so the driver never
+resets them.
+
+`tests/a_stopped_run_stops_its_program.rs` runs a native program that
+writes `started`, sleeps three seconds and writes `finished`, and sends
+SIGTERM to the driver once `started` appears. Before the change it failed
+with "the program was still running after its driver was terminated"; after
+it, `finished` never appears, the driver ends by SIGTERM, and stderr is
+empty.
+
+Rows: `startup_instructions` rose 243 to 50,507, the two `signal()` calls
+the driver now makes on every run. The first version reset both handlers
+after the wait and read +489. `codegen_instructions_release` fell 124 to
+372,025,748 on both of CI's readings. Nothing in the diff reaches `kanso
+build`, and the cause is not isolated. Welfare fell by 0.00009. The
+committee decided on kanso#2370 that the change merges and the floor moves
+down by exactly that, as it did for #2350: a driver that leaves its program
+holding a port when it is stopped is the toolchain failing what `kanso run`
+promises.

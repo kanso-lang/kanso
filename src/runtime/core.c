@@ -828,6 +828,9 @@ static long long k_stat_sock_waits = 0;
 /* Calls `std/base64` made on the runtime's two kernels: their presence.
    Printed only by a run that made one. */
 static long long k_stat_base64 = 0;
+/* Calls `text/replace` made on the runtime's kernel: its presence. Printed
+   only by a run that made one. */
+static long long k_stat_replace = 0;
 
 static void k_stats_dump(void);
 
@@ -902,6 +905,7 @@ static void k_stats_dump(void) {
     if (k_stat_delete_marks) fprintf(stderr, "delete_marks=%lld\n", k_stat_delete_marks);
     if (k_stat_sock_waits) fprintf(stderr, "sock_waits=%lld\n", k_stat_sock_waits);
     if (k_stat_base64) fprintf(stderr, "base64_calls=%lld\n", k_stat_base64);
+    if (k_stat_replace) fprintf(stderr, "replace_calls=%lld\n", k_stat_replace);
     if (k_ahead_ran) {
         fprintf(stderr, "ahead_forced=%lld\nahead_dropped=%lld\n",
                 k_stat_ahead_forced, k_stat_ahead_dropped);

@@ -52,7 +52,9 @@ pub fn check_shipped(path: &str) -> Result<(), String> {
 
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
-    let mut program = reaching(None, || {
+    let texts = module_sources(dir, None).unwrap_or_default();
+    let texts = texts.into_iter().map(|(_, text)| (text, dir.to_path_buf())).collect();
+    let mut program = reaching(texts, || {
         let mut visited = crate::hash::Set::default();
         compile_module_root(dir, require_entry, &mut visited)
     })?;
@@ -186,6 +188,23 @@ thread_local! {
     /// asked for it, and then nothing is set aside.
     static REACH: std::cell::RefCell<Option<crate::hash::Set<String>>> =
         const { std::cell::RefCell::new(None) };
+    /// The words each shipped module's kept declarations spell, by the path
+    /// an import names it with, and for each shipped module the shipped
+    /// modules that import it. A word spelled in a shipped module keeps a
+    /// declaration of that module or of one it imports, and of no other.
+    static SHIPPED_WORDS: std::cell::RefCell<crate::hash::Map<String, crate::hash::Set<String>>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    static SHIPPED_IMPORTERS: std::cell::RefCell<crate::hash::Map<String, Vec<String>>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    /// The shipped modules the survey pruned, each with how many words the
+    /// program had spelled when it did. A compile takes its module from here
+    /// and prunes nothing, unless the program has spelled more since.
+    static SURVEYED: std::cell::RefCell<crate::hash::Map<String, (usize, Pruned)>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    /// The modules the survey found named by more than one import, which are
+    /// kept from their first compile. Empty outside a root compile.
+    static SHARED: std::cell::RefCell<crate::hash::Set<std::path::PathBuf>> =
+        std::cell::RefCell::new(crate::hash::Set::default());
 }
 
 /// Names the compiler calls into the shipped library without the program
@@ -198,33 +217,91 @@ const COMPILER_ROOTS: [&str; 5] = ["fold", "bump", "file_under", "to_string", "t
 /// `past?` (src/flat.rs).
 const IMPLIED_ROOTS: [(&str, &[&str]); 1] = [("slice!", &["past?"])];
 
-/// Adds every word `text` spells to `into`: a run of letters, digits and
-/// underscores, with and without a trailing `!` or `?`. It reads more than
-/// names (keywords, words in strings and comments), which can only keep a
-/// declaration that is not needed.
+/// Adds every word `text` spells as code to `into`: a run of letters,
+/// digits and underscores, with and without a trailing `!` or `?`.
+///
+/// A comment's words are left out, from a `#` to the end of its line, and so
+/// is the text of a string outside its `{...}` interpolations. Until #2434
+/// the reach read both, so a comment that said `first` in passing or an err
+/// that said `nothing to find` kept that group of the shipped library, and
+/// the whole front end then read it. Text holding a `"""` block keeps its
+/// comments' words, because a block's lines are text whatever they open
+/// with.
+///
+/// It still reads more than names (keywords, a field's name), which can only
+/// keep a declaration that is not needed.
 fn reach_words(text: &str, into: &mut crate::hash::Set<String>) {
     let bytes = text.as_bytes();
+    // whether the text holds a block, asked at the first `#` and not before:
+    // most declarations have no `#` to ask about
+    let mut blocks = None;
     let mut i = 0;
     while i < bytes.len() {
         let b = bytes[i];
-        if !(b.is_ascii_alphabetic() || b == b'_') {
-            i += 1;
+        if b.is_ascii_alphabetic() || b == b'_' {
+            i = reach_word(text, i, into);
             continue;
         }
-        let start = i;
-        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-            i += 1;
-        }
-        if !into.contains(&text[start..i]) {
-            into.insert(text[start..i].to_string());
-        }
-        if i < bytes.len() && (bytes[i] == b'!' || bytes[i] == b'?') {
-            if !into.contains(&text[start..=i]) {
-                into.insert(text[start..=i].to_string());
+        match b {
+            b'"' => i = reach_string(text, i + 1, into),
+            b'#' if !*blocks.get_or_insert_with(|| text.contains("\"\"\"")) => {
+                i = crate::compare::byte_from(bytes, i, b'\n');
             }
-            i += 1;
+            _ => i += 1,
         }
     }
+}
+
+/// Adds the word that starts at `start` and answers where it ends. Inlined:
+/// as a call it cost the module corpus 65,929 instructions.
+#[inline(always)]
+fn reach_word(text: &str, start: usize, into: &mut crate::hash::Set<String>) -> usize {
+    let bytes = text.as_bytes();
+    let mut i = start;
+    while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1;
+    }
+    if !into.contains(&text[start..i]) {
+        into.insert(text[start..i].to_string());
+    }
+    if i < bytes.len() && (bytes[i] == b'!' || bytes[i] == b'?') {
+        if !into.contains(&text[start..=i]) {
+            into.insert(text[start..=i].to_string());
+        }
+        i += 1;
+    }
+    i
+}
+
+/// Adds the words a string's interpolations spell, from just past its opening
+/// quote, and answers where the string ends. The braces nest as the lexer
+/// counts them, a backslash takes the byte after it, and the end of the line
+/// closes a string nothing else closed. A string inside an interpolation is
+/// read whole, which reads more than it must.
+fn reach_string(text: &str, mut i: usize, into: &mut crate::hash::Set<String>) -> usize {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    while i < bytes.len() {
+        let b = bytes[i];
+        match b {
+            b'\n' => return i,
+            b'\\' if depth == 0 => i += 2,
+            b'"' if depth == 0 => return i + 1,
+            b'{' => {
+                depth += 1;
+                i += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                i += 1;
+            }
+            _ if depth > 0 && (b.is_ascii_alphabetic() || b == b'_') => {
+                i = reach_word(text, i, into);
+            }
+            _ => i += 1,
+        }
+    }
+    i
 }
 
 /// Blanks every `fn` declaration of a shipped module that no reached text
@@ -237,8 +314,10 @@ fn reach_words(text: &str, into: &mut crate::hash::Set<String>) {
 /// where it did.
 fn prune_shipped(
     sources: &mut [(String, String)],
-    roots: &mut crate::hash::Set<String>,
-) -> Vec<bool> {
+    roots: &crate::hash::Set<String>,
+    lent: &[&crate::hash::Set<String>],
+    mine: &mut crate::hash::Set<String>,
+) -> (Vec<bool>, Vec<bool>) {
     struct Decl {
         file: usize,
         start: usize,
@@ -286,29 +365,42 @@ fn prune_shipped(
             decls.push(Decl { file: f, start: here, end: at, name });
         }
     }
+    // What the program and the importers name is settled before this module
+    // is read, so each declaration asks them once. Only the module's own
+    // words grow while it is walked, and the walk asks those alone.
+    let keep = |d: &Decl, mine: &mut crate::hash::Set<String>| {
+        let source = &sources[d.file].1;
+        reach_words(&source[d.start..d.end], mine);
+        if let Some((from, to)) = d.name {
+            for (name, implied) in IMPLIED_ROOTS {
+                if &source[from..to] == name {
+                    mine.extend(implied.iter().map(|n| n.to_string()));
+                }
+            }
+        }
+    };
     let mut kept = vec![false; decls.len()];
+    for (i, d) in decls.iter().enumerate() {
+        let named = match d.name {
+            None => true,
+            Some((from, to)) => {
+                let name = &sources[d.file].1[from..to];
+                roots.contains(name) || lent.iter().any(|words| words.contains(name))
+            }
+        };
+        if named {
+            kept[i] = true;
+            keep(d, mine);
+        }
+    }
     loop {
         let mut moved = false;
         for (i, d) in decls.iter().enumerate() {
-            if kept[i] {
-                continue;
-            }
-            let source = &sources[d.file].1;
-            let wanted = match d.name {
-                None => true,
-                Some((from, to)) => roots.contains(&source[from..to]),
-            };
-            if wanted {
+            let Some((from, to)) = d.name.filter(|_| !kept[i]) else { continue };
+            if mine.contains(&sources[d.file].1[from..to]) {
                 kept[i] = true;
                 moved = true;
-                reach_words(&source[d.start..d.end], roots);
-                if let Some((from, to)) = d.name {
-                    for (name, implied) in IMPLIED_ROOTS {
-                        if &source[from..to] == name {
-                            roots.extend(implied.iter().map(|n| n.to_string()));
-                        }
-                    }
-                }
+                keep(d, mine);
             }
         }
         if !moved {
@@ -336,7 +428,141 @@ fn prune_shipped(
         }
         *source = out;
     }
-    pruned
+    (pruned, kept)
+}
+
+/// An entry file as the one text a root compile starts from, with the
+/// directory its imports are read from.
+fn from_entry(file: &str, source: &str) -> Vec<(String, std::path::PathBuf)> {
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    vec![(source.to_string(), base)]
+}
+
+/// The paths a source names on its `import` lines. Imports open a file, so
+/// the reading stops at the first line that is not one, a comment or blank.
+fn imports_named(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .lines()
+        .take_while(|line| line.is_empty() || line.starts_with('#') || line.starts_with("import "))
+        .filter_map(|line| line.strip_prefix("import ")?.split('"').nth(1))
+}
+
+/// Reads the program's own modules for their words before any of it is
+/// compiled, and notes which modules more than one import names.
+///
+/// A shipped module is pruned against the words read so far, and a compile
+/// read them as it went: the same module imported from three of the
+/// program's files was pruned three ways and compiled three times, each a
+/// little larger than the last. With the program's words in hand first, the
+/// three imports ask for one pruning, and a module known to be asked for
+/// again is kept from its first compile.
+///
+/// It follows `import` lines as text and passes over whatever it cannot
+/// read. What it misses the compile still adds as it goes, at the cost of
+/// the compile this is here to save. A shipped module's own words are left
+/// to the compile: pruning each to a fixed point here cost 3.4 million
+/// instructions on the smallest corpus and saved less than that on the
+/// largest.
+fn survey(
+    mut pending: Vec<(String, std::path::PathBuf)>,
+    roots: &mut crate::hash::Set<String>,
+) -> crate::hash::Set<std::path::PathBuf> {
+    let mut named: crate::hash::Map<std::path::PathBuf, usize> = crate::hash::Map::default();
+    // the entry imports std/render whether it says so or not
+    named.insert(std::path::PathBuf::from("std/render"), 1);
+    type Shipped = (String, &'static [(&'static str, &'static str)]);
+    let mut shipped: Vec<Shipped> = Vec::new();
+    // counts an import of a shipped module, and says whether it was one
+    fn note(
+        path: &str,
+        named: &mut crate::hash::Map<std::path::PathBuf, usize>,
+        shipped: &mut Vec<Shipped>,
+    ) -> bool {
+        let Some((_, files)) = embedded_module(path).filter(|_| path.starts_with("std/")) else {
+            return false;
+        };
+        let times = named.entry(std::path::PathBuf::from(path)).or_insert(0);
+        *times += 1;
+        if *times == 1 {
+            shipped.push((path.to_string(), files));
+        }
+        true
+    }
+    shipped
+        .extend(embedded_module("std/render").map(|(_, files)| ("std/render".to_string(), files)));
+    while let Some((text, base)) = pending.pop() {
+        for path in imports_named(&text) {
+            if note(path, &mut named, &mut shipped) {
+                continue;
+            }
+            let local = path.strip_prefix("./").unwrap_or(path);
+            let handed = HANDED_SOURCES.with(|c| c.borrow().get(local).cloned());
+            let (key, sources, inner) = match handed {
+                Some(files) => (std::path::PathBuf::from(local), Some(files), base.clone()),
+                None => {
+                    let Ok(dir) = resolve_import(&base, path) else { continue };
+                    let inner = match dir.is_file() {
+                        true => dir.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
+                        false => dir.clone(),
+                    };
+                    (dir.canonicalize().unwrap_or_else(|_| dir.clone()), None, inner)
+                }
+            };
+            let times = named.entry(key.clone()).or_insert(0);
+            *times += 1;
+            if *times > 1 {
+                continue;
+            }
+            let Ok(sources) = sources.map_or_else(|| module_sources(&key, None), Ok) else {
+                continue;
+            };
+            for (_, text) in sources {
+                reach_words(&text, roots);
+                pending.push((text, inner.clone()));
+            }
+        }
+    }
+    // a shipped module's imports are shipped modules, counted the same way,
+    // and each import is one more importer the imported module waits for
+    let mut waits: crate::hash::Map<String, usize> = crate::hash::Map::default();
+    let mut at = 0;
+    while at < shipped.len() {
+        let files = shipped[at].1;
+        for path in files.iter().flat_map(|(_, text)| imports_named(text)) {
+            if note(path, &mut named, &mut shipped) {
+                *waits.entry(path.to_string()).or_insert(0) += 1;
+            }
+        }
+        at += 1;
+    }
+    // Importers first. A word a shipped module spells can keep a declaration
+    // of a module it imports and of no module further on, so by the time a
+    // module is pruned every word that can reach it has been read, and one
+    // pruning each is the last one.
+    let spelled = roots.len();
+    let mut ready: Vec<usize> =
+        (0..shipped.len()).filter(|m| !waits.contains_key(&shipped[*m].0)).collect();
+    while let Some(m) = ready.pop() {
+        let (module, files) = &shipped[m];
+        for path in files.iter().flat_map(|(_, text)| imports_named(text)) {
+            let Some(left) = waits.get_mut(path) else { continue };
+            *left -= 1;
+            if *left == 0 {
+                ready.extend(shipped.iter().position(|(name, _)| name == path));
+            }
+        }
+        // named as the loader names them: a file's name is how the checker
+        // knows it for the library's
+        let named: Vec<(String, &str)> =
+            files.iter().map(|(n, text)| (format!("{module}/{n}"), *text)).collect();
+        let borrowed: Vec<(&str, &str)> = named.iter().map(|(n, s)| (n.as_str(), *s)).collect();
+        let Ok(sources) = module_sources(std::path::Path::new(module), Some(&borrowed)) else {
+            continue;
+        };
+        let done = pruned_shipped(module, sources, roots);
+        SURVEYED.with(|s| s.borrow_mut().insert(module.clone(), (spelled, done)));
+    }
+    named.into_iter().filter(|(_, times)| *times > 1).map(|(module, _)| module).collect()
 }
 
 /// Runs a root compile with the shipped library read only as far as the
@@ -344,17 +570,28 @@ fn prune_shipped(
 /// what reports, so every diagnostic is the one the whole library gives; a
 /// program the whole library accepts and the pruned one refused is a name
 /// this reach missed, which a debug build refuses to hide.
-fn reaching<T>(source: Option<&str>, compile: impl Fn() -> Result<T, String>) -> Result<T, String> {
+fn reaching<T>(
+    texts: Vec<(String, std::path::PathBuf)>,
+    compile: impl Fn() -> Result<T, String>,
+) -> Result<T, String> {
     let mut roots = crate::hash::Set::default();
     for root in COMPILER_ROOTS {
         roots.insert(root.to_string());
     }
-    if let Some(source) = source {
-        reach_words(source, &mut roots);
+    for (text, _) in &texts {
+        reach_words(text, &mut roots);
     }
+    // The shipped modules' words belong to one compile, as the roots do: a
+    // compile inside another starts with none and hands the outer's back.
+    let outer_words = SHIPPED_WORDS.with(|w| w.take());
+    let outer_importers = SHIPPED_IMPORTERS.with(|i| i.take());
+    let outer_surveyed = SURVEYED.with(|s| s.take());
+    let shared = survey(texts, &mut roots);
     let outer = REACH.with(|r| r.replace(Some(roots)));
+    let outer_shared = SHARED.with(|s| s.replace(shared));
     let pruned = compile();
     REACH.with(|r| *r.borrow_mut() = None);
+    SHARED.with(|s| *s.borrow_mut() = outer_shared);
     let answer = match pruned {
         Ok(program) => Ok(program),
         Err(refused) => {
@@ -368,6 +605,10 @@ fn reaching<T>(source: Option<&str>, compile: impl Fn() -> Result<T, String>) ->
         }
     };
     REACH.with(|r| *r.borrow_mut() = outer);
+    // a run holds none of these: they are dropped here, where the compile ends
+    SHIPPED_WORDS.with(|w| *w.borrow_mut() = outer_words);
+    SHIPPED_IMPORTERS.with(|i| *i.borrow_mut() = outer_importers);
+    SURVEYED.with(|s| *s.borrow_mut() = outer_surveyed);
     answer
 }
 
@@ -688,21 +929,62 @@ fn compile_module_inner(
     if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
-    let key = module_key(&canon, require_entry, embedded.is_some());
+    // A shipped module is pruned before it is looked up: what it was pruned
+    // to is what a compile of it depends on, and that is the key. An import
+    // that finds as many roots as an earlier import of the module found
+    // prunes to the same declarations, so it asks the cache under those
+    // first and reads no source when the compile is there.
+    let prunes = prunes(embedded.is_some());
+    let reached = match prunes {
+        true => shipped_reach(dir),
+        false => 0,
+    };
+    let before = match prunes {
+        true => PRUNINGS.with(|p| p.borrow().get(&canon).and_then(|m| m.at(reached))),
+        false => None,
+    };
+    if let Some(kept) = before {
+        let key = module_key(&canon, require_entry, embedded.is_some(), kept);
+        if let Some(done) = MODULE_CACHE.with(|c| c.borrow().get(&key).cloned()) {
+            visited.remove(&canon);
+            return Ok(done);
+        }
+    }
+    let shipped = match prunes {
+        true => match shipped_pruned(dir, embedded) {
+            Ok(pruned) => pruned,
+            Err(refused) => {
+                visited.remove(&canon);
+                return Err(refused);
+            }
+        },
+        false => None,
+    };
+    let (sources, kept) = match shipped {
+        Some((sources, pruned, kept)) => {
+            let kept = PRUNINGS
+                .with(|p| p.borrow_mut().entry(canon.clone()).or_default().noted(reached, kept));
+            (Some((sources, pruned)), kept)
+        }
+        None => (None, usize::MAX),
+    };
+    let key = module_key(&canon, require_entry, embedded.is_some(), kept);
     if let Some(done) = MODULE_CACHE.with(|c| c.borrow().get(&key).cloned()) {
         visited.remove(&canon);
         return Ok(done);
     }
-    // A module is kept only once a second import asks for it. Keeping the
-    // first compile of every module cloned each one, and a program whose
-    // modules are each imported once paid the clones and the memory for
-    // nothing: compile_corpus's front end rose 43% in what it held.
-    let again = MODULE_SEEN.with(|s| !s.borrow_mut().insert(key.clone()));
+    // A module is kept once a second import asks for it, or from its first
+    // compile when the survey saw two imports name it. Keeping the first
+    // compile of every module cloned each one, and a program whose modules
+    // are each imported once paid the clones and the memory for nothing:
+    // compile_corpus's front end rose 43% in what it held.
+    let again = MODULE_SEEN.with(|s| !s.borrow_mut().insert(key.clone()))
+        || SHARED.with(|s| s.borrow().contains(&canon));
     if std::env::var_os("KANSO_PHASES").is_some() {
         eprintln!("load {}", dir.display());
     }
     MODULE_LOADS.with(|c| c.set(c.get() + 1));
-    let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
+    let loaded = compile_module_loaded(dir, require_entry, visited, embedded, sources);
     visited.remove(&canon);
     if let (true, Ok(program)) = (again, &loaded) {
         MODULE_CACHE.with(|c| c.borrow_mut().insert(key, program.clone()));
@@ -713,19 +995,136 @@ fn compile_module_inner(
 /// What a module's compile depends on besides its own sources, which no
 /// compile in one load changes: where the module is, whether it must be an
 /// entry, where its sources came from, the flags its importer sets around
-/// it, and, for a shipped module, how many words it is pruned against. The
-/// root set only grows, so a module compiled against as many roots as before
-/// was pruned against the same ones.
+/// it, and, for a shipped module, which of its declarations the pruning
+/// kept.
+///
+/// The key held the number of words reached so far until #2434. That number
+/// grows with every module a load reads, so two imports of `std/text` a few
+/// modules apart never shared a compile, though the words that arrived
+/// between them named nothing in it: the entry corpus compiled `std/text`
+/// and `std/list` ten times each. A module's kept declarations name
+/// everything it reaches in the modules it imports, and the roots only grow,
+/// so a compile kept under the same declarations holds what this import
+/// needs. The key holds which of the module's prunings this is, counted in
+/// the order they were first seen (`Prunings`), and `usize::MAX` for a
+/// module that is not pruned.
 type ModuleKey = (std::path::PathBuf, bool, bool, bool, bool, bool, bool, usize);
 
-fn module_key(canon: &std::path::Path, require_entry: bool, embedded: bool) -> ModuleKey {
-    // Only a shipped module is pruned against the roots (see
-    // `compile_module_loaded`); any other compiles the same against any.
-    let pruned = SHIPPED_STD.with(|c| c.get()) && embedded && !CHECK_SHIPPED.with(|c| c.get());
-    let roots = match pruned {
-        true => REACH.with(|r| r.borrow().as_ref().map_or(usize::MAX, |s| s.len())),
-        false => 0,
-    };
+/// The ways one shipped module has been pruned in this load: each distinct
+/// set of kept declarations once, and which of them the roots gave when
+/// they numbered so many. The roots only grow, so as many roots are the
+/// same roots.
+#[derive(Default)]
+struct Prunings {
+    sets: Vec<Vec<bool>>,
+    at: Vec<(usize, usize)>,
+}
+
+impl Prunings {
+    fn at(&self, reached: usize) -> Option<usize> {
+        self.at.iter().find(|(r, _)| *r == reached).map(|(_, set)| *set)
+    }
+
+    fn noted(&mut self, reached: usize, kept: Vec<bool>) -> usize {
+        let set = match self.sets.iter().position(|s| *s == kept) {
+            Some(set) => set,
+            None => {
+                self.sets.push(kept);
+                self.sets.len() - 1
+            }
+        };
+        self.at.push((reached, set));
+        set
+    }
+}
+
+/// Whether a module loaded now is a shipped one read only as far as the
+/// program reaches (see `compile_module_loaded`); any other compiles the same
+/// against any roots.
+fn prunes(embedded: bool) -> bool {
+    SHIPPED_STD.with(|c| c.get())
+        && embedded
+        && !CHECK_SHIPPED.with(|c| c.get())
+        && REACH.with(|r| r.borrow().is_some())
+}
+
+/// A module's sources as `(file, text)`, and for each whether it lost a
+/// declaration to the pruning.
+type PrunedSources = (Vec<(String, String)>, Vec<bool>);
+
+/// A shipped module's sources pruned against the roots, with which files
+/// lost a declaration and which declarations were kept. `None` when no root
+/// compile asked for pruning.
+type Pruned = (Vec<(String, String)>, Vec<bool>, Vec<bool>);
+
+fn shipped_pruned(
+    dir: &std::path::Path,
+    embedded: Option<&[(&str, &str)]>,
+) -> Result<Option<Pruned>, String> {
+    let module = dir.to_string_lossy().into_owned();
+    REACH.with(|r| {
+        let r = r.borrow();
+        let Some(roots) = r.as_ref() else { return Ok(None) };
+        let surveyed = SURVEYED.with(|s| s.borrow_mut().remove(&module));
+        if let Some((_, done)) = surveyed.filter(|(spelled, _)| *spelled == roots.len()) {
+            return Ok(Some(done));
+        }
+        let sources = module_sources(dir, embedded)?;
+        Ok(Some(pruned_shipped(&module, sources, roots)))
+    })
+}
+
+/// Prunes one shipped module against the program's words, its own, and
+/// those of the shipped modules that import it, and notes it as an importer
+/// of the shipped modules it imports.
+fn pruned_shipped(
+    module: &str,
+    mut sources: Vec<(String, String)>,
+    roots: &crate::hash::Set<String>,
+) -> Pruned {
+    let importers = SHIPPED_IMPORTERS.with(|i| i.borrow().get(module).cloned().unwrap_or_default());
+    let (pruned, kept) = SHIPPED_WORDS.with(|w| {
+        let mut w = w.borrow_mut();
+        let mut mine = w.remove(module).unwrap_or_default();
+        let lent: Vec<&crate::hash::Set<String>> =
+            importers.iter().filter_map(|importer| w.get(importer)).collect();
+        let done = prune_shipped(&mut sources, roots, &lent, &mut mine);
+        w.insert(module.to_string(), mine);
+        done
+    });
+    SHIPPED_IMPORTERS.with(|i| {
+        let mut i = i.borrow_mut();
+        for imported in sources.iter().flat_map(|(_, s)| imports_named(s)) {
+            let importers = i.entry(imported.to_string()).or_default();
+            if !importers.iter().any(|importer| importer == module) {
+                importers.push(module.to_string());
+            }
+        }
+    });
+    (sources, pruned, kept)
+}
+
+/// How many words can keep a declaration of this shipped module: the
+/// program's, its own, and those of the shipped modules that import it.
+/// Each of the three only grows, so as many words are the same words.
+fn shipped_reach(dir: &std::path::Path) -> usize {
+    let module = dir.to_string_lossy().into_owned();
+    let importers =
+        SHIPPED_IMPORTERS.with(|i| i.borrow().get(&module).cloned().unwrap_or_default());
+    let shipped = SHIPPED_WORDS.with(|w| {
+        let w = w.borrow();
+        let own = w.get(&module).map_or(0, |words| words.len());
+        own + importers.iter().filter_map(|p| w.get(p)).map(|words| words.len()).sum::<usize>()
+    });
+    shipped + REACH.with(|r| r.borrow().as_ref().map_or(0, |s| s.len()))
+}
+
+fn module_key(
+    canon: &std::path::Path,
+    require_entry: bool,
+    embedded: bool,
+    kept: usize,
+) -> ModuleKey {
     (
         canon.to_path_buf(),
         require_entry,
@@ -734,7 +1133,7 @@ fn module_key(canon: &std::path::Path, require_entry: bool, embedded: bool) -> M
         CHECK_SHIPPED.with(|c| c.get()),
         ENTRY_COMPILE.with(|c| c.get()),
         HAKO_EMBEDDED.with(|c| c.get()),
-        roots,
+        kept,
     )
 }
 
@@ -749,6 +1148,10 @@ thread_local! {
         std::cell::RefCell::new(crate::hash::Map::default());
     static MODULE_SEEN: std::cell::RefCell<crate::hash::Set<ModuleKey>> =
         std::cell::RefCell::new(crate::hash::Set::default());
+    /// How each shipped module has been pruned in this load. Emptied with
+    /// the cache.
+    static PRUNINGS: std::cell::RefCell<crate::hash::Map<std::path::PathBuf, Prunings>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
     static LOAD_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
@@ -884,19 +1287,22 @@ fn compile_module_loaded(
     require_entry: bool,
     visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
+    shipped: Option<PrunedSources>,
 ) -> Result<ast::Program, String> {
-    let mut sources = module_sources(dir, embedded)?;
-    let pruned = REACH.with(|r| {
-        let mut r = r.borrow_mut();
-        let roots = r.as_mut()?;
-        let shipped =
-            SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
-        if shipped {
-            return Some(prune_shipped(&mut sources, roots));
+    // a shipped module arrives pruned, because its key needed that; any
+    // other adds its words to what the shipped ones are pruned against
+    let (mut sources, pruned) = match shipped {
+        Some((sources, pruned)) => (sources, Some(pruned)),
+        None => {
+            let sources = module_sources(dir, embedded)?;
+            REACH.with(|r| {
+                if let Some(roots) = r.borrow_mut().as_mut() {
+                    sources.iter().for_each(|(_, s)| reach_words(s, roots));
+                }
+            });
+            (sources, None)
         }
-        sources.iter().for_each(|(_, s)| reach_words(s, roots));
-        None
-    });
+    };
     // a file with declarations blanked out of it can leave an import that
     // only they used, and the whole file's imports are checked where the
     // shipped modules are

@@ -1,0 +1,7 @@
+import "std/text"
+
+fn braced inner
+  "<{inner}>"
+
+pub fn cleaned s
+  braced (text/trim s)

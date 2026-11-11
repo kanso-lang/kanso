@@ -902,6 +902,64 @@ KValue k_b_split(KValue sv, KValue sepv) {
     return k_list_own(items, n);
 }
 
+/* How many times the `fn` bytes at `from` occur in the `n` bytes at `s`,
+   found left to right, the search taking up again after the end of each
+   one. `fn` is at least 1. */
+static long long k_replace_count(const char* s, long long n, const char* from, long long fn) {
+    long long count = 0;
+    for (long at = 0;;) {
+        long hit = k_split_find(s, (long)n, from, (long)fn, at);
+        if (hit < 0) break;
+        count++;
+        at = hit + (long)fn;
+    }
+    return count;
+}
+
+/* Those bytes with each of the occurrences written as the `tn` bytes at
+   `to`, into `out`, which holds n + count * (tn - fn) bytes. Answers how
+   many it wrote. */
+static long long k_replace_into(const char* s, long long n, const char* from, long long fn,
+                                const char* to, long long tn, char* out) {
+    long long o = 0;
+    long at = 0;
+    for (;;) {
+        long hit = k_split_find(s, (long)n, from, (long)fn, at);
+        if (hit < 0) break;
+        memcpy(out + o, s + at, (size_t)(hit - at));
+        o += hit - at;
+        memcpy(out + o, to, (size_t)tn);
+        o += tn;
+        at = hit + (long)fn;
+    }
+    memcpy(out + o, s + at, (size_t)(n - at));
+    o += n - at;
+    return o;
+}
+
+/* `text/replace`: every occurrence of one text written as another. It
+   answers what `join (split s from) to` answers, which is how a program
+   replaced text before this existed, and makes no list of the pieces: the
+   occurrences are counted, the answer is allocated once at its length, and
+   the bytes are copied. A text that holds no occurrence is handed back as
+   it came, as `split` hands back its one piece. An empty text to find
+   occurs everywhere, so it answers an err born at the call. */
+KValue k_b_replace(KValue sv, KValue fromv, KValue tov, const char* origin) {
+    if (__builtin_expect(!k_not_failure(sv) || !k_not_failure(fromv) || !k_not_failure(tov), 0)) return k_failed3(sv, fromv, tov);
+    if (sv.tag != K_STR || fromv.tag != K_STR || tov.tag != K_STR) k_die("replace takes three strings");
+    KStr* s = k_as_str(sv);
+    KStr* from = k_as_str(fromv);
+    KStr* to = k_as_str(tov);
+    if (from->len <= 0) return k_err(k_str("replace needs something to find"), origin);
+    if (K_COUNTING) k_stat_replace++;
+    long long count = k_replace_count(s->data, s->len, from->data, from->len);
+    if (count == 0) return sv;
+    KStr* o = k_str_alloc(s->len + count * ((long long)to->len - (long long)from->len));
+    long long wrote = k_replace_into(s->data, s->len, from->data, from->len, to->data, to->len, o->data);
+    o->data[wrote] = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(o); return out;
+}
+
 KValue k_b_is_desc(KValue v) {
     if (!k_not_failure(v)) return v;
     return k_bool(v.tag == K_DESC);

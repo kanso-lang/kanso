@@ -277,10 +277,10 @@ fn complete? raw head true
 
 # No content-length is no body to wait for, which is every GET a browser makes.
 # Header names are case-insensitive, and a browser writes Content-Length where
-# a program writes content-length: splitting on one spelling and joining with
-# the other folds them into one before the search.
+# a program writes content-length: replacing one spelling with the other
+# folds them into one before the search.
 fn promised head
-  folded = text/join (text/split head "Content-Length:") "content-length:"
+  folded = text/replace head "Content-Length:" "content-length:"
   parts = text/split folded "content-length:"
   counted parts (length parts > 1)
 
