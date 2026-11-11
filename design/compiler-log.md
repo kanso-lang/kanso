@@ -2324,3 +2324,24 @@ inside an arena block, because the whole block is live memory to the
 sanitizer.
 
 No counter moved.
+
+## 2026-11-11 — the third sweep reads its gates, and the browser gate joins it
+
+#2447, its fourth item. `all_interp.sh` listed its four gates by hand, and
+`tests/every_golden_is_swept_by_something.rs` existed partly to keep that
+list honest against what CI runs. The sweep now reads its gates from
+`scripts/gates` the way `all_compile.sh` does: a script that names a
+golden under `bench/` and that neither other sweep runs is its own.
+`--list` prints them, and the test asks the sweep.
+
+Deriving the list found a fifth. CI runs `browser_cost.sh` against
+`bench/browser_golden.txt`, and no sweep ran it. The test should have
+said so. It decides whether a gate reads a golden by scanning the script
+for a file name, and the only place that script names its golden is a
+comment that ends the sentence there, so the scan read
+`browser_golden.txt.` and took the full stop for part of the name. With
+the stop trimmed the test fails and names `browser_cost`; with the
+derived list it passes.
+
+The interpreter sweep is slower by a wasm build and the browser test. No
+counter moved.
