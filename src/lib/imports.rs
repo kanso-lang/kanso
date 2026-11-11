@@ -40,6 +40,7 @@ fn embedded_module(path: &str) -> Option<Embedded> {
         "std/testing" => {
             Some(("testing", &[("testing.kso", include_str!("../../lib/testing/testing.kso"))]))
         }
+        "std/spec" => Some(("spec", &[("spec.kso", include_str!("../../lib/spec/spec.kso"))])),
         "std/net" => Some(("net", &[("net.kso", include_str!("../../lib/net/net.kso"))])),
         "std/net/http" => {
             Some(("http", &[("http.kso", include_str!("../../lib/net/http/http.kso"))]))

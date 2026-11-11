@@ -114808,3 +114808,79 @@ The committee kept the spelling `each signatures e ->`, collection first,
 two seats to one over `each signatures as e`: it is the call kanso would
 write with the parentheses the indentation makes redundant. `std` has no
 `each`, so kata's README calls it a helper kata writes.
+
+## 2026-11-10 — directive: senro may ask the language for more
+
+Clay, on the model finders: "this real world use case for kanso may lead to
+several more language tweaks. in general i support ambition as long as it
+fits with the stated goals for the language and the principles behind them.
+i'm particularly fascinated to see how you create a construct for convention
+over configuration without dynamic metaprogramming."
+
+The construct is `derive`: a library function the compiler runs over the
+project's modules, which answers source to add or a call to refuse. A senro
+feature that needs the derivation to see more than it is handed is a
+language change, proposed to the committee against the language's goals.
+The first candidate is the keys of a map literal at a call, which would let
+`where` take a map of conditions and still be checked (#2394).
+
+## 2026-11-10 — senro's apps hold no SQL
+
+The two rulings of this morning are built. The work is in senro (senro#93
+to senro#98) and on the site (#2393, #2398 and the sessions guide with
+this entry); no compiler change was needed, and no cost row moved.
+
+**What an app writes now.** A model lives in a module named for one row of
+its table, `note.kso` for `notes`, as kanso names a module for its type.
+The models derivation declares the record there from the table's columns
+and writes the calls: `note/find db id`, `find_by`, `all`, `newest`,
+`ordered`, `where`, `paged`, `create`, `update`, `destroy`, `increment`.
+The `db` an action is handed knows who is signed in, so no call takes a
+viewer. A column written out in a call is checked against the table when
+the app is checked, and the refusal is at the call
+(`spec/errors/order_not_a_column`).
+
+**The app's own writes.** Some writes have no viewer behind them: a reset
+link sets a digest, a sign-in counts a wrong password. The committee chose
+`models/as_app db`, a session that asks no policy, over naming the
+account's holder as the asker. Its reason: under the alternative the
+holder's `update?` must admit writes to the count of wrong passwords and
+the lock, which are the columns a browser-reachable write must never
+touch.
+
+**The count.** `account/increment db id "failures"` adds in the statement
+that answers the record. `spec/db/counted` runs eight on eight connections
+at once and they see 1 2 3 4 5 6 7 8, on both engines. With the increment
+rewritten as a read and then a write, they saw 1 1 1 1 1 1 1 1 natively
+and 1 1 1 1 1 2 2 2 interpreted.
+
+**The examples.** The pantry, the guestbook and what both generators write
+hold no query; `spec.sh` fails when one does. The guestbook's `account.kso`
+became the model alone, with `registration.kso` and `password.kso` as its
+resources, and the scaffold writes `note.kso` beside `notes.kso`.
+kata walks a list with `each xs x ->` and refuses a `for` row at its line.
+
+**What I got wrong on the way.**
+- I regenerated goldens (`SPEC_WRITE=1`) while the tree did not check, and
+  two goldens took the compiler's error text. Restored from the index; the
+  rule is to regenerate only from a tree that passes without writing.
+- The first generated app did not check because the model's module was not
+  imported by the entry. A derivation reads only the modules the entry
+  names, so the generators add that import.
+
+**Open.**
+- senro's CI failed twice in ten runs in the guestbook's browser spec with
+  the server interpreted, at different steps in different browsers. Forty
+  local Chromium runs passed (#2397).
+- A lock that runs out by the clock has no spec; it needs a clock the spec
+  can set.
+- `where` takes one field and one value because a derivation cannot read a
+  map literal's keys. That is the first language change senro would ask
+  for, and it goes to the committee when a second condition is wanted.
+
+**The site deploy.** Two deploys after #2393 stalled inside GitHub Pages at
+"syncing files", one failing and one reaching the ten-minute timeout, so
+the pantry's recording was on main for an hour before it was served. The
+third, after #2398, went through. Nothing in the artifact explains it: the
+merge added three small files. A merged site change is checked on
+kanso-lang.dev, since main holding it does not mean the site does.

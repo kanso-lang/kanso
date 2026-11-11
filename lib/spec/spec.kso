@@ -1,0 +1,142 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Specs that nest, as RSpec's and Ginkgo's do. A test is still a constant:
+# `describe` answers an effect that runs the examples under it, prints them
+# as an outline, and yields true when every one passed.
+#
+#     test_stack = describe "a stack" [
+#       (before (_ -> stack/empty))
+#       (it "starts empty" (s -> stack/size s == 0))
+#       (context "after a push" [
+#         (before (s -> stack/push s 7))
+#         (it "holds one" (s -> expect (stack/size s) . to (equal 1)))
+#       ])
+#     ]
+#
+# An example is handed a value and passes when it answers true, or an effect
+# that yields true. The value is what the hooks above it built: each
+# `before` is handed the value so far and answers the next, outermost
+# first, and every example gets hooks of its own, run fresh.
+#
+# `around` is the hook the others are made of. It is handed the value so far
+# and the rest of the example as a function, and it runs the rest when and
+# how it likes, so it can open something first and close it after:
+#
+#     (around (_ rest -> db/within connection rest))
+type group
+  name
+  items
+
+type example
+  name
+  body
+
+type hook
+  wrap
+
+# What an example that ended in a failure answered: the failure's reason.
+pub type raised
+  reason
+
+# What `describe` yields when an example did not pass: how many.
+pub type failed
+  examples
+
+type tally
+  count
+  failures
+
+type failure
+  name
+  got
+
+pub fn describe name items
+  start = tally 0 []
+  io/write "{name}\n" .> (_ -> each_of items [] name 1 start) .> summed
+
+# A group inside a `describe`, with hooks of its own inside the ones around
+# it.
+pub fn context name items
+  group name items
+
+pub fn it name body
+  example name body
+
+pub fn around wrap
+  hook wrap
+
+pub fn before step
+  hook (v rest -> settled (step v) .> rest)
+
+# What `step` leaves once the example is done, whatever the example answered.
+pub fn after step
+  hook (v rest -> rest v .> (got -> settled (step v) .> (_ -> effect got)))
+
+fn each_of items outer path depth t
+  mine = list/concat outer (list/to_list (list/select items hook?))
+  run = (acc item -> acc .> (now -> one item mine path depth now))
+  list/fold items (effect t) run
+
+fn one _:hook _ _ _ t
+  effect t
+
+fn one g:group hooks path depth t
+  io/write "{pad depth}{g.name}\n"
+    .> (_ -> each_of g.items hooks "{path} {g.name}" (depth + 1) t)
+
+fn one e:example hooks path depth t
+  wrap = (rest h -> inside h rest)
+  whole = list/fold (list/reverse hooks) (v -> judged e.body v) wrap
+  guarded (whole none) .> (got -> told e "{path} {e.name}" depth t got)
+
+# One hook around the rest of an example.
+fn inside h rest
+  (v -> h.wrap v rest)
+
+# An example's answer, with a failure turned into a value here, inside
+# every hook, so that a hook around the example is answered and goes on to
+# close what it opened. A failure is a box, and only an arm that asks for
+# the box is handed one.
+fn judged body v
+  guarded (body v)
+
+fn guarded e:<some>effect
+  e .? (u -> effect (raised u.reason))
+
+fn guarded v
+  effect v
+
+fn settled e:<some>effect
+  e
+
+fn settled v
+  effect v
+
+fn told e _ depth t true
+  io/write "{pad depth}{e.name}\n"
+    .> (_ -> effect (tally (t.count + 1) t.failures))
+
+fn told e full depth t got
+  failures = push t.failures (failure full got)
+  io/write "{pad depth}{e.name} (FAILED)\n"
+    .> (_ -> effect (tally (t.count + 1) failures))
+
+fn summed t
+  told_of = list/to_list (list/map t.failures (f -> "\n{f.name}\n  {f.got}\n"))
+  count = "\n{t.count} examples, {length t.failures} failed\n"
+  io/write "{text/join told_of ""}{count}" .> (_ -> effect (verdict t))
+
+fn verdict t
+  return true if length t.failures == 0
+  failed (length t.failures)
+
+fn hook? _:hook
+  true
+
+fn hook? _
+  false
+
+fn pad depth
+  text/pad_start "" (2 * depth) " "

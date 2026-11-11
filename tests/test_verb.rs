@@ -231,3 +231,21 @@ fn a_test_that_is_an_effect_is_performed_and_judged() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), err);
     assert_eq!(output.status.code(), Some(1));
 }
+
+/// A spec that nests (#2464). `std/spec`'s `describe` answers an effect, so
+/// a spec is a test the runner performs. The golden holds the outline, with
+/// a line from the `around` hook on each side of every example: hooks run
+/// fresh for each one and outermost first, a group inside sees what the
+/// groups around it built, the two examples that fail are named by their
+/// full description with what they answered, and the hook still closes
+/// around the one that ends in a failure. Watched red there: with the
+/// failure caught outside the hooks, that example's `(closed)` line was gone.
+#[test]
+fn a_spec_nests_and_its_hooks_close_around_a_failure() {
+    let output = in_fixtures(&["test", "nested_spec"]);
+    let out = std::fs::read_to_string(fixture_dir().join("nested_spec.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(1));
+}

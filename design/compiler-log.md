@@ -20,82 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — directive: senro may ask the language for more
-
-Clay, on the model finders: "this real world use case for kanso may lead to
-several more language tweaks. in general i support ambition as long as it
-fits with the stated goals for the language and the principles behind them.
-i'm particularly fascinated to see how you create a construct for convention
-over configuration without dynamic metaprogramming."
-
-The construct is `derive`: a library function the compiler runs over the
-project's modules, which answers source to add or a call to refuse. A senro
-feature that needs the derivation to see more than it is handed is a
-language change, proposed to the committee against the language's goals.
-The first candidate is the keys of a map literal at a call, which would let
-`where` take a map of conditions and still be checked (#2394).
-
-## 2026-11-10 — senro's apps hold no SQL
-
-The two rulings of this morning are built. The work is in senro (senro#93
-to senro#98) and on the site (#2393, #2398 and the sessions guide with
-this entry); no compiler change was needed, and no cost row moved.
-
-**What an app writes now.** A model lives in a module named for one row of
-its table, `note.kso` for `notes`, as kanso names a module for its type.
-The models derivation declares the record there from the table's columns
-and writes the calls: `note/find db id`, `find_by`, `all`, `newest`,
-`ordered`, `where`, `paged`, `create`, `update`, `destroy`, `increment`.
-The `db` an action is handed knows who is signed in, so no call takes a
-viewer. A column written out in a call is checked against the table when
-the app is checked, and the refusal is at the call
-(`spec/errors/order_not_a_column`).
-
-**The app's own writes.** Some writes have no viewer behind them: a reset
-link sets a digest, a sign-in counts a wrong password. The committee chose
-`models/as_app db`, a session that asks no policy, over naming the
-account's holder as the asker. Its reason: under the alternative the
-holder's `update?` must admit writes to the count of wrong passwords and
-the lock, which are the columns a browser-reachable write must never
-touch.
-
-**The count.** `account/increment db id "failures"` adds in the statement
-that answers the record. `spec/db/counted` runs eight on eight connections
-at once and they see 1 2 3 4 5 6 7 8, on both engines. With the increment
-rewritten as a read and then a write, they saw 1 1 1 1 1 1 1 1 natively
-and 1 1 1 1 1 2 2 2 interpreted.
-
-**The examples.** The pantry, the guestbook and what both generators write
-hold no query; `spec.sh` fails when one does. The guestbook's `account.kso`
-became the model alone, with `registration.kso` and `password.kso` as its
-resources, and the scaffold writes `note.kso` beside `notes.kso`.
-kata walks a list with `each xs x ->` and refuses a `for` row at its line.
-
-**What I got wrong on the way.**
-- I regenerated goldens (`SPEC_WRITE=1`) while the tree did not check, and
-  two goldens took the compiler's error text. Restored from the index; the
-  rule is to regenerate only from a tree that passes without writing.
-- The first generated app did not check because the model's module was not
-  imported by the entry. A derivation reads only the modules the entry
-  names, so the generators add that import.
-
-**Open.**
-- senro's CI failed twice in ten runs in the guestbook's browser spec with
-  the server interpreted, at different steps in different browsers. Forty
-  local Chromium runs passed (#2397).
-- A lock that runs out by the clock has no spec; it needs a clock the spec
-  can set.
-- `where` takes one field and one value because a derivation cannot read a
-  map literal's keys. That is the first language change senro would ask
-  for, and it goes to the committee when a second condition is wanted.
-
-**The site deploy.** Two deploys after #2393 stalled inside GitHub Pages at
-"syncing files", one failing and one reaching the ten-minute timeout, so
-the pantry's recording was on main for an hour before it was served. The
-third, after #2398, went through. Nothing in the artifact explains it: the
-merge added three small files. A merged site change is checked on
-kanso-lang.dev, since main holding it does not mean the site does.
-
 ## 2026-11-10 — a native program holds as many sockets as the system allows
 
 The native runtime kept open sockets in a table of 64, found by the
@@ -2617,3 +2541,69 @@ before the rule: `code is shown with ligatures (normal)`.
 helpers. A component's server action answered as its page, rolling a
 migration back, and confirmation and unlock mail in what the generator
 writes are still owed.
+
+## 2026-11-11 — directive: specs that nest, with hooks, first class in senro
+
+Clay, to cloud: "the framework needs to have something like what the rails
+helpers do where your tests set up a transaction in a before block or
+around block, so it gets reverted at the end, and nested specs work and so
+forth. i don't know how far you've gotten on our kanso alternative to
+rspec/ginkgo/gomega but it should be a first class citizen in senro."
+
+Recorded as #2464. kanso's testing was Go-test shaped by his ruling on
+#966, which ended "eventually we'll make something more like rspec". This
+is that.
+
+## 2026-11-11 — std/spec: a spec is a test whose value is an effect (#2464)
+
+**The search.** #966 and its entry (the Go-test shape), `std/expect`'s
+header (why a matcher answers a record), the two entries above on what
+`kanso test` performs and reads, and the lexer's rule for a list that
+spans lines.
+
+**The decision**, by the committee, recorded on #2464. A spec is a value
+and a test is still a constant. `describe name items` answers an effect
+that runs the examples under it, prints them as an outline and yields true
+when every one passed, and `kanso test` has performed a test whose value
+is an effect since #2458. So the verb gains nothing, and the compiler
+still carries no test vocabulary, which is what #966 took out of it.
+
+Hooks are functions around the rest. `around` is handed the value so far
+and the rest of the example as a function; `before` and `after` are
+written with it. A group's hooks wrap those of the groups inside it,
+every example gets its hooks run fresh, and an example is handed what
+they built as its one argument, so nothing plays the part of RSpec's
+`let`. A group inside a `describe` is `context`: a nested `describe`
+would be an effect sitting in a list, which the library could not look
+inside.
+
+No syntax was needed. A list that spans lines takes one element to a
+line, a line that is a call needs no parentheses, and a line that ends by
+opening a bracket spans in turn, so a nested spec is written as RSpec
+writes one with the grammar as it stood. The first prototype wrapped each
+item in parentheses and was refused at `])`, and the lexer's own comment
+on element lines is what showed the parentheses were the mistake.
+
+**Built.** `lib/spec/spec.kso`, shipped as `std/spec`. `std/expect` gains
+`contain`, `have_length`, `start_with`, `end_with`, `be_none`, `be_false`,
+`satisfy` and `not_to`, which answer an `unmet` record of what was wanted,
+in words, and what was got. `expect` and `to` take none, since `be_none`
+is a matcher.
+
+`tests/golden/test_verb/nested_spec` is a stack built by `before` hooks
+three groups deep, with an `around` that prints a line on each side of
+every example. Its golden holds the outline, the two examples made to
+fail named by their full descriptions with what they answered, and the
+count. One fault was found by it and is pinned by it: an example that
+ended in a failure skipped the closing half of its `around`. A failure is
+a box, and only an arm that asks for the box is handed one, so the arm
+that was meant to catch it inside the hooks never ran and the catch
+outside them did. Watched red: that example's `(closed)` line was missing.
+
+The book's modules chapter gains "specs that nest", with a panel the book
+check runs. Breaking the panel's expected output turned the check red.
+
+**Open.** One example cannot be run by name. The outline is printed by
+the library and `kanso test` adds its own line for the constant, so a
+file's count of tests is its count of specs, with the examples counted on
+the line above. senro's hooks, generated specs and guide are next.

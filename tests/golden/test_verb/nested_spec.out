@@ -1,0 +1,31 @@
+a stack
+    (opened)
+    (closed)
+  starts empty
+  after a push
+    (opened)
+    (closed)
+    holds one
+    (opened)
+    (closed)
+    holds what was pushed (FAILED)
+    and another
+    (opened)
+    (closed)
+      holds both, in order
+    (opened)
+    (closed)
+  is empty again out here
+    (opened)
+    (closed)
+  ends in a failure (FAILED)
+
+a stack after a push holds what was pushed
+  expect/unmet "to contain 8" [7]
+
+a stack ends in a failure
+  spec/raised "the shelf fell"
+
+6 examples, 2 failed
+test_a_stack ... FAILED (returned spec/failed 2)
+0 passed, 1 failed
