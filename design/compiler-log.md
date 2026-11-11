@@ -2282,14 +2282,14 @@ benchmark against a runtime compiled with AddressSanitizer and runs them.
 The entry that added it (2026-09-22, in the archive) left it to be run by
 hand.
 
-Run by hand today, on clang 19, it reported every program clean and its
-own `--prove` failed. The compiler emits closures on `preserve_none` when
-clang takes the convention, and builds its runtime with
-`-DKANSO_PRESERVE_NONE` to match. The sweep built its runtime without the
-flag, so a closure read its arguments from the wrong registers and each
-program stopped with a run-time error of its own, early, having freed
-nothing. The sweep looked only for a sanitizer report, found none, and
-printed CLEAN.
+Run by hand today, on clang 19, its own `--prove` failed: a read after
+free put there on purpose went unreported. The compiler emits closures on
+`preserve_none` when clang takes the convention, and builds its runtime
+with `-DKANSO_PRESERVE_NONE` to match. The sweep built its runtime without
+the flag, so a closure read its arguments from the wrong registers and the
+fixture stopped with a run-time error of its own before it freed anything.
+The sweep looked only for a sanitizer report, so a program that stops
+that way read CLEAN.
 
 Four changes to the script:
 
@@ -2319,7 +2319,8 @@ sweep links what `build` emits. The guarded sixteen-byte tail read in
 `k_b_find2_raw`, which `runbench` and `scanbench` reported in September,
 was reported by no program. Why is not established.
 
-What the sweep cannot see is a read that strays inside an arena block:
-the block is live, and the sanitizer watches blocks.
+The sweep cannot see a read that strays from one value into its neighbour
+inside an arena block, because the whole block is live memory to the
+sanitizer.
 
 No counter moved.
