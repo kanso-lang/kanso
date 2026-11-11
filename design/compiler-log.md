@@ -2255,13 +2255,18 @@ those find something to rewrite. run_allocs 2,445,662 ->
 2,709,581, which is 66 allocations a row, run_alloc_bytes 262,696,163 ->
 274,019,555, run_beat_iters 582,812 -> 614,812, run_find2_calls 1,060,857
 -> 1,168,857, run_str_scans 36,202 -> 72,202 and run_sh_str 19,156,704 ->
-25,232,528.
+25,232,528. The rest of the run's rows the phase moves: run_perm_allocs
+136 -> 151, run_sh_buf 97,305,312 -> 98,585,312, run_sh_bytes 24,384 ->
+888,384 and run_str_scan_bytes 19,043,360 -> 21,093,397.
 
 The run program's work rises: work_runbench 1,020,737,307 ->
 1,067,867,083 and work_runbench_dev 2,997,794,416 -> 3,065,058,505, both
 this container's readings less 109. runbench's emitted code reads
 defines=992 calls=10401 branches=9373 lines=81321 and its machine code is
-911,345 bytes.
+911,345 bytes. Summed over every benchmark but the decoder,
+emitted_other_defines 2,410 -> 2,421, emitted_other_calls 22,223 -> 22,353,
+emitted_other_branches 19,778 -> 19,889 and emitted_other_lines 185,435 ->
+186,392, and the summed text 5,978,121 -> 5,983,449.
 
 The interpreter's corpus rises: interp_instructions 724,216,927 ->
 744,978,389, interp_allocs 1,038,038 -> 1,074,427 and interp_peak_bytes
