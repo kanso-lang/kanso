@@ -52,7 +52,9 @@ pub fn check_shipped(path: &str) -> Result<(), String> {
 
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
-    let mut program = reaching(None, || {
+    let texts = module_sources(dir, None).unwrap_or_default();
+    let texts = texts.into_iter().map(|(_, text)| (text, dir.to_path_buf())).collect();
+    let mut program = reaching(texts, || {
         let mut visited = crate::hash::Set::default();
         compile_module_root(dir, require_entry, &mut visited)
     })?;
@@ -186,6 +188,10 @@ thread_local! {
     /// asked for it, and then nothing is set aside.
     static REACH: std::cell::RefCell<Option<crate::hash::Set<String>>> =
         const { std::cell::RefCell::new(None) };
+    /// The modules the survey found named by more than one import, which are
+    /// kept from their first compile. Empty outside a root compile.
+    static SHARED: std::cell::RefCell<crate::hash::Set<std::path::PathBuf>> =
+        std::cell::RefCell::new(crate::hash::Set::default());
 }
 
 /// Names the compiler calls into the shipped library without the program
@@ -397,22 +403,128 @@ fn prune_shipped(
     (pruned, kept)
 }
 
+/// An entry file as the one text a root compile starts from, with the
+/// directory its imports are read from.
+fn from_entry(file: &str, source: &str) -> Vec<(String, std::path::PathBuf)> {
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    vec![(source.to_string(), base)]
+}
+
+/// The paths a source names on its `import` lines. Imports open a file, so
+/// the reading stops at the first line that is not one, a comment or blank.
+fn imports_named(source: &str) -> impl Iterator<Item = &str> {
+    source
+        .lines()
+        .take_while(|line| line.is_empty() || line.starts_with('#') || line.starts_with("import "))
+        .filter_map(|line| line.strip_prefix("import \"")?.split('"').next())
+}
+
+/// Reads the program's own modules for their words before any of it is
+/// compiled, and notes which modules more than one import names.
+///
+/// A shipped module is pruned against the words read so far, and a compile
+/// read them as it went: the same module imported from three of the
+/// program's files was pruned three ways and compiled three times, each a
+/// little larger than the last. With the program's words in hand first, the
+/// three imports ask for one pruning, and a module known to be asked for
+/// again is kept from its first compile.
+///
+/// It follows `import` lines as text and passes over whatever it cannot
+/// read. What it misses the compile still adds as it goes, at the cost of
+/// the compile this is here to save. A shipped module's own words are left
+/// to the compile: pruning each to a fixed point here cost 3.4 million
+/// instructions on the smallest corpus and saved less than that on the
+/// largest.
+fn survey(
+    mut pending: Vec<(String, std::path::PathBuf)>,
+    roots: &mut crate::hash::Set<String>,
+) -> crate::hash::Set<std::path::PathBuf> {
+    let mut named: crate::hash::Map<std::path::PathBuf, usize> = crate::hash::Map::default();
+    // the entry imports std/render whether it says so or not
+    named.insert(std::path::PathBuf::from("std/render"), 1);
+    let mut shipped: Vec<&'static str> = Vec::new();
+    // counts an import of a shipped module, and says whether it was one
+    fn note(
+        path: &str,
+        named: &mut crate::hash::Map<std::path::PathBuf, usize>,
+        shipped: &mut Vec<&'static str>,
+    ) -> bool {
+        let Some((_, files)) = embedded_module(path).filter(|_| path.starts_with("std/")) else {
+            return false;
+        };
+        let times = named.entry(std::path::PathBuf::from(path)).or_insert(0);
+        *times += 1;
+        if *times == 1 {
+            shipped.extend(files.iter().map(|(_, text)| *text));
+        }
+        true
+    }
+    while let Some((text, base)) = pending.pop() {
+        for path in imports_named(&text) {
+            if note(path, &mut named, &mut shipped) {
+                continue;
+            }
+            let local = path.strip_prefix("./").unwrap_or(path);
+            let handed = HANDED_SOURCES.with(|c| c.borrow().get(local).cloned());
+            let (key, sources, inner) = match handed {
+                Some(files) => (std::path::PathBuf::from(local), Some(files), base.clone()),
+                None => {
+                    let Ok(dir) = resolve_import(&base, path) else { continue };
+                    let inner = match dir.is_file() {
+                        true => dir.parent().map(|p| p.to_path_buf()).unwrap_or_default(),
+                        false => dir.clone(),
+                    };
+                    (dir.canonicalize().unwrap_or_else(|_| dir.clone()), None, inner)
+                }
+            };
+            let times = named.entry(key.clone()).or_insert(0);
+            *times += 1;
+            if *times > 1 {
+                continue;
+            }
+            let Ok(sources) = sources.map_or_else(|| module_sources(&key, None), Ok) else {
+                continue;
+            };
+            for (_, text) in sources {
+                reach_words(&text, roots);
+                pending.push((text, inner.clone()));
+            }
+        }
+    }
+    // a shipped module's imports are shipped modules, counted the same way
+    let mut at = 0;
+    while at < shipped.len() {
+        let text = shipped[at];
+        for path in imports_named(text) {
+            note(path, &mut named, &mut shipped);
+        }
+        at += 1;
+    }
+    named.into_iter().filter(|(_, times)| *times > 1).map(|(module, _)| module).collect()
+}
+
 /// Runs a root compile with the shipped library read only as far as the
 /// program reaches, and runs it again whole if that fails. The second run is
 /// what reports, so every diagnostic is the one the whole library gives; a
 /// program the whole library accepts and the pruned one refused is a name
 /// this reach missed, which a debug build refuses to hide.
-fn reaching<T>(source: Option<&str>, compile: impl Fn() -> Result<T, String>) -> Result<T, String> {
+fn reaching<T>(
+    texts: Vec<(String, std::path::PathBuf)>,
+    compile: impl Fn() -> Result<T, String>,
+) -> Result<T, String> {
     let mut roots = crate::hash::Set::default();
     for root in COMPILER_ROOTS {
         roots.insert(root.to_string());
     }
-    if let Some(source) = source {
-        reach_words(source, &mut roots);
+    for (text, _) in &texts {
+        reach_words(text, &mut roots);
     }
+    let shared = survey(texts, &mut roots);
     let outer = REACH.with(|r| r.replace(Some(roots)));
+    let outer_shared = SHARED.with(|s| s.replace(shared));
     let pruned = compile();
     REACH.with(|r| *r.borrow_mut() = None);
+    SHARED.with(|s| *s.borrow_mut() = outer_shared);
     let answer = match pruned {
         Ok(program) => Ok(program),
         Err(refused) => {
@@ -787,11 +899,13 @@ fn compile_module_inner(
         visited.remove(&canon);
         return Ok(done);
     }
-    // A module is kept only once a second import asks for it. Keeping the
-    // first compile of every module cloned each one, and a program whose
-    // modules are each imported once paid the clones and the memory for
-    // nothing: compile_corpus's front end rose 43% in what it held.
-    let again = MODULE_SEEN.with(|s| !s.borrow_mut().insert(key.clone()));
+    // A module is kept once a second import asks for it, or from its first
+    // compile when the survey saw two imports name it. Keeping the first
+    // compile of every module cloned each one, and a program whose modules
+    // are each imported once paid the clones and the memory for nothing:
+    // compile_corpus's front end rose 43% in what it held.
+    let again = MODULE_SEEN.with(|s| !s.borrow_mut().insert(key.clone()))
+        || SHARED.with(|s| s.borrow().contains(&canon));
     if std::env::var_os("KANSO_PHASES").is_some() {
         eprintln!("load {}", dir.display());
     }
