@@ -1,0 +1,3 @@
+import "./posts"
+
+print (posts/show 7

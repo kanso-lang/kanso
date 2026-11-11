@@ -20,24 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: no for loops, in kanso or in kata
-
-kata, senro's template language, wrote a loop as `for e in signatures`. Clay:
-"we NEVER EVER EVER EVER want 'for' loops in kanso. we use collection
-pipeline constructs like each and map."
-
-kanso has no `for`, and kata's row compiled to kanso's `each xs (x -> ...)`
-already, so the template syntax was the only `for` in the project. The ruling
-covers the language and every template or configuration language built on
-it: a collection is walked with `each`, `map` and their kin, and a `for` is
-refused. kata's row is rewritten as an `each` and a `for` row is an error at
-its template line (#2395).
-
-The committee kept the spelling `each signatures e ->`, collection first,
-two seats to one over `each signatures as e`: it is the call kanso would
-write with the parentheses the indentation makes redundant. `std` has no
-`each`, so kata's README calls it a helper kata writes.
-
 ## 2026-11-10 — directive: senro may ask the language for more
 
 Clay, on the model finders: "this real world use case for kanso may lead to
@@ -2547,3 +2529,55 @@ testing, and the tour's sentence on what a test is now allows an effect.
 system when it is not. A suite has no setup or teardown; a test that needs
 a clean table makes one.
 senro's testing helpers are built on this next.
+
+## 2026-11-11 — a test file beside an entry reads what the entry reads (#2460)
+
+A senro app could not be tested with `kanso test`. Two things stood in the
+way, both found by trying it on `examples/notebook`. The verb took the
+app's directory for one module, where it is an entry and the files it
+imports one at a time, and the load then failed on `views/`, which is a
+module only because the entry's `derive kata/views` writes its functions.
+And a test file is a library, so it could not write `derive` lines, and had
+no `note/create`, no `routes` and no `schema` to call.
+
+**The search.** The log's entries on the test verb (2026-10-14,
+2026-10-29) and the 2026-10-12 gavel (#1883: a test file is an outside
+consumer of the module beside it) are all about a module that is a
+directory. No fixture under `tests/golden/test_verb` had an entry or a
+derivation in it, and no test file in kanso, kq or senro sat beside a
+`main.kso`.
+
+**The decision**, by the committee, recorded on #2460. A test file beside
+a `main.kso` tests that program. It is compiled with the entry's imports
+and the entry's derivations, and none of the entry's statements run. It
+may add imports of its own, and only those can read as unused. The gavel
+on #1883 carries over a word at a time: a test file reads the thing beside
+it as a consumer would, and beside an entry that thing is the program.
+
+The alternative was to let a test file write `derive` lines. The committee
+first leaned that way and turned it down on two counts. `routes/rest`
+describes every module the entry imports, so a test file would have to
+repeat the entry's whole import list to derive the same table. And the
+app's derivations would then be written once in `main.kso` and again in
+every test file, which is one fact with several homes.
+
+**Built.** `compile_test_file` looks for `main.kso` in the test file's
+directory. When it is there, the entry is parsed, its imports are lent to
+the test file, and its derivations run over the entry as they do when it
+is the program, so a derivation sees none of the test file's helpers. What
+they declare is declared for the test file, and an arm they define is
+compiled into its module. The library is read as far as both texts reach.
+An entry that does not parse, or whose derivation refuses, is reported at
+the entry's own line.
+
+Three fixtures under `tests/golden/test_verb`: `beside_an_entry` calls a
+module the entry imports, reads the table the entry derives and calls an
+arm the derivation wrote; `beside_a_broken_entry` and
+`beside_a_refused_entry` pin the two reports. Watched red with the lookup
+turned off: `unknown name` for each of the entry's names, and for the
+broken entry the test file's own `unknown name` where the syntax error was
+expected.
+
+**Open.** Each test file beside an entry compiles the app again. One test
+file beside senro's `examples/notebook` took 1.9 s in this container from
+start to finish, and nothing here measures an app with many of them.

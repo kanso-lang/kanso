@@ -231,3 +231,35 @@ fn a_test_that_is_an_effect_is_performed_and_judged() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), err);
     assert_eq!(output.status.code(), Some(1));
 }
+
+/// A test file beside a `main.kso` tests that program (#2460): it is compiled
+/// with the entry's imports and the entry's derivations, so it calls a module
+/// the entry imports, reads the table the entry derives and calls an arm the
+/// derivation wrote, with one import of its own. The entry's `print` does not
+/// run. Watched red on the runner that took the directory for one module:
+/// `unknown name` for the module's function, since nothing imported it.
+#[test]
+fn a_test_file_beside_an_entry_reads_what_the_entry_reads() {
+    let output = in_fixtures(&["test", "beside_an_entry"]);
+    let out = std::fs::read_to_string(fixture_dir().join("beside_an_entry.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// An entry that cannot be compiled is what its tests report, at the entry's
+/// own line: a syntax error in `main.kso`, and a derivation's refusal at the
+/// `derive` line that asked for it.
+#[test]
+fn an_entry_that_is_refused_is_what_its_tests_report() {
+    for fixture in ["beside_a_broken_entry", "beside_a_refused_entry"] {
+        let output = in_fixtures(&["test", fixture]);
+        let expected = std::fs::read_to_string(fixture_dir().join(format!("{fixture}.stderr")))
+            .expect("golden");
+
+        assert_eq!(String::from_utf8_lossy(&output.stderr), expected, "{fixture}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "", "{fixture}");
+        assert_eq!(output.status.code(), Some(2), "{fixture}");
+    }
+}

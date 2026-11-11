@@ -534,7 +534,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
-    reaching(from_entry(file, source), || compile_library_beside(file, source, None, false))
+    reaching(from_entry(file, source), || compile_library_beside(file, source, None, None, false))
 }
 
 /// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
@@ -543,16 +543,57 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
 /// loader never reads the test file, so nothing it declares or imports
 /// reaches the module. A test file with no library files beside it has no
 /// module to import and tests what it declares itself.
+///
+/// A test file beside a `main.kso` tests that program (#2460). It is compiled
+/// with the entry's imports and the entry's derivations, so it reads every
+/// name the entry's statements could, and none of those statements run.
 pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, String> {
-    let beside = module_beside(file);
+    let around = entry_beside(file)?;
+    let beside = match around {
+        Some(_) => None,
+        None => module_beside(file),
+    };
+    let mut texts = from_entry(file, source);
+    if let Some(entry) = &around {
+        texts.extend(from_entry(&entry.file, &entry.source));
+        // the entry's directory is the project, as it is for `compile_entry`
+        let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf());
+        LOCK.with(|l| *l.borrow_mut() = hako::read_lock(&base.unwrap_or_default()));
+    }
     // the module is the test file's own directory, which an import from
     // inside it would otherwise refuse as the module importing itself
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = reaching(from_entry(file, source), || {
-        compile_library_beside(file, source, beside.clone(), true)
+    let built = reaching(texts, || {
+        compile_library_beside(file, source, beside.clone(), around.as_ref(), true)
     });
     ENTRY_COMPILE.with(|c| c.set(false));
     built
+}
+
+/// The entry a test file sits beside, parsed: what it imports and derives is
+/// what the test file is compiled with.
+struct Around {
+    file: String,
+    source: String,
+    program: ast::Program,
+}
+
+/// `main.kso` in the test file's own directory, when there is one. A name
+/// marks an entry wherever it appears, so nothing else is asked of the file,
+/// and an entry that does not parse is what the test run reports.
+fn entry_beside(file: &str) -> Result<Option<Around>, String> {
+    let path = std::path::Path::new(file).with_file_name("main.kso");
+    let Ok(source) = std::fs::read_to_string(&path) else { return Ok(None) };
+    let file = path.to_string_lossy().into_owned();
+    let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, &file, &source))?;
+    let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, &file, &source))?;
+    finish_program(&mut program);
+    stamp_file(&mut program, &file);
+    let ownership_diags = merge_ambient_arms(&mut program);
+    if !ownership_diags.is_empty() {
+        return Err(diag::render(&ownership_diags, &file, &source));
+    }
+    Ok(Some(Around { file, source, program }))
 }
 
 /// Whether a file names a test file: `kanso test` is the only verb that
@@ -618,6 +659,7 @@ fn compile_library_beside(
     file: &str,
     source: &str,
     beside: Option<ast::Import>,
+    around: Option<&Around>,
     whole: bool,
 ) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
@@ -629,22 +671,66 @@ fn compile_library_beside(
         return Err(diag::render(&ownership_diags, file, source));
     }
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    // What the file wrote itself is what can read as an import left unused.
+    // The entry beside a test file lends it the rest: each import the test
+    // did not write, under the name the entry gave it.
+    let written = program.imports.clone();
+    let lent = around.iter().flat_map(|entry| &entry.program.imports);
+    for import in lent {
+        if !program.imports.iter().any(|mine| mine.path == import.path) {
+            program.imports.push(import.clone());
+        }
+    }
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     // the module under test is loaded with the file's own imports but never
     // joins `program.imports`, so it cannot read as an import left unused
     // A test file is the whole program it runs; a library waits for one.
-    let root = beside.is_some();
+    let root = beside.is_some() || around.is_some();
     import_list.extend(beside);
     ambient_imports(&mut import_list);
-    let mut visited = crate::hash::Set::default();
-    let (mut dep_program, exports, surfaced) =
-        load_dependencies(&base, &import_list, &mut visited)?;
+    let deriving = around.filter(|entry| !entry.program.derives.is_empty());
+    if deriving.is_some() && !import_list.iter().any(|i| i.path == derive::MODULE) {
+        import_list.push(ast::Import {
+            path: derive::MODULE.to_string(),
+            span: diag::Span::at(0, 0),
+            alias: None,
+            renames: Vec::new(),
+        });
+    }
+    let (loaded, deferred) = match deriving {
+        None => (load_dependencies(&base, &import_list, &mut crate::hash::Set::default()), false),
+        Some(_) => load_to_describe(&base, &import_list),
+    };
+    let (mut dep_program, mut exports, mut surfaced) = loaded?;
+    // The entry's derivations run over the entry, as they do when it is the
+    // program, and what they declare is declared for the test file.
+    if let Some(entry) = deriving {
+        let named = root_name(std::path::Path::new(&entry.file));
+        let made = derive::derive(&entry.program, &named, &base, &dep_program, &exports)
+            .map_err(|d| render_merged(&d, &entry.file, &entry.source))?;
+        if !made.definitions.is_empty() || deferred {
+            (dep_program, exports, surfaced) =
+                load_with_definitions(&base, &import_list, &made.definitions)?;
+        }
+        let stamp: std::sync::Arc<str> = std::sync::Arc::from(entry.file.as_str());
+        program.fns.extend(made.constants.into_iter().map(|mut d| {
+            d.file = std::sync::Arc::clone(&stamp);
+            d
+        }));
+        if !made.types.is_empty() {
+            program.types.extend(made.types.into_iter().map(|mut t| {
+                t.file = std::sync::Arc::clone(&stamp);
+                t
+            }));
+            synthesize_getters(&mut program);
+        }
+    }
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
-    let mut diags = unused_imports(&program.imports, &quals);
+    let mut diags = unused_imports(&written, &quals);
     // After the import is credited and before the surface is judged: the door
     // resolves to the owner's spelling, so crediting that owner would leave
     // the import the caller wrote reading as unused, and asking whether

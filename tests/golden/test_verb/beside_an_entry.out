@@ -1,0 +1,4 @@
+test_an_imported_module ... ok
+test_the_derived_table ... ok
+test_a_written_arm ... ok
+3 passed, 0 failed

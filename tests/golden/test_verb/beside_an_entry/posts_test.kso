@@ -1,0 +1,12 @@
+import "std/text"
+
+# Beside `main.kso`, so it reads what the entry reads: the modules the entry
+# imports, the table its derivation declares and the arm that derivation
+# writes into `posts`. The entry's `print` never runs.
+test_an_imported_module = posts/show 7 == "post 7"
+
+test_the_derived_table = conventions/handle routes "/posts/index" 2 == listed
+
+test_a_written_arm = text/ends_with? (posts/show "tea") "titled tea"
+
+listed = "all posts, page 2"
