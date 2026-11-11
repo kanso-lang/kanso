@@ -5,10 +5,11 @@
 
 use super::{emit_with, reached_from_entry, ClosureConvention};
 
-// The comment names `spread`, so the loader reads it although nothing
-// calls it: an import reads only the declarations its program names.
-const SOURCE: &str =
-    "import \"std/list\"\n\n# spread is read and never called\nprint \"{list/sum [3 1 2]}\"\n";
+// The program binds a local called `spread`, so the loader reads
+// `list/spread` although nothing calls it: an import reads the declarations
+// whose names the program's code spells, and a comment that named it would
+// keep nothing (kanso#2434).
+const SOURCE: &str = "import \"std/list\"\n\nspread = 3\nprint \"{list/sum [spread 1 2]}\"\n";
 
 fn program() -> crate::ast::Program {
     crate::compile_source("run", "main.kso", SOURCE).expect("the fixture compiles")

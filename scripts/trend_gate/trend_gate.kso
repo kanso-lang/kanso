@@ -85,6 +85,9 @@ lower = [
   # way.
   "rounds"
   "visits"
+  # how many modules a load compiled, in compile_golden_modules: a module
+  # compiled twice in one load is work done twice
+  "loads"
   "front_end_rounds"
   "front_end_visits"
   "compile_peak_bytes"

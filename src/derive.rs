@@ -280,7 +280,7 @@ fn module(
         // A constant is handed over as its value, which is how a derivation
         // reads data the app keeps, such as a list of migrations.
         if decl.params.is_empty() {
-            let reference = Value::FnRef(Rc::from(decl.name.as_str()));
+            let reference = Value::unnumbered(decl.name.as_str());
             let value = interp
                 .call_value(reference, Vec::new(), decl.span)
                 .and_then(|v| interp.demand(&v))
@@ -292,7 +292,7 @@ fn module(
             continue;
         }
         let params = decl.params.iter().map(param).collect();
-        let reference = Value::FnRef(Rc::from(decl.name.as_str()));
+        let reference = Value::unnumbered(decl.name.as_str());
         functions.push(record("derive/function", vec![text(bare), list(params), reference]));
     }
     let records = deps
@@ -409,7 +409,7 @@ fn run(
         );
         return Err(Diagnostic::new("derive", msg, d.span));
     }
-    let callee = Value::FnRef(Rc::from(d.name.as_str()));
+    let callee = Value::unnumbered(d.name.as_str());
     let answered = interp
         .call_value(callee, vec![description.clone()], d.span)
         .and_then(|v| interp.demand(&v))
@@ -684,7 +684,7 @@ fn written(interp: &Interp, v: &Value, span: Span) -> Result<Expr, String> {
         Value::False => ident("false"),
         Value::NoneV => ident("none"),
         Value::Done => ident("done"),
-        Value::FnRef(name) => ident(name),
+        Value::FnRef(name, _) => ident(name),
         Value::List(items) => Expr::List(
             items.iter().map(|x| written(interp, x, span)).collect::<Result<_, _>>()?,
             span,
@@ -728,7 +728,7 @@ fn pairs(interp: &Interp, entries: &Entries, span: Span) -> Result<Vec<(Expr, Ex
 fn spelled(interp: &Interp, v: &Value) -> String {
     let v = interp.demand(v).unwrap_or_else(|_| v.clone());
     match &v {
-        Value::FnRef(name) => name.to_string(),
+        Value::FnRef(name, _) => name.to_string(),
         Value::List(items) => {
             let each: Vec<String> = items.iter().map(|x| spelled(interp, x)).collect();
             format!("[{}]", each.join(" "))

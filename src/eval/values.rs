@@ -332,7 +332,7 @@ const EQUALITY_REFUSED: &str =
 /// native refused.
 fn opaque_to_equality(v: &Value) -> bool {
     match v {
-        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,
+        Value::FnRef(..) | Value::Closure(_) | Value::Desc(_) | Value::Partial(..) => true,
         Value::Sub { inner, .. } => opaque_to_equality(inner),
         _ => false,
     }
@@ -693,7 +693,7 @@ fn render_seen(
         // every engine renders a function the same way and none of them names
         // it: the name is the compiler's, and for a field getter it is one no
         // program could have written
-        Value::FnRef(_) | Value::Closure(_) | Value::Partial(..) => "<fn>".to_string(),
+        Value::FnRef(..) | Value::Closure(_) | Value::Partial(..) => "<fn>".to_string(),
         // the wire is the demand, and a browser cell answers what it settled
         // on rather than the closure that would have answered it
         Value::TableFn(handle) => match deferral_value(*handle) {

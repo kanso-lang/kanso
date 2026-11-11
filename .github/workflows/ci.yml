@@ -116,6 +116,7 @@ jobs:
       # of clang's own release, since 18's refuses the keyword.
       - name: clang 19, as the measured binaries are built
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld llvm-19
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
@@ -246,6 +247,7 @@ jobs:
       # package of its own, and without it the link fails.
       - name: clang 19 and its sanitizer runtime
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld libclang-rt-19-dev
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
@@ -279,6 +281,7 @@ jobs:
       # pages.yml builds it, so this job checks the site that ships.
       - name: build the runtime the playground links against
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
@@ -380,6 +383,7 @@ jobs:
       # whose 32-bit dependencies (libc6-i386, libxml2-dev) 404 on this image.
       - name: clang 19, for the closure calling convention
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld
           # /usr/bin/clang is a package-owned symlink to ../lib/llvm-18/bin/clang,
@@ -435,7 +439,7 @@ jobs:
       # into the file and the job log showed a step that printed nothing and
       # exited 127.
       - name: valgrind, for the two steps that count instructions
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
+        run: sh scripts/apt_ready.sh && sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
       # Before any row is compared, prove the rows can be compared at all: an
       # exact instruction golden has to be a property of the binary and not of
       # where the tree was checked out. It was not, and the nightly ratchet is
@@ -977,6 +981,7 @@ jobs:
       # is the compiler being judged.
       - name: kq's own spec suite against this compiler
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get install -y jq >/dev/null
           sh .github/clone-sibling.sh kq /tmp/kq
           cd /tmp/kq
@@ -1085,6 +1090,7 @@ jobs:
       # checking a route the site does not take.
       - name: build the runtime the pages link against
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
@@ -1122,6 +1128,7 @@ jobs:
       # scripts/browser_differential.sh builds it with these.
       - name: the toolchain for the runtime the pages link against
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang

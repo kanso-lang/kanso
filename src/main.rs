@@ -706,6 +706,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
             if std::env::var_os("KANSO_COUNTERS").is_some() {
                 eprint!("{}", self.0.thunk_stats.render());
                 eprint!("{}", interpreter_counters());
+                eprintln!("interp_callee_lookups={}", self.0.callee_lookups.get());
+                eprintln!("interp_frames_made={}", self.0.frames_made.get());
                 // Reported when it is not nought, as the native runtime
                 // reports it, so no golden without a socket carries it.
                 if self.0.sock_waits.get() > 0 {
@@ -1530,10 +1532,14 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     // the runtime. On runbench the ladder read 1,811,839,413 at 225,
     // 1,809,106,361 at 1000, 1,806,069,074 at 2000 and 1,805,972,054 at 4000.
     // The object is compiled once and cached, so the build pays it once.
-    let runtime_obj =
-        cached_runtime_object("release", &["-O3", "-mllvm", "-inline-threshold=2000"])?;
-    let hot_obj =
-        cached_object("release_hot", Some(HOT_RECIPE), &|| hot_source().into(), &["-O3", "-flto"])?;
+    let runtime_obj = linked_as(
+        cached_runtime_object("release", &["-O3", "-mllvm", "-inline-threshold=2000"])?,
+        "kanso_linked_runtime_release.o",
+    );
+    let hot_obj = linked_as(
+        cached_object("release_hot", Some(HOT_RECIPE), &|| hot_source().into(), &["-O3", "-flto"])?,
+        "kanso_linked_runtime_release_hot.o",
+    );
     std::process::Command::new("clang")
         // THE PROGRAM IS OPTIMIZED ONCE, AT THE LINK. `-O3` here ran the full
         // pipeline on the program's IR as clang -cc1 turned it into bitcode,
@@ -1683,7 +1689,8 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
 /// cached optimized runtime object, so the runtime's cost is paid once per
 /// runtime version, not per build.
 fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
-    let runtime_obj = cached_runtime_object("dev", DEV_RUNTIME_OPT)?;
+    let runtime_obj =
+        linked_as(cached_runtime_object("dev", DEV_RUNTIME_OPT)?, "kanso_linked_runtime_dev.o");
     std::process::Command::new("clang")
         .arg("-O0")
         // Gold where it links, lld where it does not: `dev_link_args` has
@@ -1988,6 +1995,31 @@ fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u
     hasher.finish()
 }
 
+/// The name a link is handed for a cached runtime object.
+///
+/// A cached object's name carries a digest: of the runtime's text, and for
+/// the hot unit of this file's bytes as well (`HOT_RECIPE`). The linker keeps
+/// its inputs' names in a string map, and how far a probe walks depends on
+/// the string. An edit to this file that changed nothing a build emits
+/// renamed the hot unit, and the release codegen row moved by 17
+/// instructions, every one of them the linker's. So a measured build, which
+/// sets `KANSO_FIXED_TEMPS`, links a copy under a plain name, written afresh
+/// by each build. Any other build links the cached file itself: it has no
+/// row to keep. `tests/the_measured_link_names_its_runtime.rs` reads the
+/// link's line both ways.
+fn linked_as(object: std::path::PathBuf, plain: &str) -> std::path::PathBuf {
+    match std::env::var("KANSO_FIXED_TEMPS") {
+        Ok(v) if !v.is_empty() => {
+            let named = std::env::temp_dir().join(plain);
+            match std::fs::copy(&object, &named) {
+                Ok(_) => named,
+                Err(_) => object,
+            }
+        }
+        _ => object,
+    }
+}
+
 fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
     cached_object(profile, None, &|| kanso::RUNTIME_C.into(), opt)
 }
@@ -2263,17 +2295,15 @@ fn cached_object(
         std::fs::rename(&staging, &object)?;
         return Ok(object);
     }
-    // The source is written under this process's name and renamed onto the
-    // shared one. Writing the shared path directly truncated it under any
-    // clang another build had reading it, and clang died of SIGBUS. A rename
-    // replaces the directory entry and leaves an open file whole, and every
-    // writer's bytes are the same, so whichever file a clang opens is the
-    // runtime. The path clang is given stays the shared one.
-    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.c"));
-    let c_staging =
-        std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.c", pid_tag()));
-    std::fs::write(&c_staging, source().as_bytes())?;
-    std::fs::rename(&c_staging, &c_path)?;
+    // THE SOURCE GOES TO CLANG ON ITS STANDARD INPUT. It used to be written to
+    // `kanso_runtime_<profile>_<key>.c` and compiled from there, and an
+    // object records the name of the file it was compiled from: as its file
+    // symbol, and in bitcode as the module's name, which the LTO link reads.
+    // The key is a digest, so the hot unit's bitcode carried a digest of
+    // this file's bytes, and an edit here that emitted nothing new moved the
+    // linker's instruction count by 64 after the link was already handed a
+    // plain name (`linked_as`). Read from standard input the object records
+    // no name a digest decides, and the same text makes the same object.
     let staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
     // `-Werror=unknown-attributes` is the belt to the probe's braces: clang 18
@@ -2287,16 +2317,22 @@ fn cached_object(
         true => &["-DKANSO_COUNTERS_BUILD"],
         false => &[],
     };
-    let status = std::process::Command::new("clang")
+    let mut child = std::process::Command::new("clang")
         .args(opt)
         .args(convention)
         .args(counters)
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
-        .arg("-c")
-        .arg(&c_path)
-        .arg("-o")
+        .args(["-x", "c", "-c", "-", "-o"])
         .arg(&staging)
-        .status()?;
+        .stdin(std::process::Stdio::piped())
+        .spawn()?;
+    {
+        use std::io::Write;
+        let mut text =
+            child.stdin.take().ok_or_else(|| std::io::Error::other("clang took no input"))?;
+        text.write_all(source().as_bytes())?;
+    }
+    let status = child.wait()?;
     if !status.success() {
         return Err(std::io::Error::other("clang failed on the runtime"));
     }

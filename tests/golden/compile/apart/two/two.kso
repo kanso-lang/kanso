@@ -1,0 +1,7 @@
+import "std/text"
+
+fn bracketed inner
+  "[{inner}]"
+
+pub fn neatened s
+  bracketed (text/trim s)

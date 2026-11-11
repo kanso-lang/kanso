@@ -1,9 +1,9 @@
-# A page's values through an HTML escape. kanso has no call that replaces
-# one text with another, so the escape a template leans on splits a value at
-# each character it rewrites and joins the pieces around the replacement
-# (#2427). This is that escape as senro writes it: three searches for the
-# five characters, a value with none handed back as it came, and a split and
-# a join for each search that found something.
+# A page's values through an HTML escape. This is the escape a template
+# leans on, as senro writes it: three searches for the five characters, a
+# value with none handed back as it came, and a `text/replace` for each
+# search that found something. The phase joined while kanso had no call
+# that replaced one text with another, and the escape split a value at each
+# character and joined the pieces around the replacement (#2427).
 #
 # A row is the mix one of senro's listing pages has: a title holding four of
 # the five characters, an excerpt holding an apostrophe, and seven values
@@ -27,7 +27,7 @@ fn swapped s false _ _
   s
 
 fn swapped s true from to
-  text/join (text/split s from) to
+  text/replace s from to
 
 fn title n
   "salt & vinegar <batch {n}> the \"house\" crisps"

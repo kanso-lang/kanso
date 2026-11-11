@@ -16,14 +16,10 @@ use crate::name::Name;
 use crate::ast::*;
 
 /// Builtins that can produce an err, which therefore carry the origin of the
-/// site that called them. Kept in step with codegen's origin-passing list.
-const BIRTHS_ERR: &[&str] = &[
-    "builtin_to_int",
-    "builtin_to_float",
-    "builtin_utf8",
-    "builtin_from_code",
-    "builtin_to_bytes",
-];
+/// site that called them, by bare name. The emitter reads this list to hand
+/// each one its origin, and the inliner below keeps each one's wrapper.
+pub(crate) const BIRTHS_ERR: &[&str] =
+    &["to_int", "to_float", "utf8", "from_code", "to_bytes", "replace"];
 use crate::hash::Map as HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm
@@ -109,7 +105,7 @@ fn direct_aliases<'a>(
         // born in `text/to_int` would start saying it was born in whichever
         // function called it, which is worse for the reader and is a real
         // change in what the program reports. Those wrappers stay.
-        if BIRTHS_ERR.contains(&target) {
+        if target.strip_prefix("builtin_").is_some_and(|bare| BIRTHS_ERR.contains(&bare)) {
             continue;
         }
         let mut threads = true;

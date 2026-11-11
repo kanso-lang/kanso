@@ -1,0 +1,9 @@
+# `text/replace` rewrites text. A literal of another kind is refused at
+# compile time, so this hands the builtin a number through a binding the
+# check cannot see through, which is the shape a real program has when a
+# value turns out to be the wrong kind at run time.
+import "std/text"
+
+pub play =
+  n = 5
+  print "{text/replace n "5" "five"}"

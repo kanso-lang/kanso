@@ -29,6 +29,7 @@ pub mod parser;
 pub mod provenance;
 pub mod read_at;
 pub mod repl;
+pub mod replace;
 pub mod trmc;
 pub mod wasm;
 pub mod wasm_encode;
@@ -91,7 +92,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(&base));
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built = reaching(Some(source), || compile_entry_inner(file, source));
+    let built = reaching(from_entry(file, source), || compile_entry_inner(file, source));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
@@ -103,7 +104,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 pub fn compile_play_file(file: &str, source: &str) -> Result<ast::Program, String> {
     ENTRY_COMPILE.with(|c| c.set(true));
     LOADED_ELSEWHERE.with(|c| c.set(false));
-    let built = reaching(Some(source), || compile_play_inner(file, source));
+    let built = reaching(from_entry(file, source), || compile_play_inner(file, source));
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
@@ -533,7 +534,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 /// as a library and loads its imports (plus the ambient module) like any
 /// other root compile.
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
-    reaching(Some(source), || compile_library_beside(file, source, None, false))
+    reaching(from_entry(file, source), || compile_library_beside(file, source, None, false))
 }
 
 /// A test file, under the 2026-10-12 gavel (#1883): an outside consumer of
@@ -547,8 +548,9 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
     // the module is the test file's own directory, which an import from
     // inside it would otherwise refuse as the module importing itself
     ENTRY_COMPILE.with(|c| c.set(true));
-    let built =
-        reaching(Some(source), || compile_library_beside(file, source, beside.clone(), true));
+    let built = reaching(from_entry(file, source), || {
+        compile_library_beside(file, source, beside.clone(), true)
+    });
     ENTRY_COMPILE.with(|c| c.set(false));
     built
 }
