@@ -5,10 +5,10 @@
 # way again. The program's output is the same; the interpreted row is the
 # witness.
 set -e
-kept='                        Named::FnRef(n) => Some(Value::FnRef(n.clone())),'
+kept='                        Named::FnRef(n, at) => Some(Value::FnRef(n.clone(), *at)),'
 [ "$(grep -cxF "$kept" src/eval.rs)" -eq 1 ] || {
   echo "the fixed table moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                        Named::FnRef(n) => Some(Value::FnRef(n\.clone())),$/                        Named::FnRef(n) => Some(Value::FnRef(n.clone())).filter(|_| false),/' src/eval.rs
+sed -i 's/^                        Named::FnRef(n, at) => Some(Value::FnRef(n\.clone(), \*at)),$/                        Named::FnRef(n, at) => Some(Value::FnRef(n.clone(), *at)).filter(|_| false),/' src/eval.rs
 if grep -qxF "$kept" src/eval.rs; then exit 1; fi

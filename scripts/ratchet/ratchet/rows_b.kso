@@ -373,8 +373,8 @@ perm_regrow = row
 
 rows_b1rg = list/concat rows_b1fp [perm_regrow]
 
-# A call through a function reference finds its callee by the reference's
-# address. The mutation hashes the name again.
+# A call through a function reference finds its callee at the reference's
+# number. The mutation hashes the name again.
 callee_by_ref = row
   "a call that hashes its callee's name"
   true
@@ -481,20 +481,22 @@ in_place_site = row
   (breaking "an_in_place_site_hashed_by_its_path")
   release
 
-# A call through a reference asks a direct-mapped table before the map. The
-# mutation never takes the table's answer.
+# What a reference calls is read from a table at the reference's number. The
+# mutation reads past the table's end, so every call looks the name up again.
+# `looked_up_once` in rows_d makes the same change and counts the lookups;
+# this row's witness is the interpreted run's instructions.
 recent_callee = row
-  "a reference's callee probed in the map"
+  "a reference's callee looked up by name on every call"
   true
   interp_gate
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_reference_s_callee_probed_in_the_map")
+  (breaking "a_reference_looked_up_by_name_on_every_call")
   release
 
-# Entering a declaration asks a direct-mapped table before the map. The
-# mutation never takes the table's answer.
+# Entering a declaration reads its frame from a table, at the declaration's
+# place in the program. The mutation reads past the table's end.
 recent_frame = row
-  "a declaration's frame probed in the map"
+  "a declaration's frame made again on every entry"
   true
   interp_gate
   "cost goldens (deterministic ratchet, no clocks)"

@@ -386,15 +386,16 @@ expr_tag = row
 
 rows_d1zzzzzzy6 = list/concat rows_d1zzzzzzy5 [guard_rest expr_tag]
 
-# The interpreter's callee and frame tables hold 256 slots each, sized by the
-# run's peak as well as its speed (2026-10-08). The mutation gives the callees
-# 1,024 again, and the interpreted run's peak is the witness.
+# The interpreter's callee table is as long as the names a run has called,
+# so it sits under the run's peak at no more than that (2026-11-11). The
+# mutation starts it at 1,024 entries, as the fixed table before it once
+# had, and the interpreted run's peak is the witness.
 callee_slots = row
-  "the callee cache sized for speed"
+  "a callee table filled before it is asked"
   false
   "sh scripts/gates/interp_memory.sh"
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "the_callee_cache_sized_for_speed")
+  (breaking "a_callee_table_filled_before_it_is_asked")
   release
 
 rows_d1zzzzzzy4 = list/concat rows_d1zzzzzzy6 [callee_slots]
@@ -1774,4 +1775,42 @@ step_unbounded = row
 
 rows_dq64 = list/concat rows_dq63 [step_unbounded]
 
-rows_d = list/concat rows_dq64 [itself]
+# An entry with a derive line imports std/derive without writing it, and the
+# survey that counts imports reads text (2026-11-11, kanso#2442's last repeat).
+derive_counted = row
+  "an entry's unwritten import of std/derive left out of the count"
+  true
+  "cargo test --release --test an_entry_that_derives_compiles_derive_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_derive_line_counted_as_no_import")
+  no_setup
+
+rows_dq65 = list/concat rows_dq64 [derive_counted]
+
+# The interpreter's table of what a reference calls is indexed by a number
+# resolve gives the name, and no longer by where the name's text was
+# allocated (2026-11-11, kanso#2444).
+looked_up_once = row
+  "a call through a reference that hashes the name's text every time"
+  true
+  "cargo test --release --test a_reference_is_looked_up_by_name_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_reference_looked_up_by_name_on_every_call")
+  no_setup
+
+rows_dq66 = list/concat rows_dq65 [looked_up_once]
+
+# A measured build links its cached runtime objects under plain names. The
+# cache names them by a digest of src/main.rs, and the linker's work moves
+# with the characters of its inputs' names (2026-11-11).
+plain_link = row
+  "a measured link handed a runtime object named by a digest"
+  true
+  "cargo test --release --test the_measured_link_names_its_runtime"
+  "specs (unit, golden, differential)"
+  (breaking "a_measured_link_handed_the_digest_s_name")
+  no_setup
+
+rows_dq67 = list/concat rows_dq66 [plain_link]
+
+rows_d = list/concat rows_dq67 [itself]

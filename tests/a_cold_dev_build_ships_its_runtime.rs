@@ -61,8 +61,10 @@ fn a_cold_dev_build_does_not_compile_the_runtime() {
         String::from_utf8_lossy(&built.stderr)
     );
     // The link names the object, `kanso_runtime_dev_<key>.o`; only a compile
-    // names the source.
-    let compiles =
-        commands.lines().filter(|l| l.contains("kanso_runtime_dev_") && l.contains(".c ")).count();
+    // of the runtime writes one, from C read on standard input.
+    let compiles = commands
+        .lines()
+        .filter(|l| l.contains("kanso_runtime_dev_") && l.contains(" -x c "))
+        .count();
     assert_eq!(compiles, 0, "a cold build compiled the runtime:\n{commands}");
 }

@@ -28,6 +28,9 @@ set -e
 # valgrind: scripts/gates/instructions.sh and scripts/gates/compile_instructions.sh.
 # jq: kq's spec.sh compares byte-for-byte against `jq -S`, and without it that
 # half of the comparison silently does not run.
+# A runner whose first mirror does not resolve reads another; the script says
+# why.
+sh "$(dirname "$0")/../apt_ready.sh"
 sudo apt-get update -qq
 sudo apt-get install -y -qq valgrind jq
 

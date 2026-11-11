@@ -435,7 +435,18 @@ fn prune_shipped(
 /// directory its imports are read from.
 fn from_entry(file: &str, source: &str) -> Vec<(String, std::path::PathBuf)> {
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    vec![(source.to_string(), base)]
+    // An entry that derives imports std/derive without writing the import
+    // (`compile_entry_program`). The survey counts imports by reading text,
+    // so it is handed the line the entry did not write: a module that
+    // declares the derivation imports std/derive too, and two imports are
+    // what keep a module from its first compile. An entry with no derive
+    // line pays the search and nothing else.
+    let derives = source.starts_with("derive ") || source.contains("\nderive ");
+    let unwritten =
+        derives.then(|| (format!("import \"{}\"\n", crate::derive::MODULE), base.clone()));
+    let mut texts = vec![(source.to_string(), base)];
+    texts.extend(unwritten);
+    texts
 }
 
 /// The paths a source names on its `import` lines. Imports open a file, so

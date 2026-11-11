@@ -24,6 +24,12 @@
 # partitioning, and it fixes the names of its temporary files
 # (`KANSO_FIXED_TEMPS`), because the name decided which of two counts a build
 # drew. With both, two readings of one binary agree to the instruction.
+# Under the same variable the link reads the cached runtime objects under
+# plain names, and every cached object is compiled from standard input. The
+# cache names its files by a digest of src/main.rs, the linker's count moves
+# with the characters of its inputs' names, and an object records the name of
+# the file it was compiled from. So an edit to main.rs that changed nothing a
+# build does moved this row, by 17 the one time it was traced.
 #
 # Most of the tree is the C toolchain, so the row belongs to clang as well as
 # glibc and rustc, and the measured-on line names all three. Only CI's
@@ -32,4 +38,4 @@
 # A rise is a regression to explain and a fall is a win to bank: say which in
 # design/compiler-log.md, which holds the history of every move.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
-codegen_instructions_release=372173775
+codegen_instructions_release=372208803

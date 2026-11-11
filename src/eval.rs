@@ -108,7 +108,17 @@ impl Entries {
     }
 }
 
+/// The number of a reference `resolve` did not make. It is past the end of
+/// any table, so such a reference is looked up by its name on every call.
+const UNNUMBERED: u32 = u32::MAX;
+
 impl Value {
+    /// A reference to a function by name, made outside `resolve`: by a
+    /// derivation handing a declaration to its deriver, and by a tie.
+    pub(crate) fn unnumbered(name: &str) -> Value {
+        Value::FnRef(Rc::from(name), UNNUMBERED)
+    }
+
     /// An integer value, kept in a machine word whenever it fits one.
     pub fn int(n: impl Into<Int>) -> Value {
         Value::Int(n.into())
@@ -160,7 +170,10 @@ pub enum Value {
         ty: Rc<str>,
         inner: Rc<Value>,
     },
-    FnRef(Rc<str>),
+    /// A function by name, and the number `resolve` gave the name the first
+    /// time this run met it. The number is the reference's place in the
+    /// table of what references call (`Interp::callee_of_ref`).
+    FnRef(Rc<str>, u32),
     Closure(Rc<ClosureData>),
     /// A closure the browser backend compiled into the module's table,
     /// named by its slot handle. The native engine tags closures inside its
@@ -571,64 +584,8 @@ fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> Eva
 
 include!("eval/executor.rs");
 
-/// The slot a key takes in the recent tables: the top bits of the key times
-/// the golden ratio, which spreads keys that differ only in their low bits.
-///
-/// The key is an object's place inside its allocator slice, never its whole
-/// address. Until 2026-09-30 it was the whole address, and where the heap
-/// landed decided which declarations and names shared a slot, so the
-/// interpreter's instruction count moved with the memory layout: a valgrind
-/// run with its mappings started at 48 MiB counted 443,467 fewer instructions
-/// than one started at the default, and one started at 256 MiB counted
-/// 522,700 more, on the same binary and the same program.
-fn recent_slot(key: u64, slots: usize) -> usize {
-    (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - slots.trailing_zeros())) as usize
-}
-
-/// A map key that is equal by address and hashed by the object's place in its
-/// slice, so which entries collide depends on the program and not on where
-/// the heap landed. Two keys at one address are one object, so they carry one
-/// `stable`.
-#[derive(Clone, Copy)]
-struct Placed {
-    at: usize,
-    stable: u64,
-}
-
-impl PartialEq for Placed {
-    fn eq(&self, other: &Self) -> bool {
-        self.at == other.at
-    }
-}
-
-impl Eq for Placed {}
-
-impl std::hash::Hash for Placed {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.stable);
-    }
-}
-
-/// Where an object sits inside the 64 KiB slice the allocator placed it in.
-/// The allocator hands out slices on 64 KiB boundaries, so moving the whole
-/// heap moves no object within its slice, and the offset is the same on every
-/// layout the same program produces.
-fn in_slice(at: usize) -> u64 {
-    (at & 0xFFFF) as u64
-}
-
 /// Call sites keyed as the linearity analysis keys them: file, line, column.
 type Sites = crate::hash::Set<(std::sync::Arc<str>, usize, usize)>;
-
-/// Slots in `Interp::recent_callees`. The table lives for the whole run, so
-/// its size sits under the interpreted run's peak memory. At 1,024 slots,
-/// with the frames' 512 beside it, the two held 32,768 bytes; at 256 each
-/// they hold 10,240, and the corpus misses often enough to cost about 720,000
-/// more instructions, which the objective weighs as the smaller of the two.
-const RECENT_CALLEES: usize = 256;
-
-/// Slots in `Interp::recent_frames`, sized with the callees above.
-const RECENT_FRAMES: usize = 256;
 
 /// What a CALL on a name does. `call_named` asked `err`, then the types map,
 /// then the function map, on every call; `group_of` inside `eval_tail` probed
@@ -680,7 +637,7 @@ enum Named<'a> {
     False,
     NoneV,
     Done,
-    FnRef(Rc<str>),
+    FnRef(Rc<str>, u32),
 }
 
 impl Named<'_> {
@@ -691,7 +648,7 @@ impl Named<'_> {
         match (self, other) {
             (Named::Constant(a), Named::Constant(b)) => std::ptr::eq(*a, *b),
             (Named::EmptyRecord(a), Named::EmptyRecord(b)) => a == b,
-            (Named::FnRef(a), Named::FnRef(b)) => a == b,
+            (Named::FnRef(a, _), Named::FnRef(b, _)) => a == b,
             (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
         }
     }
@@ -762,6 +719,15 @@ pub struct Interp<'a> {
     /// waiting for (#2405). The native runtime counts the same waits, and
     /// both report the count when it is not nought.
     pub sock_waits: Cell<u64>,
+    /// How many times a call through a reference was answered by its name:
+    /// once for each numbered name the run calls, and once a call for a
+    /// reference with no number. Counted where the table is filled, so a
+    /// call the table answers pays nothing for the count. Reported under
+    /// KANSO_COUNTERS as `interp_callee_lookups`.
+    pub callee_lookups: Cell<u64>,
+    /// How many frames `frame_of` made: one for each declaration the run
+    /// entered. Reported as `interp_frames_made`.
+    pub frames_made: Cell<u64>,
     /// Where the last slice of a string with a wider character ended: the
     /// string, a character's position and the byte it starts at. A scan asks
     /// for each next character of one string in turn, so the walk to it goes
@@ -813,25 +779,18 @@ pub struct Interp<'a> {
     /// One entry per name this run has CALLED, filled on first sight for the
     /// reason `names` above is.
     callees: RefCell<Map<String, Callee<'a>>>,
-    /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
-    /// `call_ref`.
-    callees_by_ref: RefCell<Map<Placed, (Rc<str>, Callee<'a>)>>,
-    /// The last callee each of a few hundred reference addresses asked for,
-    /// in front of `callees_by_ref`; see `callee_of_ref`.
-    recent_callees: RefCell<Vec<(usize, Option<Callee<'a>>)>>,
-    /// One entry per declaration this run has ENTERED, keyed by the
-    /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
-    /// safe: the compiler refuses a borrow that does not outlive this
-    /// interpreter, so no temporary can land here and reuse a freed address.
-    /// `frame_of` formats a trace line and asks which
-    /// package a file belongs to, on every entry into every body, for a string
-    /// only read when an err is raised. The answer depends on the declaration
-    /// alone, and a declaration lives in the `Program` this interpreter
-    /// borrows, so its address is stable for the whole run and unique to it.
-    frames: RefCell<Map<Placed, Frame>>,
-    /// The last frame each of a few hundred declaration slots asked for, in
-    /// front of `frames`; see `frame_for`.
-    recent_frames: RefCell<Vec<(usize, Frame)>>,
+    /// What each numbered reference calls, at its number; see
+    /// `callee_of_ref`. As long as the count of names this run has resolved
+    /// to a reference and then called through.
+    callees_by_number: RefCell<Vec<Option<Callee<'a>>>>,
+    /// The number the next name resolved to a reference takes.
+    references: Cell<u32>,
+    /// The frame of each declaration this run has ENTERED, at the
+    /// declaration's place in `program.fns`; see `frame_for`. `frame_of`
+    /// formats a trace line and asks which package a file belongs to, for a
+    /// string only read when an err is raised, and the answer depends on the
+    /// declaration alone. As long as the furthest declaration entered.
+    frames: RefCell<Vec<Frame>>,
     program: &'a Program,
 }
 
@@ -931,6 +890,8 @@ impl<'a> Interp<'a> {
             pool_failing: Cell::new(false),
             sock_waiting: Cell::new(false),
             sock_waits: Cell::new(0),
+            callee_lookups: Cell::new(0),
+            frames_made: Cell::new(0),
             text_cursor: RefCell::new(None),
             cycles: std::cell::OnceCell::new(),
             linearity: std::cell::OnceCell::new(),
@@ -940,10 +901,9 @@ impl<'a> Interp<'a> {
             fixed: RefCell::new(Vec::new()),
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
-            callees_by_ref: RefCell::new(Map::default()),
-            recent_callees: RefCell::new(vec![(0, None); RECENT_CALLEES]),
-            frames: RefCell::new(Map::default()),
-            recent_frames: RefCell::new(vec![(0, None); RECENT_FRAMES]),
+            callees_by_number: RefCell::new(Vec::new()),
+            references: Cell::new(0),
+            frames: RefCell::new(Vec::new()),
             program,
         }
     }
@@ -951,37 +911,37 @@ impl<'a> Interp<'a> {
     /// `frame_of` for a declaration this run has entered before, which after
     /// the first entry is a clone of an `Rc` rather than two formatted strings.
     ///
-    /// A direct-mapped table of the last frame per slot answers before the
-    /// map, the way `callee_of_ref` does. A declaration borrows from the
-    /// program for as long as the interpreter lives, so its address cannot be
-    /// handed to another while a slot names it.
+    /// Every declaration the interpreter enters is an element of
+    /// `program.fns`, so its distance from the first one is its index there:
+    /// the program's order, whatever address the vector was given. The table
+    /// was keyed by the declaration's address until 2026-11-11, and then
+    /// which declarations shared a slot moved with what had been allocated
+    /// before the program was parsed (kanso#2444).
     #[inline]
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
-        let key = decl as *const FnDecl as usize;
-        let slot = recent_slot(in_slice(key), RECENT_FRAMES);
-        if let (at, frame @ Some(_)) = &self.recent_frames.borrow()[slot] {
-            if *at == key {
-                return frame.clone();
-            }
+        let first = self.program.fns.as_ptr() as usize;
+        let at = (decl as *const FnDecl as usize).wrapping_sub(first) / size_of::<FnDecl>();
+        if let Some(frame @ Some(_)) = self.frames.borrow().get(at) {
+            return frame.clone();
         }
-        self.frame_missed(decl, key, slot)
+        self.frame_missed(decl, at)
     }
 
-    /// The table did not hold the declaration; out of line, as `callee_missed`.
+    /// The first entry into a declaration; out of line, as `callee_missed`.
+    /// A declaration that is not the program's own element at `at` has no
+    /// place in the table and is given its frame afresh.
     #[inline(never)]
-    fn frame_missed(&self, decl: &'a FnDecl, key: usize, slot: usize) -> Frame {
-        let placed = Placed { at: key, stable: in_slice(key) };
-        let known = self.frames.borrow().get(&placed).cloned();
-        let frame = match known {
-            Some(frame) => frame,
-            None => {
-                let made = frame_of(decl);
-                self.frames.borrow_mut().insert(placed, made.clone());
-                made
+    fn frame_missed(&self, decl: &'a FnDecl, at: usize) -> Frame {
+        let made = frame_of(decl);
+        self.frames_made.set(self.frames_made.get() + 1);
+        if self.program.fns.get(at).is_some_and(|own| std::ptr::eq(own, decl)) {
+            let mut frames = self.frames.borrow_mut();
+            if frames.len() <= at {
+                frames.resize(at + 1, None);
             }
-        };
-        self.recent_frames.borrow_mut()[slot] = (key, frame.clone());
-        frame
+            frames[at] = made.clone();
+        }
+        made
     }
 
     /// Evaluate a declaration's body with its lazy bind sites in view.
@@ -1124,7 +1084,7 @@ impl<'a> Interp<'a> {
             return Ok(Flow::Done(self.eval(expr, env, frame)?));
         }
         let group_of = |callee: &Value| -> Option<(Rc<str>, Rc<Vec<&'a FnDecl>>)> {
-            let Value::FnRef(n) = callee else { return None };
+            let Value::FnRef(n, at) = callee else { return None };
             // `if` is the one name the memory would answer Group for and this
             // may not: it is a declaration AND the conditional form, and the
             // form wins here. The group rides along with the name, so the
@@ -1133,7 +1093,7 @@ impl<'a> Interp<'a> {
             if &**n == "if" {
                 return None;
             }
-            match self.callee_of_ref(n) {
+            match self.callee_of_ref(n, *at) {
                 Callee::Group(group) => Some((n.clone(), group)),
                 _ => None,
             }
@@ -1188,7 +1148,7 @@ impl<'a> Interp<'a> {
             };
         }
         let callee = self.eval(head, env, frame)?;
-        if matches!(&callee, Value::FnRef(n) if &**n == "if") && args.len() == 3 {
+        if matches!(&callee, Value::FnRef(n, _) if &**n == "if") && args.len() == 3 {
             let cond = self.force(self.eval(&args[0], env, frame)?)?;
             return match cond {
                 Value::True => self.eval_tail(&args[1], env, frame),
@@ -1678,7 +1638,7 @@ impl<'a> Interp<'a> {
                 // closure and then reaches through a thunk, so `force_thunk` on
                 // the branch is the second half of that. A failure VALUE is
                 // still the answer rather than a fault, as it was there.
-                if matches!(&callee, Value::FnRef(n) if &**n == "if") && args.len() == 3 {
+                if matches!(&callee, Value::FnRef(n, _) if &**n == "if") && args.len() == 3 {
                     let cond = self.force(self.eval(&args[0], env, frame)?)?;
                     return match cond {
                         Value::True => self.force_thunk(self.eval(&args[1], env, frame)?),
@@ -1690,7 +1650,7 @@ impl<'a> Interp<'a> {
                         },
                     };
                 }
-                let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
+                let lazy_if = matches!(&callee, Value::FnRef(name, _) if &**name == "if");
                 let mut values = Vec::with_capacity(args.len());
                 // Any other arity reaches `builtin_if` as before -- a partial
                 // application, or a miscount the arity check is there to name.
@@ -1884,7 +1844,7 @@ impl<'a> Interp<'a> {
                         entry.1 = Some(slots.len());
                     }
                     let fixed = match &named {
-                        Named::FnRef(n) => Some(Value::FnRef(n.clone())),
+                        Named::FnRef(n, at) => Some(Value::FnRef(n.clone(), *at)),
                         Named::True => Some(Value::True),
                         Named::False => Some(Value::False),
                         Named::NoneV => Some(Value::NoneV),
@@ -1948,7 +1908,7 @@ impl<'a> Interp<'a> {
             Named::False => Ok(Value::False),
             Named::NoneV => Ok(Value::NoneV),
             Named::Done => Ok(Value::Done),
-            Named::FnRef(name) => Ok(Value::FnRef(name)),
+            Named::FnRef(name, at) => Ok(Value::FnRef(name, at)),
         }
     }
 
@@ -2008,7 +1968,9 @@ impl<'a> Interp<'a> {
                     .strip_prefix("builtin_")
                     .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
             {
-                Ok(Named::FnRef(Rc::from(name)))
+                let at = self.references.get();
+                self.references.set(at + 1);
+                Ok(Named::FnRef(Rc::from(name), at))
             }
             _ => Err(RuntimeError { at: None, message: format!("unknown name `{name}`"), span }),
         }
@@ -2395,8 +2357,7 @@ impl<'a> Interp<'a> {
         let mut nodes = Entries::new();
         for key in keys {
             let held = vec![Value::int(serial), key.clone()];
-            let r =
-                Value::Partial(Rc::new(Value::FnRef(Rc::from("builtin_tie_ref"))), Rc::new(held));
+            let r = Value::Partial(Rc::new(Value::unnumbered("builtin_tie_ref")), Rc::new(held));
             let node = self.call(maker.clone(), vec![key.clone(), r], span, frame)?;
             let node = self.force_thunk(node)?;
             if is_failure(&node) {
