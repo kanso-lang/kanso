@@ -2493,4 +2493,13 @@ Left on the issue: the two greps that count rulings, which the compiler
 page tells as a dated story, and "five libraries the link resolves",
 written in four places.
 
+The chart's palette had a second copy too (#2447, its first item):
+`tests/the_chart_palette_is_the_one_that_was_measured.rs` held all the
+colours of `docs/numbers.html` and asserted the page equalled them. The
+chart draws one panel to a counter, so colour tells no two lines apart.
+The copy is gone, and `tests/a_chart_line_wears_a_token_both_modes_declare.rs`
+checks the page against itself: both modes declare the same tokens, and
+every line wears a declared token and no hex. Watched fail with a token
+taken out of the dark block and with one line given a hex.
+
 No counter moved.
