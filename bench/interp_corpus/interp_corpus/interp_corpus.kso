@@ -34,7 +34,8 @@ pub play =
   told = "{rounds 6} {branched 680} {padded 18 0} {maps} {nest} {texts}"
   trips = sealed 15 0
   reads = taken 12 0
-  shown = (_ -> print "interp {told} {trips} {reads}")
+  pages = rewritten 80 0
+  shown = (_ -> print "interp {told} {trips} {reads} {pages}")
   served 2000 .> (_ -> deferred 2000) .> shown
 
 fn rounds n
@@ -376,3 +377,52 @@ fn taken n acc
   apart = inside 64 bs (frame_at bs 1) 0
   handed = through bs 1 64 frame_at 0
   taken (n - 1) (acc + unframed bs 1 64 0 + apart + handed)
+
+# A page's values through an HTML escape, as a template writes one (#2427):
+# three searches for the five characters, a value with none handed back as
+# it came, and a split and a join for each search that found something. A
+# row is a heading holding four of the five, an excerpt holding an
+# apostrophe, and seven values with nothing to rewrite.
+fn escaped s
+  cs = text/bytes s
+  past = length cs
+  amp = text/find2 cs 1 38 38 <= past
+  angle = text/find2 cs 1 60 62 <= past
+  quote = text/find2 cs 1 34 39 <= past
+  return s if not (amp or angle or quote)
+  a = swapped s amp "&" "&amp;"
+  b = swapped a angle "<" "&lt;"
+  c = swapped b angle ">" "&gt;"
+  d = swapped c quote "\"" "&quot;"
+  swapped d quote "'" "&#39;"
+
+fn swapped s false _ _
+  s
+
+fn swapped s true from to
+  text/join (text/split s from) to
+
+fn heading n
+  "salt & vinegar <batch {n}> the \"house\" crisps"
+
+fn excerpt n
+  "the cook's notes on batch {n}, kept for the next one"
+
+fn plain n k
+  "row {n} column {k}, a value with nothing in it to rewrite"
+
+fn plains _ 0 acc
+  acc
+
+fn plains n k acc
+  plains n (k - 1) (acc + length (escaped (plain n k)))
+
+fn page_row n
+  marked = length (escaped (heading n)) + length (escaped (excerpt n))
+  plains n 7 marked
+
+fn rewritten 0 acc
+  acc
+
+fn rewritten n acc
+  rewritten (n - 1) (acc + page_row n)
