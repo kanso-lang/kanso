@@ -20,21 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — directive: senro may ask the language for more
-
-Clay, on the model finders: "this real world use case for kanso may lead to
-several more language tweaks. in general i support ambition as long as it
-fits with the stated goals for the language and the principles behind them.
-i'm particularly fascinated to see how you create a construct for convention
-over configuration without dynamic metaprogramming."
-
-The construct is `derive`: a library function the compiler runs over the
-project's modules, which answers source to add or a call to refuse. A senro
-feature that needs the derivation to see more than it is handed is a
-language change, proposed to the committee against the language's goals.
-The first candidate is the keys of a map literal at a call, which would let
-`where` take a map of conditions and still be checked (#2394).
-
 ## 2026-11-10 — senro's apps hold no SQL
 
 The two rulings of this morning are built. The work is in senro (senro#93
@@ -2617,3 +2602,70 @@ before the rule: `code is shown with ligatures (normal)`.
 helpers. A component's server action answered as its page, rolling a
 migration back, and confirmation and unlock mail in what the generator
 writes are still owed.
+
+## 2026-11-11 — a test file beside an entry reads what the entry reads (#2460)
+
+A senro app could not be tested with `kanso test`. Two things stood in the
+way, both found by trying it on `examples/notebook`. The verb took the
+app's directory for one module, where it is an entry and the files it
+imports one at a time, and the load then failed on `views/`, which is a
+module only because the entry's `derive kata/views` writes its functions.
+And a test file is a library, so it could not write `derive` lines, and had
+no `note/create`, no `routes` and no `schema` to call.
+
+**The search.** The log's entries on the test verb (2026-10-14,
+2026-10-29) and the 2026-10-12 gavel (#1883: a test file is an outside
+consumer of the module beside it) are all about a module that is a
+directory. No fixture under `tests/golden/test_verb` had an entry or a
+derivation in it, and no test file in kanso, kq or senro sat beside a
+`main.kso`.
+
+**The decision**, by the committee, recorded on #2460. A test file beside
+a `main.kso` tests that program. It is compiled with the entry's imports
+and the entry's derivations, and none of the entry's statements run. It
+may add imports of its own, and only those can read as unused. The gavel
+on #1883 carries over a word at a time: a test file reads the thing beside
+it as a consumer would, and beside an entry that thing is the program.
+
+The alternative was to let a test file write `derive` lines. The committee
+first leaned that way and turned it down on two counts. `routes/rest`
+describes every module the entry imports, so a test file would have to
+repeat the entry's whole import list to derive the same table. And the
+app's derivations would then be written once in `main.kso` and again in
+every test file, which is one fact with several homes.
+
+**Built.** `compile_test_file` looks for `main.kso` in the test file's
+directory. When it is there, the entry is parsed, its imports are lent to
+the test file, and its derivations run over the entry as they do when it
+is the program, so a derivation sees none of the test file's helpers. What
+they declare is declared for the test file, and an arm they define is
+compiled into its module. The library is read as far as both texts reach.
+An entry that does not parse, or whose derivation refuses, is reported at
+the entry's own line.
+
+Three fixtures under `tests/golden/test_verb`: `beside_an_entry` calls a
+module the entry imports, reads the table the entry derives and calls an
+arm the derivation wrote; `beside_a_broken_entry` and
+`beside_a_refused_entry` pin the two reports. Watched red with the lookup
+turned off: `unknown name` for each of the entry's names, and for the
+broken entry the test file's own `unknown name` where the syntax error was
+expected.
+
+**The rows.** CI's first reading had `library_instructions` 2,304 above
+its golden. A file's import list was copied on every library compile, to
+know which imports the file wrote itself once an entry had lent it more.
+The copy is now made only when an entry is beside the file, and the row is
+63,634,563 -> 63,634,689: 126 instructions for the question "is there an
+entry beside this file" on a path where the answer is no.
+`entry_instructions` is 119,166,280 -> 119,166,322. Nothing on the entry's
+path changed, so that is the binary's layout. The browser's compile row
+went the other way by two, 412,081,307 -> 412,081,305.
+
+The welfare floor is lowered by what this costs, under the exception for
+building a ruled part of the language: #2460 is the committee's decision,
+and the floor's history says so: 95.39230414088809 ->
+95.3923041102071.
+
+**Open.** Each test file beside an entry compiles the app again. One test
+file beside senro's `examples/notebook` took 1.9 s in this container from
+start to finish, and nothing here measures an app with many of them.
