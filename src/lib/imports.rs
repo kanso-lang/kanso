@@ -6,6 +6,73 @@
 // fmt does not reach an included file, so CI's format job checks the files
 // under src/'s subdirectories itself.
 
+/// A shipped module: its short name and its files.
+type Embedded = (&'static str, &'static [(&'static str, &'static str)]);
+
+/// Embedded std modules load where no filesystem exists (the browser)
+/// and where no lib/ ships beside the binary (installs). include_str!
+/// of the same files keeps the embedded copies incapable of drifting.
+/// the shipped library, embedded so the browser (no filesystem) and
+/// an installed binary (no lib/ beside it) resolve the same sources
+/// the checkout does. A module is its whole file set, so a
+/// multi-file module lists every file.
+fn embedded_module(path: &str) -> Option<Embedded> {
+    match path {
+        "std/render" => {
+            Some(("render", &[("render.kso", include_str!("../../lib/render/render.kso"))]))
+        }
+        "std/list" => Some(("list", &[("list.kso", include_str!("../../lib/list/list.kso"))])),
+        "std/time" => Some(("time", &[("time.kso", include_str!("../../lib/time/time.kso"))])),
+        "std/io" => Some(("io", &[("io.kso", include_str!("../../lib/io/io.kso"))])),
+        "std/os" => Some(("os", &[("os.kso", include_str!("../../lib/os/os.kso"))])),
+        "std/text" => Some((
+            "text",
+            &[
+                ("span.kso", include_str!("../../lib/text/span.kso")),
+                ("text.kso", include_str!("../../lib/text/text.kso")),
+            ],
+        )),
+        "std/math" => Some(("math", &[("math.kso", include_str!("../../lib/math/math.kso"))])),
+        "std/bits" => Some(("bits", &[("bits.kso", include_str!("../../lib/bits/bits.kso"))])),
+        "std/expect" => {
+            Some(("expect", &[("expect.kso", include_str!("../../lib/expect/expect.kso"))]))
+        }
+        "std/testing" => {
+            Some(("testing", &[("testing.kso", include_str!("../../lib/testing/testing.kso"))]))
+        }
+        "std/net" => Some(("net", &[("net.kso", include_str!("../../lib/net/net.kso"))])),
+        "std/net/http" => {
+            Some(("http", &[("http.kso", include_str!("../../lib/net/http/http.kso"))]))
+        }
+        "std/path" => Some(("path", &[("path.kso", include_str!("../../lib/path/path.kso"))])),
+        "std/pool" => Some(("pool", &[("pool.kso", include_str!("../../lib/pool/pool.kso"))])),
+        "std/sha256" => {
+            Some(("sha256", &[("sha256.kso", include_str!("../../lib/sha256/sha256.kso"))]))
+        }
+        "std/base64" => {
+            Some(("base64", &[("base64.kso", include_str!("../../lib/base64/base64.kso"))]))
+        }
+        "std/derive" => {
+            Some(("derive", &[("derive.kso", include_str!("../../lib/derive/derive.kso"))]))
+        }
+        "std/regexp" => {
+            Some(("regexp", &[("regexp.kso", include_str!("../../lib/regexp/regexp.kso"))]))
+        }
+        "std/json" => Some((
+            "json",
+            &[
+                ("json.kso", include_str!("../../lib/json/json.kso")),
+                ("number.kso", include_str!("../../lib/json/number.kso")),
+                ("scan.kso", include_str!("../../lib/json/scan.kso")),
+                ("text.kso", include_str!("../../lib/json/text.kso")),
+                ("value.kso", include_str!("../../lib/json/value.kso")),
+            ],
+        )),
+        "./hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
+        _ => None,
+    }
+}
+
 /// Load and qualify every imported module, recursively.
 fn load_dependencies(
     base: &std::path::Path,
@@ -52,67 +119,7 @@ fn load_dependencies_inner(
                 &qual_owned
             }
         };
-        // Embedded std modules load where no filesystem exists (the browser)
-        // and where no lib/ ships beside the binary (installs). include_str!
-        // of the same files keeps the embedded copies incapable of drifting.
-        // the shipped library, embedded so the browser (no filesystem) and
-        // an installed binary (no lib/ beside it) resolve the same sources
-        // the checkout does. A module is its whole file set, so a
-        // multi-file module lists every file.
-        let embedded: Option<(&str, &[(&str, &str)])> = match path.as_str() {
-            "std/render" => {
-                Some(("render", &[("render.kso", include_str!("../../lib/render/render.kso"))]))
-            }
-            "std/list" => Some(("list", &[("list.kso", include_str!("../../lib/list/list.kso"))])),
-            "std/time" => Some(("time", &[("time.kso", include_str!("../../lib/time/time.kso"))])),
-            "std/io" => Some(("io", &[("io.kso", include_str!("../../lib/io/io.kso"))])),
-            "std/os" => Some(("os", &[("os.kso", include_str!("../../lib/os/os.kso"))])),
-            "std/text" => Some((
-                "text",
-                &[
-                    ("span.kso", include_str!("../../lib/text/span.kso")),
-                    ("text.kso", include_str!("../../lib/text/text.kso")),
-                ],
-            )),
-            "std/math" => Some(("math", &[("math.kso", include_str!("../../lib/math/math.kso"))])),
-            "std/bits" => Some(("bits", &[("bits.kso", include_str!("../../lib/bits/bits.kso"))])),
-            "std/expect" => {
-                Some(("expect", &[("expect.kso", include_str!("../../lib/expect/expect.kso"))]))
-            }
-            "std/testing" => {
-                Some(("testing", &[("testing.kso", include_str!("../../lib/testing/testing.kso"))]))
-            }
-            "std/net" => Some(("net", &[("net.kso", include_str!("../../lib/net/net.kso"))])),
-            "std/net/http" => {
-                Some(("http", &[("http.kso", include_str!("../../lib/net/http/http.kso"))]))
-            }
-            "std/path" => Some(("path", &[("path.kso", include_str!("../../lib/path/path.kso"))])),
-            "std/pool" => Some(("pool", &[("pool.kso", include_str!("../../lib/pool/pool.kso"))])),
-            "std/sha256" => {
-                Some(("sha256", &[("sha256.kso", include_str!("../../lib/sha256/sha256.kso"))]))
-            }
-            "std/base64" => {
-                Some(("base64", &[("base64.kso", include_str!("../../lib/base64/base64.kso"))]))
-            }
-            "std/derive" => {
-                Some(("derive", &[("derive.kso", include_str!("../../lib/derive/derive.kso"))]))
-            }
-            "std/regexp" => {
-                Some(("regexp", &[("regexp.kso", include_str!("../../lib/regexp/regexp.kso"))]))
-            }
-            "std/json" => Some((
-                "json",
-                &[
-                    ("json.kso", include_str!("../../lib/json/json.kso")),
-                    ("number.kso", include_str!("../../lib/json/number.kso")),
-                    ("scan.kso", include_str!("../../lib/json/scan.kso")),
-                    ("text.kso", include_str!("../../lib/json/text.kso")),
-                    ("value.kso", include_str!("../../lib/json/value.kso")),
-                ],
-            )),
-            "./hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
-            _ => None,
-        };
+        let embedded = embedded_module(path);
         // A handed-in module: the browser has no filesystem, so a program
         // that is a library plus the entry that runs it arrives as sources
         // rather than as files. The canon's `./` is how the entry SPELLS a
