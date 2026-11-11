@@ -1813,4 +1813,16 @@ plain_link = row
 
 rows_dq67 = list/concat rows_dq66 [plain_link]
 
-rows_d = list/concat rows_dq67 [itself]
+# A derivation is told which file declares each of a module's names, so a
+# convention can order code by its file's name (2026-11-11, kanso#2455).
+declared_in = row
+  "a declaration's file left blank in what a derivation is handed"
+  true
+  "cargo test --release --test derivations"
+  "specs (unit, golden, differential)"
+  (breaking "a_declaration_s_file_left_blank")
+  no_setup
+
+rows_dq68 = list/concat rows_dq67 [declared_in]
+
+rows_d = list/concat rows_dq68 [itself]

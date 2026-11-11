@@ -1,0 +1,19 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# The names of a module's constants, in the order of the files that declare
+# them. The module's files share a namespace, so the order is the files'.
+pub fn ordered p
+  kept = list/select p.modules (m -> m.name == "changes")
+  names = list/fold kept [] (acc m -> list/concat acc (by_file m))
+  [(derive/declare "order" "order" names)]
+
+fn by_file m
+  pairs = list/map (keys m.constants) (n -> "{m.sources[n]} {n}")
+  sorted = list/sort (list/to_list pairs)
+  list/to_list (list/map sorted name_of)
+
+fn name_of pair
+  parts = text/split pair " "
+  parts[2]

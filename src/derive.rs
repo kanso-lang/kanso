@@ -174,6 +174,7 @@ fn entry_module(entry: &Program, root: &str) -> Value {
         list(Vec::new()),
         list(calls),
         Value::Map(Rc::new(Entries::new())),
+        Value::Map(Rc::new(Entries::new())),
     ];
     record("derive/module", fields)
 }
@@ -268,6 +269,12 @@ fn module(
     let mut seen: Vec<&str> = Vec::new();
     let mut functions = Vec::new();
     let mut constants = Entries::new();
+    // Which file declares each pub function and constant. A module's kanso
+    // files share one namespace, so nothing else says where a name was
+    // written, and a convention that places code by its file's name, as one
+    // that runs an app's migrations in the order of their file names does,
+    // needs it. The first arm's file answers for a function of several.
+    let mut sources = Entries::new();
     for decl in &deps.fns {
         let Some(bare) = decl.name.strip_prefix(&prefix) else { continue };
         if !open(&decl.name) || decl.synthetic || bare.contains('/') || seen.contains(&bare) {
@@ -277,6 +284,11 @@ fn module(
             continue;
         }
         seen.push(bare);
+        let file = std::path::Path::new(&*decl.file)
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        sources.insert(MapKey::Str(bare.to_string().into()), text(&file));
         // A constant is handed over as its value, which is how a derivation
         // reads data the app keeps, such as a list of migrations.
         if decl.params.is_empty() {
@@ -308,7 +320,9 @@ fn module(
         .collect();
     let constants = Value::Map(Rc::new(constants));
     let calls = calls_in(deps, name);
-    let fields = vec![text(name), list(functions), constants, list(records), list(calls), files];
+    let sources = Value::Map(Rc::new(sources));
+    let fields =
+        vec![text(name), list(functions), constants, list(records), list(calls), files, sources];
     Ok(record("derive/module", fields))
 }
 
