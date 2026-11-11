@@ -2564,3 +2564,28 @@ reach), and sixty unread program arguments. The evidence that the old
 slots moved with the front end is the two per-function profiles on #2444.
 That the new ones cannot is by construction: a slot is an index the
 program decides.
+
+## 2026-11-11 — a job's install reads a mirror that resolves
+
+Not a compiler change. From 13:52 UTC the first mirror in a hosted
+runner's apt list, `azure.archive.ubuntu.com`, stopped resolving on the
+runners, and it was still not resolving two hours later. Every job that
+installs a package died in the install with exit 100, before any test
+ran: in kanso on two pull requests, and in senro and kq. The name
+resolved from this container throughout, and GitHub's status page showed
+no incident.
+
+`scripts/apt_ready.sh` runs before each install in `ci.yml`, in
+`pages.yml` and in the ratchet's `toolchain.sh`. When the first mirror
+resolves it changes nothing. When it does not, it rewrites the runner's
+list to the first of `archive.ubuntu.com` and `mirrors.kernel.org` that
+does. apt checks what it downloads against the archive's signature, so
+the mirror that served the bytes does not change what is installed.
+
+`tests/apt_reads_a_mirror_that_resolves.rs` runs the script against a
+list and a resolver of its own, four ways: the first mirror answering,
+the first away, the first two away, and none answering. Watched fail
+with the check for the first mirror forced to pass.
+
+What is not known until a run says so is whether the other names resolve
+on a runner where Azure's does not. The script prints which it took.

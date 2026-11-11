@@ -51,6 +51,7 @@ jobs:
       # reason the engine is: the site serves the runtime it was built from.
       - name: build the runtime the playground links against
         run: |
+          sh scripts/apt_ready.sh
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 wasi-libc
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
