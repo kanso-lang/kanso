@@ -114808,3 +114808,18 @@ The committee kept the spelling `each signatures e ->`, collection first,
 two seats to one over `each signatures as e`: it is the call kanso would
 write with the parentheses the indentation makes redundant. `std` has no
 `each`, so kata's README calls it a helper kata writes.
+
+## 2026-11-10 — directive: senro may ask the language for more
+
+Clay, on the model finders: "this real world use case for kanso may lead to
+several more language tweaks. in general i support ambition as long as it
+fits with the stated goals for the language and the principles behind them.
+i'm particularly fascinated to see how you create a construct for convention
+over configuration without dynamic metaprogramming."
+
+The construct is `derive`: a library function the compiler runs over the
+project's modules, which answers source to add or a call to refuse. A senro
+feature that needs the derivation to see more than it is handed is a
+language change, proposed to the committee against the language's goals.
+The first candidate is the keys of a map literal at a call, which would let
+`where` take a map of conditions and still be checked (#2394).

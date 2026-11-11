@@ -282,20 +282,19 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
   <pre><code><span class="c"># Three wrong passwords in a row lock an account, as Devise's `lockable`</span>
 <span class="c"># does, for an hour or until the link mailed to its address unlocks it. A</span>
 <span class="c"># right password ends the run of wrong ones.</span>
-<span class="k">pub</span> <span class="f">locks_after</span> <span class="o">=</span> <span class="n">3</span>
+<span class="k">pub</span> <span class="f">locks_after</span> <span class="o">=</span> 3
 
-<span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> <span class="n">60</span>
+<span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> 60
 
 <span class="k">fn</span> <span class="f">locked?</span> a t
-  <span class="f">return</span> false if a<span class="o">.</span>locked <span class="o">==</span> <span class="s">""</span>
-  t <span class="o">&lt;</span> stamp_of (<span class="f">text/to_int</span> a<span class="o">.</span>locked) <span class="o">+</span> locked_minutes <span class="o">*</span> <span class="n">60</span> <span class="o">*</span> <span class="n">1000</span>
+  <span class="f">accounts/locked?</span> a.locked locked_minutes t
 
 <span class="k">fn</span> <span class="f">shut</span> req name true
   told <span class="o">=</span> <span class="s">"This account is locked. Follow the link we mailed to unlock it."</span>
-  <span class="f">effect</span> (<span class="f">opened</span> req name { <span class="s">"password"</span>:told } <span class="n">403</span>)
+  effect (opened req name { <span class="s">"password"</span>:told } 403)
 
 <span class="k">fn</span> <span class="f">shut</span> req name false
-  <span class="f">refused</span> req name
+  refused req name
 
 <span class="c"># A wrong password for an account counts against it, and the one that makes</span>
 <span class="c"># the run long enough locks it and mails the link that unlocks it. A lock</span>
@@ -303,28 +302,63 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># added in one statement, so of several wrong passwords at once exactly one</span>
 <span class="c"># sees the run reach its length.</span>
 <span class="k">fn</span> <span class="f">missed</span> req db name a t
-  <span class="f">return</span> refused req name if a<span class="o">.</span>id <span class="o">==</span> <span class="s">""</span>
-  <span class="f">reopened</span> db a
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">account/increment</span> (<span class="f">models/as_app</span> db) a<span class="o">.</span><span class="f">id</span> <span class="s">"failures"</span>)
-    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> <span class="f">locking</span> req db name a counted t)
+  <span class="k">return</span> refused req name <span class="k">if</span> a.id <span class="o">==</span> <span class="s">""</span>
+  <span class="f">accounts/missed</span> db <span class="f">account/account_model</span> a.id a.locked
+    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> locking req db name a counted t)
 
-<span class="k">fn</span> <span class="f">reopened</span> db a
-  <span class="f">return</span> effect a if a<span class="o">.</span>locked <span class="o">==</span> <span class="s">""</span>
-  <span class="f">account/update</span> (<span class="f">models/as_app</span> db) a<span class="o">.</span>id { <span class="s">"failures"</span>:<span class="s">"0"</span> <span class="s">"locked"</span>:<span class="s">""</span> }
-
-<span class="k">fn</span> <span class="f">locking</span> req _ name _ _:web/absent _
-  <span class="f">refused</span> req name
+<span class="k">fn</span> <span class="f">locking</span> req _ name _ _:<span class="f">web/absent</span> _
+  refused req name
 
 <span class="k">fn</span> <span class="f">locking</span> req db name a counted t
-  <span class="f">return</span> refused req name if counted<span class="o">.</span>failures <span class="o">!=</span> locks_after
-  stamp <span class="o">=</span> <span class="s">"<span class="i">{t}</span>"</span>
-  <span class="f">account/update</span> (<span class="f">models/as_app</span> db) a<span class="o">.</span>id { <span class="s">"locked"</span>:stamp }
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">account_mailer/unlock</span> db a<span class="o">.</span><span class="f">id</span> a<span class="o">.</span><span class="f">email</span> stamp)
-    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: <span class="i">{u.reason}</span>\n"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">refused</span> req name)</code></pre>
+  <span class="k">return</span> refused req name <span class="k">if</span> counted.failures <span class="o">!=</span> locks_after
+  <span class="f">accounts/locked_at</span> db <span class="f">account/account_model</span> a.id t
+    <span class="o">.&gt;</span> (stamp <span class="o">-&gt;</span> <span class="f">account_mailer/unlock</span> db a.id a.email stamp)
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: {u.reason}\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> refused req name)</code></pre>
 </div>
 
-<p><code>missed</code> counts a wrong password with <code>account/increment (models/as_app db) a.id "failures"</code>. the increment adds one in the statement that answers the record, so several wrong passwords that arrive at once each see a count of their own, and exactly one of them sees the count reach <code>locks_after</code>. that request stamps <code>locked</code> with the moment and mails the account a link to unlock it. senro's <code>spec/db/counted</code> runs eight increments at once on eight connections, and they see the counts 1 through 8. a lock that has run out is cleared before the count, in <code>reopened</code>, so the run starts again at one.</p>
+<p>the counting and the lock itself are senro's, in its <code>accounts</code> module, so every app that locks accounts shares them. the guestbook supplies its model, its two numbers, and what happens when a lock begins.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">accounts/accounts.kso</div>
+  <pre><code><span class="c"># Whether an account locked at `stamp`, the moment in milliseconds as text</span>
+<span class="c"># or "" for one that is open, is still locked at `t`, when a lock lasts</span>
+<span class="c"># `minutes`.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">locked?</span> stamp minutes t
+  <span class="k">return</span> false <span class="k">if</span> stamp <span class="o">==</span> <span class="s">""</span>
+  t <span class="o">&lt;</span> moment (<span class="f">text/to_int</span> stamp) <span class="o">+</span> minutes <span class="o">*</span> 60 <span class="o">*</span> 1000
+
+<span class="k">fn</span> <span class="f">moment</span> none
+  0
+
+<span class="k">fn</span> <span class="f">moment</span> n
+  n
+
+<span class="c"># A wrong password for the account `id`, whose lock is `locked`: one more</span>
+<span class="c"># in its run, answering the account as it now stands. A lock that has run</span>
+<span class="c"># out counts as none, so the run starts again. Postgres adds in the</span>
+<span class="c"># statement that answers, so of several wrong passwords at once exactly one</span>
+<span class="c"># sees the run reach a given length.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">missed</span> db model id locked
+  reopened db model id locked
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/increment</span> (<span class="f">models/as_app</span> db) model id <span class="s">"failures"</span>)
+
+<span class="k">fn</span> <span class="f">reopened</span> _ _ _ <span class="s">""</span>
+  effect <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">reopened</span> db model id _
+  open <span class="o">=</span> { <span class="s">"failures"</span>:<span class="s">"0"</span> <span class="s">"locked"</span>:<span class="s">""</span> }
+  <span class="f">models/update</span> (<span class="f">models/as_app</span> db) model id open <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect <span class="s">""</span>)
+
+<span class="c"># Locks the account `id` at `t`, answering the stamp the lock is kept</span>
+<span class="c"># under, which a link that unlocks it is bound to.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">locked_at</span> db model id t
+  stamp <span class="o">=</span> <span class="s">"{t}"</span>
+  <span class="f">models/update</span> (<span class="f">models/as_app</span> db) model id { <span class="s">"locked"</span>:stamp }
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect stamp)</code></pre>
+</div>
+
+<p><code>accounts/missed</code> counts a wrong password with <code>models/increment (models/as_app db) model id "failures"</code>. the increment adds one in the statement that answers the record, so several wrong passwords that arrive at once each see a count of their own, and exactly one of them sees the count reach <code>locks_after</code>. that request stamps <code>locked</code> with the moment and mails the account a link to unlock it. senro's <code>spec/db/counted</code> runs eight increments at once on eight connections, and they see the counts 1 through 8. a lock that has run out is cleared before the count, in <code>reopened</code>, so the run starts again at one.</p>
 
 <p>a locked account answers a wrong password the way every wrong password is answered, so a guesser learns nothing from it. only the right password is told that the account is locked, the same rule that keeps an unconfirmed account's existence to the holder of its password. the lock ends by itself after an hour (<code>session/locked_minutes</code>), and a right password, or a password reset, ends a run of wrong ones.</p>
 
@@ -366,7 +400,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <h2>where sign-ins came from</h2>
 
-<p>the guestbook keeps what Devise's <code>trackable</code> keeps: how many times an account has signed in, and when and from which address the latest sign-in and the one before it came. five columns hold them, each added by a migration of its own. after a right password, <code>arrived</code> writes them as the app. one update ends the run of wrong passwords, moves the latest time and address to the <code>last_</code> columns and stamps the new ones, and <code>account/increment</code> then counts the sign-in. the time is the app's clock, which <code>clock/utc_minute</code> writes as UTC to the minute: "2026-11-10 02:31 UTC". the address is <code>web/peer req</code>, the address the connection came from, which behind a proxy is the proxy's.</p>
+<p>the guestbook keeps what Devise's <code>trackable</code> keeps: how many times an account has signed in, and when and from which address the latest sign-in and the one before it came. five columns hold them, each added by a migration of its own. after a right password, the guestbook's <code>arrived</code> hands the account to <code>accounts/arrived</code>, which writes them as the app. one update ends the run of wrong passwords, moves the latest time and address to the <code>last_</code> columns and stamps the new ones, and <code>account/increment</code> then counts the sign-in. the time is the app's clock, which <code>clock/utc_minute</code> writes as UTC to the minute: "2026-11-10 02:31 UTC". the address is <code>web/peer req</code>, the address the connection came from, which behind a proxy is the proxy's.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/session.kso</div>
@@ -374,19 +408,31 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># stamped, the one before it kept beside it. The app writes these on its own</span>
 <span class="c"># account, and the time is the app's clock, written as UTC to the minute.</span>
 <span class="k">fn</span> <span class="f">arrived</span> _ _ none _
-  <span class="f">effect</span> none
+  effect none
 
 <span class="k">fn</span> <span class="f">arrived</span> req db was t
+  at <span class="o">=</span> was.current_sign_in_at
+  from <span class="o">=</span> was.current_sign_in_ip
+  <span class="f">accounts/arrived</span> req db <span class="f">account/account_model</span> was.id at from t</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">accounts/accounts.kso</div>
+  <pre><code><span class="c"># A right password for the account `id`: its run of wrong ones ends, any</span>
+<span class="c"># lock is lifted, and the sign-in is counted and stamped with the app's</span>
+<span class="c"># clock, as UTC to the minute, and the address the request came from. The</span>
+<span class="c"># sign-in before it, `was_at` from `was_ip`, is kept beside it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">arrived</span> req db model id was_at was_ip t
   changes <span class="o">=</span> {
     <span class="s">"current_sign_in_at"</span>:(<span class="f">clock/utc_minute</span> t)
     <span class="s">"current_sign_in_ip"</span>:(<span class="f">web/peer</span> req)
     <span class="s">"failures"</span>:<span class="s">"0"</span>
-    <span class="s">"last_sign_in_at"</span>:was<span class="o">.</span><span class="f">current_sign_in_at</span>
-    <span class="s">"last_sign_in_ip"</span>:was<span class="o">.</span><span class="f">current_sign_in_ip</span>
+    <span class="s">"last_sign_in_at"</span>:was_at
+    <span class="s">"last_sign_in_ip"</span>:was_ip
     <span class="s">"locked"</span>:<span class="s">""</span>
   }
-  <span class="f">account/update</span> (<span class="f">models/as_app</span> db) was<span class="o">.</span><span class="f">id</span> changes
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">account/increment</span> (<span class="f">models/as_app</span> db) was<span class="o">.</span><span class="f">id</span> <span class="s">"sign_in_count"</span>)</code></pre>
+  <span class="f">models/update</span> (<span class="f">models/as_app</span> db) model id changes
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/increment</span> (<span class="f">models/as_app</span> db) model id <span class="s">"sign_in_count"</span>)</code></pre>
 </div>
 
 <p>the account page shows the count and, from the second sign-in on, when and from where the one before came. a holder who does not recognize that time or address has reason to change the password, which ends every other sign-in. <code>arrivals</code>, in the password panel below, reads the columns from the account record.</p>
@@ -410,6 +456,36 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 <p><code>web/requiring_sign_in routes secret bound_of</code> wraps every action in the table, and a component's action is one of them, so the table goes through <code>web/components</code> first. an action that is not open asks for a sign-in. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
 
 <p>a sign-in rests on something the account holds, which the guestbook takes to be the password's digest. <code>session/create</code> hands it to <code>web/signed_in</code>, which keeps an HMAC of it in the session beside the viewer's name. at every action, <code>bound_of db name</code> reads what the account holds now, and the guestbook's <code>session/signed_against</code> reads the account by its name and answers the digest. when the HMAC does not match it, the sign-in is over. an action that asks for a sign-in sends the visitor to the sign-in form. an open one, such as the book's front page or a component's remove button, runs as if nobody had signed in, and its answer tells the browser to forget the sign-in, so a stolen cookie cannot act through an open action either. setting a new password changes the digest, so it ends every sign-in made before it, on every browser, as devise does. an app whose sign-ins rest on nothing passes <code>web/unbound</code> as <code>bound_of</code> and <code>""</code> to <code>web/signed_in</code>.</p>
+
+<h2>ending an idle session</h2>
+
+<p>a sign-in lasts fourteen days from the request that made it. an app that wants it to end sooner when nobody is using it gives the session an inactivity window, as Devise's timeoutable does. <code>web/idle_after held minutes</code> answers the session with the window set, and the session is then signed in as usual. this is the sign-in of the app senro's spec serves to check it, where the window is three seconds:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/idle/session.kso</div>
+  <pre><code><span class="c"># How long a sign-in lasts with no request: three seconds, as minutes.</span>
+<span class="k">pub</span> <span class="f">idle_minutes</span> <span class="o">=</span> 0.05
+
+<span class="c"># Anyone who asks is signed in as ada, for as long as she keeps asking.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
+  s <span class="o">=</span> <span class="f">web/idle_after</span> (<span class="f">web/session</span> req secret) idle_minutes
+  effect (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/notes"</span>) secret s <span class="s">"ada"</span> <span class="s">""</span>)</code></pre>
+</div>
+
+<p>each answer to a signed-in request rewrites the cookie with the time the session was last seen, once a second has passed since the time it holds. a request that arrives after the window has run out reads without its viewer, so a page that asks for a sign-in sends the visitor to the sign-in form. the window is measured by the time the server stamps on each request, as the fourteen days are.</p>
+
+<p>the spec signs in and asks for a page four times. the first request comes at once and is answered without touching the cookie. the next two come a second and a half and then two seconds later, three and a half seconds after the sign-in: each is answered and moves the window on. the last comes after four quiet seconds and is sent to sign in:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/serve/idle.out</div>
+  <pre><code>HTTP/1.1 303 See Other, setting a session to /notes
+HTTP/1.1 200 OK: every note, read by ada
+HTTP/1.1 200 OK, setting a session: every note, read by ada
+HTTP/1.1 200 OK, setting a session: every note, read by ada
+HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
+</div>
+
+<p>the window is off unless an app sets it, and <code>senro generate authentication</code> does not set one.</p>
 
 <h2>changing a password</h2>
 
@@ -470,20 +546,7 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 
 <h2>sending mail</h2>
 
-<p>senro's <code>mail</code> module sends plain-text mail. <code>mail/composed from to subject body</code> makes a message, and <code>mail/delivered message</code> sends it the way the <code>SENRO_MAIL</code> environment variable says:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">SENRO_MAIL</div>
-  <pre><code>unset or ""                    standard error, for development
-dir:&lt;path&gt;                     a file of its own under &lt;path&gt;
-smtp://user:pass@host:587      SMTP, after STARTTLS
-smtps://user:pass@host:465     SMTP inside TLS from the first byte
-smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre>
-</div>
-
-<p><code>smtp://</code> refuses a server that does not offer STARTTLS rather than send in the clear, because a reset link read off the wire is as good as a password. a header that holds a line break is refused before anything is sent, so a subject typed into a form cannot add headers of its own. a subject that is not ASCII travels as RFC 2047 encoded words, and a body that is not ASCII, or has a line longer than SMTP allows, travels as base64.</p>
-
-<p>the guestbook does not send its mail during the request. it queues each letter with <code>mail/delivered_later</code>, which refuses what <code>mail/delivered</code> would refuse and writes the rest to the jobs table, and a worker beside the server sends it a moment later. the <a href="jobs.html">background jobs guide</a> covers the table and the worker.</p>
+<p>the next two sections mail a link. senro's <code>mail</code> module sends plain-text mail: <code>mail/composed from to subject body</code> makes a message, and <code>mail/delivered_later db message</code> queues it for a worker beside the server to send. the <a href="mailers.html">mailers guide</a> covers writing a letter, the <code>SENRO_MAIL</code> variable that says how mail leaves the app, and what is refused. the <a href="jobs.html">background jobs guide</a> covers the queue and the worker.</p>
 
 <h2>a lost password</h2>
 

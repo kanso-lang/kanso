@@ -1,0 +1,116 @@
+---
+layout: default
+title: "security in senro"
+description: "the attacks a web app has to expect and what senro does about each: sessions, requests from other sites, passwords, guessing, links in mail, injection, uploads and authorization."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>security</h1>
+
+<p>this guide goes through the attacks a web app has to expect and says what senro does about each, as the Rails security guide does for Rails. most of the defences are on without being asked for. where one is the app's to turn on or to get right, the section says so. the guides it links to cover each mechanism in full.</p>
+
+<h2>sessions</h2>
+
+<p>a session is a cookie the app signs with its secret, an HMAC-SHA-256 over what the cookie holds. a visitor can read their session and cannot change it: a cookie whose signature does not match is treated as no session at all. the secret is the 32 random bytes <code>senro generate authentication</code> writes into <code>session.kso</code>. keep that file out of a public repository.</p>
+
+<p>the cookie is <code>HttpOnly</code>, so a script on the page cannot read it, and <code>SameSite=Lax</code>, so a browser does not send it with a form another site posts. when the request reached the server through a proxy that took it over HTTPS and said so in <code>X-Forwarded-Proto</code>, every cookie in the answer is also marked <code>Secure</code>, and the browser never sends it back in the clear.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">one answer, to a plain request and to one a proxy took over HTTPS</div>
+  <pre><code>set-cookie: senro_notice=Noted%3B%20thank%20you.; Path=/; HttpOnly; SameSite=Lax
+set-cookie: senro_notice=Noted%3B%20thank%20you.; Path=/; HttpOnly; SameSite=Lax; Secure</code></pre>
+</div>
+
+<p>a sign-in lasts fourteen days. it is also tied to the password it was made with: the session keeps a fingerprint of the account's digest, and the server compares it at every request. changing a password therefore ends every sign-in made under the old one, on every device. <a href="sessions.html">sessions and sign-in</a> covers the cookie and the sign-in.</p>
+
+<h2>requests from other sites</h2>
+
+<p>a page on another site can make a visitor's browser post a form to yours. senro refuses any request that would change something and says it came from elsewhere. a browser names the origin of a request in <code>Sec-Fetch-Site</code>, and an older one in <code>Origin</code>, and anything but the app's own origin is answered 403 before an action runs. there is no token to put in each form and none to forget.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/web.kso</div>
+  <pre><code><span class="c"># A request that would change something, sent by a page on another site, as</span>
+<span class="c"># Rails' `protect_from_forgery` refuses one. The session cookie is</span>
+<span class="c"># SameSite=Lax, so a browser should not send it on such a request at all;</span>
+<span class="c"># this refuses the request even when it does. A browser says where a</span>
+<span class="c"># request came from in `Sec-Fetch-Site`, and in `Origin` when it is older</span>
+<span class="c"># than that header: anything but the app's own origin is refused. A request</span>
+<span class="c"># with neither header comes from a program, not a page, and is let through.</span>
+<span class="k">fn</span> <span class="f">forged?</span> method req
+  <span class="k">return</span> false <span class="k">if</span> method <span class="o">==</span> <span class="s">"GET"</span> <span class="k">or</span> method <span class="o">==</span> <span class="s">"HEAD"</span>
+  elsewhere? req.headers[<span class="s">"sec-fetch-site"</span>] req</code></pre>
+</div>
+
+<p>a request with neither header comes from a program such as <code>curl</code>, which holds no visitor's cookies to misuse, and is let through. a GET is never checked, so an action reached by GET must not change anything. the routing convention gives GET only to the actions that read.</p>
+
+<h2>passwords</h2>
+
+<p>a password is kept as a PBKDF2-SHA-256 digest with a salt of its own and 100,000 rounds, written with its rounds beside it so the number can rise without breaking the digests already kept. checking one compares every byte of the two digests whichever differs first, so the time a refusal takes says nothing about how close a guess was.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">passwords/passwords.kso</div>
+  <pre><code><span class="c"># Whether `password` is the one `kept` was digested from. A digest this</span>
+<span class="c"># module did not write matches nothing. The two digests are compared over</span>
+<span class="c"># every byte, whichever differs first, so the time a refusal takes says</span>
+<span class="c"># nothing about how much of a guess was right.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">matches?</span> password kept
+  parts <span class="o">=</span> <span class="f">text/split</span> kept <span class="s">"$"</span>
+  <span class="k">return</span> false <span class="k">if</span> length parts <span class="o">!=</span> 4
+  <span class="k">return</span> false <span class="k">if</span> parts[1] <span class="o">!=</span> <span class="s">"pbkdf2-sha256"</span>
+  rounds <span class="o">=</span> <span class="f">text/to_int</span> parts[2]
+  salted? password rounds (<span class="f">base64/decode</span> parts[3]) parts[4]</code></pre>
+</div>
+
+<p>signing in with an address that has no account still checks the password, against a stand-in digest that nothing matches. the answer and the time it takes are the same as for a wrong password, so the sign-in form cannot be used to learn which addresses have accounts.</p>
+
+<h2>guessing</h2>
+
+<p>two limits slow a guesser down, and they count different things. a module's <code>rate_limits</code> counts calls from one address: the generated sign-in allows ten tries in three minutes and answers 429 after that. the account's own count of wrong passwords does not care where they came from: five in a row lock the account for an hour, and a right password is told so while a wrong one is answered as any wrong password is. the first stops one machine hammering the form. the second stops many machines sharing the work.</p>
+
+<h2>links in mail</h2>
+
+<p>a link that resets a password or confirms an address carries a signed token: the account's id, the moment the link stops working, and an HMAC over both, the link's purpose, and a value the account holds now. nothing is stored. a reset token is signed over the digest the reset will replace, so it works once, and the purpose keeps a token made for one kind of link from opening another.</p>
+
+<p>the link's host comes from <code>SENRO_URL</code> and never from the request's <code>Host</code> header, which the sender of a request chooses. the server's log writes a token in a path as <code>:token</code> and leaves query strings out, so a log can be read by people who should not be able to reset an account. <a href="mailers.html">mailers</a> covers the links.</p>
+
+<h2>injection</h2>
+
+<p><strong>SQL.</strong> an app's modules hold no SQL. reads and writes go through its models, which send every value to Postgres as a parameter beside the statement and never as part of its text. a value a visitor typed cannot become SQL, because nothing an app writes assembles a statement from text.</p>
+
+<p><strong>HTML.</strong> a kata template escapes what it writes. <code>= expr</code> and <code>{expr}</code> in text both turn <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code> and quotes into entities. writing a value raw takes a different operator, <code>==</code>, which the layout uses for the page body it was handed. a search of an app's templates for <code>==</code> finds every place raw HTML can enter.</p>
+
+<p><strong>mail headers.</strong> a message whose subject or address holds a line break is refused before it is sent or queued, so text from a form cannot add a header such as <code>Bcc</code>.</p>
+
+<p><strong>paths.</strong> a request for a static file whose path holds <code>..</code> is answered 404 without touching the disk.</p>
+
+<h2>uploads</h2>
+
+<p>an uploaded file is stored under a random key and served back from <code>/senro/blobs/&lt;key&gt;</code> with <code>X-Content-Type-Options: nosniff</code> and a <code>Content-Disposition</code> that names it, so a browser does not guess a type the uploader did not declare. a request whose body would be larger than 10 MiB is answered 413 before the body is read. <a href="uploads.html">file uploads</a> covers the rest.</p>
+
+<h2>who may do what</h2>
+
+<p>authentication says who the visitor is. three checks then decide what they may do, each written once.</p>
+
+<ul>
+  <li>the entry's <code>web/requiring_sign_in</code> sends a visitor who has not signed in to the sign-in page from every action a module does not list in <code>without_sign_in</code>. a new action is closed until someone opens it.</li>
+  <li>a module's <code>admits action viewer db</code> says who may reach each of its pages, and covers the data the page loads afterwards.</li>
+  <li>a model's policies, <code>create?</code>, <code>update?</code>, <code>destroy?</code> and <code>visible?</code>, are asked by the model on every read and write, whichever action it came from. an action cannot forget to ask, because the write it calls is the one that asks.</li>
+</ul>
+
+<p>the policies a scaffold writes let anyone write. narrow them before the app is public. <a href="authorization.html">authorization</a> and <a href="models.html">models</a> cover the three.</p>
+
+<h2>what is left to the proxy</h2>
+
+<p>senro's server speaks HTTP. the proxy in front of it holds the certificate, redirects plain requests to HTTPS, and sends the <code>Strict-Transport-Security</code> header if the site wants one. it must also set <code>X-Forwarded-Proto</code>, which most do, for the cookies to be marked <code>Secure</code>.</p>
+
+</article>
