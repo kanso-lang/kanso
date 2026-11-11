@@ -20,56 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a call that answers one kind meets the arms that take it
-
-kanso#2331. senro's migration runner named a parameter `done`, which is the
-nullary literal, so its one arm took only the value `done`. A call handing it
-a map passed `kanso check` and failed on both engines with "no overload of
-`pending` matches these arguments", ten edits from the cause. The literal
-check already refuses `kept {}`, with "no arm of `kept` takes a map here
-(arms take done)", but it reads only literals, whose kind is on the page.
-
-The same refusal now reaches an argument that is a call of a group whose
-every arm answers one kind: a map, a list, a string, an int or a float, with
-a failure and a thunk set aside, since a thunk is forced before it is
-matched. Inference's return sets are joins, so they may say more than a call
-answers and never less; a group that answers a map and nothing else hands a
-map, and an arm that takes no map cannot take it.
-
-The check asks only when a call hands an argument that is itself a call,
-and only at positions where every arm of the callee restricts. A group's
-arms are read through the member list the box check threads, and the
-program's types are collected the first time a refusal is likely.
-
-Three tables in the same pass were keyed by the group: the none check's,
-the box check's, and the discarded-effect check's, which was keyed by
-position too and so hashed the name once per parameter to build. Each now
-reads one `Group` built in one walk of the declarations, with the new
-check's mask beside the others. The discarded-effect check also asks
-whether an argument is a call before it hashes the callee, where it used
-to hash every callee first. Measured here against the same tree with the
-new check's call commented out, `kanso check` of the compile, entry and
-library corpora ran 99k, 336k and 323k fewer instructions, so the check
-and the merged table together cost less than the tree before them.
-
-CI's rows against main agree in direction: compile instructions fell
-96,410 (-0.40%), entry 327,237 (-0.37%), library 312,109 (-0.42%), the
-tab's compile 665,638 (-0.19%), compile allocations 2 and the interpreted
-run's allocations 6. emit_instructions rose 7, to 5,612,815, which is
-layout, since the emitter runs no check. Welfare rose too little to show at two places and is banked.
-
-A field read is left alone on either side of the call. A getter's arms do
-not say what it takes or answers: on an err, `.reason` reads the err's own
-reason, so `e.reason.position` hands a json failure record to a getter whose
-return set, taken from the record's own `reason` field, says string. The
-first version refused that line of `a_blank_run_in_json_is_read_by_each_state`
-through the entry the micro corpus stages for a `pub play` library, and
-`a_field_read_twice_through_an_err` is that case reduced.
-
-Goldens: `a_map_a_call_answers_handed_to_a_done_arm` in the module error
-corpus, the senro shape reduced, which checked clean before this change;
-and the micro above, which prints `2` on every engine.
-
 ## 2026-11-05 — a lazy binding of an effect, handed back unread, still runs
 
 A binding is lazy, so `change = models/updated ...` holds the call until
@@ -2281,3 +2231,52 @@ record bound before it is handed on. Its benchmark page draws in
 3,845,447 wasm instructions where it took 4,254,682, and an action runs
 in 115,251 where it took 125,306. Those rows are senro's to pin from its
 own CI once it takes this compiler.
+
+## 2026-11-11 — one limit for every test and every ratchet gate
+
+#2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
+may map, after one ratchet row ended CI's runner twice. Every other test
+that starts kanso, and every ratchet gate that is a script, still ran with
+no limit.
+
+The issue asked for a helper in `tests/support/` that the tests starting
+kanso would call. The committee's reading is on the issue: 153 files start
+kanso, a helper covers the ones that remember to call it, and it leaves the
+ratchet's script gates out. A limit is inherited by a child process, so it
+is set once on the way in. `scripts/bounded.sh` sets it. Cargo runs every
+test binary through that script on Linux (`runner` in `.cargo/config.toml`),
+and the ratchet sources it before each command it runs in a worktree.
+`tests/golden.rs` loses its own.
+
+Two measurements changed what #2431 chose.
+
+The kind of limit. #2431 limited address space. Headless Chromium does not
+start under that at 8 GiB: Playwright's launch fails. Two ratchet gates run
+a browser, so the same limit in the ratchet would have turned them red
+before any mutation. Under a limit on data, `ulimit -d`, Chromium starts and
+makes a wasm memory, and callgrind runs under either. The limit is on data.
+
+The number. With the mutation that ended the runner applied,
+`micro/a_greedy_run_of_one_character_backs_off_in_order` says `out of
+memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
+seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
+nearly all of its limit by the time it is refused, so the limit is what one
+such program costs the machine. It is 4 GiB. A release build of the
+compiler, Chromium, callgrind, the compile sweep, the counter sweep and the
+golden suite were each run under 4 GiB first. A second program, one that
+pushes onto a list without end, was run under 1 GiB on both engines: the
+native binary says `out of memory` and exits 1, and the interpreter panics
+and exits 101.
+
+It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
+limit from a shell a program starts, on both engines, and reads `unlimited`
+with the `runner` line removed. `tests/the_ratchet_bounds_what_it_starts.rs`
+stages one row whose gate is green only under the limit and runs the real
+`prove` over it, started with the limit lifted. With the ratchet's line
+removed the baseline reads `ALREADY RED`, and the gate's own words are
+`limit unlimited`. Neither spec has a ratchet row: the ratchet bounds the
+gate that would read the first, and the second runs `prove`.
+
+No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
+script directly, the cost-goldens job among them, go through neither cargo
+nor the ratchet and have no limit.
