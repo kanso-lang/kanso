@@ -4,7 +4,7 @@
 # answers something else is read back as the record: `list/next` answering
 # `done`, `list/iter` answering a `cursor`, and regexp's own. The micro
 # corpus reaches a regexp fixture first, and its binary allocates until the
-# golden harness's bound refuses it.
+# limit scripts/bounded.sh sets refuses it.
 set -e
 kept='        if answers_other {'
 [ "$(grep -cxF "$kept" src/escape.rs)" -eq 1 ] || {

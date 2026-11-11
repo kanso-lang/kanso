@@ -114319,3 +114319,30 @@ Rows: `entry_instructions` rose 12,540 to 87,930,129 and
 came with the binary and with four more comment lines in lib/derive, and
 nothing here isolates one from the other. It builds the derivations ruling
 (#2186), so the welfare floor moves down by exactly that.
+
+## 2026-11-06 — directive: the language committee decides, and nothing blocks on Clay
+
+Clay, on #2356: "nothing needs me you can just ask the language committee
+like I said. I will give you feedback once I see what you've built perhaps
+but you don't have to block anything for me."
+
+A design question, including one about kanso the language, is now decided
+by the committee and recorded on its issue and here. The work goes ahead on
+that decision. Clay's later feedback overrides it and is recorded as a
+ruling. `needs-clay` stays for what the committee cannot settle: a refusal
+from the harness, a permission, or a question Clay has said he wants put to
+him. CLAUDE.md states the rule under The tracker, and the places that sent
+decisions to him now point there.
+
+The first decision under it is #2356, whether an application model should
+get Go-style embedding. The committee chose no implicit delegation. A model
+is the record its table derives plus the functions in its module, and a
+delegator is an ordinary function. A field group that several models share,
+timestamps most likely, uses the `&` merge of the 2026-07-25 gavel, and its
+open parts (acceptance where the parent is expected, the collision rule,
+variance) are built when a second model shares one. Promotion was declined:
+it needs depth and ambiguity rules, and it lets a function match a type it
+was not written for by a rule the call site cannot see. #2356 is closed.
+
+#2284, how browser code calls a JavaScript library, stays parked until an
+app needs one, which is when the committee takes it up.

@@ -20,33 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-06 — directive: the language committee decides, and nothing blocks on Clay
-
-Clay, on #2356: "nothing needs me you can just ask the language committee
-like I said. I will give you feedback once I see what you've built perhaps
-but you don't have to block anything for me."
-
-A design question, including one about kanso the language, is now decided
-by the committee and recorded on its issue and here. The work goes ahead on
-that decision. Clay's later feedback overrides it and is recorded as a
-ruling. `needs-clay` stays for what the committee cannot settle: a refusal
-from the harness, a permission, or a question Clay has said he wants put to
-him. CLAUDE.md states the rule under The tracker, and the places that sent
-decisions to him now point there.
-
-The first decision under it is #2356, whether an application model should
-get Go-style embedding. The committee chose no implicit delegation. A model
-is the record its table derives plus the functions in its module, and a
-delegator is an ordinary function. A field group that several models share,
-timestamps most likely, uses the `&` merge of the 2026-07-25 gavel, and its
-open parts (acceptance where the parent is expected, the collision rule,
-variance) are built when a second model shares one. Promotion was declined:
-it needs depth and ambiguity rules, and it lets a function match a type it
-was not written for by a rule the call site cannot see. #2356 is closed.
-
-#2284, how browser code calls a JavaScript library, stays parked until an
-app needs one, which is when the committee takes it up.
-
 ## 2026-11-06 — `kanso run` hands SIGTERM and SIGHUP to its program
 
 **DONE.** `kanso run` builds a native binary and waits on it as a child. A
@@ -2077,6 +2050,60 @@ The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.32525328 before and 95.32525334 after.
 
+## 2026-11-11 — one limit for every test and every ratchet gate
+
+#2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
+may map, after one ratchet row ended CI's runner twice. Every other test
+that starts kanso, and every ratchet gate that is a script, still ran with
+no limit.
+
+The issue asked for a helper in `tests/support/` that the tests starting
+kanso would call. The committee's reading is on the issue: 153 files start
+kanso, a helper covers the ones that remember to call it, and it leaves the
+ratchet's script gates out. A limit is inherited by a child process, so it
+is set once on the way in. `scripts/bounded.sh` sets it. Cargo runs every
+test binary through that script on Linux (`runner` in `.cargo/config.toml`),
+and the ratchet sources it before each command it runs in a worktree.
+`tests/golden.rs` loses its own.
+
+Two measurements changed what #2431 chose.
+
+The kind of limit. #2431 limited address space. Headless Chromium does not
+start under that at 8 GiB: Playwright's launch fails. Two ratchet gates run
+a browser, so the same limit in the ratchet would have turned them red
+before any mutation. Under a limit on data, `ulimit -d`, Chromium starts and
+makes a wasm memory, and callgrind runs under either. The limit is on data.
+
+The number. With the mutation that ended the runner applied,
+`micro/a_greedy_run_of_one_character_backs_off_in_order` says `out of
+memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
+seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
+nearly all of its limit by the time it is refused, so the limit is what one
+such program costs the machine, and it should be no larger than the tests
+need. A release build of the compiler, Chromium, callgrind, the compile
+sweep, the counter sweep and the golden suite were each run under 4 GiB, and
+the first push set the limit there. CI then failed one test:
+`an_answer_above_two_gibibytes_reads_back` in `tests/wasm_engine.rs` grows a
+wasm memory past two gibibytes inside the test process, and the engine
+could not grow it. Run alone it fails under 4 GiB and passes under 5, 6 and
+8. The limit is 6 GiB. The runaway fixture was not run again at 6. A second
+program, one that pushes onto a list without end, was run under 1 GiB on
+both engines: the native binary says `out of memory` and exits 1, and the
+interpreter panics and exits 101.
+
+It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
+limit from a shell a program starts, on both engines, and reads `unlimited`
+with the `runner` line removed. `tests/the_ratchet_bounds_what_it_starts.rs`
+stages one row whose gate is green only under the limit and runs the real
+`prove` over it, started with the limit lifted. With the ratchet's line
+removed the baseline reads `ALREADY RED`, and the gate's own words are
+`limit unlimited`. Neither spec has a ratchet row: the ratchet bounds the
+gate that would read the first, and the second runs `prove`.
+
+No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
+script directly, the cost-goldens job among them, go through neither cargo
+nor the ratchet and have no limit.
+
 ## 2026-11-11 — one text written as another, in one pass
 
 #2427's first lead, on the corpus the entry before this one added.
@@ -2153,13 +2180,12 @@ emitted_other_calls 22,353 -> 22,356 and emitted_other_lines 186,392 ->
 and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
 compile_instructions 24,154,945 -> 24,168,284, entry_instructions
 156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
-73,647,363. codegen_instructions_dev is written at 117,014,851 and
-codegen_instructions_release at 372,088,332, this container's readings
-plus the difference CI has shown before, for CI to replace. Four work rows
+73,647,363. CI read codegen_instructions_dev at 117,013,839 and
+codegen_instructions_release at 372,134,885. Three work rows
 move with the layout of the grown runtime: work_encodebench up 154 to
-2,335,341,047, work_oneshot down 854 to 9,979,505, work_pendbench up 37
-to 154,094,201 and work_livebench down 518 to 938,654,959. Welfare rises
-95.32525334 -> 95.34300865, and the floor is banked there.
+2,335,341,047, work_oneshot down 854 to 9,979,505 and work_livebench
+down 546 to 938,654,931. Welfare rises
+95.32525334 -> 95.34299175, and the floor is banked there.
 
 Checked against the interpreter. `micro/text_replace_answers_what_split_and_join_did`
 prints the call beside the idiom on every engine: occurrences at either
@@ -2208,16 +2234,16 @@ The four benchmarks that read a file pay 16 instructions for the
 question: work_jsonbench 549,338,015, work_widebench 28,701,603,
 work_digestbench 3,107,795 and work_readbench 4,583,700. Five move with
 the layout of the grown runtime: work_encodebench down 425 to
-2,335,340,622, work_oneshot down 768 to 9,978,737, work_livebench up 296
+2,335,340,622, work_oneshot down 768 to 9,978,737, work_livebench up 324
 to 938,655,255, work_runbench down 502 to 1,059,837,979 and
 work_runbench_dev down 32 to 3,057,251,699. Clang compiles the longer
-runtime: codegen_instructions_dev is written at 117,031,436 and
-codegen_instructions_release at 372,178,859, this container's rise added
+runtime: codegen_instructions_dev is written at 117,030,424 and
+codegen_instructions_release at 372,225,412, this container's rise added
 to the rows below, for CI to replace. The work rows are this container's
 readings less the 109 CI has read under it. No allocation counter, compile
 row, interpreter row or browser row moved here.
 
-Welfare reads 95.34294665, under the 95.34300865 the kernel banked. The
+Welfare reads 95.34292976, under the 95.34299175 the kernel banked. The
 objective's header leaves a fix that makes the engines agree outside the
 sum, so the floor moves to what the fix costs and its history says so.
 
@@ -2299,8 +2325,8 @@ count used to separate it. On the module corpus that keeps copies no
 third import comes for: `compile_allocs` 13,956 -> 14,016,
 `compile_peak_bytes` 599,057 -> 612,423, and in the tab
 `browser_compile_peak_bytes` 984,597 -> 985,156. Welfare weighs the falls
-and the rises together and rises
-95.34294665 -> 95.35566837, banked.
+and the rises together and rises. The floor is banked once for this
+entry and the two after it, and the last of them says where.
 
 **Not done.** A module is still compiled once for each pruning the load
 happens to pass through. Gathering every word the program's own modules
@@ -2463,6 +2489,9 @@ and `Interp::callee_missed` rises 214,571: the interpreter's table of
 recent callees takes its slots from where each name's text was
 allocated, and pruning the library differently moved the names. The
 same table moved the row for `text/replace`. It is #2444.
+
+**Welfare.** Over this entry and the two before it welfare rises
+95.34292976 -> 95.39062234, and the floor is banked there.
 
 **Not done.** `std/derive` is still compiled twice on the entry corpus,
 and that was not looked into.
