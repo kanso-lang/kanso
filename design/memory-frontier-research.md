@@ -5,26 +5,27 @@ literature → dream grounded-but-wild ideas → refute each with a skeptic →
 synthesize. 16 ideas generated; 0 survived unqualified, 9 partial, 7 refuted.
 Every claim is falsifiable against the tree or a named paper.
 
-## Where every idea stands
+## Where the open ideas stand
 
-Sixteen ideas, and the state of each. The prose below holds the rows still
-open (3.3, 3.5 and 5.x) and the analysis behind them. What shipped is in the log, and what was
-declined is on the compiler page with its measurement.
+Sixteen ideas came out of the memo and four more were added since. This
+table holds the ones still open, and the prose below is the analysis behind
+them. The rest have homes of their own:
+
+- **Shipped**, and in the log: wiring `linear.rs` into codegen (3.1), TRMC
+  (3.6) and the cohort-counting soundness test (3.7).
+- **Declined**, each on the compiler page's ledger with its measurement and
+  what would reopen it: free-the-top mini-rewind (3.2), the three-way escape
+  split (3.4), auto-SoA by field touch (4.3) and e-graph fusion over pure IR
+  (4.5).
+- **Gone with `build`**, which retired on 2026-10-10 (kanso#1837): static
+  reuse inside the build-block (4.1) and build-blocks hosting in-place graph
+  algorithms (4.4).
 
 | # | idea | state |
 |---|---|---|
-| 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
-| 3.2 | free-the-top mini-rewind | **declined** 2026-07-27; the measurement and the reopening condition are on the compiler page's ledger |
 | 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime/evacuate.c`, the comment above `k_memo_outlives`: "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
-| 3.4 | three-way escape split | **declined** 2026-07-27, measured; on the compiler page's ledger |
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
-| 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
-| 3.7 | cohort-counting soundness ratchet test | **shipped** |
-| 4.1 | static reuse-in-place inside the build-block | **declined**, measured; **moot** since `build` retired on 2026-10-10 (kanso#1837) |
 | 4.2 | tag-hoist under monomorphism speculation | **half harvested**, corrected 2026-09-02 — harvested for a value's tag in a numeric loop, and NOT for a callable's tag at a dispatch, which was worth 1.096% of oneshot and shipped in #1210 |
-| 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a workload; on the compiler page's ledger |
-| 4.4 | build-blocks hosting in-place graph algorithms | **moot** since `build` retired on 2026-10-10 (kanso#1837), and `list/tie` is the one way to write a cycle. Before that: **the rule is widened** (2026-09-09): born flows through aliases, `if`, indexes and fields; a node reached through a call is still not proved, so the traversal algorithms wait on that flow |
-| 4.5 | e-graph fusion over pure IR | **declined** for want of a customer; on the compiler page's ledger |
 | 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
 | 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
@@ -318,23 +319,16 @@ and construction. Beats is not the bottleneck; the tag is.**
 
 ## 2. Perceus-on-beats?
 
-**The runtime count: never — delete the header (settled doctrine). The static
-reuse: a narrow measurable sliver whose right home is the build-block.**
+**The runtime count: never.** A count per object is store traffic paid to
+reclaim into an allocator that reclaims in bulk for free, and the header it
+would live in no longer exists.
 
-- The count is strictly negative (per-object store traffic to reclaim into an
-  allocator that bulk-reclaims for free). **Action: delete the 16-byte KHeader
-  from arena objects.**
-- Static reuse-in-place (FIP/ICFP'23 specialized to a bump arena) is sound and
-  degrades gracefully (a missed pairing is a slower line, never a miscompile —
-  so the Wansbrough–SPJ inferred-usage fragility does NOT apply; that was
-  *dynamic* usage, this is *structural* last-use). But it only helps peak RSS,
-  only for non-LIFO interior churn, only when the gap crosses a cache level — and
-  the LIFO case it was pitched at is dominated by **free-the-top** (decrement the
-  bump pointer at a static last-use). Persistent RB/HAMT rebuilds must be
-  *excluded* (sharing-defined → not uniquely owned → degrade to copy). So its
-  right home is the build-block, where uniqueness is *syntactic*.
+Static reuse in place is the part that was worth having, and it shipped as
+row 3.1: the linearity fixpoint proves a write may go in place, and a missed
+proof is a slower line and never a miscompile. What it leaves open is row
+5.3, whether a dynamic check would find reuses the static proof misses.
 
-## 3. Making beats more optimal — survivors ranked (payoff × feasibility)
+## 3. Making beats more optimal — the two survivors still open
 
 3. **Generalize the non-heap-scalar rewind rule** (`k_memo_outlives` in
    `src/runtime/evacuate.c`) to every
