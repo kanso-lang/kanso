@@ -1,0 +1,13 @@
+a,b,,c | , -> ; | [a;b;;c] [a;b;;c]
+,a,b, | , ->  | [ab] [ab]
+aaaaa | aa -> b | [bba] [bba]
+abab | ab -> abab | [abababab] [abababab]
+nothing here | x -> y | [nothing here] [nothing here]
+ | x -> y | [] []
+x | x ->  | [] []
+café & crème | é -> e | [cafe & crème] [cafe & crème]
+語語 and 語 | 語 -> go | [gogo and go] [gogo and go]
+<a href="x">it's</a> | < -> &lt; | [&lt;a href="x">it's&lt;/a>] [&lt;a href="x">it's&lt;/a>]
+short | longer than the text -> y | [short] [short]
+one::two:: | :: -> : | [one:two:] [one:two:]
+nothing to find: replace needs something to find

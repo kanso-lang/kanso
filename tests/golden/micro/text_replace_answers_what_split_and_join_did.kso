@@ -1,0 +1,42 @@
+# `text/replace` writes every occurrence of one text as another (#2427), and
+# this pins what it answers on every engine. A program used to write
+# `text/join (text/split s from) to`, so each line shows both and they
+# agree: occurrences are found left to right and the search takes up again
+# after each one, an occurrence at either end or two in a row leave nothing
+# between them, and text longer than a byte is found whole. A text that
+# holds no occurrence comes back as it was. An empty text to find is a
+# failure with its own reason, as it is for `split`.
+import "std/io"
+import "std/text"
+
+fn old s from to
+  text/join (text/split s from) to
+
+fn both s from to
+  "[{text/replace s from to}] [{old s from to}]"
+
+fn line s from to
+  "{s} | {from} -> {to} | {both s from to}"
+
+fn refused _
+  io/write "an empty text to find was replaced\n"
+
+fn empty s
+  told = (u -> io/write "nothing to find: {u.reason}\n")
+  text/replace s "" "x" .> refused .? told
+
+pub play =
+  a = line "a,b,,c" "," ";"
+  b = line ",a,b," "," ""
+  c = line "aaaaa" "aa" "b"
+  d = line "abab" "ab" "abab"
+  e = line "nothing here" "x" "y"
+  f = line "" "x" "y"
+  g = line "x" "x" ""
+  h = line "café & crème" "é" "e"
+  i = line "語語 and 語" "語" "go"
+  j = line "<a href=\"x\">it's</a>" "<" "&lt;"
+  k = line "short" "longer than the text" "y"
+  l = line "one::two::" "::" ":"
+  said = "{a}\n{b}\n{c}\n{d}\n{e}\n{f}\n{g}\n{h}\n{i}\n{j}\n{k}\n{l}\n"
+  io/write said .> (_ -> empty "abc")

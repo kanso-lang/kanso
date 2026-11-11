@@ -28,17 +28,17 @@
 # measured-on glibc=2.39-0ubuntu8.9
 # measured-on clang=19.1.1
 jsonbench 549337999
-encodebench 2335340893
-oneshot 9980359
+encodebench 2335341047
+oneshot 9979505
 basket 18295405
 widebench 28701587
 deepbench 198293720
 escapebench 40308987
-pendbench 154094164
+pendbench 154094201
 indexbench 1887800
 scanbench 267843
 digestbench 3107779
 readbench 4583684
-livebench 938655477
-runbench 1067867083
-runbench_dev 3065058505
+livebench 938654959
+runbench 1059838481
+runbench_dev 3057251731

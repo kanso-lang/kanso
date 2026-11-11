@@ -66,6 +66,7 @@ fn route(name: &str) -> Option<(&'static str, &'static [&'static str], bool)> {
         "put" => ("put {0} {1} {2}", &["{ \"a\":1 }", "\"b\"", "2"], false),
         "delete" => ("delete {0} {1}", &["{ \"a\":1 }", "\"a\""], false),
         "slice" => ("text/slice {0} {1} {2}", &["\"abc\"", "1", "2"], false),
+        "replace" => ("text/replace {0} {1} {2}", &["\"a,b\"", "\",\"", "\";\""], false),
         "split" => ("text/split {0} {1}", &["\"a,b\"", "\",\""], false),
         "to_float" => ("text/to_float {0}", &["\"1.5\""], false),
         "to_int" => ("text/to_int {0}", &["\"1\""], false),

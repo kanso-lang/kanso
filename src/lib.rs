@@ -29,6 +29,7 @@ pub mod parser;
 pub mod provenance;
 pub mod read_at;
 pub mod repl;
+pub mod replace;
 pub mod trmc;
 pub mod wasm;
 pub mod wasm_encode;

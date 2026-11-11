@@ -1,0 +1,6 @@
+import "std/text"
+
+# An empty text occurs everywhere, so "every occurrence becomes the other
+# text" gives no answer for it. It is a mistake, as an empty separator is
+# for `split`.
+pub play = print "{text/replace "abc" "" "x"}"

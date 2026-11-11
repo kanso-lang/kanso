@@ -19,7 +19,7 @@ use crate::ast::*;
 /// site that called them, by bare name. The emitter reads this list to hand
 /// each one its origin, and the inliner below keeps each one's wrapper.
 pub(crate) const BIRTHS_ERR: &[&str] =
-    &["to_int", "to_float", "utf8", "from_code", "to_bytes"];
+    &["to_int", "to_float", "utf8", "from_code", "to_bytes", "replace"];
 use crate::hash::Map as HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm

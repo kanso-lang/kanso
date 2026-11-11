@@ -20,70 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a lazy binding of an effect, handed back unread, still runs
-
-A binding is lazy, so `change = models/updated ...` holds the call until
-something reads it. A function that takes the binding and answers it unread,
-as `fn owned _ write` does with `write`, answers the cell itself. Every place
-that asked whether a value is an effect asked before forcing it, so the cell
-read as a plain value: `owned row change .> (w -> ...)` handed `w` the
-effect's description instead of running it, and the write never happened.
-senro's nested scaffold found it, in an update guarded by a lookup of the
-parent.
-
-Both engines had the gap in the same three places:
-
-- the subject of `.>`: the interpreter's piped application, in value and in
-  tail position; natively `k_maybe_bind`, `k_b_bind`, and the two places
-  codegen builds a bind inline;
-- a callback's answer: the interpreter's `worded_step`, and natively the
-  chain walks in `k_exec_unmarked`, the executor's loop and `k_step`;
-- the subject of `.?` and `annotate` natively, in `k_sited_word`. The
-  interpreter's builtin path already forced it.
-
-Each now forces before it asks. The first version forced ahead of the
-description test, and CI read deepbench 2,180,005 instructions (1.1%)
-higher. Moving each test behind the description test left CI's reading
-where it was, at +2,179,642. A profile of deepbench in this container put
-the whole difference in two functions: `k_maybe_bind` (+1,308,003), where
-every bind of a plain value now paid the cell test, and the executor's
-loop (+871,637), which called `k_force` on every answer that was not a
-description.
-
-So the cell test now runs only where it can find something. Codegen calls
-`k_bind_settled`, which has no cell test, wherever inference rules a cell
-out, and `k_maybe_bind` only where the value's set holds a thunk. The inline
-tail bind tests for a cell under the same condition. The executor's loops
-test the tag before forcing, and the forcing sits in a cold helper out of
-line. In this container deepbench then reads 198,401,946 against main's
-197,862,309: +539,637 (0.27%), all in the executor's loop. That is one tag
-test for each callback answer that is not a description, and it stays,
-because whether a callback answers a cell is known only when it answers.
-`.?`'s entry still tests first, once per rescue built.
-
-Rows, from CI on the branch. The runtime's instructions rose with the cell
-tests: `work_deepbench` 539,637 to 198,295,366, `work_widebench` 15,990 to
-28,702,513, `work_runbench` 40,882 to 915,653,371, `work_encodebench` 496 to
-2,335,340,781, `work_oneshot` 181 to 9,980,271, `work_pendbench` 143 to
-154,125,066, `work_livebench` 90 to 938,655,701, `work_jsonbench` 7 to
-549,338,429, `work_readbench` 7 to 4,584,591 and `work_digestbench` 6 to
-3,288,947, while `work_runbench_dev` fell 34,240. The inline cell path adds
-code where a value's set holds a thunk: `emitted_other_defines` 2,367,
-`emitted_other_calls` 21,902, `emitted_other_branches` 19,043 and
-`emitted_other_lines` 180,685, and every binary's text grows 1,536 bytes for
-the runtime's new functions, `text` 5,877,065 in all. Compiling costs more
-with the code it emits: `codegen_instructions_release` 58,837 to 372,025,872,
-`codegen_instructions_dev` 3,473 to 116,855,724 and `emit_instructions` 582
-to 5,613,397. The interpreter forces where it did not, and
-`interp_instructions` rose 92,078 to 622,558,315. In the tab,
-`browser_compile_instructions` rose 6,395 to 350,297,580 and
-`browser_run_instructions` 8,001 to 78,426,179.
-
-`a_lazy_effect_handed_through_a_function_still_runs` holds the three cases:
-the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
-with a failure from std. Before the change both engines printed `<io>` for
-each; after it they print what each effect does.
-
 ## 2026-11-05 — a declaration cannot take a nullary value's name
 
 A library could declare a constant named `done`. std/list's iterators answer
@@ -2267,3 +2203,98 @@ browser_compile_peak_bytes 969,319 -> 985,620 and browser_run_instructions
 The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.32525328 before and 95.32525334 after.
+
+## 2026-11-11 — one text written as another, in one pass
+
+#2427's first lead, on the corpus the entry before this one added.
+`text/replace s from to` joins `std/text`. The committee's reading is on
+the issue: the call answers what `text/join (text/split s from) to`
+answers in every case, so a program can swap the idiom for it and nothing
+it prints changes. Occurrences are found left to right and the search
+takes up again after the end of each. A text that holds none comes back
+as it was, with no copy. An empty text to find occurs everywhere and is an
+err with its own reason, as an empty separator is for `split`.
+
+The harness came first. `tests/replace_agrees_with_its_reference.rs` holds
+both kernels to a reference that walks one byte at a time and asks at
+each whether the text to find starts there: 4,000,000 cases against the
+interpreter's and 1,000,000 against the runtime's, 0 failures. The C is
+cut out of the runtime's text and run with each buffer ending at a page
+nothing may touch. With the copy made to read one byte too many the
+harness stops on that page, and with the interpreter's search made to
+resume one byte on instead of after the match it names the first case.
+
+The kernel counts the occurrences with the search `split` uses, allocates
+the answer once at its length, and copies. Its presence counter is
+`replace_calls`, 28,000 in `bench/cost_golden_run.txt`: the escape asks
+seven times a row, and five of those find something.
+
+Where the err is born took two tries. The first wrote the empty case as a
+second arm in the library, as `split` does. A program that names the call
+then keeps a group of two arms that `inline_builtin_wrappers` cannot
+rewrite, and the interpreter's corpus cost 1,670,000 instructions more to
+start whether or not it called the group; a guard inside one arm cost the
+same. That is #2434, and `split` is written the same way. The builtin
+answers the err itself now, as `from_code` does, and the library holds one
+forwarding arm. Its wrapper stays a real call so the err is born in
+`text/replace`, where a caller may rescue it, and the list of builtins
+that can give birth to an err has one home, `inline::BIRTHS_ERR`, which
+the emitter reads to hand each its origin.
+
+Measured on the corpus. The phase is 39,101,174 instructions of the run
+program where it was 47,129,776, in this container. `k_b_split` falls
+5,994,654 -> 22,654 and `k_b_join` 18,580,590 -> 14,124,590, and
+`k_b_replace` takes 4,228,000, 151 a call. run_allocs 2,709,581 ->
+2,573,581, 34 fewer a row, run_alloc_bytes 274,019,555 -> 269,477,283,
+run_sh_str 25,232,528 -> 24,785,824 and run_sh_buf 98,585,312 ->
+97,305,312. work_runbench 1,067,867,083 -> 1,059,838,481 and
+work_runbench_dev 3,065,058,505 -> 3,057,251,731, both this container's
+readings less 109. The tab compiles its corpus in 416,189,723
+instructions where it took 417,017,327 and runs it in 100,428,884 where
+it took 100,630,653, with browser_compile_peak_bytes 985,620 -> 984,597.
+
+interp_instructions rises, 744,978,389 -> 745,491,463, on a collision in
+the interpreter's table of callees. The same compiler on the corpus as it
+was, splitting and joining, reads 744,767,711. Against that the call costs 723,752 more,
+which is 1,915,016 more in `Interp::callee_missed` and 1,191,264 less
+everywhere else. The interpreter remembers the last callee in each of 256
+slots, a name's slot comes from where its text was allocated, and with
+this program's names two busy ones share a slot: the table misses 24,661
+times where it missed 4,399. interp_allocs 1,074,427 -> 1,069,565 and
+interp_peak_bytes 1,527,692 -> 1,524,780.
+
+Two things tried on that table and taken back. Two entries a slot took
+the misses to 190 and `callee_missed` to 36,362, and made every hit
+dearer: `callee_of_ref` 12,103,951 -> 14,856,020, and the row read
+745,934,437. Mixing the hash of the map behind the table left the row
+where it was, at 745,519,639.
+
+What else moves. Every program links the kernel, 1,360 bytes: the summed
+machine code rises by that for each of the fourteen, and runbench's by
+9,376 to 920,721 because the linker also copies the kernel into its seven
+call sites. runbench's emitted code reads defines=993 calls=10404
+branches=9373 lines=81337. The compile rows rise with the builtin's rows
+and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
+compile_instructions 24,154,945 -> 24,168,284, entry_instructions
+156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
+73,647,363. codegen_instructions_dev is written at 117,014,851 and
+codegen_instructions_release at 372,088,332, this container's readings
+plus the difference CI has shown before, for CI to replace. Four work rows
+move with the layout of the grown runtime: work_encodebench up 154 to
+2,335,341,047, work_oneshot down 854 to 9,979,505, work_pendbench up 37
+to 154,094,201 and work_livebench down 518 to 938,654,959. Welfare rises
+95.32525334 -> 95.34300865, and the floor is banked there.
+
+Checked against the interpreter. `micro/text_replace_answers_what_split_and_join_did`
+prints the call beside the idiom on every engine: occurrences at either
+end and two in a row, text to find that overlaps itself, text longer than
+a byte, a replacement that holds the text again, and an empty text to
+find rescued by its caller. `http/promised`, the one place kanso's own
+library used the idiom, calls it.
+
+The issue's second lead, an escape kernel, is not built. Most of what is
+left of the phase is the templates that build each row's values:
+14,124,590 in `k_b_join` and 3,744,000 in the joins under it, against
+4,228,000 in `k_b_replace` and 2,436,774 in `memchr`. A kernel that knew
+HTML could take the second pair and some of the escape's own searches, at
+the price of HTML in the runtime.
