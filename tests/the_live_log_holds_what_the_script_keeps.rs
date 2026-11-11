@@ -1,5 +1,6 @@
-//! design/compiler-log.md holds the last forty entries, and every older one is
-//! in design/log/compiler-log-archive.md, unedited and in order.
+//! design/compiler-log.md holds the most recent entries, as many as
+//! `scripts/archive_log.sh` keeps, and every older one is in
+//! design/log/compiler-log-archive.md, unedited and in order.
 //!
 //! The live file is read at its tail and appended on every change, so it grows
 //! without limit unless something moves the older end out. Nothing did. On
@@ -7,10 +8,11 @@
 //! 526 entries and 25,301 lines and was moved by hand again, by the pull
 //! request fixing kanso#1850. kanso#1854 asked for this spec.
 //!
-//! The count is pinned rather than capped. A branch that appends the
-//! forty-first entry runs `scripts/archive_log.sh`, which moves the oldest one
-//! by date to the end of the archive, in the same commit, so the file holds
-//! forty after every merge.
+//! The count is pinned rather than capped. A branch whose entry takes the
+//! file past the limit runs the script, which moves the oldest one by date
+//! to the end of the archive, in the same commit, so the file holds the
+//! limit after every merge. The limit is the script's `keep=` line and is
+//! read from there.
 
 use std::path::Path;
 
@@ -23,20 +25,31 @@ fn headings(text: &str) -> Vec<&str> {
     text.lines().filter(|l| l.starts_with("## ")).collect()
 }
 
+/// How many entries the script keeps: its `keep=` line.
+fn kept() -> usize {
+    let script = read("scripts/archive_log.sh");
+    let line = script
+        .lines()
+        .find_map(|l| l.strip_prefix("keep="))
+        .expect("scripts/archive_log.sh has a keep= line");
+    line.trim().parse().expect("keep= is a number")
+}
+
 #[test]
-fn the_live_log_holds_forty_entries() {
+fn the_live_log_holds_what_the_script_keeps() {
     let live = read("design/compiler-log.md");
     let held = headings(&live);
+    let keep = kept();
     assert_eq!(
         held.len(),
-        40,
-        "design/compiler-log.md holds {} entries. It holds the last forty: run \
-         `sh scripts/archive_log.sh`, which moves the oldest {} entr{} by date, \
-         unedited, to the end of design/log/compiler-log-archive.md, and commit \
-         it with the entry. The first to move is {:?}.",
+        keep,
+        "design/compiler-log.md holds {} entries and scripts/archive_log.sh \
+         keeps {keep}: run `sh scripts/archive_log.sh`, which moves the oldest \
+         {} by date, unedited, to the end of \
+         design/log/compiler-log-archive.md, and commit it with the entry. The \
+         first to move is {:?}.",
         held.len(),
-        held.len().saturating_sub(40),
-        if held.len() == 41 { "y" } else { "ies" },
+        held.len().saturating_sub(keep),
         held.iter().min_by_key(|h| h.get(3..13).unwrap_or_default()).copied().unwrap_or_default(),
     );
 }
@@ -83,10 +96,11 @@ fn the_archive_script_moves_the_oldest_dated_entries() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("design/log")).expect("a scratch directory");
 
-    // Forty-two entries. The first two are dated a day after the third, so
-    // the two oldest are the third and the fourth.
+    // Two entries more than the script keeps. The first two are dated a day
+    // after the third, so the two oldest are the third and the fourth.
+    let keep = kept();
     let mut live = String::from("# compiler log\n\nThe live end.\n\n");
-    for i in 1..=42 {
+    for i in 1..=keep + 2 {
         let day = match i {
             1 | 2 => 13,
             3 | 4 => 11,
@@ -112,10 +126,10 @@ fn the_archive_script_moves_the_oldest_dated_entries() {
         std::fs::read_to_string(dir.join("design/log/compiler-log-archive.md")).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 
-    let kept = headings(&live_after);
-    assert_eq!(kept.len(), 40, "{live_after}");
-    assert_eq!(kept[0], "## 2026-10-13 — entry 1", "{live_after}");
-    assert!(!kept.iter().any(|h| h.ends_with("entry 3") || h.ends_with("entry 4")));
+    let stayed = headings(&live_after);
+    assert_eq!(stayed.len(), keep, "{live_after}");
+    assert_eq!(stayed[0], "## 2026-10-13 — entry 1", "{live_after}");
+    assert!(!stayed.iter().any(|h| h.ends_with("entry 3") || h.ends_with("entry 4")));
     assert!(live_after.starts_with("# compiler log\n\nThe live end.\n\n## 2026-10-13 — entry 1\n"));
     assert_eq!(
         archive_after,

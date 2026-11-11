@@ -2,16 +2,8 @@
 //! sweeps, so a container cannot read "nothing moved" off a board that is
 //! missing a row.
 //!
-//! There are three sweeps and between them they looked like the whole board.
-//! On 2026-09-18 they were not: `all_counters.sh` printed that every cost
-//! vein and the lazy tier agreed with their goldens, on a tree whose
-//! interpreted row had moved 18,540,440 instructions. `interp_instructions`
-//! was in neither that list nor `all_compile.sh`'s, along with `interp_memory`,
-//! `startup_instructions` and `instructions` -- the last being retired
-//! instructions per benchmark, the dimension every allocation counter is blind
-//! to. The change was deliberate and CI measured it, so nothing was lost that
-//! day. What it showed is that two green sweeps did not mean what a reader
-//! would take them to mean.
+//! Two green sweeps once read as the whole board and were not. The header
+//! of `scripts/gates/all_interp.sh` tells that day, 2026-09-18.
 //!
 //! This is the third spec in the family and the widest. The counter sweep
 //! reads its veins from the `*_counters.sh` gates themselves, the compile sweep

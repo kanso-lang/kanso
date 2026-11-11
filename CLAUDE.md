@@ -60,9 +60,10 @@ which it is before it edits anything.
   rulings onto them. Nothing waits on the chat to be closed: cloud closes an
   issue when its work is done. Clay: "nothing needs to be closed from the chat
   lane."
-- **Cloud keeps the page level with the log.** `page_drift` fails a tree more
-  than three log entries ahead of docs/compiler.html, so a pull request that
-  adds the fourth entry writes the page's section for them. A `data-golden`
+- **Cloud keeps the page level with the log.** `page_drift` fails a tree whose
+  log has run further ahead of docs/compiler.html than its budget, which is
+  `budget` in `scripts/page_drift/page_drift.kso`. The pull request whose
+  entry would pass it writes the page's section for them. A `data-golden`
   span quotes a golden and `golden_prose` checks the quote.
 
 ### The tracker
@@ -464,10 +465,11 @@ machine publishes the linker's luck.
 
 ### The log
 
-- **design/compiler-log.md holds the last forty entries**; older ones move,
-  unedited, to design/log/compiler-log-archive.md. Append to the live file and
-  move the oldest entry out when it passes forty. Search the archive before
-  calling an idea new.
+- **design/compiler-log.md holds the most recent entries**, as many as
+  `scripts/archive_log.sh` keeps; older ones move, unedited, to
+  design/log/compiler-log-archive.md. Append to the live file and run the
+  script, which moves the oldest out when there are too many. Search the
+  archive before calling an idea new.
 - **A design note whose work has shipped is deleted.** The log carries the
   history.
 

@@ -114637,3 +114637,38 @@ kata needed nothing of its own. The page as data already kept the inner
 record's fields that a template reads, so senro's `spec/runs/nested_reads`
 prints the same page three ways: rendered from the records, as data, and
 rendered from the data.
+
+## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
+
+A compile error in code a derivation wrote named the module's derived file,
+`views.derived.kso`, which is not on disk. senro's kata listed this among
+what it does not do yet: a typo in `views/list.kata` was reported at a line
+of the derived source.
+
+The committee chose a comment convention over carrying positions through the
+derive API (#2380). A derivation may write `# from <file>:<line>` above what
+it writes, naming the file within the module. When a diagnostic falls in a
+derived file, the renderer looks up to the nearest such comment in the same
+definition, or among the comments right above its header, and adds
+`= written from <module>/<file>:<line>` under the quoted line. The derive API
+and the span type stay as they were, and a derivation that writes no such
+comment gets the message it got before. The quote of the derived line stays,
+because it shows what kanso read.
+
+`tests/golden/derive/a_template_mistake_names_its_template_line` writes a
+template that misspells `name`, under one `# from` comment above the
+function. Both of its refusals, the unused parameter at the header and the
+unknown name in the body, carry `= written from …/views/greeting.tpl:1` on
+both engines. Main's binary prints them without the note.
+
+Tried and dropped: one refusal quotes nothing in derived source. The
+travelling-call check in `lib/travel.rs` ("no module in this program writes
+`shout` for a type it owns") reads the file it quotes from disk, and a
+derived file is not there. Reading the derivation's text first fixes it, but
+the change moved rows whose corpora never run that code. Inlined, it
+read `browser_compile_instructions` at 352,264,417 against main's
+352,264,415, and reverting it alone restored 415. Out of line in a cold
+helper, the browser row fell to 352,264,411 and `entry_instructions` rose
+from 156,082,962 to 156,082,993, which together read below the welfare
+floor. The fix waits for a change to that function that pays for its own
+layout.

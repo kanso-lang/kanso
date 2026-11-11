@@ -1,11 +1,13 @@
 #!/bin/sh
 # Moves the oldest entries of design/compiler-log.md, unedited, to the end of
-# design/log/compiler-log-archive.md until the live log holds forty.
+# design/log/compiler-log-archive.md until the live log holds `keep` of them.
+# The number is set once, on the `keep=` line below.
 #
-# tests/the_live_log_holds_forty_entries.rs pins the count at forty, so a
-# branch that appends an entry runs this in the same commit. Entries land in
-# merge order, and a branch dated one day can merge after a branch dated the
-# next, so the top of the live log is not always its oldest entry (kanso#1966).
+# tests/the_live_log_holds_what_the_script_keeps.rs pins the count at that
+# number, so a branch that appends an entry runs this in the same commit.
+# Entries land in merge order, and a branch dated one day can merge after a
+# branch dated the next, so the top of the live log is not always its oldest
+# entry (kanso#1966).
 # The entries that move are the oldest by the date in their heading, the
 # earlier in the file first among equal dates, and they reach the archive in
 # that order. The entries that stay keep their places.

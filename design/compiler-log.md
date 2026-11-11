@@ -20,41 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
-
-A compile error in code a derivation wrote named the module's derived file,
-`views.derived.kso`, which is not on disk. senro's kata listed this among
-what it does not do yet: a typo in `views/list.kata` was reported at a line
-of the derived source.
-
-The committee chose a comment convention over carrying positions through the
-derive API (#2380). A derivation may write `# from <file>:<line>` above what
-it writes, naming the file within the module. When a diagnostic falls in a
-derived file, the renderer looks up to the nearest such comment in the same
-definition, or among the comments right above its header, and adds
-`= written from <module>/<file>:<line>` under the quoted line. The derive API
-and the span type stay as they were, and a derivation that writes no such
-comment gets the message it got before. The quote of the derived line stays,
-because it shows what kanso read.
-
-`tests/golden/derive/a_template_mistake_names_its_template_line` writes a
-template that misspells `name`, under one `# from` comment above the
-function. Both of its refusals, the unused parameter at the header and the
-unknown name in the body, carry `= written from …/views/greeting.tpl:1` on
-both engines. Main's binary prints them without the note.
-
-Tried and dropped: one refusal quotes nothing in derived source. The
-travelling-call check in `lib/travel.rs` ("no module in this program writes
-`shout` for a type it owns") reads the file it quotes from disk, and a
-derived file is not there. Reading the derivation's text first fixes it, but
-the change moved rows whose corpora never run that code. Inlined, it
-read `browser_compile_instructions` at 352,264,417 against main's
-352,264,415, and reverting it alone restored 415. Out of line in a cold
-helper, the browser row fell to 352,264,411 and `entry_instructions` rose
-from 156,082,962 to 156,082,993, which together read below the welfare
-floor. The fix waits for a change to that function that pays for its own
-layout.
-
 ## 2026-11-08 — a list with a comment among its elements spans lines
 
 A list or map spans lines only when it cannot fit on one (the 2026-10-13
@@ -2502,3 +2467,30 @@ derived list it passes.
 
 The interpreter sweep is slower by a wasm build and the browser test. No
 counter moved.
+
+## 2026-11-11 — two limits live where they are enforced
+
+#2448, from the weekly sweep. Not a compiler change.
+
+The live log's limit was written in `scripts/archive_log.sh`, three
+times in its test, in the test's file name and in CLAUDE.md. It is now
+the script's `keep=` line and nowhere else:
+`tests/the_live_log_holds_what_the_script_keeps.rs` reads the number
+from the script, builds its scratch log two entries past it, and
+CLAUDE.md names the script. Watched fail with `keep=41`: the test says
+the log holds 40 and the script keeps 41. The page-drift budget is
+`budget` in `scripts/page_drift/page_drift.kso`; CLAUDE.md and the
+compiler page name it without the number.
+
+Three stories were told twice, in a sweep's header and again in its
+test's doc comment: the span that cost a round on kanso#1328, the
+interpreted row no sweep read on 2026-09-18, and the library change of
+2026-09-05. Each stays in the script, and the test points at it. The
+trend gate's excuse for the one golden without counters is said in the
+gate, and its test no longer repeats it.
+
+Left on the issue: the two greps that count rulings, which the compiler
+page tells as a dated story, and "five libraries the link resolves",
+written in four places.
+
+No counter moved.
