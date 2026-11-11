@@ -114205,3 +114205,52 @@ rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
 `browser_compile_instructions` 3,822 to 350,291,185, and
 `browser_run_instructions` did not move. The rule is part of the language,
 so the welfare floor moves down by exactly the check's cost.
+
+## 2026-11-05 — directive: a model's fields come from its table
+
+Clay: "we need the fields for the model to be auto-magic like in ruby." He
+named two ways: generate the model files the way the schema is kept, or a
+primitive that maps data such as a schema to code the compiler can still
+check. kanso already has the second. A derivation runs during the build,
+reads the app's own data and answers declarations that are checked like
+code someone wrote (#2186). senro's models derivation read the migrations
+and checked each hand-written record against its table, so every column was
+named twice.
+
+`derive/define` writes source into a module as one more of its files, and the
+source can be a `type`. What stopped a module from using one was the first
+load of the app's modules, which describes them to the derivations before
+any has run. A module that annotated `p:post` and read `p.title` was refused
+there, because nothing had declared `post` yet. #2265 met the same problem
+for functions and set an unknown name aside in that load. The load now also
+sets aside an unknown type name and a field read no record has, in the
+per-file checks and in the merged check; one helper, `set_aside`, holds all
+of them. The second load, with the derived source joined in, refuses
+whatever is still unknown with the message it always gave.
+
+Three cases in tests/golden/derive pin it.
+`a_module_reads_a_record_its_derivation_declares` prints its bylines on both
+engines, and the binary before the change refused it with "no type is called
+`post`". `a_module_reads_a_field_its_derived_record_lacks` and
+`a_module_names_a_record_nothing_declares` are still refused.
+
+senro builds on it: a module named for a table gets the table's record
+declared in it, with a field for each column in the table's order, and a
+module that declares the record keeps its own. `kanso derived` prints the
+declared type, so the generated code can be read without being kept on disk.
+Files written by a generator would drift from the schema until someone ran
+it again; a derivation runs on every build.
+
+Go's embedding was raised in the same message, as a way to put validations
+and helpers on top of the generated fields. A kanso record carries no
+methods, and the module's functions that take the record sit beside it, so
+there is nothing to delegate through. The question and the committee's
+reading are on #2356.
+
+Rows: the describe load's added set-asides cost every derive-free compile a
+little, because the helper runs on each file's diagnostics.
+`compile_instructions` rose 290 to 24,115,253, `entry_instructions` 2,156 to
+87,964,947 and `library_instructions` 617 to 73,496,395.
+`browser_compile_instructions` fell 799 to 350,296,781, by layout. The
+directive is a part of the language Clay asked for, so the welfare floor
+moves down by exactly that cost.
