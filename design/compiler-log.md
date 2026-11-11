@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-06 — `kanso run` hands SIGTERM and SIGHUP to its program
-
-**DONE.** `kanso run` builds a native binary and waits on it as a child. A
-SIGTERM sent to the driver, which is what `kill` and process supervisors
-send, ended the driver alone. The program went on running, reparented, and a
-server went on listening on its port. senro's specs start each app with
-`kanso run`, stop it with `kill`, and start the next on the same port, so a
-later spec could reach a server an earlier one left behind. Four orphaned
-servers were found on port 3000 in one container. They explain a
-password-reset mail delivered to an old server's outbox and a JSON request
-answered by a server built before the branch that added JSON.
-
-`execute` in src/main.rs now spawns the program and, while it waits, passes
-SIGTERM and SIGHUP on to it. SIGINT already reached the program, because a
-terminal sends it to the whole process group. When the program dies of a
-signal the driver handed on, the driver raises that signal on itself and
-prints nothing, so whoever sent it sees the driver end by it. A program
-killed by a signal the driver never received is reported as before; the
-first version re-raised any signal and turned `a_program_the_system_killed`
-red. The handlers are installed once. With no program running, the handler
-puts the default back and raises the signal itself, so the driver never
-resets them.
-
-`tests/a_stopped_run_stops_its_program.rs` runs a native program that
-writes `started`, sleeps three seconds and writes `finished`, and sends
-SIGTERM to the driver once `started` appears. Before the change it failed
-with "the program was still running after its driver was terminated"; after
-it, `finished` never appears, the driver ends by SIGTERM, and stderr is
-empty.
-
-Rows: `startup_instructions` rose 243 to 50,507, the two `signal()` calls
-the driver now makes on every run. The first version reset both handlers
-after the wait and read +489. `codegen_instructions_release` fell 124 to
-372,025,748 on both of CI's readings. Nothing in the diff reaches `kanso
-build`, and the cause is not isolated. Welfare fell by 0.00009. The
-committee decided on kanso#2370 that the change merges and the floor moves
-down by exactly that, as it did for #2350: a driver that leaves its program
-holding a port when it is stopped is the toolchain failing what `kanso run`
-promises.
-
 ## 2026-11-07 — the entry corpus is shaped like an app (#2373)
 
 `kanso check` of senro's pantry compiled its 27 modules 1,094 times, because
@@ -2103,6 +2063,35 @@ gate that would read the first, and the second runs `prove`.
 No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
 script directly, the cost-goldens job among them, go through neither cargo
 nor the ratchet and have no limit.
+
+## 2026-11-11 — a step in CI starts under the limit too
+
+#2441, the loose end of the entry "one limit for every test and every
+ratchet gate". Cargo's runner bounds a test binary and the ratchet bounds
+a gate it starts, but a `run:` step in a workflow goes through neither:
+the cost-goldens job runs its gate scripts directly, and so do the
+browser, site and book jobs.
+
+`ci.yml` and `ratchet.yml` now name a default shell. It sources
+`scripts/bounded.sh` when the checkout has put it there and then runs the
+step's script as `bash -e`, which is what a step that names no shell
+gets, so no step changes what it does. The steps before a job's checkout
+start as they did.
+
+Two things hold it. In CI, the specs job reads `ulimit -S -d` from inside
+a step and compares it with the number `bounded.sh` sets. In the tree,
+`tests/every_ci_step_starts_under_the_limit.rs` reads both workflows for
+the default and refuses a step that names a shell of its own, which
+would start without the limit. The ratchet row is `step_unbounded`: with
+the default taken out of `ci.yml` the spec fails and names the workflow.
+
+Whether everything a step starts fits under 6 GiB is CI's to say, as it
+was for the tests: the release build with fat LTO, the wasm build and
+clang at `-O3 -flto` had only been run under the limit by the ratchet.
+`pages.yml` and `release.yml` are left as they are. They run on main and
+on a tag, after CI has built the same tree under the limit.
+
+No counter moved.
 
 ## 2026-11-11 — one text written as another, in one pass
 
