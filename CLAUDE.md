@@ -454,7 +454,10 @@ machine publishes the linker's luck.
    compile timings, and move the published numbers when either shifts
    substantially.
 5. A log entry with the decisions, measurements and open threads. Negative
-   results go on the compiler page so ideas stay declined.
+   results go on the compiler page so ideas stay declined. The entry names
+   every row that worsened, with the value it landed on: the trend gate
+   refuses a row the entry leaves out, so run
+   `kanso run scripts/trend_gate -- origin/main` before the push.
 6. Technique-ledger and mined-queue statuses move in the same pull request.
 
 ### The log

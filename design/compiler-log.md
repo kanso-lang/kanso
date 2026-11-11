@@ -2118,13 +2118,18 @@ those find something to rewrite. run_allocs 2,445,662 ->
 2,709,581, which is 66 allocations a row, run_alloc_bytes 262,696,163 ->
 274,019,555, run_beat_iters 582,812 -> 614,812, run_find2_calls 1,060,857
 -> 1,168,857, run_str_scans 36,202 -> 72,202 and run_sh_str 19,156,704 ->
-25,232,528.
+25,232,528. The rest of the run's rows the phase moves: run_perm_allocs
+136 -> 151, run_sh_buf 97,305,312 -> 98,585,312, run_sh_bytes 24,384 ->
+888,384 and run_str_scan_bytes 19,043,360 -> 21,093,397.
 
 The run program's work rises: work_runbench 1,020,737,307 ->
 1,067,867,083 and work_runbench_dev 2,997,794,416 -> 3,065,058,505, both
 this container's readings less 109. runbench's emitted code reads
 defines=992 calls=10401 branches=9373 lines=81321 and its machine code is
-911,345 bytes.
+911,345 bytes. Summed over every benchmark but the decoder,
+emitted_other_defines 2,410 -> 2,421, emitted_other_calls 22,223 -> 22,353,
+emitted_other_branches 19,778 -> 19,889 and emitted_other_lines 185,435 ->
+186,392, and the summed text 5,978,121 -> 5,983,449.
 
 The interpreter's corpus rises: interp_instructions 724,216,927 ->
 744,978,389, interp_allocs 1,038,038 -> 1,074,427 and interp_peak_bytes
@@ -2205,8 +2210,11 @@ where it was, at 745,519,639.
 What else moves. Every program links the kernel, 1,360 bytes: the summed
 machine code rises by that for each of the fourteen, and runbench's by
 9,376 to 920,721 because the linker also copies the kernel into its seven
-call sites. runbench's emitted code reads defines=993 calls=10404
-branches=9373 lines=81337. The compile rows rise with the builtin's rows
+call sites. Summed, text 5,983,449 -> 6,010,505. runbench's emitted code
+reads defines=993 calls=10404 branches=9373 lines=81337, and summed over
+every benchmark but the decoder emitted_other_defines 2,421 -> 2,422,
+emitted_other_calls 22,353 -> 22,356 and emitted_other_lines 186,392 ->
+186,408. The compile rows rise with the builtin's rows
 and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
 compile_instructions 24,154,945 -> 24,168,284, entry_instructions
 156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
@@ -2259,7 +2267,8 @@ text. With the unsized branch taken out the native build prints
 `0 bytes, last <none>` where the interpreter prints `5000 bytes, last
 255`.
 
-What moves. Every program links the reader, 320 bytes of machine code.
+What moves. Every program links the reader, 320 bytes of machine code,
+and summed over the fourteen text 6,010,505 -> 6,014,985.
 The four benchmarks that read a file pay 16 instructions for the
 question: work_jsonbench 549,338,015, work_widebench 28,701,603,
 work_digestbench 3,107,795 and work_readbench 4,583,700. Five move with
