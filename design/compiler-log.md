@@ -2465,7 +2465,9 @@ reads 7, `std/list` twice.
 1,068,177 -> 1,067,948 and `interp_peak_bytes` 1,512,615 -> 1,509,557.
 
 Four programs emit one line less: the decoder 14,240 -> 14,239, and
-`oneshot`, `livebench` and `runbench`. The table of call sites no longer
+`oneshot`, `livebench` and `runbench`, so that summed over every
+benchmark but the decoder emitted_other_lines reads 186,408 -> 186,405.
+The table of call sites no longer
 names the one inside `os/start`, which none of them calls. Another
 module's `start` had kept it. Three of the four run a different count
 with the shorter table, which this container could not read and CI did:
