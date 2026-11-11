@@ -49,13 +49,13 @@ import "std/text"
 # the same thing.
 #
 # Each term carries two numbers, because weight alone cannot say what a second
-# is worth here. `weight` is how much the dimension matters at all: runtime
-# carries two thirds because that is the claim the front page makes, and
-# compile cost a third, because a language nobody can iterate in is not fast
-# either. `satiation` is how fast further improvement stops mattering, which
-# differs by dimension and is not a matter of importance — a compiler that
-# already finishes in six milliseconds gains almost nothing from three, while a
-# decoder in a hot loop that gets eight times faster is eight times faster.
+# is worth here. `weight` is how much the dimension matters at all, as a
+# share of its side; the numbers are on the `dimension` lines below and
+# nowhere in this prose. `satiation` is how fast further improvement stops
+# mattering, which differs by dimension and is not a matter of importance:
+# a compiler that already finishes in six milliseconds gains almost nothing
+# from three, while a decoder in a hot loop that gets eight times faster is
+# eight times faster.
 type dimension
   counters
   name
@@ -80,13 +80,13 @@ floor_path = "bench/welfare_floor.json"
 # compile memory better than three to one.
 #
 # The weights come from what teams shipping software pay for, recorded with
-# their sources in the log (design/log/compiler-log-archive.md). Runtime
-# carries 0.60 because it recurs per request forever. Compile carries 0.40
-# rather than the third it looks like from inside, because 45% of people who
-# stopped using rust named long compile times among their reasons — that is
-# whether anyone stays, not whether they are comfortable. Inside compile, speed
-# outweighs memory better than two to one: the complaint that dominates every
-# survey is waiting for an incremental rebuild, not footprint.
+# their sources in the log (design/log/compiler-log-archive.md). Running
+# outweighs compiling because it recurs per request forever. Compiling
+# carries more than it looks like from inside, because 45% of people who
+# stopped using rust named long compile times among their reasons: that
+# decides whether anyone stays. Inside compile, speed outweighs memory
+# better than two to one: the complaint that dominates every survey is
+# waiting for an incremental rebuild, and footprint comes well behind it.
 #
 # Satiation is a different question from weight — it says how long a dimension
 # keeps paying for improvement. Runtime at 2.0: a decoder eight times faster is
