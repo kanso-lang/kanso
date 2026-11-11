@@ -2283,8 +2283,11 @@ where it was, at 745,519,639.
 What else moves. Every program links the kernel, 1,360 bytes: the summed
 machine code rises by that for each of the fourteen, and runbench's by
 9,376 to 920,721 because the linker also copies the kernel into its seven
-call sites. runbench's emitted code reads defines=993 calls=10404
-branches=9373 lines=81337. The compile rows rise with the builtin's rows
+call sites. Summed, text 5,983,449 -> 6,010,505. runbench's emitted code
+reads defines=993 calls=10404 branches=9373 lines=81337, and summed over
+every benchmark but the decoder emitted_other_defines 2,421 -> 2,422,
+emitted_other_calls 22,353 -> 22,356 and emitted_other_lines 186,392 ->
+186,408. The compile rows rise with the builtin's rows
 and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
 compile_instructions 24,154,945 -> 24,168,284, entry_instructions
 156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
