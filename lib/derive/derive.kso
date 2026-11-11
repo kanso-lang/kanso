@@ -48,6 +48,10 @@ pub type program
 # convention writes one of the module's functions from. A directory of such
 # files alone is a module, and every function in it is one a derivation
 # defines. A module that is a single file has none, and so does the entry.
+# `sources` maps each pub function's and each pub constant's name to the
+# name of the kanso file that declares it. A module's files share one
+# namespace, so a convention that places code by its file's name reads it
+# here: migrations kept one to a file run in the order of the files' names.
 pub type module
   name
   functions
@@ -55,6 +59,7 @@ pub type module
   records
   calls
   files
+  sources
 
 pub type call
   module

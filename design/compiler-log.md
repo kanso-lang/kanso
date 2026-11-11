@@ -20,49 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-08 — patterns and operators move out of emit.rs (#2377)
-
-`src/codegen/emit.rs` had grown to 3,055 lines in one `impl Backend` block.
-Two runs of methods in it shared nothing with the rest, so they moved to files
-of their own, read with `include!` right after emit.rs as calls.rs already
-is:
-
-- `patterns.rs`, 444 lines: matching a pattern against a parameter, the
-  `%parsed` returns and constructions, packed constructor arguments and the
-  type-set checks.
-- `operators.rs`, 471 lines: word runs, the general arithmetic they fall back
-  to, `emit_binop` and the builtin operators.
-
-emit.rs keeps bodies, binds, conditions and indexing, at 2,153 lines. The move
-changes no text: the dev and release IR of `bench/runbench` are byte-identical
-before and after. Five ratchet mutations patched lines that moved, and each
-now names the file its line lives in. `tests/native_layout_on_wasm32.rs`
-reads the two new files when it looks for the lines the wasm32 table
-rewrites.
-
-## 2026-11-08 — a module reads through a record it was handed
-
-A library may read a field that no type it can see declares, as long as the
-read's base is a parameter: the value came from the caller, and the program
-that imports the library answers for the field (the 2026-10-12 gavel on
-#1894). The check looked only one step back, so `p.author.name` was refused
-in the module that wrote it. `p.author` is not a parameter, and nothing in
-the module declares `name`. senro's kata hit this: a template could not show
-a post's author's name, and its README listed that as a limit.
-
-The check now follows a chain of field reads and indexes back to where it
-starts. `p.author.name` and `ps[1].author.name` are both left to the program,
-and the program still refuses a field no type in it declares, at the end of
-a chain as anywhere else. `tests/golden/field_reads/a_chain_from_a_parameter`
-runs on both engines, and `errors_module/a_field_chain_no_type_declares` pins
-the refusal of a misspelled last field. Main's binary refuses the first
-fixture with "no record type has a field `name`" on both engines.
-
-kata needed nothing of its own. The page as data already kept the inner
-record's fields that a template reads, so senro's `spec/runs/nested_reads`
-prints the same page three ways: rendered from the records, as data, and
-rendered from the data.
-
 ## 2026-11-08 — a mistake in derived source names the line it was written from (#2380)
 
 A compile error in code a derivation wrote named the module's derived file,
@@ -2473,3 +2430,58 @@ file now, so there is nothing for a second build to truncate, and
 release row's 35,028 and the browser row's 1,181 from the derive check,
 which the bank before this one had not read, less the dev row's 3,186.
 Main's floor is 95.39064215, so the pull request as a whole is a rise.
+
+## 2026-11-11 — directive: senro is to be a full alternative to Rails
+
+Clay, to cloud: "there should be a [senro] binary that acts like rails
+and has generators and can make a migration. the migrations need to have
+a date time stamp thing in the file name so they can run in order and
+create the actual schema deterministically." He asked for the generators
+Rails has, "a resource that's restful making just a controller or
+whatever", and "a facility to add other generators through plugins"; for
+documentation that reads as "a fully formed alternative to rails or at
+least as much functionality as you would have encountered in the early
+days around rails three"; for auth in the framework, since "everyone
+needs auth"; and for authorization that is "about getting to that page",
+so that "once you checked [auth] for that page you don't need to recheck
+for every data provider that it uses".
+
+Recorded on #2455 with where senro stood and a checklist. The design is
+cloud's (#2280) and is on the issue: a `senro` command; migrations as
+files named by a stamp, still folded into the schema by the build;
+generators for the parts and from outside senro; confirmation, lockout
+and tracking moved from the guestbook into the framework; and one check
+at the page that covers the providers the page calls.
+
+## 2026-11-11 — a derivation is told which file declares a name
+
+The first thing #2455 needs from the language. senro's migrations are to
+be files that run in the order of their names. A derivation folds them
+into the schema while the app compiles, and a derivation could not see a
+file's name: a module's kanso files share one namespace, the description
+handed over a module's constants with no file, and it left the module's
+kanso files out of `files`.
+
+The committee's reading: a convention that places code by its file's
+name is the same kind of convention as one that places it by its
+function's name, and the description already carries the second. So a
+module's description gains `sources`, a map from each pub function's and
+pub constant's name to the name of the file that declares it. The first
+arm's file answers for a function of several. Nothing else changes, and
+a derivation still only computes: the map is read off declarations the
+compiler has already loaded.
+
+**Spec.** `tests/golden/derive/a_derivation_reads_the_file_a_declaration_is_in`
+keeps two constants in two files whose names sort the other way from the
+constants' names, and a convention answers the names in the order of
+their files: `["zebra" "apple"]`, on both engines. The ratchet row is
+`declared_in`. Watched fail with every file's name left blank: the
+convention falls back on the names and answers `["apple" "zebra"]`.
+
+**Rows.** Three compile rows move with the binary's layout, each down:
+`compile_instructions` 22,652,656 -> 22,652,542, `entry_instructions`
+119,194,010 -> 119,166,280 and `library_instructions` 63,634,723 ->
+63,634,563. None of the three corpora has a `derive` that reads the new
+field. The interpreter's and the browser's rows did not move.
+
+**Welfare.** 95.39228290 -> 95.39230414, banked.

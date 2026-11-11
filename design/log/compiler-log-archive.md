@@ -114594,3 +114594,46 @@ same dev emitter, so it runs the check, and its translator ignores the
 attribute, so its run gains nothing. That reading of the browser row has not
 been isolated. `codegen_instructions_dev` and `codegen_instructions_release`
 do not move. Welfare rises from 95.07 to 95.08 and is banked.
+
+## 2026-11-08 — patterns and operators move out of emit.rs (#2377)
+
+`src/codegen/emit.rs` had grown to 3,055 lines in one `impl Backend` block.
+Two runs of methods in it shared nothing with the rest, so they moved to files
+of their own, read with `include!` right after emit.rs as calls.rs already
+is:
+
+- `patterns.rs`, 444 lines: matching a pattern against a parameter, the
+  `%parsed` returns and constructions, packed constructor arguments and the
+  type-set checks.
+- `operators.rs`, 471 lines: word runs, the general arithmetic they fall back
+  to, `emit_binop` and the builtin operators.
+
+emit.rs keeps bodies, binds, conditions and indexing, at 2,153 lines. The move
+changes no text: the dev and release IR of `bench/runbench` are byte-identical
+before and after. Five ratchet mutations patched lines that moved, and each
+now names the file its line lives in. `tests/native_layout_on_wasm32.rs`
+reads the two new files when it looks for the lines the wasm32 table
+rewrites.
+
+## 2026-11-08 — a module reads through a record it was handed
+
+A library may read a field that no type it can see declares, as long as the
+read's base is a parameter: the value came from the caller, and the program
+that imports the library answers for the field (the 2026-10-12 gavel on
+#1894). The check looked only one step back, so `p.author.name` was refused
+in the module that wrote it. `p.author` is not a parameter, and nothing in
+the module declares `name`. senro's kata hit this: a template could not show
+a post's author's name, and its README listed that as a limit.
+
+The check now follows a chain of field reads and indexes back to where it
+starts. `p.author.name` and `ps[1].author.name` are both left to the program,
+and the program still refuses a field no type in it declares, at the end of
+a chain as anywhere else. `tests/golden/field_reads/a_chain_from_a_parameter`
+runs on both engines, and `errors_module/a_field_chain_no_type_declares` pins
+the refusal of a misspelled last field. Main's binary refuses the first
+fixture with "no record type has a field `name`" on both engines.
+
+kata needed nothing of its own. The page as data already kept the inner
+record's fields that a template reads, so senro's `spec/runs/nested_reads`
+prints the same page three ways: rendered from the records, as data, and
+rendered from the data.
