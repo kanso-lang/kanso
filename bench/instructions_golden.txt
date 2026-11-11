@@ -29,7 +29,7 @@
 # measured-on clang=19.1.1
 jsonbench 549338015
 encodebench 2335340622
-oneshot 9978737
+oneshot 9978975
 basket 18295405
 widebench 28701603
 deepbench 198293720
@@ -39,6 +39,6 @@ indexbench 1887800
 scanbench 267843
 digestbench 3107795
 readbench 4583700
-livebench 938655255
-runbench 1059837979
+livebench 938654576
+runbench 1059837846
 runbench_dev 3057251699

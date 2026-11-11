@@ -2478,7 +2478,12 @@ reads 7, `std/list` twice.
 Four programs emit one line less: the decoder 14,240 -> 14,239, and
 `oneshot`, `livebench` and `runbench`. The table of call sites no longer
 names the one inside `os/start`, which none of them calls. Another
-module's `start` had kept it.
+module's `start` had kept it. Three of the four run a different count
+with the shorter table, which this container could not read and CI did:
+work_oneshot up 238 to 9,978,975, work_livebench down 679 to 938,654,576
+and work_runbench down 133 to 1,059,837,846. The code they run is the
+same. The likely cause is where the shorter table leaves the data after
+it, and that was not isolated.
 
 Two rows rise. `emit_instructions` 5,632,066 -> 5,632,125. Two builds of
 this branch that hand the emitter the same program read 5,632,618 and
@@ -2491,7 +2496,7 @@ allocated, and pruning the library differently moved the names. The
 same table moved the row for `text/replace`. It is #2444.
 
 **Welfare.** Over this entry and the two before it welfare rises
-95.34294930 -> 95.39064189, and the floor is banked there.
+95.34294930 -> 95.39064215, and the floor is banked there.
 
 **Not done.** `std/derive` is still compiled twice on the entry corpus,
 and that was not looked into.
