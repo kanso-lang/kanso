@@ -1910,15 +1910,13 @@ impl<'a> Backend<'a> {
         }
     }
 
-    /// A group we can hand out as a first-class value through a `w_` wrapper: a
-    /// `%KValue` return and no by-value or byte-discriminated parameters, which
-    /// the generic wrapper does not know how to convert.
+    /// A group we can hand out as a first-class value through a `w_` wrapper:
+    /// no by-value or byte-discriminated parameters, which the generic
+    /// wrapper does not know how to convert. A by-value answer it boxes.
     fn simple_fn_value(&self, name: &str, arity: usize) -> bool {
-        self.ret_ty(name, arity) == "%KValue"
-            && (0..arity).all(|i| {
-                !self.is_byte_disc(name, arity, i)
-                    && self.escape.carries_ty(name, arity, i).is_none()
-            })
+        (0..arity).all(|i| {
+            !self.is_byte_disc(name, arity, i) && self.escape.carries_ty(name, arity, i).is_none()
+        })
     }
 
     /// A bind is representable as a native thunk when its captures fit the
@@ -2332,7 +2330,43 @@ impl<'a> Backend<'a> {
                     writeln!(conv, "  %deep_set = select i1 %deep_empty, ptr @{lit}, ptr %deep");
                 let _ = writeln!(conv, "  store ptr %deep_set, ptr @k_deep_site");
             }
-            let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));
+            // A group that answers a record in registers is called that way
+            // here too, and the wrapper builds the record: whoever calls a
+            // function value reads one boxed word. Its direct callers still
+            // get the words, which a group handed out anywhere used to
+            // forfeit for every caller it had.
+            match self
+                .escape
+                .returns_ty(name, arity)
+                .filter(|_| self.ret_ty(name, arity) == "%parsed")
+            {
+                Some(ty) => {
+                    let rebuild = match self.escape.int_last(ty) {
+                        true => "k_parsed_box_back",
+                        false => "k_parsed_box",
+                    };
+                    let id = self.type_ids[ty];
+                    let _ = writeln!(
+                        conv,
+                        "  %rp = call tailcc %parsed @{sym}({})",
+                        call_args.join(", ")
+                    );
+                    for w in 0..3 {
+                        let _ = writeln!(conv, "  %rw{w} = extractvalue %parsed %rp, {w}");
+                    }
+                    let _ = writeln!(
+                        conv,
+                        "  %r = call %KValue @{rebuild}(i64 {id}, i64 %rw0, i64 %rw1, i64 %rw2)"
+                    );
+                }
+                None => {
+                    let _ = writeln!(
+                        conv,
+                        "  %r = call tailcc %KValue @{sym}({})",
+                        call_args.join(", ")
+                    );
+                }
+            }
             if deep.is_some() {
                 let _ = writeln!(conv, "  store ptr %deep, ptr @k_deep_site");
             }

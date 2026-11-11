@@ -1,0 +1,50 @@
+# A decoder is handed out as a value when something reads a list with it:
+# the list's reader takes the function that reads one item. A function
+# value is called through a wrapper that answers one word, so a group
+# handed out anywhere kept its record on the heap for every caller it had,
+# the direct ones too (#2421). The wrapper builds the record now and the
+# direct callers still get the words. A function handed out can be called
+# with anything, so `at` says its position is an int: the record goes by
+# value only when its position is one. This reads forty-one bytes directly
+# and eight through the value: sh_rec counts the eight, where it counted
+# every read.
+import "std/text"
+
+type read
+  value
+  next
+
+fn at bs p:int
+  read bs[p] (p + 1)
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) (acc + worth v)
+
+fn listed _ _ 0 _ acc
+  acc
+
+fn listed bs p n one acc
+  item bs (one bs p) (n - 1) one acc
+
+fn item bs r n one acc
+  listed bs r.next n one (acc + worth r.value)
+
+fn shown (read v p)
+  "{worth v} then {p}"
+
+fn total s
+  bs = text/bytes s
+  direct = summed 40 bs (at bs 1) 0
+  through = listed bs 1 8 at 0
+  "{direct} {through} {shown (at bs 3)}"
+
+pub play = print (total "forty bytes of text for a decoder to read")
