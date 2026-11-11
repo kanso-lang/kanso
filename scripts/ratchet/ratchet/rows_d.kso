@@ -1813,6 +1813,18 @@ plain_link = row
 
 rows_dq67 = list/concat rows_dq66 [plain_link]
 
+# A derivation is told which file declares each of a module's names, so a
+# convention can order code by its file's name (2026-11-11, kanso#2455).
+declared_in = row
+  "a declaration's file left blank in what a derivation is handed"
+  true
+  "cargo test --release --test derivations"
+  "specs (unit, golden, differential)"
+  (breaking "a_declaration_s_file_left_blank")
+  no_setup
+
+rows_dq68 = list/concat rows_dq67 [declared_in]
+
 # The sanitizer sweep runs on every change (2026-11-11, kanso#2449). Run by
 # hand it had come to build its runtime on the wrong calling convention, and
 # its programs stopped before they reached the memory it watches.
@@ -1824,6 +1836,6 @@ freed_read = row
   (breaking "a_tenure_block_read_after_its_free")
   release
 
-rows_dq68 = list/concat rows_dq67 [freed_read]
+rows_dq69 = list/concat rows_dq68 [freed_read]
 
-rows_d = list/concat rows_dq68 [itself]
+rows_d = list/concat rows_dq69 [itself]

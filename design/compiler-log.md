@@ -20,49 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-08 — a list with a comment among its elements spans lines
-
-A list or map spans lines only when it cannot fit on one (the 2026-10-13
-gavel on #1882). The width check measured a span with its comment lines
-dropped, so a short list with a comment above an element was refused as
-fitting on one line, and the line it asked for cannot be written: a comment
-runs to the end of its line. senro's kata hit this once each literal sat
-under its own `# from` comment (#2380). Two short literals in one `joined [ ]`
-were refused, and a template like that could not compile.
-
-The lexer now notes when a span holds a comment line, and such a span skips
-the fits-on-one-line refusal; a nested span's comment counts for the span
-around it. A span with no comment is judged as before, so the corpus's two
-refusals, `a_list_that_fits_on_one_line_does_not_span` and its map twin, still
-read the same. `tests/golden/micro/a_list_with_comments_spans_lines` holds a
-short list and a short map, each with a comment above every element, and
-prints `["<p>" "</p>"] { "a":1 "b":2 }` on every engine; main's binary
-refuses both literals. Appendix C says so beside the width rule.
-
-## 2026-11-08 — the travelling-call refusal quotes derived source
-
-#2380 rules that a diagnostic falling in a `.derived.kso` file carries
-`= written from <file>:<line>`. One refusal still missed it: the
-travelling-call check in `lib/travel.rs` ("no module in this program writes
-`perimeter` for a type it owns"). It read the file it quotes from disk, and a
-derived file is not there, so in derived source it printed the header alone.
-It now renders through `render_merged`, which every merged-check refusal
-already uses and which reads a derivation's text before the disk. The line is
-quoted and the note follows.
-
-`tests/golden/derive/a_traveling_call_in_a_template_names_its_template_line`
-writes a template that calls `perimeter` on a circle whose module writes only
-`area`. Both engines quote `views.derived.kso:3` and name `views/one.tpl:1`;
-main's binary prints the header alone.
-
-No corpus reaches this refusal, and the change still moves two rows through
-layout, as CI measured them: `browser_compile_instructions` rose from
-352,264,415 to 352,264,424 and `entry_instructions` from 156,082,962 to
-156,082,965. Every other row read as before. #2382 dropped the fix to keep
-the floor, and that was the wrong call: the refusal is part of what #2380
-ruled, and a ruled feature's cost lowers the floor by exactly what it
-measures. The floor moves by that amount here (#2383).
-
 ## 2026-11-08 — a module calls an arm a derivation writes
 
 An entry that derives loads its modules twice: once to describe them to its
@@ -2395,6 +2352,61 @@ file now, so there is nothing for a second build to truncate, and
 release row's 35,028 and the browser row's 1,181 from the derive check,
 which the bank before this one had not read, less the dev row's 3,186.
 Main's floor is 95.39064215, so the pull request as a whole is a rise.
+
+## 2026-11-11 — directive: senro is to be a full alternative to Rails
+
+Clay, to cloud: "there should be a [senro] binary that acts like rails
+and has generators and can make a migration. the migrations need to have
+a date time stamp thing in the file name so they can run in order and
+create the actual schema deterministically." He asked for the generators
+Rails has, "a resource that's restful making just a controller or
+whatever", and "a facility to add other generators through plugins"; for
+documentation that reads as "a fully formed alternative to rails or at
+least as much functionality as you would have encountered in the early
+days around rails three"; for auth in the framework, since "everyone
+needs auth"; and for authorization that is "about getting to that page",
+so that "once you checked [auth] for that page you don't need to recheck
+for every data provider that it uses".
+
+Recorded on #2455 with where senro stood and a checklist. The design is
+cloud's (#2280) and is on the issue: a `senro` command; migrations as
+files named by a stamp, still folded into the schema by the build;
+generators for the parts and from outside senro; confirmation, lockout
+and tracking moved from the guestbook into the framework; and one check
+at the page that covers the providers the page calls.
+
+## 2026-11-11 — a derivation is told which file declares a name
+
+The first thing #2455 needs from the language. senro's migrations are to
+be files that run in the order of their names. A derivation folds them
+into the schema while the app compiles, and a derivation could not see a
+file's name: a module's kanso files share one namespace, the description
+handed over a module's constants with no file, and it left the module's
+kanso files out of `files`.
+
+The committee's reading: a convention that places code by its file's
+name is the same kind of convention as one that places it by its
+function's name, and the description already carries the second. So a
+module's description gains `sources`, a map from each pub function's and
+pub constant's name to the name of the file that declares it. The first
+arm's file answers for a function of several. Nothing else changes, and
+a derivation still only computes: the map is read off declarations the
+compiler has already loaded.
+
+**Spec.** `tests/golden/derive/a_derivation_reads_the_file_a_declaration_is_in`
+keeps two constants in two files whose names sort the other way from the
+constants' names, and a convention answers the names in the order of
+their files: `["zebra" "apple"]`, on both engines. The ratchet row is
+`declared_in`. Watched fail with every file's name left blank: the
+convention falls back on the names and answers `["apple" "zebra"]`.
+
+**Rows.** Three compile rows move with the binary's layout, each down:
+`compile_instructions` 22,652,656 -> 22,652,542, `entry_instructions`
+119,194,010 -> 119,166,280 and `library_instructions` 63,634,723 ->
+63,634,563. None of the three corpora has a `derive` that reads the new
+field. The interpreter's and the browser's rows did not move.
+
+**Welfare.** 95.39228290 -> 95.39230414, banked.
 
 ## 2026-11-11 — the sanitizer sweep is a job
 
