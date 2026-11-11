@@ -1,16 +1,17 @@
 #!/bin/sh
-# A group handed out as a function value may return its record in registers.
+# The wrapper of a function value passes a record in registers straight on.
 #
-# A function value is called through a wrapper that answers one boxed word, so
-# native refuses to wrap a group whose record comes back in two registers. With
-# the check gone, the escape analysis lets such a group go by value and the
-# build of a program that holds it with `&` or passes it by name is refused.
+# A function value is called through a wrapper that answers one boxed word. A
+# group that answers its record in registers is called that way by the wrapper
+# too, which builds the record from the three words. With the wrapper calling
+# every group as though it answered a boxed word, a handed-out decoder's
+# caller reads the first register as a record.
 set -e
-f=src/escape.rs
-grep -q "fn value_names" src/escape.rs
-grep -qF '        if self.returns_ty.iter().any(|(name, arity)| *arity > 0 && values.contains(*name)) {' "$f" || {
-  echo "the value check in returnable moved; this mutation needs rewriting" >&2
+f=src/codegen.rs
+grep -q "fn simple_fn_value" src/codegen.rs
+grep -qF '                .filter(|_| self.ret_ty(name, arity) == "%parsed")' "$f" || {
+  echo "the wrapper's boxing of a by-value answer moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^        if self.returns_ty.iter().any(|(name, arity)| \*arity > 0 \&\& values.contains(\*name)) {$/        if false \&\& self.returns_ty.iter().any(|(name, arity)| *arity > 0 \&\& values.contains(*name)) {/' "$f"
-grep -qF 'if false && self.returns_ty.iter().any(' "$f"
+sed -i 's/^                \.filter(|_| self\.ret_ty(name, arity) == "%parsed")$/                .filter(|_| false \&\& self.ret_ty(name, arity) == "%parsed")/' "$f"
+grep -qF '.filter(|_| false && self.ret_ty(name, arity) == "%parsed")' "$f"
