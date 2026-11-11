@@ -1,0 +1,24 @@
+import "../performed"
+
+# A test whose value is an effect is performed, and what it yields is
+# judged as any test's value is: true passes, and anything else fails and
+# is printed. An err that the effect ends in fails the test and says where
+# it was born. The pure test beside them runs as it always has, and the one
+# after the err shows the runner went on.
+test_pure = 1 + 1 == 2
+
+test_yields_true = performed/shouted "KANSO_SPEC_WORD" .> said_quiet
+
+test_yields_false = performed/shouted "KANSO_SPEC_UNSET" .> said_quiet
+
+test_yields_a_value = performed/shouted "KANSO_SPEC_UNSET"
+
+test_yields_an_err = performed/refusing "the disk is full"
+
+test_after_an_err = performed/shouted "KANSO_SPEC_UNSET" .> said_nothing
+
+fn said_quiet s
+  effect (s == "QUIET")
+
+fn said_nothing s
+  effect (s == "NOTHING")

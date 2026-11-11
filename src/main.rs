@@ -2457,8 +2457,30 @@ fn run_tests_on_stack(target: &str, suites: &[(ast::Program, String, String)]) -
         for name in &names {
             ran += 1;
             let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
+            // A test whose value is an effect has not said true or false
+            // yet: it is performed, and what it yields is judged below as
+            // any test's value is (#2458).
+            let (outcome, performed) = match outcome {
+                Ok(eval::Value::Desc(desc)) => {
+                    let mut executor =
+                        eval::RealExecutor { program_args: Vec::new(), rng: eval::Rng::seeded() };
+                    (interp.execute(&desc, &mut executor), true)
+                }
+                other => (other, false),
+            };
             match outcome {
                 Ok(eval::Value::True) => println!("{name} ... ok"),
+                // An effect that ended in an err says where the err was
+                // born, as an entry's unhandled err does under `run`.
+                Ok(eval::Value::ErrV(info)) if performed => {
+                    failed += 1;
+                    println!("{name} ... FAILED");
+                    eprint!(
+                        "error[endpoint]: unhandled err reached the executor: {}\n{}",
+                        eval::render(&interp, &info.reason, true),
+                        eval::trace_lines(&interp, &info)
+                    );
+                }
                 Ok(other) => {
                     failed += 1;
                     println!(

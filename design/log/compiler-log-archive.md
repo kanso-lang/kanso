@@ -114750,3 +114750,43 @@ run from the repository root, cannot; main's binary refuses
 `browser_compile_instructions` rose from 352,264,424 to 352,264,564. The
 browser corpus derives nothing, so the 140 instructions are the new code in
 the compiler the tab runs. Every other row is where it was.
+
+## 2026-11-10 — gavel: an app goes through its models, never through pg/query
+
+The guestbook's list page on the senro site read `pg/query db newest []`.
+Clay: "this is crazy. you shoudn't have to call something like db/query. you
+just use the model. clay = models/user/find params.id or something along
+those lines." On how the session reaches the call: "that's the kind of thing
+that the framework would do and inject somehow into the controller actions
+perhaps. you can figure out something elegant for that. like maybe it passes
+in a DB object that you pass to the model method. or maybe it sets those up
+preconfigured so you get it already from the imported finder object that's
+analogous to the class with its class methods in rails."
+
+senro had model writes (`models/created`) and two reads (`found`, `where`),
+each taking the viewer and the session apart, and no read of a whole table.
+The three example apps wrote SQL by hand at 34 sites. The ruling is that app
+code holds none. The design, the first of Clay's two options, is on #2394:
+the session an action is handed already knows who is signed in, and each
+model's module answers its reads and writes by name. Clay also asked that
+such designs go by the committee, "to find beauty and elegance".
+
+The committee read it from three seats (a kanso purist, a Rails veteran, a
+newcomer) and decided, on #2394:
+
+- `db` is passed to the model's function. All three preferred it to a finder
+  value handed to the action, which would shadow the module it stands for.
+- The reads are `find`, `find_by`, `all`, `newest`, `ordered`, `where` and
+  `paged`. `ordered` takes a column and nothing else: the first draft's
+  `ordered db "id desc"` put a small language inside a string, and `newest`
+  covers the case that wanted it.
+- `where` keeps one field and one value. A map of conditions was declined
+  because the derivation can check a field written as a string against the
+  table's columns and cannot read a map literal's keys.
+- The writes are `create`, `update` and `destroy` per model, over the
+  purist's `created`, `updated`, `destroyed`.
+- The scaffold is split into `note.kso`, the model, and `notes.kso`, the
+  actions.
+
+Open: the account reads that run before anyone is signed in, which need a
+read that asks as the app itself.
