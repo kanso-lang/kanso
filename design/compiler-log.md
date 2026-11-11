@@ -2459,6 +2459,10 @@ line from a measured build of each tier and from an unmeasured one, and
 searches every cached object for a name that holds a digest. The ratchet
 row is `plain_link`: with `linked_as` answering the cached path, the
 measured release link names `kanso_runtime_release_hot_8d55bbc03f0775ad.o`.
+The row `runtime_source` is retired with its mutation, which wrote the
+runtime's source onto the shared path in place. No build writes that
+file now, so there is nothing for a second build to truncate, and
+`tests/concurrent_build.rs` still races eight cold builds.
 
 **Welfare.** 95.39229249 -> 95.39234298, banked. The rise is the two
 codegen rows, less the browser row's 1,181 from the derive check.

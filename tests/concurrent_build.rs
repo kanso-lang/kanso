@@ -137,6 +137,10 @@ fn many_builds_of_one_program_all_answer() {
 /// each round here gets a temp directory of its own, and every racer compiles
 /// the runtime cold. Three rounds, because whether two writes overlap a read
 /// is the race; before the fix this failed in every sitting it was run.
+///
+/// Since 2026-11-11 the source goes to clang on its standard input and no
+/// build writes it to a file. The rounds stay, as eight cold builds that
+/// race for one cached object.
 #[test]
 fn builds_that_compile_the_runtime_at_once_all_answer() {
     let mark = std::process::id() + 2;
