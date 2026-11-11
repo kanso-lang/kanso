@@ -1,0 +1,5 @@
+import "std/derive"
+
+# Refuses an app with no `posts/index`, where the entry asks for it.
+pub fn routing _
+  [(derive/refuse "conventions" "an app needs a `posts/index`")]

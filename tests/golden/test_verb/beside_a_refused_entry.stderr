@@ -1,0 +1,4 @@
+error[derive]: an app needs a `posts/index`
+  --> beside_a_refused_entry/main.kso:4:1
+   4 | derive conventions/routing
+       ^

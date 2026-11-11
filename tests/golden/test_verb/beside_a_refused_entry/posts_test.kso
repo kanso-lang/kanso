@@ -1,0 +1,1 @@
+test_show = posts/show 7 == "post 7"

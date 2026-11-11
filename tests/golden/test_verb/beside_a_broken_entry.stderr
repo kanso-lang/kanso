@@ -1,0 +1,4 @@
+error[syntax]: expected `)`
+  --> beside_a_broken_entry/main.kso:3:19
+   3 | print (posts/show 7
+                         ^

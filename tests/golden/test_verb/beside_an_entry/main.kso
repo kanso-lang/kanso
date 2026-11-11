@@ -1,0 +1,6 @@
+import "./conventions"
+import "./posts"
+
+derive conventions/routing
+
+print (conventions/handle routes "/posts/show" 7)

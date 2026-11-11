@@ -20,101 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a native program holds as many sockets as the system allows
-
-The native runtime kept open sockets in a table of 64, found by the
-remainder a handle leaves, and ended the process when a sixty-fifth was
-wanted: `too many sockets open at once`. The interpreter has no table. The
-limit came to light through senro, whose server kept a connection for
-every client that hung up without a request (fixed there in senro#102):
-about sixty such clients ended a natively built app. With that leak fixed
-the limit still stood in the way of any server with sixty clients
-connected at one moment. Tracked as #2402.
-
-**What changed, in `src/runtime/effects.c`.**
-- The table starts at 64 slots and doubles when every one is taken. Two
-  handles that leave different remainders by a size leave different ones
-  by twice it, so each open socket moves to the slot its handle now names
-  and no two meet. Handles are numbered as before, so a program that
-  prints one reads the same on both engines.
-- A slot remembers the handle that owns it. Before, `k_socket_of` asked
-  only whether the slot was in use, so closing a handle a second time
-  closed whatever connection had taken its slot since.
-- `listen` asks for the longest queue of unaccepted callers the system
-  allows, where it asked for 16.
-- Running children keep their own table of 64 (`K_KIDS`), which they had
-  shared a constant with.
-- The lookup, the taking of a slot and the growing are kept out of line,
-  so the function every effect passes through holds a call to them and
-  none of their code.
-
-When the system itself refuses a file, `dial` already answered an err, and
-`accept` already left its fiber waiting and trying again, so a server at
-the system's limit keeps the clients it has. Nothing there needed to
-change.
-
-**Three specs in the micro corpus, each red on the runtime before.**
-- `a_program_holds_more_sockets_than_its_first_table`: a hundred
-  connections held by both ends, then the first pair and the last speak.
-  Before: `too many sockets open at once`, at the thirty-second accept.
-- `a_handle_closed_twice_closes_nothing_else`: sixty-four sockets, one
-  closed, one opened in its place, the old handle closed again. Now the
-  second close is refused and the new connection takes a write. Before,
-  the second close succeeded and the write failed: `that is not a
-  connection`.
-- `a_listener_queues_a_hundred_callers`: a hundred callers connect before
-  any is accepted. Before, the program stopped partway and was ended by
-  the test's clock. With the table grown and the queue alone put back to
-  16 it stops the same way, so the queue is the cause.
-
-The interpreter passed all three before and after.
-
-**What I got wrong on the way.**
-- The runtime is also built for wasm, where the headers name no queue
-  length, and the first build of it failed. I had built and tested natively
-  only. The constant is defined when the headers leave it out.
-- The three specs open sockets, which the tab cannot, and I left them off
-  `native_route_gaps.txt`. Three wasm corpus tests went red on the first
-  push.
-- The first version made every benchmark's effects dearer. CI's hosts were
-  not the one the work rows were counted on, so the gate would not compare
-  and I read the differences it printed as the host's. They were mine.
-  Main built here reads each row a constant above its golden, 109 for
-  thirteen of the fifteen, and the branch read deepbench 1,308,377 higher than
-  that, runbench 303,062 and widebench 48,034. All of it was in `k_exec`,
-  the function every effect passes through. The table's lookup, with its
-  remainder by a size that is no longer a constant, had been folded into
-  it. With `k_sock` kept out of line deepbench reads main's number again.
-
-**Rows.**
-- `unpinned_diagnostics.txt` loses the message that no longer exists.
-- Work: eleven of the fifteen rows are main's. `work_runbench` rises 469
-  to 913,657,523 and `work_oneshot` 357 to 9,980,628; `work_encodebench`
-  falls 350 to 2,335,340,431 and `work_livebench` 189 to 938,655,512. No
-  benchmark opens a socket, so these four are layout. I set the rows from
-  a count here and each row's distance to main's on this machine, and CI
-  then counted on the golden's own silicon: fourteen agreed and
-  `work_livebench` read 28 lower, which is CI's row above.
-- clang's work on the runtime: `codegen_instructions_release` falls 80,668
-  to 371,945,188 and `codegen_instructions_dev` rises 2,539 to
-  116,857,586.
-- Machine code: each of the fourteen benchmarks carries 512 fewer bytes of
-  `.text` than on main, and `text` sums to 5,869,065 from 5,876,233. The
-  lookup is one function now where it was a copy at each use.
-- The tab runs its corpus in 55,987 fewer wasm instructions
-  (`browser_run_instructions` 78,370,192). That corpus opens no socket. I
-  did not isolate what clang did differently.
-- The three specs join `native_route_gaps.txt`, because the tab has no
-  sockets.
-
-**Welfare.** The sum rises by 0.000027 and is banked: the release tier
-and the tab cost less, against 469 instructions on runbench and 2,539 at
-the dev tier.
-
-**Open.** A fiber waiting on a socket is asked again every millisecond on
-both engines, so an idle server is never asleep for long and each query a
-request makes costs a millisecond of waiting (#2405).
-
 ## 2026-11-10 — a fiber waiting on a socket is waited for
 
 A read that found nothing arrived, or an accept that found nobody calling,
@@ -2542,6 +2447,73 @@ helpers. A component's server action answered as its page, rolling a
 migration back, and confirmation and unlock mail in what the generator
 writes are still owed.
 
+## 2026-11-11 — a test file beside an entry reads what the entry reads (#2460)
+
+A senro app could not be tested with `kanso test`. Two things stood in the
+way, both found by trying it on `examples/notebook`. The verb took the
+app's directory for one module, where it is an entry and the files it
+imports one at a time, and the load then failed on `views/`, which is a
+module only because the entry's `derive kata/views` writes its functions.
+And a test file is a library, so it could not write `derive` lines, and had
+no `note/create`, no `routes` and no `schema` to call.
+
+**The search.** The log's entries on the test verb (2026-10-14,
+2026-10-29) and the 2026-10-12 gavel (#1883: a test file is an outside
+consumer of the module beside it) are all about a module that is a
+directory. No fixture under `tests/golden/test_verb` had an entry or a
+derivation in it, and no test file in kanso, kq or senro sat beside a
+`main.kso`.
+
+**The decision**, by the committee, recorded on #2460. A test file beside
+a `main.kso` tests that program. It is compiled with the entry's imports
+and the entry's derivations, and none of the entry's statements run. It
+may add imports of its own, and only those can read as unused. The gavel
+on #1883 carries over a word at a time: a test file reads the thing beside
+it as a consumer would, and beside an entry that thing is the program.
+
+The alternative was to let a test file write `derive` lines. The committee
+first leaned that way and turned it down on two counts. `routes/rest`
+describes every module the entry imports, so a test file would have to
+repeat the entry's whole import list to derive the same table. And the
+app's derivations would then be written once in `main.kso` and again in
+every test file, which is one fact with several homes.
+
+**Built.** `compile_test_file` looks for `main.kso` in the test file's
+directory. When it is there, the entry is parsed, its imports are lent to
+the test file, and its derivations run over the entry as they do when it
+is the program, so a derivation sees none of the test file's helpers. What
+they declare is declared for the test file, and an arm they define is
+compiled into its module. The library is read as far as both texts reach.
+An entry that does not parse, or whose derivation refuses, is reported at
+the entry's own line.
+
+Three fixtures under `tests/golden/test_verb`: `beside_an_entry` calls a
+module the entry imports, reads the table the entry derives and calls an
+arm the derivation wrote; `beside_a_broken_entry` and
+`beside_a_refused_entry` pin the two reports. Watched red with the lookup
+turned off: `unknown name` for each of the entry's names, and for the
+broken entry the test file's own `unknown name` where the syntax error was
+expected.
+
+**The rows.** CI's first reading had `library_instructions` 2,304 above
+its golden. A file's import list was copied on every library compile, to
+know which imports the file wrote itself once an entry had lent it more.
+The copy is now made only when an entry is beside the file, and the row is
+63,634,563 -> 63,634,689: 126 instructions for the question "is there an
+entry beside this file" on a path where the answer is no.
+`entry_instructions` is 119,166,280 -> 119,166,322. Nothing on the entry's
+path changed, so that is the binary's layout. The browser's compile row
+went the other way by two, 412,081,307 -> 412,081,305.
+
+The welfare floor is lowered by what this costs, under the exception for
+building a ruled part of the language: #2460 is the committee's decision,
+and the floor's history says so: 95.39230414088809 ->
+95.3923041102071.
+
+**Open.** Each test file beside an entry compiles the app again. One test
+file beside senro's `examples/notebook` took 1.9 s in this container from
+start to finish, and nothing here measures an app with many of them.
+
 ## 2026-11-11 — directive: specs that nest, with hooks, first class in senro
 
 Clay, to cloud: "the framework needs to have something like what the rails
@@ -2602,6 +2574,15 @@ outside them did. Watched red: that example's `(closed)` line was missing.
 
 The book's modules chapter gains "specs that nest", with a panel the book
 check runs. Breaking the panel's expected output turned the check red.
+
+**Rows.** The compiler's table of shipped modules holds one more name, and
+the four rows that pass through it worsened: `compile_instructions`
+22,652,542 -> 22,652,874, `entry_instructions` 119,166,322 ->
+119,166,434, `library_instructions` 63,634,689 -> 63,634,765, and the
+browser's compile row 412,081,305 -> 412,081,336. The welfare floor is
+lowered by what that costs, 95.3923041102071 -> 95.39230375032061: the
+directive asked for the library, so the exception for a ruled part of the
+language applies.
 
 **Open.** One example cannot be run by name. The outline is printed by
 the library and `kanso test` adds its own line for the constant, so a
