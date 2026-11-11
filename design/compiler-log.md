@@ -2217,3 +2217,21 @@ failure a boxed group hands back to a by-value return is one such place:
 `mem/a_failure_handed_back_by_a_boxed_group_stays_a_failure` prints
 `stopped: end of input` with the ask and stops on a runtime error
 without it.
+
+A third row ended CI's runner, twice. `a group answering other values by
+value` skips the check that every arm of a group answers the record or a
+failure. On main `micro/a_greedy_run_of_one_character_backs_off_in_order`
+still prints its golden under that mutation. Here more groups are
+candidates, regexp's among them, and the same fixture builds into a binary
+that allocates without end. Nothing bounded a program a golden
+runs, so the kernel ended it once the machine was out of memory, and on a
+runner that ends the job with a shutdown signal and a log that cannot be
+read. `run_kanso_env` in tests/golden.rs now hands each program 8 GiB of
+address space on Linux, where the ratchet runs. Under the bound the binary
+is refused an allocation and says `out of memory`, and the row reads red
+in 24 seconds. `a_program_a_golden_runs_may_map_only_so_much` reads the
+limit from a shell the program starts, on both engines, and reads
+`unlimited` without the bound. The whole golden suite passes under it. A
+test that starts kanso some other way has no bound yet (#2436). The spec's
+first draft read `/proc/self/limits` and found that the native runtime
+reads such a file as empty (#2435).

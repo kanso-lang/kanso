@@ -1,8 +1,10 @@
 #!/bin/sh
 # A record goes back in two words only when every arm of its group answers
-# that record or a failure. This mutation skips the check, so `list/next`
-# answers `done` and `list/iter` answers a `cursor` through a convention
-# that reads both back as the record, and two micro fixtures say so.
+# that record or a failure. This mutation skips the check, so a group that
+# answers something else is read back as the record: `list/next` answering
+# `done`, `list/iter` answering a `cursor`, and regexp's own. The micro
+# corpus reaches a regexp fixture first, and its binary allocates until the
+# golden harness's bound refuses it.
 set -e
 kept='        if answers_other {'
 [ "$(grep -cxF "$kept" src/escape.rs)" -eq 1 ] || {
