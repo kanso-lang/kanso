@@ -1761,4 +1761,17 @@ golden_panel = row
 
 rows_dq63 = list/concat rows_dq62 [landing_output golden_panel]
 
-rows_d = list/concat rows_dq63 [itself]
+# A `run:` step in a workflow goes through neither cargo's runner nor the
+# ratchet, so the workflows' default shell sources scripts/bounded.sh
+# (2026-11-11, kanso#2441).
+step_unbounded = row
+  "a workflow whose steps start with no limit on what they may allocate"
+  true
+  "cargo test --release --test every_ci_step_starts_under_the_limit"
+  "specs (unit, golden, differential)"
+  (breaking "a_ci_step_starts_without_the_limit")
+  no_setup
+
+rows_dq64 = list/concat rows_dq63 [step_unbounded]
+
+rows_d = list/concat rows_dq64 [itself]

@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a declaration cannot take a nullary value's name
-
-A library could declare a constant named `done`. std/list's iterators answer
-`done` when they run out, and with the constant declared that answer read
-the constant, so a fold elsewhere in the program found no arm for it and
-failed at run time (#2338). senro's jobs module found it with a SQL string
-named `done`. An entry already refused the name, because there it is a
-binding and the shadow check holds the nullary values as globals; a library
-declares it instead, and `collect_globals` checked declarations against the
-ambient names and the types only.
-
-A declaration named `done`, `none`, `true` or `false` is now refused as a
-name already taken. The one program in the tree that declared one was
-`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
-`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
-declares `done` and `none`, and checked clean before the change.
-
-Rows: the new check costs every compile a little. `compile_instructions`
-rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
-`library_instructions` 1,497 to 73,495,778 and
-`browser_compile_instructions` 3,822 to 350,291,185, and
-`browser_run_instructions` did not move. The rule is part of the language,
-so the welfare floor moves down by exactly the check's cost.
-
 ## 2026-11-05 — directive: a model's fields come from its table
 
 Clay: "we need the fields for the model to be auto-magic like in ruby." He
@@ -2268,3 +2244,32 @@ gate that would read the first, and the second runs `prove`.
 No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
 script directly, the cost-goldens job among them, go through neither cargo
 nor the ratchet and have no limit.
+
+## 2026-11-11 — a step in CI starts under the limit too
+
+#2441, the loose end of the entry "one limit for every test and every
+ratchet gate". Cargo's runner bounds a test binary and the ratchet bounds
+a gate it starts, but a `run:` step in a workflow goes through neither:
+the cost-goldens job runs its gate scripts directly, and so do the
+browser, site and book jobs.
+
+`ci.yml` and `ratchet.yml` now name a default shell. It sources
+`scripts/bounded.sh` when the checkout has put it there and then runs the
+step's script as `bash -e`, which is what a step that names no shell
+gets, so no step changes what it does. The steps before a job's checkout
+start as they did.
+
+Two things hold it. In CI, the specs job reads `ulimit -S -d` from inside
+a step and compares it with the number `bounded.sh` sets. In the tree,
+`tests/every_ci_step_starts_under_the_limit.rs` reads both workflows for
+the default and refuses a step that names a shell of its own, which
+would start without the limit. The ratchet row is `step_unbounded`: with
+the default taken out of `ci.yml` the spec fails and names the workflow.
+
+Whether everything a step starts fits under 6 GiB is CI's to say, as it
+was for the tests: the release build with fat LTO, the wasm build and
+clang at `-O3 -flto` had only been run under the limit by the ratchet.
+`pages.yml` and `release.yml` are left as they are. They run on main and
+on a tag, after CI has built the same tree under the limit.
+
+No counter moved.

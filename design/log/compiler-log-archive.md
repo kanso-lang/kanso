@@ -114181,3 +114181,27 @@ to 5,613,397. The interpreter forces where it did not, and
 the binding as `.>`'s subject, as a callback's answer, and as `.?`'s subject
 with a failure from std. Before the change both engines printed `<io>` for
 each; after it they print what each effect does.
+
+## 2026-11-05 — a declaration cannot take a nullary value's name
+
+A library could declare a constant named `done`. std/list's iterators answer
+`done` when they run out, and with the constant declared that answer read
+the constant, so a fold elsewhere in the program found no arm for it and
+failed at run time (#2338). senro's jobs module found it with a SQL string
+named `done`. An entry already refused the name, because there it is a
+binding and the shadow check holds the nullary values as globals; a library
+declares it instead, and `collect_globals` checked declarations against the
+ambient names and the types only.
+
+A declaration named `done`, `none`, `true` or `false` is now refused as a
+name already taken. The one program in the tree that declared one was
+`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
+`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
+declares `done` and `none`, and checked clean before the change.
+
+Rows: the new check costs every compile a little. `compile_instructions`
+rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
+`library_instructions` 1,497 to 73,495,778 and
+`browser_compile_instructions` 3,822 to 350,291,185, and
+`browser_run_instructions` did not move. The rule is part of the language,
+so the welfare floor moves down by exactly the check's cost.
