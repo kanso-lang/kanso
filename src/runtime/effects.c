@@ -58,6 +58,35 @@ KValue k_b_random_bytes(KValue n) {
    the BSDs alike; under WASI it is the host's random_get, which the page
    answers with crypto.getRandomValues. macOS has arc4random_buf, which has no
    limit and cannot fail. */
+/* How long an open file says it is, or -1 when it cannot say. A pipe cannot
+   seek. procfs answers 0 for a file that has bytes, so 0 is read below as
+   not knowing either. */
+static long k_told_size(FILE* fh) {
+    if (fseek(fh, 0, SEEK_END) != 0) return -1;
+    long size = ftell(fh);
+    fseek(fh, 0, SEEK_SET);
+    return size;
+}
+
+/* Every byte of a file that could not say how long it is, in a buffer the
+   caller frees: read until the file ends, with the room doubling when it
+   runs out. Until #2435 both readers read exactly the size they were told,
+   so a pipe or a procfs file read as nothing where the interpreter read all
+   of it, and a pipe's -1 went to fread as a count. */
+static __attribute__((noinline, cold)) char* k_read_unsized(FILE* fh, size_t* got) {
+    size_t room = 4096;
+    char* data = malloc(room);
+    size_t n = 0;
+    for (;;) {
+        n += fread(data + n, 1, room - n, fh);
+        if (n < room) break;
+        room *= 2;
+        data = realloc(data, room);
+    }
+    *got = n;
+    return data;
+}
+
 static int k_entropy(unsigned char* at, long long n) {
 #ifdef __APPLE__
     arc4random_buf(at, (size_t)n);
@@ -1234,11 +1263,15 @@ static KValue k_exec(KDesc* d) {
                 return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
                                       k_str(": unreadable")), NULL);
             }
-            fseek(fh, 0, SEEK_END);
-            long size = ftell(fh);
-            fseek(fh, 0, SEEK_SET);
-            char* data = malloc(size + 1);
-            size_t got = fread(data, 1, size, fh);
+            long size = k_told_size(fh);
+            size_t got;
+            char* data;
+            if (size > 0) {
+                data = malloc((size_t)size + 1);
+                got = fread(data, 1, (size_t)size, fh);
+            } else {
+                data = k_read_unsized(fh, &got);
+            }
             fclose(fh);
             /* A file that is there, readable and not text is a failure on
                every engine, worded as the interpreter's read_file_text words
@@ -1260,8 +1293,10 @@ static KValue k_exec(KDesc* d) {
         case 30: {
             /* The same three answers as case 4 -- the bytes, none for a file
                that is not there, an err for anything else -- with no test
-               of what the bytes are. They go straight into the arena, the
-               way to_bytes builds a value, so nothing is copied twice. */
+               of what the bytes are. A file that says how long it is goes
+               straight into the arena, the way to_bytes builds a value, so
+               nothing is copied twice. One that cannot say is read to its
+               end first and copied in once its length is known. */
             KStr* p = k_as_str(d->x);
             FILE* fh = fopen(k_cstr(p), "rb");
             if (!fh) {
@@ -1271,12 +1306,19 @@ static KValue k_exec(KDesc* d) {
                 return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
                                       k_str(": unreadable")), NULL);
             }
-            fseek(fh, 0, SEEK_END);
-            long size = ftell(fh);
-            fseek(fh, 0, SEEK_SET);
-            unsigned char* data = (unsigned char*)k_alloc((size_t)(size > 0 ? size : 1));
-            size_t got = fread(data, 1, (size_t)size, fh);
+            long size = k_told_size(fh);
+            if (size > 0) {
+                unsigned char* data = (unsigned char*)k_alloc((size_t)size);
+                size_t got = fread(data, 1, (size_t)size, fh);
+                fclose(fh);
+                return k_bytes_view(data, (long long)got);
+            }
+            size_t got;
+            char* read = k_read_unsized(fh, &got);
             fclose(fh);
+            unsigned char* data = (unsigned char*)k_alloc(got > 0 ? got : 1);
+            memcpy(data, read, got);
+            free(read);
             return k_bytes_view(data, (long long)got);
         }
         case 40: {

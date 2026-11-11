@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-05 — a declaration cannot take a nullary value's name
-
-A library could declare a constant named `done`. std/list's iterators answer
-`done` when they run out, and with the constant declared that answer read
-the constant, so a fold elsewhere in the program found no arm for it and
-failed at run time (#2338). senro's jobs module found it with a SQL string
-named `done`. An entry already refused the name, because there it is a
-binding and the shadow check holds the nullary values as globals; a library
-declares it instead, and `collect_globals` checked declarations against the
-ambient names and the types only.
-
-A declaration named `done`, `none`, `true` or `false` is now refused as a
-name already taken. The one program in the tree that declared one was
-`sockets_serve`'s loop fixture, with `fn done _` as a callback; it is
-`reported` now. `a_constant_named_like_a_builtin_value` in the error corpus
-declares `done` and `none`, and checked clean before the change.
-
-Rows: the new check costs every compile a little. `compile_instructions`
-rose 409 to 24,114,963, `entry_instructions` 1,799 to 87,962,791,
-`library_instructions` 1,497 to 73,495,778 and
-`browser_compile_instructions` 3,822 to 350,291,185, and
-`browser_run_instructions` did not move. The rule is part of the language,
-so the welfare floor moves down by exactly the check's cost.
-
 ## 2026-11-05 — directive: a model's fields come from its table
 
 Clay: "we need the fields for the model to be auto-magic like in ruby." He
@@ -2298,3 +2274,48 @@ left of the phase is the templates that build each row's values:
 4,228,000 in `k_b_replace` and 2,436,774 in `memchr`. A kernel that knew
 HTML could take the second pair and some of the escape's own searches, at
 the price of HTML in the runtime.
+
+## 2026-11-11 — a file that cannot say its size is read to its end
+
+#2435. `os/read_file` and `os/read_bytes` disagreed between the engines on
+any file that is not a regular file on disk. The interpreter reads until
+the file ends. The native runtime sought to the end, asked where it was,
+and read that many bytes. procfs answers 0 for a file that has bytes, so
+`/proc/self/comm` read as the empty string. A pipe cannot seek, `ftell`
+answers -1, and that went to `fread` as a count beside a buffer of no
+bytes; it read nothing here. The spec for #2431's harness bound found it,
+because its first draft read `/proc/self/limits`.
+
+The size is now a first answer and no more. `k_told_size` reports what
+the seek says, or -1 when the file cannot seek. A file that reports more
+than nothing is read as before: one buffer of that size and one read, and
+for `read_bytes` straight into the arena. Anything else goes to
+`k_read_unsized`, which reads until the file ends and doubles its room
+when it runs out. `read_bytes` copies that into the arena once the length
+is known.
+
+Two programs join the stdin corpus, which pipes each program its input.
+`a_piped_file_is_read_to_its_end` reads `/dev/stdin` as text, 7,800
+characters, so the reader's first 4,096 bytes are not enough.
+`a_pipe_s_bytes_are_read_to_the_end` reads 5,000 bytes whose last is not
+text. With the unsized branch taken out the native build prints
+`0 bytes, last <none>` where the interpreter prints `5000 bytes, last
+255`.
+
+What moves. Every program links the reader, 320 bytes of machine code.
+The four benchmarks that read a file pay 16 instructions for the
+question: work_jsonbench 549,338,015, work_widebench 28,701,603,
+work_digestbench 3,107,795 and work_readbench 4,583,700. Five move with
+the layout of the grown runtime: work_encodebench down 425 to
+2,335,340,622, work_oneshot down 768 to 9,978,737, work_livebench up 296
+to 938,655,255, work_runbench down 502 to 1,059,837,979 and
+work_runbench_dev down 32 to 3,057,251,699. Clang compiles the longer
+runtime: codegen_instructions_dev is written at 117,031,436 and
+codegen_instructions_release at 372,178,859, this container's rise added
+to the rows below, for CI to replace. The work rows are this container's
+readings less the 109 CI has read under it. No allocation counter, compile
+row, interpreter row or browser row moved here.
+
+Welfare reads 95.34294665, under the 95.34300865 the kernel banked. The
+objective's header leaves a fix that makes the engines agree outside the
+sum, so the floor moves to what the fix costs and its history says so.

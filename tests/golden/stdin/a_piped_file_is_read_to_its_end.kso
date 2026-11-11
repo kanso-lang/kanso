@@ -1,0 +1,13 @@
+# `os/read_file` handed the path of a file that reports no size: standard
+# input, piped. The native runtime asked the file how long it was and read
+# that many bytes, so a pipe read as nothing where the interpreter read all
+# of it (#2435). The input is longer than the reader's first buffer.
+import "std/os"
+import "std/text"
+
+fn told text
+  lines = text/split text "\n"
+  last = lines[length lines - 1]
+  print "{length text} characters in {length lines - 1} lines, last [{last}]"
+
+pub play = os/read_file! "/dev/stdin" .> told

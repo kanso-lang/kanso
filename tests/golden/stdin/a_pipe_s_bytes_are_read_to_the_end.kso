@@ -1,0 +1,9 @@
+# `os/read_bytes` on the same kind of file: a pipe has no size to ask for,
+# and the bytes are read until it ends (#2435). The last byte is not text,
+# which only this reader accepts.
+import "std/os"
+
+fn told bytes
+  print "{length bytes} bytes, last {bytes[length bytes]}"
+
+pub play = os/read_bytes! "/dev/stdin" .> told
