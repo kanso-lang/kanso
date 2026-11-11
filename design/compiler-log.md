@@ -2322,10 +2322,10 @@ and the library's lines: emit_instructions 5,632,306 -> 5,633,371,
 compile_instructions 24,154,945 -> 24,168,284, entry_instructions
 156,095,335 -> 156,165,133 and library_instructions 73,612,703 ->
 73,647,363. CI read codegen_instructions_dev at 117,013,839 and
-codegen_instructions_release at 372,134,885. Four work rows
+codegen_instructions_release at 372,134,885. Three work rows
 move with the layout of the grown runtime: work_encodebench up 154 to
-2,335,341,047, work_oneshot down 854 to 9,979,505, work_pendbench up 37
-to 154,094,201 and work_livebench down 546 to 938,654,931. Welfare rises
+2,335,341,047, work_oneshot down 854 to 9,979,505 and work_livebench
+down 546 to 938,654,931. Welfare rises
 95.32525334 -> 95.34299175, and the floor is banked there.
 
 Checked against the interpreter. `micro/text_replace_answers_what_split_and_join_did`
