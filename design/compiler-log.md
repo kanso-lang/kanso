@@ -20,194 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-07 — each module is compiled once per load (#2373)
-
-`kanso run` of senro's pantry took 8.4 s to answer its first request after a
-container restart. `kanso check .` alone took 2.0 s and 8,741,148,257
-instructions. `load_dependencies` compiled a module for every import that
-reached it, and every import inside that module the same way, so a module
-cost one compile per path through the import graph. `KANSO_PHASES=1` printed
-1,094 `load` lines for the pantry's 27 modules: std/text 235 times, std/list
-212, std/bits 144, senro's pg 36.
-
-The corpus could not see it. Every compile sample was one file, the module
-sample imports one module, and `compile_instructions` checks `lib/json`,
-which loads each module once. The first commit adds `kanso::module_loads()`,
-a `loads` column in `bench/compile_golden_modules.txt`, and the sample
-`tests/golden/compile/shared`: an entry importing two modules that both import
-a third, all three importing std/text. Before the fix it read `loads=11` for 6
-modules, in CI run 42413285691.
-
-`compile_module_inner` now keeps a module the second time an import asks for
-it and hands later importers a copy. The key is the canonical path,
-`require_entry`, whether the sources came embedded, and the flags an importer
-sets around a compile. A shipped std module is pruned against the words the
-program has read so far, and that set only grows, so its key also holds the
-set's size; a module from disk is not pruned and its key does not. The
-outermost `load_dependencies` empties the cache when it returns, which bounds
-it to one compile whether the root is an entry file or a directory.
-
-The first version kept every module on its first compile. That took the
-pantry to 96 loads and 0.75 s, but CI read `compile_instructions` at
-25,213,290 against 24,110,987 and `compile_memory` at 859,218 bytes against
-598,588. A module's program carries every declaration its imports brought in,
-so keeping one is a clone of its whole subtree, and `lib/json` imports each
-module once, so it paid every clone and used none. Keeping a module only on
-its second request costs a set of keys. Locally, callgrind reads `kanso check
-bench/compile_corpus` at 25,315,543 against 25,308,680 before the change.
-
-On CI, against the app-shaped entry corpus #2375 added for this change,
-`entry_instructions` falls from 177,925,530 to 155,859,192. The rows with
-nothing to share pay for the cache's bookkeeping: `compile_instructions`
-rises 6,406 to 24,117,393, `library_instructions` 43,941 to 73,505,059,
-`compile_allocs` 16 to 13,956 and `compile_peak_bytes` 469 to 599,057. The
-interpreter's run of its corpus loads modules too: `interp_allocs` rises 16
-to 810,162 and `interp_peak_bytes` 344 to 1,366,487. Compiling in the tab
-moves both ways, 3,466 fewer instructions and
-`browser_compile_peak_bytes` up 208 to 856,339. `emit_instructions` falls
-346, `codegen_instructions_dev` falls 677 and
-`codegen_instructions_release` rises 108 to 372,025,856, which is the
-binary's layout: the shipped runtime object below made it larger. The
-module corpus mints `module_loads`, which reads 3. A cheaper key, the path's bytes in place of a
-`PathBuf`, and keeping a module only on its third request were both measured
-and dropped: neither brought those rows back, and the third request gave the
-pantry back 64 of its loads.
-
-The pantry now loads 164 times, and `kanso check .` takes 1.09 s where it took
-1.94 s. Its IR is byte-identical, 2,314,435 bytes. `shared` still reads
-`loads=11`: each of its modules is asked for at most twice under one key, so
-nothing is handed out of the cache, and the rows match the corpus commit.
-
-A cold `kanso build` of the pantry took 7.2 s, and 5.7 s of it was clang
-compiling `runtime.c` for the dev tier into the temp directory, once per
-container. build.rs now compiles that object, 377 KB, and the binary carries
-it. When the key the compiler computes names the dev tier with no counters,
-on the convention build.rs's clang took, a cold build writes those bytes
-instead of running clang; any other recipe compiles as before. The dev tier's
-`-O2` moved into build.rs, which writes it out for the compiler, so the
-shipped object and a compiled one come from one list.
-`tests/a_cold_dev_build_ships_its_runtime.rs` builds a program against an
-empty temp directory behind a clang that logs its commands and counts compiles
-of the runtime: 1 with the shipped object turned off, 0 with it. The codegen
-gates warm the cache before they count, so no row they read moves.
-
-With both changes, a cold `kanso build` of the pantry takes 1.8 s where it
-took 6.5 to 7.0 s, and a warm one 1.7 s where it took 2.9 s.
-
-## 2026-11-08 — a dev build folds small word functions into their callers (#2304)
-
-A dev build compiles the program at `-O0`, where clang inlines nothing that
-is not marked. PBKDF2's rounds call `sha256/spun`, a rotate, four times per
-message-schedule step and six times per round, and each call pays for a
-frame, the moves of its two words and the spills of its result. With #2376's
-width bits, a dev build of 10,000 rounds spent 32% of its instructions in
-`spun`.
-
-A definition now goes out `alwaysinline` in a dev build when it takes only
-words, calls no other definition of the program, and is at most 80 lines of
-IR. `Backend::folded_at_dev` holds the rule. In the PBKDF2 program it folds
-`spun`, `choice`, `majority` and `list/repeat`. The release tier is
-untouched, because its inliner already decides for itself. Measured here
-against main at 64f4c196, under callgrind:
-
-| | main | this branch |
-|---|---|---|
-| `runbench_dev` | 2,822,197,755 | 2,774,768,832 |
-| PBKDF2, 10,000 rounds, dev build | 2,379,121,527 | 1,651,368,753 |
-| `codegen_instructions_dev` | 116,687,950 | 116,687,950 |
-
-Three variants were measured and declined.
-
-- Every small leaf, boxed parameters included, bought runbench's dev run
-  2.0% and cost `codegen_instructions_dev` 4.5%, which welfare scores below
-  the floor. Two leaves that take a `%KValue`, `list/next` and
-  `render/to_string`, were the whole of that cost. Unpacking a `%KValue`
-  inside a caller is an `extractvalue`, and clang's fast instruction
-  selector at `-O0` hands the rest of that block to the slow one.
-- A budget on lines times call sites, from 150 to 3,000, changed no row
-  once boxed parameters were excluded.
-- A 40-line cap misses `spun`, which is about 50 lines, and PBKDF2 keeps
-  the whole cost. 80 is the smallest cap measured that reaches it.
-
-On CI, `runbench_dev` falls from 2,822,091,163 to 2,774,662,240. The
-compile side pays a little: `emit_instructions` rises to 5,630,728 and
-`browser_compile_instructions` to 351,180,151. The tab compiles through the
-same dev emitter, so it runs the check, and its translator ignores the
-attribute, so its run gains nothing. That reading of the browser row has not
-been isolated. `codegen_instructions_dev` and `codegen_instructions_release`
-do not move. Welfare rises from 95.07 to 95.08 and is banked.
-
-## 2026-11-07 — a mask bounds an int, and a bounded sum needs no overflow test (#2304)
-
-PBKDF2's rounds spent most of their time on adds that could not overflow.
-`h + mixed + fed & whole` masks to 32 bits, but inference knew each operand
-only as an int, so every add carried an overflow branch to a bignum and the
-result stayed boxed as int-or-bignum.
-
-Inference now carries five width bits beside `INT`. Each says a word int in
-the set may lie outside `[0, 2^k)`, for k of 32, 40, 48, 56 and 62. They say
-what may be, like every other bit, so the join stays a union and an int
-bounded on one path and not another is unbounded. `INT` is the word with all
-five, so everything that produced an int before still produces an unbounded
-one. Three rules remove bits:
-
-- a literal carries the bits its value needs;
-- `x & y` is no wider than its narrower operand, since a non-negative mask
-  bounds the answer whatever the other side held, a negative word included;
-  `|`, `^` and `bits/shr` are no wider than their wider operand;
-- `a + b` of two words below 2^62 crosses only the tightest bound its
-  operands had, so it moves up one bucket and cannot leave the word.
-
-A bound that can climb has to be given up, or the fixpoint climbs with it.
-The first build let a counter fed by `n + 1` widen one bucket a round, and
-the module sample took ten rounds where it took four. Parameters, returns,
-record fields and yields now join through `infer::joined`. A word arriving
-with a bound above 2^32 is a sum, since masks and literals arrive below it,
-and it widens at once to an int or a bignum, which is what it read before the
-width bits. A word that grows wider than what is held loses its bound. Every
-`compile_golden.txt` row reads what it read before. A rule for `a - b`, which
-cannot leave the word either, went too: its answer had no bignum yet and the
-next sum gave it one, a round later.
-
-Codegen reads the same rules. A sum the rules bound is `add nsw` with no
-overflow test and no bignum behind it, in the binop path and in the word
-runs that chain arithmetic. Eight checks that asked whether a set was exactly
-`INT` now ask whether it holds only a word, whatever its width.
-
-`tests/golden/micro/a_masked_sum_stays_a_word.kso` holds the edges: masked
-negative operands, sums at each bound, a sum of two words just under 2^62,
-and a quadrupled one that must become a bignum. With the sum rule changed to
-keep its operands' bound instead of moving up a bucket, the native engine
-printed -4 for 18446744073709551612 while the interpreter printed the
-bignum.
-
-Measured here under callgrind, PBKDF2 at 10,000 rounds read 380,173,992
-instructions and reads 347,030,678, with the same digest. Compiling costs a
-little more: `kanso check` of `compile_corpus` read 24,629,306 and reads
-24,664,277, and of `entry_corpus` 88,645,583 and 88,780,655. `sha256/compress`
-fell from 212,561,254 to 179,417,940; `sha256/schedule` did not move, since
-its adds read list elements, which carry no bound.
-
-Tried and dropped, again: masking the four list reads in the rounds and the
-schedule, `(ks[at] & whole) + (w[at] & whole)`. With the inline `&` path now
-taking any operand that may be a word, the run read 366,492,605, worse than
-without the masks. The inline path stays: it costs nothing where no mask is
-written.
-
-On CI, against main after #2374, the run rows fall: `digestbench` from
-3,288,947 to 3,108,282 instructions, `runbench` from 915,653,371 to
-913,657,054 and `runbench_dev` from 2,822,091,163 to 2,811,021,533; with
-#2378's dev fold also on main, `runbench_dev` reads 2,763,752,866. The
-compile rows pay for the wider sets and the rules that read them:
-`compile_instructions` rises to 24,152,651, `entry_instructions` to
-156,082,962 and `library_instructions` to 73,608,656. On the tree merged with
-#2378, `emit_instructions` rises from 5,630,728 to 5,642,485 and
-`browser_compile_instructions` from 351,180,151 to 352,264,415. The emitted
-code grows where the inline bitwise path now takes an operand that may be a
-word behind a tag test: `emitted_other_branches` reads 19,444 and
-`emitted_other_lines` 182,342. The machine code shrinks by 832 bytes.
-Welfare rises from 95.07 to 95.08 and is banked.
-
 ## 2026-11-08 — patterns and operators move out of emit.rs (#2377)
 
 `src/codegen/emit.rs` had grown to 3,055 lines in one `impl Backend` block.
@@ -2503,6 +2315,15 @@ directory path whether or not it was needed, which the interpreter's
 corpus read as one allocation more; the clone is made for an entry that
 derives and for no other.
 
+The browser's compile of its corpus reads the check:
+`browser_compile_instructions` 412,080,126 -> 412,081,307, which is 1,181
+instructions over the corpus for the search of each entry's text. With
+the check withheld the row read 412,080,126 again. A version that read
+only the entry's header, as the parser does, was measured and dropped.
+No program's output differed between the two, and it read 412,081,343
+there, 119,205,544 on `entry_instructions` and 63,641,726 on
+`library_instructions`, each higher than the search of the whole text.
+
 **Welfare.** 95.39064215 -> 95.39098937, banked.
 
 ## 2026-11-11 — a called name's place in the table comes from the program
@@ -2594,3 +2415,50 @@ the script.
 list and a resolver of its own, four ways: the first mirror answering,
 the first away, both of Ubuntu's names away, and none answering. Watched
 fail with the check for the first mirror forced to pass.
+
+## 2026-11-11 — a measured link names its runtime plainly
+
+`codegen_instructions_release` read 372,173,792 in CI on this branch,
+twice, against 372,173,775 on main. Nothing on the branch reaches
+codegen, and the IR the corpus compiles to is byte for byte what main
+writes. Split by process, clang counted the same on both trees and the
+linker counted 17 more.
+
+The 17 came from a file name. A build compiles the runtime once and
+keeps the objects in the temp directory, each named by a digest of the
+recipe that made it, and the recipe for the hot unit includes the text
+of `src/main.rs`. This branch edits `main.rs` to print two counters, so
+the hot unit's object had a new name. The two links' command lines
+differed in that name and in nothing else. lld keeps its inputs' names
+in a hash table, and the work the table does depends on the characters
+in them.
+
+Under `KANSO_FIXED_TEMPS`, which the gate sets for a measured build, the
+link is now handed copies of the cached objects under plain names:
+`kanso_linked_runtime_release.o`, `kanso_linked_runtime_release_hot.o`
+and `kanso_linked_runtime_dev.o`. A build without the variable links the
+cached files as it did.
+
+Plain names alone were not enough. With them, a comment added to
+`main.rs` still moved the release row, by 64. An object records the name
+of the file it was compiled from, and the cache wrote the runtime's
+source to a file named by the same digest. So the cache now compiles
+each object from standard input, and no object holds a name the digest
+decides. With both changes, the gate's build read the same on both tiers
+before and after a comment was added to `main.rs`. That was read in this
+container, whose codegen numbers are not CI's.
+
+**Rows.** `codegen_instructions_release` 372,173,775 -> 372,059,349 and
+`codegen_instructions_dev` 117,031,054 -> 117,027,519. The build does
+the same work as before; the rows read less because of what they no
+longer read. No other compile row moved, and neither did the
+interpreter's or the browser's.
+
+**Spec.** `tests/the_measured_link_names_its_runtime.rs` reads the link's
+line from a measured build of each tier and from an unmeasured one, and
+searches every cached object for a name that holds a digest. The ratchet
+row is `plain_link`: with `linked_as` answering the cached path, the
+measured release link names `kanso_runtime_release_hot_8d55bbc03f0775ad.o`.
+
+**Welfare.** 95.39229249 -> 95.39234298, banked. The rise is the two
+codegen rows, less the browser row's 1,181 from the derive check.
