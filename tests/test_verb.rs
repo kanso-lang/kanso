@@ -263,3 +263,33 @@ fn an_entry_that_is_refused_is_what_its_tests_report() {
         assert_eq!(output.status.code(), Some(2), "{fixture}");
     }
 }
+
+/// A test file beside an entry reads the entry's bindings as names (#2463).
+/// The entry binds `front` and `told` and performs `told`. The first test
+/// reads `front`. The second performs `told`, an effect, so `post 1` is
+/// printed once and in the middle of the run: by the test, and never by the
+/// entry. Watched red with the bindings left behind: `unknown name` for both.
+#[test]
+fn a_test_file_beside_an_entry_reads_the_names_it_binds() {
+    let output = in_fixtures(&["test", "reads_the_entrys_names"]);
+    let out =
+        std::fs::read_to_string(fixture_dir().join("reads_the_entrys_names.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// A test file that declares a name the entry binds is refused at its own
+/// declaration, and told where the entry binds it. Watched red with the
+/// bindings left behind: the test file's `front` stood alone and passed.
+#[test]
+fn a_test_file_cannot_declare_a_name_the_entry_binds() {
+    let output = in_fixtures(&["test", "names_the_entry_bound"]);
+    let expected = std::fs::read_to_string(fixture_dir().join("names_the_entry_bound.stderr"))
+        .expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(output.status.code(), Some(2));
+}

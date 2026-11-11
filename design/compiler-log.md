@@ -20,21 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — directive: senro may ask the language for more
-
-Clay, on the model finders: "this real world use case for kanso may lead to
-several more language tweaks. in general i support ambition as long as it
-fits with the stated goals for the language and the principles behind them.
-i'm particularly fascinated to see how you create a construct for convention
-over configuration without dynamic metaprogramming."
-
-The construct is `derive`: a library function the compiler runs over the
-project's modules, which answers source to add or a call to refuse. A senro
-feature that needs the derivation to see more than it is handed is a
-language change, proposed to the committee against the language's goals.
-The first candidate is the keys of a map literal at a call, which would let
-`where` take a map of conditions and still be checked (#2394).
-
 ## 2026-11-10 — senro's apps hold no SQL
 
 The two rulings of this morning are built. The work is in senro (senro#93
@@ -2581,3 +2566,49 @@ expected.
 **Open.** Each test file beside an entry compiles the app again. One test
 file beside senro's `examples/notebook` took 1.9 s in this container from
 start to finish, and nothing here measures an app with many of them.
+
+## 2026-11-11 — a test beside an entry reads the names the entry binds (#2463)
+
+The first test written for a senro app needed the app as its entry wires
+it: `signed`, the route table with the sign-in requirement around it, and
+`connected`, the effect that opens a database session. Both are bindings
+among the entry's statements, and #2460 lent a test file the entry's
+imports and derivations and nothing else. The test would have had to wire
+the app a second time, and would then be testing its own wiring.
+
+**The search.** The entries on the test verb (2026-10-12, 2026-10-14,
+2026-10-29, and the two above) and on the entry (`an entry names a group`,
+2026-10-29; `a lazy binding of an effect, handed back unread, still runs`,
+2026-11-05) say nothing on a test reading an entry's names. No fixture
+under `tests/golden/test_verb` had a binding in an entry.
+
+**The decision**, by the committee, recorded on #2463. A test file beside
+an entry reads the entry's bindings as names. An entry's statements are of
+two kinds: a binding gives a value a name, and a bare expression is
+performed. An effect is a value, so a binding performs nothing even when
+its value is one, and naming it in a test evaluates what the entry wrote.
+#2460's "none of the entry's statements run" still holds.
+
+Moving the wiring into a module a test could import was turned down:
+every app would be laid out for the test verb's sake, and one that kept
+its wiring in the entry, where `senro new` puts it, could not be tested
+as wired.
+
+**Built.** In `compile_library_beside`, each `name = value` among the
+statements of the entry beside a test file becomes a constant of the test
+file's program, stamped with the entry's file. A test file that declares
+one of those names is refused at its own declaration and told where the
+entry binds it. A pattern on the left lends no names.
+
+Two fixtures. `reads_the_entrys_names` binds a string and an effect that
+prints it, and performs the effect; its test file reads the string and
+performs the effect itself, and the golden shows the line printed once,
+between the two tests. `names_the_entry_bound` pins the refusal. Watched
+red with the bindings left behind: `unknown name` for both names in the
+first, and in the second the test file's own `front` stood alone and
+passed.
+
+Tried on senro's `examples/notebook`: a test file reads `signed`.
+
+**Open.** A binding that takes its value apart lends nothing, and a test
+that names one of its parts is told only that the name is unknown.

@@ -142,7 +142,7 @@ test_unknown_item_fails ... ok
 
 <p>a test is a boolean constant. the runner evaluates each <code>test_</code> name and reports what came back. <code>test_dango_price</code> is the comparison <code>price "dango" == 400</code>, and nothing else is needed to write it. <code>test_unknown_item_fails</code> needs one helper from <code>std/testing</code>, because a failure is a box and <code>==</code> reads only values (chapter 04). <code>testing/failed?</code> rescues the box and answers whether there was a failure in it, which it may do because the failure comes from the module under test.</p>
 
-<p>a test file beside a <code>main.kso</code> tests the program. it is compiled with what the entry imports, so it calls <code>price</code> as the entry does, with no import line of its own, and the entry's statements do not run. a module's own tests stay inside the module. a test beside the entry is for what the modules do together.</p>
+<p>a test file beside a <code>main.kso</code> tests the program. it is compiled with what the entry imports, so it calls <code>price</code> as the entry does, with no import line of its own. it also reads the names the entry binds: after <code>total = price "dango"</code> in <code>main.kso</code>, a test can say <code>total == 400</code>. nothing the entry performs is run. a module's own tests stay inside the module. a test beside the entry is for what the modules do together.</p>
 
 <p>when a plain comparison fails, the report can only say that it came out false. by the time the runner has the boolean, the two values that were compared are gone:</p>
 

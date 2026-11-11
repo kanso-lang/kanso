@@ -1,0 +1,7 @@
+import "./posts"
+
+front = posts/show 1
+
+told = print front
+
+told

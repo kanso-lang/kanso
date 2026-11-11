@@ -671,6 +671,45 @@ fn compile_library_beside(
         return Err(diag::render(&ownership_diags, file, source));
     }
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    // The entry's bindings are names of the program it is the entry of, so
+    // a test beside it reads them (#2463): each `name = value` among the
+    // entry's statements is a constant here. A binding performs nothing,
+    // even when its value is an effect, and the entry's bare statements are
+    // left where they are. A pattern on the left lends no names.
+    let mut twice = Vec::new();
+    for decl in around.iter().flat_map(|entry| &entry.program.fns) {
+        if decl.name != ast::ENTRY {
+            continue;
+        }
+        for stmt in &decl.body {
+            let ast::Stmt::Bind { pattern: ast::Pattern::Var(name, span), expr } = stmt else {
+                continue;
+            };
+            if let Some(mine) = program.fns.iter().find(|d| d.name == name.as_str()) {
+                let message = format!(
+                    "`{name}` is a name the entry binds ({}:{}), and a test file beside \
+                     it reads that name: it cannot declare another",
+                    decl.file, span.line
+                );
+                twice.push(diag::Diagnostic::new("name", message, mine.span));
+                continue;
+            }
+            program.fns.push(ast::FnDecl {
+                name: name.to_string(),
+                is_pub: false,
+                written_pub: false,
+                span: *span,
+                params: Vec::new(),
+                body: vec![ast::Stmt::Expr(expr.clone())],
+                file: std::sync::Arc::clone(&decl.file),
+                synthetic: false,
+                shades: None,
+            });
+        }
+    }
+    if !twice.is_empty() {
+        return Err(diag::render(&twice, file, source));
+    }
     // What the file wrote itself is what can read as an import left unused.
     // The entry beside a test file lends it the rest: each import the test
     // did not write, under the name the entry gave it.
