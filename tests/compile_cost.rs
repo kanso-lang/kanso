@@ -69,7 +69,11 @@ fn work_for_module(name: &str) -> (u64, u64) {
 
 /// How many modules compiling the sample compiled. `shared` imports two
 /// modules that both import a third, and all three import `std/text`, so it
-/// counts every module a loader compiles more than once (kanso#2373).
+/// counts every module a loader compiles more than once (kanso#2373). `lent`
+/// uses `std/list` on either side of a module that slices a text. `std/text`
+/// spells `span`, which the list library declares, and does not import it:
+/// the word keeps nothing there, so the list library is compiled once
+/// (kanso#2442).
 fn loads_for_module(name: &str) -> u64 {
     kanso::reset_module_loads();
     let _ = module_entry(name);
@@ -77,7 +81,7 @@ fn loads_for_module(name: &str) -> u64 {
 }
 
 /// Directory samples, measured the same way and reported in the same file.
-const MODULES: &[&str] = &["module", "shared", "apart"];
+const MODULES: &[&str] = &["module", "shared", "apart", "lent"];
 
 /// Counts that move only when the emitter's output does.
 fn shape(ir: &str) -> (usize, usize, usize, usize) {

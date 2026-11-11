@@ -188,6 +188,19 @@ thread_local! {
     /// asked for it, and then nothing is set aside.
     static REACH: std::cell::RefCell<Option<crate::hash::Set<String>>> =
         const { std::cell::RefCell::new(None) };
+    /// The words each shipped module's kept declarations spell, by the path
+    /// an import names it with, and for each shipped module the shipped
+    /// modules that import it. A word spelled in a shipped module keeps a
+    /// declaration of that module or of one it imports, and of no other.
+    static SHIPPED_WORDS: std::cell::RefCell<crate::hash::Map<String, crate::hash::Set<String>>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    static SHIPPED_IMPORTERS: std::cell::RefCell<crate::hash::Map<String, Vec<String>>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
+    /// The shipped modules the survey pruned, each with how many words the
+    /// program had spelled when it did. A compile takes its module from here
+    /// and prunes nothing, unless the program has spelled more since.
+    static SURVEYED: std::cell::RefCell<crate::hash::Map<String, (usize, Pruned)>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
     /// The modules the survey found named by more than one import, which are
     /// kept from their first compile. Empty outside a root compile.
     static SHARED: std::cell::RefCell<crate::hash::Set<std::path::PathBuf>> =
@@ -301,7 +314,9 @@ fn reach_string(text: &str, mut i: usize, into: &mut crate::hash::Set<String>) -
 /// where it did.
 fn prune_shipped(
     sources: &mut [(String, String)],
-    roots: &mut crate::hash::Set<String>,
+    roots: &crate::hash::Set<String>,
+    lent: &[&crate::hash::Set<String>],
+    mine: &mut crate::hash::Set<String>,
 ) -> (Vec<bool>, Vec<bool>) {
     struct Decl {
         file: usize,
@@ -350,29 +365,42 @@ fn prune_shipped(
             decls.push(Decl { file: f, start: here, end: at, name });
         }
     }
+    // What the program and the importers name is settled before this module
+    // is read, so each declaration asks them once. Only the module's own
+    // words grow while it is walked, and the walk asks those alone.
+    let keep = |d: &Decl, mine: &mut crate::hash::Set<String>| {
+        let source = &sources[d.file].1;
+        reach_words(&source[d.start..d.end], mine);
+        if let Some((from, to)) = d.name {
+            for (name, implied) in IMPLIED_ROOTS {
+                if &source[from..to] == name {
+                    mine.extend(implied.iter().map(|n| n.to_string()));
+                }
+            }
+        }
+    };
     let mut kept = vec![false; decls.len()];
+    for (i, d) in decls.iter().enumerate() {
+        let named = match d.name {
+            None => true,
+            Some((from, to)) => {
+                let name = &sources[d.file].1[from..to];
+                roots.contains(name) || lent.iter().any(|words| words.contains(name))
+            }
+        };
+        if named {
+            kept[i] = true;
+            keep(d, mine);
+        }
+    }
     loop {
         let mut moved = false;
         for (i, d) in decls.iter().enumerate() {
-            if kept[i] {
-                continue;
-            }
-            let source = &sources[d.file].1;
-            let wanted = match d.name {
-                None => true,
-                Some((from, to)) => roots.contains(&source[from..to]),
-            };
-            if wanted {
+            let Some((from, to)) = d.name.filter(|_| !kept[i]) else { continue };
+            if mine.contains(&sources[d.file].1[from..to]) {
                 kept[i] = true;
                 moved = true;
-                reach_words(&source[d.start..d.end], roots);
-                if let Some((from, to)) = d.name {
-                    for (name, implied) in IMPLIED_ROOTS {
-                        if &source[from..to] == name {
-                            roots.extend(implied.iter().map(|n| n.to_string()));
-                        }
-                    }
-                }
+                keep(d, mine);
             }
         }
         if !moved {
@@ -416,7 +444,7 @@ fn imports_named(source: &str) -> impl Iterator<Item = &str> {
     source
         .lines()
         .take_while(|line| line.is_empty() || line.starts_with('#') || line.starts_with("import "))
-        .filter_map(|line| line.strip_prefix("import \"")?.split('"').next())
+        .filter_map(|line| line.strip_prefix("import ")?.split('"').nth(1))
 }
 
 /// Reads the program's own modules for their words before any of it is
@@ -442,12 +470,13 @@ fn survey(
     let mut named: crate::hash::Map<std::path::PathBuf, usize> = crate::hash::Map::default();
     // the entry imports std/render whether it says so or not
     named.insert(std::path::PathBuf::from("std/render"), 1);
-    let mut shipped: Vec<&'static str> = Vec::new();
+    type Shipped = (String, &'static [(&'static str, &'static str)]);
+    let mut shipped: Vec<Shipped> = Vec::new();
     // counts an import of a shipped module, and says whether it was one
     fn note(
         path: &str,
         named: &mut crate::hash::Map<std::path::PathBuf, usize>,
-        shipped: &mut Vec<&'static str>,
+        shipped: &mut Vec<Shipped>,
     ) -> bool {
         let Some((_, files)) = embedded_module(path).filter(|_| path.starts_with("std/")) else {
             return false;
@@ -455,10 +484,12 @@ fn survey(
         let times = named.entry(std::path::PathBuf::from(path)).or_insert(0);
         *times += 1;
         if *times == 1 {
-            shipped.extend(files.iter().map(|(_, text)| *text));
+            shipped.push((path.to_string(), files));
         }
         true
     }
+    shipped
+        .extend(embedded_module("std/render").map(|(_, files)| ("std/render".to_string(), files)));
     while let Some((text, base)) = pending.pop() {
         for path in imports_named(&text) {
             if note(path, &mut named, &mut shipped) {
@@ -491,14 +522,45 @@ fn survey(
             }
         }
     }
-    // a shipped module's imports are shipped modules, counted the same way
+    // a shipped module's imports are shipped modules, counted the same way,
+    // and each import is one more importer the imported module waits for
+    let mut waits: crate::hash::Map<String, usize> = crate::hash::Map::default();
     let mut at = 0;
     while at < shipped.len() {
-        let text = shipped[at];
-        for path in imports_named(text) {
-            note(path, &mut named, &mut shipped);
+        let files = shipped[at].1;
+        for path in files.iter().flat_map(|(_, text)| imports_named(text)) {
+            if note(path, &mut named, &mut shipped) {
+                *waits.entry(path.to_string()).or_insert(0) += 1;
+            }
         }
         at += 1;
+    }
+    // Importers first. A word a shipped module spells can keep a declaration
+    // of a module it imports and of no module further on, so by the time a
+    // module is pruned every word that can reach it has been read, and one
+    // pruning each is the last one.
+    let spelled = roots.len();
+    let mut ready: Vec<usize> =
+        (0..shipped.len()).filter(|m| !waits.contains_key(&shipped[*m].0)).collect();
+    while let Some(m) = ready.pop() {
+        let (module, files) = &shipped[m];
+        for path in files.iter().flat_map(|(_, text)| imports_named(text)) {
+            let Some(left) = waits.get_mut(path) else { continue };
+            *left -= 1;
+            if *left == 0 {
+                ready.extend(shipped.iter().position(|(name, _)| name == path));
+            }
+        }
+        // named as the loader names them: a file's name is how the checker
+        // knows it for the library's
+        let named: Vec<(String, &str)> =
+            files.iter().map(|(n, text)| (format!("{module}/{n}"), *text)).collect();
+        let borrowed: Vec<(&str, &str)> = named.iter().map(|(n, s)| (n.as_str(), *s)).collect();
+        let Ok(sources) = module_sources(std::path::Path::new(module), Some(&borrowed)) else {
+            continue;
+        };
+        let done = pruned_shipped(module, sources, roots);
+        SURVEYED.with(|s| s.borrow_mut().insert(module.clone(), (spelled, done)));
     }
     named.into_iter().filter(|(_, times)| *times > 1).map(|(module, _)| module).collect()
 }
@@ -519,6 +581,11 @@ fn reaching<T>(
     for (text, _) in &texts {
         reach_words(text, &mut roots);
     }
+    // The shipped modules' words belong to one compile, as the roots do: a
+    // compile inside another starts with none and hands the outer's back.
+    let outer_words = SHIPPED_WORDS.with(|w| w.take());
+    let outer_importers = SHIPPED_IMPORTERS.with(|i| i.take());
+    let outer_surveyed = SURVEYED.with(|s| s.take());
     let shared = survey(texts, &mut roots);
     let outer = REACH.with(|r| r.replace(Some(roots)));
     let outer_shared = SHARED.with(|s| s.replace(shared));
@@ -538,6 +605,10 @@ fn reaching<T>(
         }
     };
     REACH.with(|r| *r.borrow_mut() = outer);
+    // a run holds none of these: they are dropped here, where the compile ends
+    SHIPPED_WORDS.with(|w| *w.borrow_mut() = outer_words);
+    SHIPPED_IMPORTERS.with(|i| *i.borrow_mut() = outer_importers);
+    SURVEYED.with(|s| *s.borrow_mut() = outer_surveyed);
     answer
 }
 
@@ -864,7 +935,10 @@ fn compile_module_inner(
     // prunes to the same declarations, so it asks the cache under those
     // first and reads no source when the compile is there.
     let prunes = prunes(embedded.is_some());
-    let reached = REACH.with(|r| r.borrow().as_ref().map_or(0, |s| s.len()));
+    let reached = match prunes {
+        true => shipped_reach(dir),
+        false => 0,
+    };
     let before = match prunes {
         true => PRUNINGS.with(|p| p.borrow().get(&canon).and_then(|m| m.at(reached))),
         false => None,
@@ -987,13 +1061,62 @@ fn shipped_pruned(
     dir: &std::path::Path,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<Option<Pruned>, String> {
-    let mut sources = module_sources(dir, embedded)?;
-    Ok(REACH.with(|r| {
-        let mut r = r.borrow_mut();
-        let roots = r.as_mut()?;
-        let (pruned, kept) = prune_shipped(&mut sources, roots);
-        Some((sources, pruned, kept))
-    }))
+    let module = dir.to_string_lossy().into_owned();
+    REACH.with(|r| {
+        let r = r.borrow();
+        let Some(roots) = r.as_ref() else { return Ok(None) };
+        let surveyed = SURVEYED.with(|s| s.borrow_mut().remove(&module));
+        if let Some((_, done)) = surveyed.filter(|(spelled, _)| *spelled == roots.len()) {
+            return Ok(Some(done));
+        }
+        let sources = module_sources(dir, embedded)?;
+        Ok(Some(pruned_shipped(&module, sources, roots)))
+    })
+}
+
+/// Prunes one shipped module against the program's words, its own, and
+/// those of the shipped modules that import it, and notes it as an importer
+/// of the shipped modules it imports.
+fn pruned_shipped(
+    module: &str,
+    mut sources: Vec<(String, String)>,
+    roots: &crate::hash::Set<String>,
+) -> Pruned {
+    let importers = SHIPPED_IMPORTERS.with(|i| i.borrow().get(module).cloned().unwrap_or_default());
+    let (pruned, kept) = SHIPPED_WORDS.with(|w| {
+        let mut w = w.borrow_mut();
+        let mut mine = w.remove(module).unwrap_or_default();
+        let lent: Vec<&crate::hash::Set<String>> =
+            importers.iter().filter_map(|importer| w.get(importer)).collect();
+        let done = prune_shipped(&mut sources, roots, &lent, &mut mine);
+        w.insert(module.to_string(), mine);
+        done
+    });
+    SHIPPED_IMPORTERS.with(|i| {
+        let mut i = i.borrow_mut();
+        for imported in sources.iter().flat_map(|(_, s)| imports_named(s)) {
+            let importers = i.entry(imported.to_string()).or_default();
+            if !importers.iter().any(|importer| importer == module) {
+                importers.push(module.to_string());
+            }
+        }
+    });
+    (sources, pruned, kept)
+}
+
+/// How many words can keep a declaration of this shipped module: the
+/// program's, its own, and those of the shipped modules that import it.
+/// Each of the three only grows, so as many words are the same words.
+fn shipped_reach(dir: &std::path::Path) -> usize {
+    let module = dir.to_string_lossy().into_owned();
+    let importers =
+        SHIPPED_IMPORTERS.with(|i| i.borrow().get(&module).cloned().unwrap_or_default());
+    let shipped = SHIPPED_WORDS.with(|w| {
+        let w = w.borrow();
+        let own = w.get(&module).map_or(0, |words| words.len());
+        own + importers.iter().filter_map(|p| w.get(p)).map(|words| words.len()).sum::<usize>()
+    });
+    shipped + REACH.with(|r| r.borrow().as_ref().map_or(0, |s| s.len()))
 }
 
 fn module_key(

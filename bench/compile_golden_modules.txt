@@ -6,7 +6,12 @@
 # `loads` counts the modules the compile compiled. `shared` imports two local
 # modules that both import a third, and all three import std/text, so a
 # loader that compiles a module once per import reads as more loads than
-# modules (kanso#2373).
+# modules (kanso#2373). `apart` is three modules that each import std/text
+# and bring words of their own (kanso#2434). `lent` uses std/list on either
+# side of a module that slices a text. std/text spells `span`, which is also
+# a helper of the list library's sort, and does not import std/list: a word
+# keeps a declaration of a module its own module imports and of no other, so
+# std/list is compiled once (kanso#2442).
 #
 # Kept apart from that file because the welfare index sums its rows, and a
 # sample added there would read as a regression the size of the sample.
@@ -16,3 +21,4 @@
 module lines=1129 calls=95 branches=75 defines=28 rounds=4 visits=1449 loads=3
 shared lines=1482 calls=168 branches=96 defines=35 rounds=6 visits=1676 loads=6
 apart lines=961 calls=137 branches=28 defines=31 rounds=8 visits=367 loads=5
+lent lines=1320 calls=127 branches=85 defines=37 rounds=5 visits=1630 loads=6

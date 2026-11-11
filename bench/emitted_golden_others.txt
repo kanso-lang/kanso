@@ -12,7 +12,7 @@
 # design/compiler-log.md, which holds the history of every move, and
 # regenerate.
 encodebench defines=144 calls=1205 branches=873 lines=10413
-oneshot defines=178 calls=1610 branches=1353 lines=14960
+oneshot defines=178 calls=1610 branches=1353 lines=14959
 basket defines=133 calls=1147 branches=1051 lines=9550
 widebench defines=161 calls=1372 branches=1008 lines=11605
 deepbench defines=50 calls=242 branches=250 lines=2376
@@ -22,5 +22,5 @@ indexbench defines=22 calls=71 branches=42 lines=782
 scanbench defines=331 calls=3190 branches=3019 lines=26106
 digestbench defines=115 calls=814 branches=982 lines=8213
 readbench defines=22 calls=70 branches=44 lines=788
-livebench defines=179 calls=1645 branches=1385 lines=15227
-runbench defines=993 calls=10404 branches=9373 lines=81337
+livebench defines=179 calls=1645 branches=1385 lines=15226
+runbench defines=993 calls=10404 branches=9373 lines=81336

@@ -114287,3 +114287,35 @@ the side vector's first push is three more front-end allocations
 (`compile_allocs` 13,937 to 13,940) and two more in the interpreted run
 (`interp_allocs` 810,144 to 810,146). The sum falls by about 0.0002. The fix
 lets a correct program compile, so the floor moves down by that cost.
+
+## 2026-11-06 — a derived definition opens with the imports it needs
+
+**DONE.** A module's files share their declarations and not their imports, so
+an arm that `derive/define` added could call only what its own module
+happened to import. senro's next convenience is a reader each way for every
+foreign key, as Rails' `has_many` and `belongs_to` give, and those readers
+call senro's `models`. A definition may now open with `import` lines. The
+module's derived file opens with all of them, once each and sorted, since
+the parser refuses imports anywhere else or out of order.
+
+A relative path in a definition is written from the derivation's own
+module, as that module's own imports are, and the compiler rewrites it from
+the module the definition joins. senro writes `import "../models"` from
+`models/`; the notebook's `pages`, two directories away from senro, reads
+it as `../../models`. The derivation's path is the one the entry imports it
+by (`written_from` in src/derive.rs), and the rewrite is `reread` in
+src/lib/modules.rs.
+
+`tests/golden/derive/a_defined_arm_opens_with_its_imports` gives a module
+that imports nothing two arms: one calls a sibling of the derivation's
+module through a path written from there, and one imports `std/list` and
+`std/text`. Both engines print `["HELLO!" "AGAIN!"]` and `HELLO AGAIN`. The
+compiler before the change refused it, at the import in the middle of the
+derived file.
+
+Rows: `entry_instructions` rose 12,540 to 87,930,129 and
+`emit_instructions` 270 to 5,613,493; `browser_compile_instructions` fell
+17 to 350,566,782. The compile and library rows did not move. The change
+came with the binary and with four more comment lines in lib/derive, and
+nothing here isolates one from the other. It builds the derivations ruling
+(#2186), so the welfare floor moves down by exactly that.

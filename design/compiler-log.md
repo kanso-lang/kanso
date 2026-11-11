@@ -20,38 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-06 — a derived definition opens with the imports it needs
-
-**DONE.** A module's files share their declarations and not their imports, so
-an arm that `derive/define` added could call only what its own module
-happened to import. senro's next convenience is a reader each way for every
-foreign key, as Rails' `has_many` and `belongs_to` give, and those readers
-call senro's `models`. A definition may now open with `import` lines. The
-module's derived file opens with all of them, once each and sorted, since
-the parser refuses imports anywhere else or out of order.
-
-A relative path in a definition is written from the derivation's own
-module, as that module's own imports are, and the compiler rewrites it from
-the module the definition joins. senro writes `import "../models"` from
-`models/`; the notebook's `pages`, two directories away from senro, reads
-it as `../../models`. The derivation's path is the one the entry imports it
-by (`written_from` in src/derive.rs), and the rewrite is `reread` in
-src/lib/modules.rs.
-
-`tests/golden/derive/a_defined_arm_opens_with_its_imports` gives a module
-that imports nothing two arms: one calls a sibling of the derivation's
-module through a path written from there, and one imports `std/list` and
-`std/text`. Both engines print `["HELLO!" "AGAIN!"]` and `HELLO AGAIN`. The
-compiler before the change refused it, at the import in the middle of the
-derived file.
-
-Rows: `entry_instructions` rose 12,540 to 87,930,129 and
-`emit_instructions` 270 to 5,613,493; `browser_compile_instructions` fell
-17 to 350,566,782. The compile and library rows did not move. The change
-came with the binary and with four more comment lines in lib/derive, and
-nothing here isolates one from the other. It builds the derivations ruling
-(#2186), so the welfare floor moves down by exactly that.
-
 ## 2026-11-06 — directive: the language committee decides, and nothing blocks on Clay
 
 Clay, on #2356: "nothing needs me you can just ask the language committee
@@ -2400,3 +2368,101 @@ helpers, and `lib/text/span.kso` spells the word nine times. Reach is by
 bare word over one set for the whole load. Letting a shipped module's
 words keep another module's declarations only when they are written
 qualified is #2442.
+
+## 2026-11-11 — a shipped module's words keep its own declarations
+
+#2442. Reach is by bare word, and the words were one set for a whole
+load, so a word spelled inside `std/text` could keep a declaration of
+`std/list`. Each import of a shipped module found more words than the
+last, asked for a larger pruning, and compiled the module again.
+
+**Whose words keep what.** Each shipped module has a set of words of its
+own: the ones its kept declarations spell. A declaration is kept when its
+name is among the program's words, the module's own, or the words of a
+shipped module that imports it. A module can call only what it imports,
+so a word needs to reach no further. The program's words keep what they
+kept before, since a program may use an imported name bare.
+
+The issue proposed that a shipped module's word keep another module's
+declaration only when it is written qualified. Lending along the import
+does that work without a second kind of word: `text/trim` spelled in
+`std/json` is the words `text` and `trim`, and `std/text` is lent json's
+words because json imports it.
+
+**One pass, importers first.** Words now travel only down imports, and
+the shipped modules' imports hold no cycle. The survey prunes every
+shipped module the load will reach before the first of them compiles,
+each after the shipped modules that import it. By the time a module is
+pruned every word that can reach it has been read, so its first pruning
+is its last, and the compile takes the module as the survey left it. If
+the program has spelled more words since, which happens when a
+derivation's text arrives as a source file, the surveyed pruning is
+dropped and the module is pruned where it is loaded.
+
+**Found on the way.** The survey read `import "path"` and missed
+`import { join:joined } "std/text"`, which is how `std/path` and
+`std/regexp` import. With one set of words nothing depended on the miss.
+With a set for each module it left `std/text` without two importers'
+words, the pruned compile refused (`std/text` exports no `join` to
+rename) and the load fell back to the whole library: the entry corpus
+read twice what it had. The scan takes the first quoted text after
+`import `.
+
+The survey also named a module's files `span.kso` at first, where the
+loader names them `std/text/span.kso`. The checker knows a library file
+by that name, so it refused `builtin_slice_in` as internal and the load
+fell back again: 41.0 million instructions to check the module corpus
+against 24.0. A release build takes that fallback without a word and a
+debug build fails an assertion on it, so the loader's specs and the
+golden corpus were run in a debug build after each change.
+
+**The version before this one** kept the lending incremental: a module
+was pruned where it was loaded, against the importers seen so far.
+Whole-process counts under callgrind: the entry corpus 121,365,118 with
+24 loads and the library corpus 72,984,999 with 17. One pass reads
+122,174,697 with 19 and 65,076,973 with 11. The entry corpus reads a
+little more over fewer loads because every importer now takes the module
+as all of its importers need it, where the early ones took a smaller
+one. The two corpora together read 7.1 million less with one pass.
+
+**Two costs taken out after measuring.** The pruning loop asked the
+program's words and each importer's for every declaration on every pass.
+Those sets do not change while a module is walked, so each declaration
+asks them once and the passes ask the module's own words alone: 78,426
+instructions off a check of the module corpus and 147,189 off the
+library corpus. The word sets also outlived the compile, which the
+interpreter's corpus read as 18,377 bytes of peak. They belong to one
+compile now, as the roots do.
+
+**Spec.** `tests/golden/compile/lent` is three modules: two use
+`std/list` and the one between them slices a text. `text/slice` has an
+arm for a span, and `span` is also a private helper of the list
+library's sort. The sample reads `loads=6`. With the loader as it was it
+reads 7, `std/list` twice.
+
+**Rows**, against the survey's. `compile_instructions` 23,782,898 ->
+22,652,638, `entry_instructions` 125,827,812 -> 119,661,348 and
+`library_instructions` 71,987,077 -> 63,632,847, falls of 4.8%, 4.9% and
+11.6%. `compile_allocs` 13,767 -> 13,503, `compile_peak_bytes` 606,357
+-> 546,568 and `front_end_visits` 7,388 -> 6,870. In the tab,
+`browser_compile_instructions` 413,249,135 -> 412,080,126 and
+`browser_compile_peak_bytes` 985,156 -> 984,870. `interp_allocs`
+1,068,177 -> 1,067,948 and `interp_peak_bytes` 1,512,615 -> 1,509,557.
+
+Four programs emit one line less: the decoder 14,240 -> 14,239, and
+`oneshot`, `livebench` and `runbench`. The table of call sites no longer
+names the one inside `os/start`, which none of them calls. Another
+module's `start` had kept it.
+
+Two rows rise. `emit_instructions` 5,632,066 -> 5,632,125. Two builds of
+this branch that hand the emitter the same program read 5,632,618 and
+5,632,125, so the row is moving with the binary's layout.
+`interp_instructions` 744,801,747 -> 744,907,234. Compared function by
+function with the loader as it was, the compile half of that row falls
+and `Interp::callee_missed` rises 214,571: the interpreter's table of
+recent callees takes its slots from where each name's text was
+allocated, and pruning the library differently moved the names. The
+same table moved the row for `text/replace`. It is #2444.
+
+**Not done.** `std/derive` is still compiled twice on the entry corpus,
+and that was not looked into.
