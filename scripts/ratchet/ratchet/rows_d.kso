@@ -1786,4 +1786,17 @@ derive_counted = row
 
 rows_dq65 = list/concat rows_dq64 [derive_counted]
 
-rows_d = list/concat rows_dq65 [itself]
+# The interpreter's table of what a reference calls is indexed by a number
+# resolve gives the name, and no longer by where the name's text was
+# allocated (2026-11-11, kanso#2444).
+looked_up_once = row
+  "a call through a reference that hashes the name's text every time"
+  true
+  "cargo test --release --test a_reference_is_looked_up_by_name_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_reference_looked_up_by_name_on_every_call")
+  no_setup
+
+rows_dq66 = list/concat rows_dq65 [looked_up_once]
+
+rows_d = list/concat rows_dq66 [itself]

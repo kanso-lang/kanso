@@ -2504,3 +2504,63 @@ corpus read as one allocation more; the clone is made for an entry that
 derives and for no other.
 
 **Welfare.** 95.39064215 -> 95.39098937, banked.
+
+## 2026-11-11 — a called name's place in the table comes from the program
+
+#2444. The interpreter keeps what a function reference calls in a table,
+and a declaration's frame in another, so that a call does not hash the
+name's text or format a trace line. Both tables took their slots from
+addresses: the address of the name's text and the address of the
+declaration, each reduced to its place in a 64 KiB allocator slice. Two
+names shared a slot when their texts were allocated a multiple of the
+table apart, and then each put the other out on every call. Where a text
+is allocated depends on everything allocated before it, so a change to
+the front end alone moved how often the tables missed. The last two
+entries on the loader and the one on `text/replace` each named a rise in
+`interp_instructions` that came from there.
+
+`resolve` now numbers a name the first time the run meets it, and the
+number travels in `Value::FnRef` beside the name. The table of callees is
+a vector indexed by it. `Value` is still 32 bytes. A declaration needs no
+number of its own: every declaration the interpreter enters is an element
+of `program.fns`, so its distance from the first is its index, and the
+table of frames is a vector indexed by that. Neither table has a fixed
+size or a second map behind it, and no two entries share a slot.
+
+A reference made outside `resolve` has no number and is looked up by name
+on each call. There are two: the one a derivation hands its deriver, and
+the one a tie hands its maker.
+
+Measured on the interpreter's corpus, in this container:
+
+| | before | after |
+| --- | --- | --- |
+| `interp_instructions` | 744,907,234 | 741,096,980 |
+| `interp_allocs` | 1,067,948 | 1,067,941 |
+| `interp_peak_bytes` | 1,509,557 | 1,501,749 |
+
+That is 0.51% fewer instructions. In the profile, `callee_missed` and
+what it calls fell from 1,900,502 to 129,815, which is one lookup for
+each name the corpus calls.
+
+One version was measured and dropped. Keying the frame table by where
+the source wrote the declaration, its line and column, read 744,370,410
+with the callee table already numbered, against 742,958,287 without the
+change: declarations at the same line of different files shared a slot,
+and `frame_missed` went from 388,208 to 1,488,815.
+
+Two counters, `interp_callee_lookups` and `interp_frames_made`, are
+counted where a table is filled and printed under `KANSO_COUNTERS`.
+`tests/a_reference_is_looked_up_by_name_once.rs` pins both at eight for
+a program that calls eight names, at 300 laps and at 3,000. The ratchet
+row is `looked_up_once`: with the table read past its end, the 300-lap
+run reads 1,221 lookups.
+
+What is not shown is the old tables moving under a perturbation made
+from outside. Three were tried on the old binary and its count held
+still under each: a block allocated before the run, a preload that pads
+allocations (the compiler links mimalloc, which a preload does not
+reach), and sixty unread program arguments. The evidence that the old
+slots moved with the front end is the two per-function profiles on #2444.
+That the new ones cannot is by construction: a slot is an index the
+program decides.
