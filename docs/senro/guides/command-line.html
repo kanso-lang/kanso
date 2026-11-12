@@ -17,7 +17,7 @@ description: "senro's command: making an app, the generators and how to add your
 <span class="eyebrow">senro guides</span>
 <h1>the command line</h1>
 
-<p>senro has one command, <code>senro</code>, as Rails has <code>rails</code>. it makes an app, writes the parts of one, lists its routes, brings its database up to date and serves it. this guide goes through each. the command is a shell script, <code>bin/senro</code> in senro's repository, and it works once that directory is on your PATH.</p>
+<p>senro has one command, <code>senro</code>, as Rails has <code>rails</code>. it makes an app, writes the parts of one, lists its routes, brings its database up to date, serves it and runs its tests. this guide goes through each. the command is a shell script, <code>bin/senro</code> in senro's repository, and it works once that directory is on your PATH.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -27,7 +27,8 @@ senro: usage: senro new &lt;app&gt;
        senro generate                         lists the generators
        senro routes                           lists the routes
        senro server                           (or `senro s`)
-       senro migrate</code></pre>
+       senro migrate
+       senro test [file]                      (or `senro t`)</code></pre>
 </div>
 
 <p>the command runs kanso programs, so it needs kanso. it uses the <code>kanso</code> on your PATH, or the one <code>KANSO</code> names.</p>
@@ -143,5 +144,9 @@ senro on port 3000</code></pre>
 </div>
 
 <p>a table that differs from the schema stops both before anything is served, with each difference named. the <a href="models.html">models guide</a> says what is compared.</p>
+
+<h2>test</h2>
+
+<p><code>senro test</code>, or <code>senro t</code>, runs the specs in the app's <code>*_test.kso</code> files, and <code>senro test notes_test.kso</code> runs one file. it works on a database of its own, the app's with <code>_test</code> after its name, which it makes when the server has none by that name and migrates before anything runs. it exits with a failure when an example fails. the <a href="testing.html">testing guide</a> covers what a spec holds.</p>
 
 </article>
