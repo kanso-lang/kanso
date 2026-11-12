@@ -128,7 +128,7 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
 <span class="c"># What a form with two files and a title reads as: the title as typed, and</span>
 <span class="c"># each file as the key it was stored under.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
-  f <span class="o">=</span> <span class="f">web/form</span> req.body
+  f <span class="o">=</span> <span class="f">web/input</span> req
   said <span class="o">=</span> <span class="f">list/map</span> [<span class="s">"title"</span> <span class="s">"photo"</span> <span class="s">"notes"</span>] (n <span class="o">-&gt;</span> <span class="f">web/value</span> f n)
   effect (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
 </div>

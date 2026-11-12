@@ -29,10 +29,11 @@ description: "what a senro action is handed, how it reads a form and a query str
   <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown req r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
-  effect (form req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} 200)
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/create"</span>
+  effect (form req path <span class="s">"POST"</span> blank {} 200)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  given <span class="o">=</span> sent (<span class="f">web/form</span> req.body)
+  given <span class="o">=</span> sent (<span class="f">web/input</span> req)
   <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (made req w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
@@ -83,7 +84,7 @@ per_page <span class="o">=</span> 25</code></pre>
 <span class="c"># problem with each, if any.</span>
 <span class="k">fn</span> <span class="f">form</span> req path method fields problems code
   page <span class="o">=</span> <span class="f">views/notes_form_view</span> path method fields problems
-  <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+  <span class="f">views/answer</span> req code <span class="s">"Note"</span> page</code></pre>
 </div>
 
 <p>the scaffold shares one form between <code>new</code> and <code>edit</code>, and shows it again with a 422 when a write is refused. a program that posts the form learns from the status that it was not accepted, without reading the page.</p>
@@ -95,13 +96,14 @@ per_page <span class="o">=</span> 25</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">made</span> req w:<span class="f">models/invalid</span>
-  form req <span class="s">"/notes"</span> <span class="s">"POST"</span> (filled w.record) w.problems 422
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/create"</span>
+  form req path <span class="s">"POST"</span> (filled w.record) w.problems 422
 
 <span class="k">fn</span> <span class="f">made</span> _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">made</span> _ w
-  <span class="f">web/redirect</span> <span class="s">"/notes/{w.id}"</span></code></pre>
+  <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"notes/show"</span> w.id)</code></pre>
 </div>
 
 <p><code>web/noticed</code> wraps an answer and leaves a message for the request after it, as <code>redirect_to path, notice: message</code> does in Rails. the next action reads it with <code>web/notice req</code> and hands it to its view, and the server forgets it once that request is answered. signing out of the generated app leaves one.</p>
@@ -110,9 +112,9 @@ per_page <span class="o">=</span> 25</code></pre>
   <div class="code-panel-title">examples/notebook/session.kso</div>
   <pre><code><span class="c"># Signing out keeps the rest of the session and forgets the sign-in.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
-  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req secret)
-  r <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/session/new"</span>) <span class="s">"Signed out."</span>
-  effect (<span class="f">web/kept</span> r secret s)</code></pre>
+  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req)
+  r <span class="o">=</span> <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"session/new"</span>) <span class="s">"Signed out."</span>
+  effect (<span class="f">web/kept</span> req r s)</code></pre>
 </div>
 
 <h2>answering JSON</h2>
@@ -126,7 +128,7 @@ per_page <span class="o">=</span> 25</code></pre>
   mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p.rows as_json)
   <span class="k">return</span> <span class="f">web/json</span> 200 mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/notes_index_view</span> p.rows p.number p.more
-  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
+  <span class="f">views/answer</span> req 200 <span class="s">"Notes"</span> page</code></pre>
 </div>
 
 <p><code>note/note_attributes</code> is the row as a map of its columns, which the models derivation writes for every model.</p>
@@ -138,11 +140,12 @@ per_page <span class="o">=</span> 25</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
-  given <span class="o">=</span> picked (<span class="f">web/form</span> req.body)
+  given <span class="o">=</span> picked (<span class="f">web/input</span> req)
   <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (changed req id w))
 
 <span class="k">fn</span> <span class="f">changed</span> req id w:<span class="f">models/invalid</span>
-  form req <span class="s">"/notes/{id}"</span> <span class="s">"PATCH"</span> (filled w.record) w.problems 422
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/update"</span> id
+  form req path <span class="s">"PATCH"</span> (filled w.record) w.problems 422
 
 <span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
@@ -151,7 +154,7 @@ per_page <span class="o">=</span> 25</code></pre>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">changed</span> _ id _
-  <span class="f">web/redirect</span> <span class="s">"/notes/{id}"</span></code></pre>
+  <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"notes/show"</span> id)</code></pre>
 </div>
 
 <p><code>web/refusal</code> turns a denial into a 403 and an absence into a 404. an action may also answer either value as it stands, and the server writes the same response for it. a read that finds no row answers <code>none</code>, and the action answers <code>http/not_found</code>.</p>
@@ -165,7 +168,7 @@ per_page <span class="o">=</span> 25</code></pre>
   attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
   <span class="k">return</span> <span class="f">web/json</span> 200 attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/notes_show_view</span> record
-  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+  <span class="f">views/answer</span> req 200 <span class="s">"Note"</span> page</code></pre>
 </div>
 
 <h2>what a module can say about its actions</h2>
