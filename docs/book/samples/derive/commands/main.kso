@@ -1,0 +1,9 @@
+import "../registry"
+import "./commands"
+
+derive registry/commands
+
+print usage
+  .> (_ -> print (registry/run commands["greet"] ["Ada" "Lovelace"]))
+  .> (_ -> print (registry/run commands["count"] ["one" "two" "three"]))
+  .> (_ -> print (registry/run commands["grete"] []))

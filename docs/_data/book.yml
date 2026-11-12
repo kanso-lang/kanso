@@ -30,6 +30,7 @@
   start: 15
   chapters:
     - { num: "15", slug: "fast", title: "fast by construction", blurb: "past serde_json without memory syntax, and the ratchet that holds it" }
+    - { num: "16", slug: "derive", title: "conventions at compile time", blurb: "a derivation reads the program while it compiles and answers checked declarations; senro's conventions as the case study" }
 - part: "appendices"
   start: 1
   appendix: true
