@@ -20,91 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a write that would wait yields its fiber
-
-Fixes #2407.
-
-**What was wrong.** `net/write` wrote to a blocking socket and came back
-when every byte was taken. A fiber waiting to read or to accept yields to
-the scheduler (#2208, #2405), and a write did not. While one client's
-socket was full, no other fiber ran, on either engine. The issue was read
-from the code and had no case. The case turned out worse than a stall: a
-program that is both ends of a connection and writes more than the
-sockets between them hold never ends, because the fiber that would read
-is one of the fibers the write holds.
-
-**What changed.** Inside the scheduler a write asks the connection for
-what it will take without waiting. When it will take no more, the fiber
-is left holding the write and the count of bytes gone, and goes back in
-the queue. The scheduler's wait on sockets (`k_sched_await`, `awaited`)
-asks about room for those fibers, where it asks about arrival for a
-reader. The fiber picks up at the byte it stopped on, so no byte is
-copied to remember the rest. Natively the part-done write is one more
-description (42: the write, and how much has gone); the interpreter's is
-`Desc::Sending`.
-
-Outside the scheduler nothing changes. A write at the top of a program
-has no other fiber to yield to and waits where it stands.
-
-**TLS.** A TLS session writes whole records and has no call for "as much
-as fits". A secured connection is asked only when its socket says it has
-room, and is handed at most one record, 16,384 bytes, each time. That
-write can still wait briefly if the room is less than a record. It is the
-same on both engines.
-
-**The specs.** `tests/golden/micro/a_writer_waits_for_its_reader` is the
-program that is both ends: twelve megabytes written to a reader in the
-same group. It never ended on either engine and now prints the count.
-`tests/a_slow_reader_holds_only_its_own_fiber.rs` is the issue's case
-with clients outside the program: one asks for twelve megabytes and
-reads none of it, and a second is answered while the first still reads
-nothing. With the yield taken out of both engines the second client's
-read timed out natively, where the test stops, and the micro program was
-killed at twenty seconds on each engine.
-
-**The scheduler's loop.** The first build put the write into both
-switches and cost programs that open no socket. Each cost had one cause,
-and each was found by a row that had no reason to move.
-- deepbench rose 1,867,728. 1.2 million of that was in `k_exec`, whose
-  entry had gained one `mov`: a changed switch made clang keep the
-  function's argument in a second register. `k_exec` is as it was. A write outside the scheduler has no
-  other fiber to yield to, and a part-done write never reaches it,
-  because only the scheduler steps a fiber it holds. The write's step is
-  its own function, out of line.
-- Every program rose 443. `send` with `MSG_DONTWAIT` says "what you can
-  take now" in one call, and was one more name for the loader to find at
-  every program's start. The write sets the socket not to wait with
-  `fcntl`, writes, and sets it back; both names were already there.
-- With those gone, runbench fell 383,692 at the release tier and rose
-  415,722 at the dev tier, all of the rise in `k_schedule`. The wait on
-  sockets was inlined into the scheduler's loop, and its body decided
-  how the loop kept its own registers. Out of line and called with the
-  addresses of the loop's fiber table and clock, it was better at the
-  release tier (a fall of 800,791) and worse at the dev tier (a rise of
-  767,174), because a variable whose address is taken lives in memory.
-  Called with copies of the two, made only on the path that waits, it
-  is better at both. Three builds of the same source that differ only
-  in where the wait sits gave those three pairs.
-
-**Rows.** The work rows are counts from this machine set by their
-distance to main's reading here. Clang's rows and the tab's are CI's.
-- `work_runbench` falls 1,216,098 to 952,666,853 and `work_runbench_dev`
-  falls 320,187 to 2,805,647,188, for the wait leaving the loop.
-- Three programs rise a little: `work_encodebench` 616 to 2,335,341,459,
-  `work_livebench` 301 to 938,654,920 and `work_oneshot` 98 to
-  9,979,851. The other ten are unmoved.
-- The interpreter's step has one more arm to pass: `interp_instructions`
-  rises 7,995 to 680,822,127. Its send is out of line and cold, as its
-  wait on sockets already was.
-- The write's step and the wait as a function are 928 bytes of machine
-  code in every program, and the fourteen text rows sum to `text`
-  5,919,865.
-- Clang's rows, from CI: `codegen_instructions_release` falls 109,950 to
-  372,070,546 and `codegen_instructions_dev` rises 5,675 to 116,944,920.
-- The tab's run of the compiled corpus, from CI, rises 40,000 to
-  `browser_run_instructions` 91,172,686. Its other three rows hold. I
-  did not look for where the 40,000 are.
-
 ## 2026-11-10 — a lazy binding under two holders keeps its slots in tenure
 
 Fixes #2415.
@@ -2227,3 +2142,68 @@ one derivation writes `shown`, which takes a `thing`, and a second writes
 the `thing` record and its maker. Without the fix both engines refuse the
 derived file with the formatter's message above; with it they print
 `thing 3`.
+
+## 2026-11-12 — a module's own arm answers its bare call (#2473)
+
+senro's notebook declares `fn id_of` in a module that imports `tokens`,
+which exports an `id_of` of its own. A bare `id_of` there calls the
+module's own function, and both engines run it, but the check refused the
+caller: "this can be a none and `wanted` has no arm for it". The import's
+`id_of` can answer none, and the module's own never does.
+
+**The fault.** A name a module declares and one of its imports exports is
+one overload group inside the module, and dispatch tries its arms in
+order. `qualify` puts the module's own arms ahead of the import's, so an
+importer runs them in that order. The module's own check merges its
+dependencies in first, so there the import's arm stood ahead. Inference
+then read the call's answer as the union of every arm the arguments could
+reach, the import's included, and the none question read that union.
+
+**Built.** Two changes, each needed. Where a module and its dependencies
+are merged for the module's check, an import's twin of a name the module
+declares goes in behind the module's own arms, as `qualify` orders them.
+Inference stops at the first arm whose parameters are all binders: a later
+arm answers that call only for a failure it names. A call that passes over
+arms is marked by the arms it reaches, through `none_free`, the per-call
+mark `math/round` already uses.
+
+`tests/golden/own_arms_first` is the postcard from the issue, run on both
+engines by `tests/own_arms_first.rs`. It was watched red with each change
+taken out alone, both times with the refusal above.
+
+**What the first push cost.** CI's reading of the first push put the
+front end's peak on `compile_corpus` up 12,643 bytes (546,568 to 559,211)
+and its allocations up 28. Built locally with each half of the change
+alone, the merge carried all of it: it split the dependency's functions
+with `partition`, which moves every one into a new vector while the old
+one is still held. `extract_if` takes out only the twins that go behind,
+and CI's second reading put the peak 84 bytes above main's (546,652).
+
+The instruction rows stayed up about 0.7%: `compile_instructions`
+22,642,405 to 22,800,026 on that reading. A callgrind diff of the check
+of `compile_corpus` against main split the 159,052 instructions between
+the two halves. The merge spent about 64,000 building a set of every
+function name the module declares, and inference about 84,000 testing,
+on every visit to every call, whether each arm's parameters were all
+binders. Both are facts about the declarations. Which arms a call passes
+over is now worked out once per group when inference starts, and the
+merge looks up the larger of the two name lists in a set of the smaller
+and keeps only the names both hold, which most modules have none of.
+Locally that took the check from 159,052 instructions over main to
+138,754, for 174 bytes more peak, which `welfare --score` prefers by a
+hair. What is left in `eval_expr` is the new branch in the call loop,
+which the precomputed table does not remove.
+
+**Rows, from CI on 5c30213f8.** Every row below rose, and none of them
+counts a program running: `compile_instructions` 22,642,405 to
+22,778,659, `entry_instructions` 119,108,774 to 119,972,835,
+`library_instructions` 63,609,875 to 64,026,941, `compile_peak_bytes`
+546,568 to 546,826, `compile_allocs` 13,503 to 13,508,
+`emit_instructions` 5,632,125 to 5,636,195, `interp_instructions`
+741,096,980 to 741,118,066 (the interpreter's run includes its check of
+the corpus), `interp_allocs` 1,067,941 to 1,067,977 and
+`browser_compile_instructions` 412,081,396 to 412,743,106.
+`browser_run_instructions` fell from 100,428,884 to 100,428,858. The
+runtime veins did not move. The check now reads the program as it runs,
+so the floor is lowered by what that costs, to 95.391044, under the rule
+for the language working as specified.

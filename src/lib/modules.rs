@@ -1666,12 +1666,43 @@ fn compile_module_loaded(
         root: String::new(),
     };
     merged.types.extend(dep_program.types);
-    merged.fns.extend(dep_program.fns);
+    // An import's twin of a name the module also declares goes in behind the
+    // module's own arms, as `qualify` orders that group for every program
+    // that imports this one: dispatch tries the arms in order, so the check
+    // reads the group as it will run. Ahead of them, the import's `id_of`
+    // answered for a call the module's own `fn id_of n` takes (#2473).
+    let own = || {
+        parsed
+            .iter()
+            .flat_map(|(_, _, program)| program.fns.iter())
+            .filter(|f| !f.synthetic && !f.is_getter() && !ast::has_slash(&f.name))
+            .map(|f| f.name.as_str())
+            .filter(|n| !is_operator(n))
+    };
+    let enrolled = || dep_program.fns.iter().filter(|f| f.synthetic).map(|f| f.name.as_str());
+    // The names both sides hold, found by looking the larger side up in a set
+    // of the smaller. Most modules declare no twin, so this is usually empty
+    // and nothing moves.
+    let twins: crate::hash::Set<String> = if enrolled().count() <= own().count() {
+        let smaller: crate::hash::Set<&str> = enrolled().collect();
+        own().filter(|n| smaller.contains(n)).map(str::to_string).collect()
+    } else {
+        let smaller: crate::hash::Set<&str> = own().collect();
+        enrolled().filter(|n| smaller.contains(n)).map(str::to_string).collect()
+    };
+    let mut ahead = dep_program.fns;
+    let held: Vec<ast::FnDecl> = if twins.is_empty() {
+        Vec::new()
+    } else {
+        ahead.extract_if(.., |f| f.synthetic && twins.contains(f.name.as_str())).collect()
+    };
+    merged.fns.extend(ahead);
     for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
         rename_travels(&mut program, &travels);
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
+    merged.fns.extend(held);
     own_types_beat_twins(&mut merged);
     if require_entry {
         enroll_travelers(&mut merged)?;

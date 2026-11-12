@@ -1,0 +1,4 @@
+import "./app"
+
+print (app/shown "7")
+print (app/shown "x")

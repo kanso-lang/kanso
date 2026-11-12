@@ -1,0 +1,13 @@
+import "../lib"
+
+pub fn shown s
+  wanted (id_of (lib/id_of s))
+
+fn wanted t
+  "id {t}"
+
+fn id_of none
+  "0"
+
+fn id_of n
+  "{n}"
