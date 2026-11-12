@@ -2193,3 +2193,17 @@ Locally that took the check from 159,052 instructions over main to
 138,754, for 174 bytes more peak, which `welfare --score` prefers by a
 hair. What is left in `eval_expr` is the new branch in the call loop,
 which the precomputed table does not remove.
+
+**Rows, from CI on 5c30213f8.** Every row below rose, and none of them
+counts a program running: `compile_instructions` 22,642,405 to
+22,778,659, `entry_instructions` 119,108,774 to 119,972,835,
+`library_instructions` 63,609,875 to 64,026,941, `compile_peak_bytes`
+546,568 to 546,826, `compile_allocs` 13,503 to 13,508,
+`emit_instructions` 5,632,125 to 5,636,195, `interp_instructions`
+741,096,980 to 741,118,066 (the interpreter's run includes its check of
+the corpus), `interp_allocs` 1,067,941 to 1,067,977 and
+`browser_compile_instructions` 412,081,396 to 412,743,106.
+`browser_run_instructions` fell from 100,428,884 to 100,428,858. The
+runtime veins did not move. The check now reads the program as it runs,
+so the floor is lowered by what that costs, to 95.391044, under the rule
+for the language working as specified.
