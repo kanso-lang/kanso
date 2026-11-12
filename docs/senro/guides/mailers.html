@@ -112,6 +112,22 @@ sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
 
 <p><code>mail/delivered message</code> sends a message during the request and answers the text it sent. <code>mail/delivered_later db message</code> writes it to the jobs table instead, as Action Mailer's <code>deliver_later</code> does, and the request answers without waiting on a mail server. the entry <code>senro new</code> writes runs a worker on the <code>mail</code> queue beside the server, and that worker sends each letter a moment later. a letter whose delivery fails is tried again, as any job is. <a href="jobs.html">background jobs</a> covers the table and the worker.</p>
 
+<div class="code-panel">
+  <div class="code-panel-title">mail/mail.kso</div>
+  <pre><code><span class="c"># Queues `m` on the `mail` queue of the jobs table, so the request that asked</span>
+<span class="c"># for it answers without waiting on the mail server, as Action Mailer's</span>
+<span class="c"># `deliver_later` does. A worker running `mail/performers` sends it the way</span>
+<span class="c"># `delivered` does. A message `delivered` would refuse is refused here, before</span>
+<span class="c"># it is queued.</span>
+<span class="k">pub</span> <span class="k">fn</span> delivered_later db m
+  why <span class="o">=</span> refusal m
+  <span class="k">return</span> err why <span class="k">if</span> why !<span class="o">=</span> <span class="s">""</span>
+  fields <span class="o">=</span> { <span class="s">"body"</span>:m.body <span class="s">"from"</span>:m.from <span class="s">"subject"</span>:m.subject <span class="s">"to"</span>:m.to }
+  <span class="f">time/now</span> .&gt; (t -&gt; <span class="f">jobs/later</span> db <span class="s">"mail"</span> <span class="s">"deliver"</span> fields t)</code></pre>
+</div>
+
+<p>it refuses a letter <code>delivered</code> would refuse before anything is written, so a bad address fails the request that asked for it and never waits in the queue.</p>
+
 <p>the generated letters all use <code>delivered_later</code>. an action that queues one has usually just written something, and it should answer whether or not the mail server is up.</p>
 
 <h2>where mail goes</h2>

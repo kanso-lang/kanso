@@ -181,6 +181,22 @@ per_page <span class="o">=</span> 25</code></pre>
   <li><code>admits action viewer db</code> says who may reach each action, and is asked once for a page and the data it loads. see <a href="authorization.html">authorization</a>.</li>
 </ul>
 
+<p>the notebook's password resets use two of them. a visitor who has lost a password cannot sign in, so all four actions are open without a sign-in, and asking for a link is limited by client:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/resets.kso</div>
+  <pre><code><span class="c"># A visitor who has lost a password asks for a link by email, follows it,</span>
+<span class="c"># and chooses a new one, as Rails 8's generated PasswordsController has it.</span>
+<span class="c"># The link carries a token `tokens/made` signs over the account and the</span>
+<span class="c"># digest it keeps, so nothing is stored, and a link works once and for</span>
+<span class="c"># fifteen minutes.</span>
+<span class="k">pub</span> without_sign_in <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"edit"</span> <span class="s">"new"</span> <span class="s">"update"</span>]
+
+<span class="c"># Asking is limited as signing in is, so the form cannot be used to fill</span>
+<span class="c"># someone's inbox.</span>
+<span class="k">pub</span> rate_limits <span class="o">=</span> { <span class="s">"create"</span>:<span class="s">"10 per 3 minutes"</span> }</code></pre>
+</div>
+
 <h2>what the server does around an action</h2>
 
 <p>the server writes a line for each request it answers: the method, the path, the status and how long the answer took.</p>

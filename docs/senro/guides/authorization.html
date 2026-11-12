@@ -138,6 +138,20 @@ HTTP/1.1 200 OK: &lt;div data-component="tally" data-runs="server" data-state="i
 
 <p>a page decides which providers it calls, and it also chooses their arguments. a page that may list the viewer's own notes could be made to ask for somebody else's by id. that question belongs to the record, and the model answers it: a provider that reads through a model, as every read in an app does, gets only what the model's <code>visible?</code> lets that viewer see, as the <a href="models.html">models guide</a> describes. the page's check covers whether the viewer may be here, and the model's covers which rows are theirs.</p>
 
+<p>senro's spec of read policies keeps notes that only their owner sees. a provider that reads a note by id through this model answers none for anyone else's, whatever id the page passed:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/visible/notes.kso</div>
+  <pre><code><span class="c"># A note, which only its owner may see.</span>
+<span class="k">pub</span> type note
+  id
+  owner
+  body
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">visible?</span> viewer n
+  n.owner <span class="o">==</span> viewer</code></pre>
+</div>
+
 <h2>a component's actions</h2>
 
 <p>a server component's action, the kind that writes to the database from a click without a page load, is answered the same way. the click posts the component's state to <code>/senro/act/&lt;component&gt;</code> with the path of the page it is on, and the server checks the same three things: the page's module leans on the component's module, the visitor has the sign-in the page asks for, and the page's module admits them. the ledger draws a tally whose action asks for the viewer, so it runs on the server:</p>
