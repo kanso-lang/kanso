@@ -115712,3 +115712,68 @@ time comes: keyed matching, then the binary encoding, then compiled updates
 if a benchmark shows the morph is the cost. The encoding is ruled and owed
 on #2416, so cloud reads the order as placing the two later items around it
 and builds the encoding now. The note went in with senro#105.
+
+## 2026-11-10 — a built module's wasm instructions can be counted from outside the tests
+
+#2416 owes a benchmark that counts what a page update costs in the browser,
+and senro had no way to count it. kanso's own browser rows are counted by
+`tests/support/wasm32.rs`, which runs a module against the runtime under
+wasmi and counts the instructions executed, the same on every machine. That
+host was reachable only from kanso's tests.
+
+`scripts/count_module.rs` is a cargo example that runs it on any module
+`kanso build --wasm` wrote:
+
+    cargo run --release --example count_module -- runtime.wasm app.wasm \
+        NAME=@file /path=@file
+
+The module's output goes to stdout and `instructions=` and `grown_bytes=`
+to stderr. `NAME=@file` is a variable read from a file, since a page event
+has newlines in it. `/path=@file` is a file the module finds at that path
+with `os/read_bytes`, because a variable cannot carry a zero byte or bytes
+that are not utf-8, and the encoding #2416 asks for is binary. It is an
+example because wasmi is a dev-dependency, and the `kanso` binary a user
+installs does not carry a wasm interpreter. No row moves: nothing in the
+binary or the library changed.
+
+The host under it answered every filesystem call with ENOSYS. It now
+serves the files it is given: one directory, `/`, and `path_open`,
+`fd_seek`, `fd_read` and `fd_close` over them. A path it was not given
+answers ENOENT, which reads in the program as `os/file_not_found`, as
+native reads it.
+
+`tests/a_built_module_is_counted.rs` builds a program that prints a
+variable and the bytes of a file, runs the example's `answered` on it and
+reads the count the host gives when called directly. Its first version ran
+the example's binary and passed against an example edited to report one
+instruction too many: `cargo test --test` does not rebuild examples, so it
+read the binary an earlier build had left. A second version built the
+example from inside the test, and each of `cargo test` and the nested
+`cargo build` then rebuilt what the other had left, three minutes a run.
+The spec now compiles the example's source into itself with `#[path]`, so
+there is no binary to be stale, and with the edit it fails on 38,157
+against 38,156.
+
+The reader of a module's `kanso.link` section moved from
+`tests/build_wasm.rs` into the shared support, where the example reads it
+too.
+
+A first reading with it, on senro's `spec/runs/pages` views and a list of
+fifty posts (6,562 bytes of JSON): the browser module executes 3,991,398
+instructions to turn the page's data into HTML. Splitting the event and
+decoding the JSON, with nothing rendered, is 1,064,700 of them, and the
+split alone is 145,817. Rendering is the larger part.
+
+A second, on a tagged binary encoding written in kanso as a prototype,
+field names still on the wire: the same page is 5,044 bytes and decodes in
+1,708,928 instructions, where the JSON decodes in 918,883. By kind of
+value, binary against JSON: 905 against 1,664 instructions for a small
+int, 1,828 against 1,915 for a string of twenty bytes, and 17,729 against
+14,203 for a map of five one-letter keys. std/json reads a key with a
+builtin and keeps short tokens in a cache, and the prototype reads a key
+as any other string and puts it in a map, so the page's two hundred and
+fifty keys are where it loses. The scalars favour the binary encoding and
+the maps do not, which is the case for the positional layout the ruling
+asks for: a record's fields in order, with no key read and no map built.
+These are this machine's numbers from a runtime built here, and the
+benchmark #2416 owes will pin its own from CI.

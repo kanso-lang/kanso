@@ -20,71 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a built module's wasm instructions can be counted from outside the tests
-
-#2416 owes a benchmark that counts what a page update costs in the browser,
-and senro had no way to count it. kanso's own browser rows are counted by
-`tests/support/wasm32.rs`, which runs a module against the runtime under
-wasmi and counts the instructions executed, the same on every machine. That
-host was reachable only from kanso's tests.
-
-`scripts/count_module.rs` is a cargo example that runs it on any module
-`kanso build --wasm` wrote:
-
-    cargo run --release --example count_module -- runtime.wasm app.wasm \
-        NAME=@file /path=@file
-
-The module's output goes to stdout and `instructions=` and `grown_bytes=`
-to stderr. `NAME=@file` is a variable read from a file, since a page event
-has newlines in it. `/path=@file` is a file the module finds at that path
-with `os/read_bytes`, because a variable cannot carry a zero byte or bytes
-that are not utf-8, and the encoding #2416 asks for is binary. It is an
-example because wasmi is a dev-dependency, and the `kanso` binary a user
-installs does not carry a wasm interpreter. No row moves: nothing in the
-binary or the library changed.
-
-The host under it answered every filesystem call with ENOSYS. It now
-serves the files it is given: one directory, `/`, and `path_open`,
-`fd_seek`, `fd_read` and `fd_close` over them. A path it was not given
-answers ENOENT, which reads in the program as `os/file_not_found`, as
-native reads it.
-
-`tests/a_built_module_is_counted.rs` builds a program that prints a
-variable and the bytes of a file, runs the example's `answered` on it and
-reads the count the host gives when called directly. Its first version ran
-the example's binary and passed against an example edited to report one
-instruction too many: `cargo test --test` does not rebuild examples, so it
-read the binary an earlier build had left. A second version built the
-example from inside the test, and each of `cargo test` and the nested
-`cargo build` then rebuilt what the other had left, three minutes a run.
-The spec now compiles the example's source into itself with `#[path]`, so
-there is no binary to be stale, and with the edit it fails on 38,157
-against 38,156.
-
-The reader of a module's `kanso.link` section moved from
-`tests/build_wasm.rs` into the shared support, where the example reads it
-too.
-
-A first reading with it, on senro's `spec/runs/pages` views and a list of
-fifty posts (6,562 bytes of JSON): the browser module executes 3,991,398
-instructions to turn the page's data into HTML. Splitting the event and
-decoding the JSON, with nothing rendered, is 1,064,700 of them, and the
-split alone is 145,817. Rendering is the larger part.
-
-A second, on a tagged binary encoding written in kanso as a prototype,
-field names still on the wire: the same page is 5,044 bytes and decodes in
-1,708,928 instructions, where the JSON decodes in 918,883. By kind of
-value, binary against JSON: 905 against 1,664 instructions for a small
-int, 1,828 against 1,915 for a string of twenty bytes, and 17,729 against
-14,203 for a map of five one-letter keys. std/json reads a key with a
-builtin and keeps short tokens in a cache, and the prototype reads a key
-as any other string and puts it in a map, so the page's two hundred and
-fifty keys are where it loses. The scalars favour the binary encoding and
-the maps do not, which is the case for the positional layout the ruling
-asks for: a record's fields in order, with no key read and no map built.
-These are this machine's numbers from a runtime built here, and the
-benchmark #2416 owes will pin its own from CI.
-
 ## 2026-11-10 — senro's pages travel as bytes kata derives
 
 #2416, built in senro (senro#107 for the benchmark, senro#108 for the
@@ -2177,3 +2112,32 @@ refuses a program the language says is wrong, so the floor is lowered by
 what it costs, under the rule for the language working as specified, as for
 #2473: 95.39104366 -> 95.39101636. No runtime row moved. The compiler page
 has a section for it, §303.
+
+## 2026-11-12 — a browser component is listed by its record (senro#141)
+
+The follow-up the last entry left open. A server component was listed by
+the record `derive kata/views` writes into its module, and a browser
+component was named by hand, `browser/component planner/act planner/view`,
+under a name typed again in a map. kata now writes the record for every
+component, and a browser module lists them as an entry lists its server
+components: `browser/answer_pages [planner/component] views/rendered`.
+`browser/component` is gone. A browser component's record names no pages,
+since its actions never reach the server.
+
+The record names the one template that draws a component's state, so a
+component with two templates that bind actions is now refused on both
+sides, where only a server component was before.
+`spec/errors/component_drawn_by_two` is a browser counter with two such
+templates; senro's main checks it clean.
+
+Rows: senro's bench/pages moved. The first cut folded the list into a map
+before the module read its event and read about 7,000 instructions more on
+every browser row. Looking the component up when its event arrives, and
+recording no pages for it, brought them to browser_start 13,643 -> 16,873,
+browser_page 3,667,266 -> 3,670,780 and browser_act 115,229 -> 119,357, with
+server_data 1,130,145 -> 1,130,451 and server_html 3,087,821 -> 3,088,133.
+The derived code differs from main's only by the record and its type, and
+taking out `std/list` or `browser`'s own type left start-up where it was, so
+what remains is building a record of five fields where the module built one
+of two and a map. No kanso row moved. The site's views guide quotes the new
+lists, and the pin is d247faa.
