@@ -125,8 +125,14 @@ fn told e full depth t got
 
 fn summed t
   told_of = list/to_list (list/map t.failures (f -> "\n{f.name}\n  {f.got}\n"))
-  count = "\n{t.count} examples, {length t.failures} failed\n"
+  count = "\n{counted t.count}, {length t.failures} failed\n"
   io/write "{text/join told_of ""}{count}" .> (_ -> effect (verdict t))
+
+fn counted 1
+  "1 example"
+
+fn counted n
+  "{n} examples"
 
 fn verdict t
   return true if length t.failures == 0

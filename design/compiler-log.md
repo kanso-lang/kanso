@@ -20,94 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a lazy binding a callback holds joins the corpus
-
-Corpus first, before #2408. A senro app built natively held 184 bytes more
-for every request it answered: 3,844 kB over 20,000 requests, where the
-same app interpreted held nothing. valgrind named the allocation, one lazy
-cell made in `web/text_at` for each request and never freed. `text_at`
-binds the request's body lazily and hands it to a callback, so the frame
-that made the cell cannot free it, and nothing else in the runtime did.
-The log has called these cells live to exit since 2026-07-23. A program
-that runs once pays for them once. A server pays for every request.
-
-The fix for #2408 has the beat that made such a cell free it at a rewind.
-With that fix the welfare sum read just under the floor, for two reasons
-that are both about what is measured.
-
-**Cells were not counted as held memory.** `held_peak_bytes` is the
-malloc'd storage a program holds at its fullest, and it counted builders'
-buffers and maps' views. A cell is malloc'd too and was left out, so
-`run_peak_bytes`, which sums the arena, held and permanent peaks, could
-not see a cell nobody frees. The counting build now adds a cell's 184
-bytes when it is made and takes them off when it is freed. A shipping
-build counts nothing, so no benchmark's instructions or machine code
-move for this.
-
-**No benchmark bound a lazy value that a callback holds.** runbench made
-50 cells in all. `bench/runbench/runbench/deferred` is the `forked` shape
-with the page a lazy binding: `sized` has an arm that never reads it, so
-the page is built only when the callback asks. It runs 16,000 passes
-after `forked`. `bench/interp_corpus` runs the same loop for 2,000 passes
-before it prints. Neither printed line moves.
-
-**Rows.** Only runbench and the interpreted corpus run the new loop.
-The native and interpreted instruction rows are counts from this machine
-set by their distance to main's reading here, and CI's first run agreed
-with each. The tab's rows and clang's are CI's.
-- runbench rises to `work_runbench` 955,363,291, the shape's 44,795,888
-  instructions or 4.69% of the program, and at the dev tier to
-  `work_runbench_dev` 2,807,447,887. Its machine code grows 7,792 bytes
-  and the text rows sum to `text` 5,883,353. Its 18 new functions take
-  the emitted rows of the other benchmarks to `emitted_other_defines`
-  2,384, `emitted_other_calls` 21,917, `emitted_other_branches` 19,483
-  and `emitted_other_lines` 182,766.
-- Held memory, which is what the shape is for: `run_held_peak_bytes`
-  rises from 248,688 to 3,201,888. That is 2,944,000 bytes for the
-  shape's 16,000 cells and 9,200 for the 50 the program already made and
-  never freed. `run_peak_bytes`, the welfare term, goes from 7,899,297
-  to 10,852,497.
-- The run program's other counters move with the 16,000 passes:
-  `run_allocs` 2,344,070, `run_alloc_bytes` 255,465,985,
-  `run_beat_iters` 196,448, `run_evac_allocs` 2,615, `run_evac_bytes`
-  4,625,312, `run_thunk_allocs` 16,050, `run_thunk_evals` 16,025,
-  `run_thunk_live_exit` 16,050, `run_str_scans` 35,402,
-  `run_str_scan_bytes` 18,976,160, `run_sh_str` 18,977,792 and
-  `run_sh_buf` 96,487,840.
-- The interpreted corpus rises to `interp_instructions` 680,814,132,
-  `interp_allocs` 984,852 and `interp_peak_bytes` 1,377,499. The
-  interpreter frees a cell when nothing holds it, so its peak moves by
-  the loop's own 11,012 bytes.
-- The tab compiles and runs the same corpus:
-  `browser_compile_instructions` 358,135,821 (from 352,283,482),
-  `browser_compile_peak_bytes` 862,043 (from 856,339),
-  `browser_run_instructions` 90,929,278 (from 77,181,763) and
-  `browser_run_peak_bytes` 1,835,008 (from 1,572,864), which is four more
-  pages of wasm memory.
-- `codegen_instructions_release` rises 71 to 372,180,777. It arrived with
-  the two counting statements in the runtime, which clang reads at the
-  release tier and folds away. The dev tier links a runtime built ahead of
-  time and its row holds.
-- Counting cells alone moves ten goldens that run no new code.
-  pendbench's 200 cells read `pend_held_peak_bytes` 36,800. In
-  `tests/golden/mem`, `many_cells_held_peak_bytes` reads 7,360 for its
-  40 cells, and eight fixtures that hold one cell read 184:
-  `a_demanded_knot_allocates_one_cell_held_peak_bytes`,
-  `an_unasked_equality_stays_a_cell_held_peak_bytes`,
-  `builder_counts_once_held_peak_bytes`, `force_path_held_peak_bytes`,
-  `returned_thunk_held_peak_bytes`, `skip_unused_held_peak_bytes`,
-  `skipped_err_held_peak_bytes` and `unsafe_wrap_held_peak_bytes`.
-
-**The floor is re-based.** The change is only to what is measured, so
-each term it moves keeps its ratio to its baseline, as it did when the
-corpus first forked (2026-11-01). Ten baselines are scaled by the new
-reading over the old and rounded up: `run_instructions`, `run_peak_bytes`,
-`dev_run_instructions`, `interp_instructions`, `interp_peak_bytes`,
-`codegen_instructions_release` and the tab's four. The score moves only by
-that rounding, and the `--set` records it.
-
-**Open.** #2408's fix, measured against this.
-
 ## 2026-11-10 — a beat frees the lazy bindings its frames could not
 
 Fixes #2408.
@@ -2356,6 +2268,20 @@ std/spec: `compile_instructions` 22,652,874 -> 22,642,731,
 -> 412,081,396. The welfare score rose, and the floor is set to it,
 95.39230375032061 -> 95.39235548899775. The check verb's route for a test
 file reaches no compile any row measures.
+
+## 2026-11-12 — a spec of one example says "1 example" (#2469)
+
+The home-page spec `senro new` writes has one example, and `std/spec`
+ended its run with "1 examples, 0 failed". The summary now counts with the
+noun's number, as RSpec prints it: `counted 1` is "1 example", and any
+other count takes the plural. `tests/golden/test_verb/one_example` is a
+spec of one example; watched red on main with the plural.
+
+**Rows.** `lib/` is compiled into the binary, so the compile rows moved
+with it: `compile_instructions` 22,642,731 -> 22,642,405, and two worsened,
+`entry_instructions` 119,108,712 -> 119,108,774 and `library_instructions`
+63,609,813 -> 63,609,875. The welfare score rose, and the floor is set to
+it, 95.39235548899775 -> 95.39235569042921.
 
 ## 2026-11-12 — gavel: senro fitted to one way of doing each thing (#2468)
 
