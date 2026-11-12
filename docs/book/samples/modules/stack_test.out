@@ -1,0 +1,9 @@
+a stack
+  starts empty
+  after a push
+    holds one
+    holds what was pushed
+
+3 examples, 0 failed
+test_a_stack ... ok
+1 passed, 0 failed

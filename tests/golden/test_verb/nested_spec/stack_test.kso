@@ -1,0 +1,32 @@
+import "std/expect"
+import "std/io"
+import "std/spec"
+
+# A spec is a test whose value is an effect: `describe` runs the examples
+# under it and prints them as an outline. Each example gets its hooks run
+# fresh, the outer group's first, so the stack is empty again for the last
+# one. Two examples fail on purpose, one by answering a mismatch and one by
+# ending in a failure, and the hook around them still closes.
+test_a_stack = describe "a stack" [
+  around opened
+  before (_ -> [])
+  it "starts empty" (s -> expect (length s) . to (equal 0))
+  context "after a push" [
+    before (s -> push s 7)
+    it "holds one" (s -> expect s . to (have_length 1))
+    it "holds what was pushed" (s -> expect s . to (contain 8))
+    context "and another" [
+      before (s -> push s 9)
+      it "holds both, in order" (s -> expect s . to (equal [7 9]))
+    ]
+  ]
+  it "is empty again out here" (s -> expect s . to (equal []))
+  it "ends in a failure" (_ -> err "the shelf fell")
+]
+
+# Says so on the way in and on the way out of every example.
+fn opened v rest
+  io/write "    (opened)\n" .> (_ -> rest v) .> closed
+
+fn closed got
+  io/write "    (closed)\n" .> (_ -> effect got)
