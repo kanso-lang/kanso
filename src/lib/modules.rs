@@ -1662,9 +1662,8 @@ fn compile_module_loaded(
         .filter(|n| !is_operator(n))
         .collect();
     let mut ahead = dep_program.fns;
-    let held: Vec<ast::FnDecl> = ahead
-        .extract_if(.., |f| f.synthetic && own_names.contains(f.name.as_str()))
-        .collect();
+    let held: Vec<ast::FnDecl> =
+        ahead.extract_if(.., |f| f.synthetic && own_names.contains(f.name.as_str())).collect();
     merged.fns.extend(ahead);
     for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
         rename_travels(&mut program, &travels);
