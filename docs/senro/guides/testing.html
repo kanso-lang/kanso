@@ -98,7 +98,7 @@ broken <span class="o">=</span> put <span class="f">given/note</span> <span clas
   <pre><code>the home page
   is shown
 
-1 examples, 0 failed
+1 example, 0 failed
 test_home ... ok
 notes
   are listed
@@ -147,11 +147,51 @@ test_signing_in ... ok
 
 <p>a spec is a constant whose name begins <code>test_</code>. <code>describe</code> takes a name and a list, one item to a line. <code>it</code> names an example and the function that runs it. <code>context</code> is a group inside a group, and groups nest as deep as you like. the example passes when its function answers what an expectation answers for a match, and <code>expect value . to (matcher)</code> is how one is written. <code>std/expect</code> has <code>equal</code>, <code>contain</code>, <code>have_length</code>, <code>start_with</code>, <code>end_with</code>, <code>be_none</code>, <code>be_true</code>, <code>be_false</code> and <code>satisfy</code>, and <code>not_to</code> for the opposite.</p>
 
+<p>the spec <code>senro generate authentication</code> writes has all of these. the <code>around</code> hook opens the transaction every example runs in, which is described below. the <code>context</code> inside it holds four examples, and its <code>before</code> runs <code>joined</code> for each of them, after the <code>around</code> and before the example's own function:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session_test.kso</div>
+  <pre><code><span class="c"># Signing in, asked for as a browser asks. `signed` is the app as the entry</span>
+<span class="c"># serves it, with the sign-in requirement around its routes, so an example</span>
+<span class="c"># meets the door a visitor meets. A visit keeps the cookies the app sets:</span>
+<span class="c"># the examples under "with an account" begin signed in, since `joined` makes</span>
+<span class="c"># the account, follows the link mailed to confirm its address, and signs in.</span>
+test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</span> [
+  around (<span class="f">visit/within</span> signed connected)
+  it <span class="s">"is asked of a stranger"</span> turned_back
+  it <span class="s">"waits for the address to be confirmed"</span> held_back
+  context <span class="s">"with an account"</span> [
+    before joined
+    it <span class="s">"opens the app"</span> opened
+    it <span class="s">"is over once the visitor signs out"</span> over
+    it <span class="s">"takes the address and password again"</span> returned
+    it <span class="s">"refuses a wrong password"</span> refused
+  ]
+]</code></pre>
+</div>
+
+<p><code>senro test</code> prints the groups indented, as in the run above. a failing example is named by its whole description, the names of its groups and its own in order: <code>signing in with an account opens the app</code>.</p>
+
 <p>three hooks set an example up. <code>before</code> takes a function that is handed what the hooks so far built and answers what the example gets. <code>after</code> runs once the example has answered. <code>around</code> is handed the value so far and the rest of the example, and decides what happens on each side of it. a group's hooks wrap those of the groups inside it, and they run afresh for every example, so no example sees what another left. the book's chapter on modules has <a href="/book/modules.html">the whole of it</a>.</p>
 
 <h2>a visit</h2>
 
 <p>the value a senro example is handed is a visit: one visitor's dealings with the app. <code>visit/get</code>, <code>visit/post</code>, <code>visit/patch</code> and <code>visit/remove</code> each ask for a path and answer the visit as it stands afterwards. <code>visit/post</code> and <code>visit/patch</code> take a map and send it as a form, and <code>visit/post_json</code> sends JSON to an API. the last answer is on the visit: <code>v.status</code>, <code>v.body</code>, and <code>visit/header v "location"</code> for a header. <code>visit/location v</code> is where a redirect points, and <code>visit/followed v</code> goes there.</p>
+
+<p>the notes spec's third example uses most of these. it makes a note from the form, follows the redirect to the note's page, sends the edit form there, and reads the page the app redirects to after the edit:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">changed</span> v
+  <span class="f">visit/post</span> v <span class="s">"/notes"</span> <span class="f">given/note</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/patch</span> v (<span class="f">visit/location</span> v) edited)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/followed</span> v)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.body . to (contain <span class="s">"bread"</span>)))
+
+edited <span class="o">=</span> put <span class="f">given/note</span> <span class="s">"title"</span> <span class="s">"bread"</span></code></pre>
+</div>
+
+<p>each step answers a new visit, and the next step is handed it. <code>visit/location v</code> after the post is the new note's path, <code>/notes/1</code> or whatever id the row got, so the example never has to know the id. <code>edited</code> is the note's form with the title changed.</p>
 
 <p>a visit keeps the cookies the app sets and sends them with the next request. an example that signs in is signed in for what it asks next, and a notice set by one answer shows on the page after it. a request goes through everything a served one does: the route table, the check for a form posted from another site, sessions, the sign-in requirement and the page's <code>admits</code>.</p>
 
@@ -176,24 +216,6 @@ test_signing_in ... ok
 <span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/spec"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
-
-<span class="c"># Signing in, asked for as a browser asks. `signed` is the app as the entry</span>
-<span class="c"># serves it, with the sign-in requirement around its routes, so an example</span>
-<span class="c"># meets the door a visitor meets. A visit keeps the cookies the app sets:</span>
-<span class="c"># the examples under "with an account" begin signed in, since `joined` makes</span>
-<span class="c"># the account, follows the link mailed to confirm its address, and signs in.</span>
-test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</span> [
-  around (<span class="f">visit/within</span> signed connected)
-  it <span class="s">"is asked of a stranger"</span> turned_back
-  it <span class="s">"waits for the address to be confirmed"</span> held_back
-  context <span class="s">"with an account"</span> [
-    before joined
-    it <span class="s">"opens the app"</span> opened
-    it <span class="s">"is over once the visitor signs out"</span> over
-    it <span class="s">"takes the address and password again"</span> returned
-    it <span class="s">"refuses a wrong password"</span> refused
-  ]
-]
 
 <span class="k">fn</span> <span class="f">turned_back</span> v
   <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
@@ -265,6 +287,17 @@ door <span class="o">=</span> <span class="s">"/session/new"</span></code></pre>
 <h2>jobs in a test</h2>
 
 <p>a job an action queues waits in the <code>senro_jobs</code> table, inside the example's transaction, until something works it. <code>jobs/worked v.db jobs/default_queue performers t</code> claims one job due at the time <code>t</code> and runs it, as a Rails test's <code>perform_enqueued_jobs</code> does. it answers <code>none</code> when no job was due, and otherwise a line naming the job and how it went, which an expectation can read. <code>performers</code> is the table the entry derives, so a test file beside it has it already. the job's writes happen in the example's transaction and are rolled back with the rest.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/performed/steps.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">step</span> db table
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (now <span class="o">-&gt;</span> <span class="f">jobs/worked</span> db jobs/default_queue table (now <span class="o">+</span> 1000))
+    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> print (told said))
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> db)</code></pre>
+</div>
+
+<p>this is from senro's own suite, which works a queue three times and prints what each step did. it passes a time a second past now, so a job queued for now is due. in an app's spec the database is <code>v.db</code> and the table is <code>performers</code>.</p>
 
 <h2>what a spec does not reach</h2>
 
