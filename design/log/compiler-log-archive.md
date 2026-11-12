@@ -115692,3 +115692,23 @@ browser module; a differential golden that a page rendered from the encoded
 data is byte-identical to the server's rendering; a fuzzer for the codec run
 to silence; the guard against data from another compile; and the numbers
 before and after.
+
+## 2026-11-10 — gavel: keyed list matching and compiled updates are recorded, not built
+
+Clay ruled that two ways of making senro's pages update faster are written
+into senro's `design/live-views.md` as later work, and that neither is built
+yet (#2418).
+
+Keyed list matching: the page script's morph matches children by position,
+so a list that gains an item at the top re-patches every element after it.
+Matching on a stable key moves the existing elements, with `moveBefore()`
+where the browser has it and `insertBefore` elsewhere. Compiled updates:
+kata knows which fields each part of a template reads, so it could compile a
+template into direct updates of the nodes that show a changed field. A
+virtual DOM is declined, and the note says so.
+
+Each is measured before it is built. The issue gives an order for when the
+time comes: keyed matching, then the binary encoding, then compiled updates
+if a benchmark shows the morph is the cost. The encoding is ruled and owed
+on #2416, so cloud reads the order as placing the two later items around it
+and builds the encoding now. The note went in with senro#105.

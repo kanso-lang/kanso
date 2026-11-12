@@ -1,0 +1,9 @@
+# A list written across lines takes one element per line, so a line holding
+# three strings reads as the first applied to the other two. No string can be
+# called, and this checked clean and failed when the line ran (#2479).
+names = [
+  "confirmations" "registration" "resets"
+  "session" "unlocks" "user_accounts_table"
+]
+
+pub play = print names

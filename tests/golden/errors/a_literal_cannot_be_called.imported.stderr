@@ -1,0 +1,4 @@
+error[type]: an int cannot be called, and here it is applied to 1 argument (module a_literal_cannot_be_called)
+  --> a_literal_cannot_be_called.kso:4:5
+   4 | x = 3 4
+           ^

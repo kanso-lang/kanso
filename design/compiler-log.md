@@ -20,26 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: keyed list matching and compiled updates are recorded, not built
-
-Clay ruled that two ways of making senro's pages update faster are written
-into senro's `design/live-views.md` as later work, and that neither is built
-yet (#2418).
-
-Keyed list matching: the page script's morph matches children by position,
-so a list that gains an item at the top re-patches every element after it.
-Matching on a stable key moves the existing elements, with `moveBefore()`
-where the browser has it and `insertBefore` elsewhere. Compiled updates:
-kata knows which fields each part of a template reads, so it could compile a
-template into direct updates of the nodes that show a changed field. A
-virtual DOM is declined, and the note says so.
-
-Each is measured before it is built. The issue gives an order for when the
-time comes: keyed matching, then the binary encoding, then compiled updates
-if a benchmark shows the morph is the cost. The encoding is ruled and owed
-on #2416, so cloud reads the order as placing the two later items around it
-and builds the encoding now. The note went in with senro#105.
-
 ## 2026-11-10 — a built module's wasm instructions can be counted from outside the tests
 
 #2416 owes a benchmark that counts what a page update costs in the browser,
@@ -2161,3 +2141,39 @@ Authorization at the page: a component's server action is now answered as the pa
 Rows: senro's bench/pages moved in CI. server_records went from 344,151 to 344,207, server_data from 1,130,160 to 1,130,145, and server_html from 3,087,836 to 3,087,821; the browser rows held. The bench's component runs in the browser, so it gets no record. The likeliest cause is kata/views now importing `data`, which has not been isolated. No kanso row moved.
 
 Open: browser components still go through `browser/component act view`; giving them the same derived record is a small follow-up.
+
+## 2026-11-12 — a literal applied as a function is refused where it is written (#2479)
+
+A list written across lines takes one element per line, so a line holding
+two strings reads as the first string applied to the second. No literal can
+be called, and `kanso check` passed the line; both engines failed with
+"`confirmations` is not callable" when it ran. In senro the same shape, in a
+generator's list of modules, came out natively as an error naming an
+unrelated function.
+
+The checker now refuses a string, number, list or map at the head of an
+application, at the literal's line and column. Inside a list the message
+says the list takes one element per line:
+
+```
+error[type]: this element of the list is a string applied to 2 arguments, and a string cannot be called. A list written across lines takes one element per line
+```
+
+Elsewhere it reads "an int cannot be called, and here it is applied to 1
+argument". A value called through a name, as in the runtime corpus's
+`a_plain_value_is_not_callable`, still checks clean and fails when it runs,
+because its value is not on the page. Two error goldens pin the refusal: the
+issue's list and `x = 3 4`. main's binary checks both as `ok`.
+
+**Rows.** The first cut ran the check as a pass of its own at every node and
+cost the entry corpus's check 184,858 instructions in CI. The list case now
+rides `call_shaped_at`, which already walks a list's elements, and the call
+case rides `literal_argument_at`, which already takes an application apart.
+What is left is the price of the refusal: `compile_instructions`
+22,778,659 -> 22,780,737, `entry_instructions` 119,972,835 -> 119,985,418,
+`library_instructions` 64,026,941 -> 64,031,825 and
+`browser_compile_instructions` 412,743,106 -> 412,766,768. The check
+refuses a program the language says is wrong, so the floor is lowered by
+what it costs, under the rule for the language working as specified, as for
+#2473: 95.39104366 -> 95.39101636. No runtime row moved. The compiler page
+has a section for it, §303.
