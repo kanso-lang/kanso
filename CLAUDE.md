@@ -523,6 +523,14 @@ in one.
 - **An app goes through its models (#2394).** senro app code, the examples
   and what the generator writes hold no SQL and no `pg/query`. A read or a
   write the models cannot express is a gap in senro, fixed there.
+- **senro ships as releases.** An app gets senro with `kanso install`, which
+  resolves the highest `vX.Y.Z` tag. senro's `VERSION` names the release,
+  and its release workflow tags the main commit that first carries a
+  version, since a session cannot push a tag (403). A merge that changes
+  what an app writes or runs raises `VERSION` in the same pull request: the
+  minor while senro is 0.x when an app must change to follow, the patch
+  otherwise. The site's `docs/senro/senro-version` names a tagged commit.
+  Clay: "it definitely needs release tags."
 - **senro may ask the language for more.** Clay: "this real world use case
   for kanso may lead to several more language tweaks. in general i support
   ambition as long as it fits with the stated goals for the language and the
