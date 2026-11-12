@@ -181,8 +181,11 @@ fn plan_prints_the_description_without_executing_it() {
 /// Every fixture runs as a LIBRARY through the harness-generated entry, per
 /// the play migration — this corpus no longer touches the compiler's entry
 /// synthesis. Most diagnostics are byte-identical either way; the ones that
-/// gain the loader's ` (module …)` suffix carry a second golden for this
-/// path, the same shape as the micro corpus's `.imported.out`.
+/// gain the loader's ` (module …)` suffix carry `.imported.stderr` in place
+/// of `.stderr`, the same shape as the micro corpus's `.imported.out`. A
+/// fixture has one golden: a `.stderr` beside an `.imported.stderr` is read by
+/// nothing here or in the page's corpus test, and at least 20 of the 72
+/// on disk had drifted before they went (#2484), so one is refused.
 ///
 /// This sentence said TWENTY-THREE of them and there were 41 the day it was
 /// corrected. A count of files on disk goes stale every time somebody adds a
@@ -193,6 +196,11 @@ fn plan_prints_the_description_without_executing_it() {
 fn error_corpus_reports_each_golden_diagnostic() {
     for program in kso_files(&manifest_dir().join("tests/golden/errors")) {
         let imported_golden = program.with_extension("imported.stderr");
+        assert!(
+            !(imported_golden.exists() && program.with_extension("stderr").exists()),
+            "{program:?} carries both .stderr and .imported.stderr; the imported one is its \
+             golden and nothing compares the other, so remove the .stderr"
+        );
         let expected_err = if imported_golden.exists() {
             std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
         } else {
