@@ -23,6 +23,18 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. the app's secret is <code>pub secret</code> in its session module, which senro reads by that name and the route table carries, and a deployed app sets <code>SENRO_SECRET</code>, which senro reads in its place. the secret rides on the request an action is handed and never in a header, so nothing a client sends can name it. an action reads the session with <code>web/session req</code> and keeps a changed one by answering <code>web/kept req response session</code>. an answer that would set the session the request already carried sets none, so a page the server read before a sign-out cannot sign the visitor back in when its answer reaches the browser last.</p>
 
+<p>the guestbook's list of signatures reads the session to show whatever notice it carries and who is signed in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/entries.kso</div>
+  <pre><code><span class="c"># The session says who is signed in, and carries a notice across the</span>
+<span class="c"># redirect that follows a signature or a sign-in; the page that shows the</span>
+<span class="c"># notice clears it.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+  s <span class="o">=</span> <span class="f">web/session</span> req
+  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> shown req book s (filled <span class="s">""</span> {}) 200)</code></pre>
+</div>
+
 <p><code>web/signed_in req response session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
 <p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. a session made <code>web/lasting</code> keeps its cookie for those fourteen days instead, which is Devise's "remember me". the mark is in the session itself, so every later response that keeps the session keeps the cookie as long. the guestbook's sign-in form has a "Keep me signed in" box, and <code>signed</code> below marks the session when it is ticked. <code>web/signed_out session</code> forgets the sign-in, the mark with it, and keeps the rest.</p>
@@ -157,6 +169,14 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <h2>writing as the app</h2>
 
 <p>some writes to an account have no signed-in visitor behind them. a reset link sets a new digest for someone who cannot sign in. a confirmation link stamps <code>confirmed</code>, an unlock link clears a lock, and a sign-in counts wrong passwords and records where it came from. the guestbook makes each of these writes as the app. the write a confirmation link makes is <code>account/update (models/as_app db) a.id { "confirmed":"{t}" }</code>. <code>models/as_app db</code> is the database session asking as the app itself, and a write through it asks no policy.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/confirmations.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">confirmed</span> _ db a
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">account/update</span> (<span class="f">models/as_app</span> db) a.id { <span class="s">"confirmed"</span>:<span class="s">"{t}"</span> })
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (<span class="f">web/redirect</span> home confirmed_notice))</code></pre>
+</div>
 
 <p>a write as the app follows one rule: the id comes from a token the app checked or a record it just read, and the changes are written out at the call, never taken from a form.</p>
 
@@ -801,6 +821,21 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <h2>requests from other sites</h2>
 
 <p>a page on another site can hold a form that posts to the app, and a visitor's browser would send it with their session. senro refuses such a request before any action sees it. any request but a GET or a HEAD is answered with a 403 when the browser says another site sent it: its <code>Sec-Fetch-Site</code> header is anything but <code>same-origin</code> or <code>none</code>, or, from a browser too old to send that header, its <code>Origin</code> is not the app's own. the session cookie is also <code>SameSite=Lax</code>, so a browser should not carry it on such a request at all. this is the check Rails' <code>protect_from_forgery</code> makes, done with the headers a browser sets instead of a token in every form. a request with neither header comes from a program, which has no visitor's cookie to borrow, and is let through.</p>
+
+<p>senro's own suite posts to a page with each combination of headers and prints what came back. the port is the one the test server listened on:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/serve/cross_site.out</div>
+  <pre><code>POST /door: HTTP/1.1 200 OK: let in
+POST /door with origin: http://localhost:24406: HTTP/1.1 200 OK: let in
+POST /door with origin: https://elsewhere.example: HTTP/1.1 403 Forbidden: Forbidden: a request from another site
+POST /door with origin: null: HTTP/1.1 403 Forbidden: Forbidden: a request from another site
+POST /door with sec-fetch-site: same-origin: HTTP/1.1 200 OK: let in
+POST /door with sec-fetch-site: cross-site: HTTP/1.1 403 Forbidden: Forbidden: a request from another site
+POST /door with sec-fetch-site: same-site: HTTP/1.1 403 Forbidden: Forbidden: a request from another site
+POST /door with sec-fetch-site: cross-site, origin: http://localhost:24406: HTTP/1.1 403 Forbidden: Forbidden: a request from another site
+GET /door with sec-fetch-site: cross-site: HTTP/1.1 200 OK: looked</code></pre>
+</div>
 
 <p>every answer also carries the headers Rails sends by default. <code>x-frame-options: SAMEORIGIN</code> keeps another site from showing the app's pages in a frame, where a visitor could be tricked into clicking them. <code>x-content-type-options: nosniff</code> has the browser take a body as the type it was sent as, <code>referrer-policy: strict-origin-when-cross-origin</code> keeps a link to another site from telling it the path it was followed from, and <code>x-permitted-cross-domain-policies: none</code> and <code>x-xss-protection: 0</code> turn off two old browser features. an action that sets one of these itself, such as a page meant to be framed, keeps its own.</p>
 </article>
