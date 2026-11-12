@@ -182,7 +182,15 @@ fn literal_argument_at(
     diags: &mut Vec<Diagnostic>,
 ) {
     let Expr::App { head, args, .. } = e else { return };
-    let Expr::Ident(name, _, _) = &**head else { return };
+    let Expr::Ident(name, _, _) = &**head else {
+        // the list above has already said this, in the words for a list
+        if let Some((what, args, span)) = applied_literal(e) {
+            if !diags.iter().any(|d| d.span == span) {
+                diags.push(literal_applied(what, args, span));
+            }
+        }
+        return;
+    };
     // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
     // Every arm below is guarded by `literal_kind(arg)`, so a call
     // with no literal argument can say nothing at all — and asking
@@ -272,6 +280,53 @@ fn literal_argument_at(
                 }
             }
         }
+    }
+}
+
+/// A literal applied as a function (#2479). No literal can be called, so
+/// `"a" "b"` type-checked and failed only when the line ran. A list written
+/// across lines takes one element per line, and two strings on one of its
+/// lines read as exactly this call, so `call_shaped_at` says so for an
+/// element of a list, and `literal_argument_at` for any other application.
+fn literal_in_a_list(what: &str, args: usize, span: Span) -> Diagnostic {
+    Diagnostic::new(
+        "type",
+        format!(
+            "this element of the list is {what} applied to {}, and {what} cannot be called. \
+             A list written across lines takes one element per line",
+            counted(args)
+        ),
+        span,
+    )
+}
+
+fn literal_applied(what: &str, args: usize, span: Span) -> Diagnostic {
+    Diagnostic::new(
+        "type",
+        format!("{what} cannot be called, and here it is applied to {}", counted(args)),
+        span,
+    )
+}
+
+/// What a literal at the head of an application is, how many arguments it is
+/// handed, and where it stands.
+fn applied_literal(e: &Expr) -> Option<(&'static str, usize, Span)> {
+    let Expr::App { head, args, .. } = e else { return None };
+    let what = match head.as_ref() {
+        Expr::Int(..) => "an int",
+        Expr::Float(..) => "a float",
+        Expr::Str(..) => "a string",
+        Expr::List(..) => "a list",
+        Expr::MapLit(..) => "a map",
+        _ => return None,
+    };
+    Some((what, args.len(), head.span()))
+}
+
+fn counted(args: usize) -> String {
+    match args {
+        1 => "1 argument".to_string(),
+        n => format!("{n} arguments"),
     }
 }
 

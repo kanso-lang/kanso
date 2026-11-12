@@ -1,0 +1,6 @@
+# A literal applied to arguments outside a list. No int can be called, and
+# this checked clean and failed with "`3` is not callable" when it ran
+# (#2479).
+x = 3 4
+
+pub play = print x

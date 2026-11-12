@@ -811,6 +811,10 @@ fn call_shaped_at(
 ) {
     if let Expr::List(items, _) = expr {
         for (at, item) in items.iter().enumerate() {
+            if let Some((what, args, span)) = applied_literal(item) {
+                diags.push(literal_in_a_list(what, args, span));
+                continue;
+            }
             let Expr::Ident(name, span, _) = item else {
                 continue;
             };
