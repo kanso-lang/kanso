@@ -244,6 +244,10 @@ door <span class="o">=</span> <span class="s">"/session/new"</span></code></pre>
 
 <p>the same works for anything an example needs in the database first: call the model with <code>v.db</code>, as an action would.</p>
 
+<h2>jobs in a test</h2>
+
+<p>a job an action queues waits in the <code>senro_jobs</code> table, inside the example's transaction, until something works it. <code>jobs/worked v.db jobs/default_queue performers t</code> claims one job due at the time <code>t</code> and runs it, as a Rails test's <code>perform_enqueued_jobs</code> does. it answers <code>none</code> when no job was due, and otherwise a line naming the job and how it went, which an expectation can read. <code>performers</code> is the table the entry derives, so a test file beside it has it already. the job's writes happen in the example's transaction and are rolled back with the rest.</p>
+
 <h2>what a spec does not reach</h2>
 
 <p>a visit asks for pages and reads them. it does not run the scripts on them, so a live view's updates in the browser and a component compiled to wasm are outside it. senro's own suite drives those in Firefox and Chromium. a single example cannot yet be run by name, only a file.</p>
