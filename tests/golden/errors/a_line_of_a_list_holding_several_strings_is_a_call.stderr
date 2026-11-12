@@ -1,8 +1,0 @@
-error[type]: this element of the list is a string applied to 2 arguments, and a string cannot be called. A list written across lines takes one element per line
-  --> tests/golden/errors/a_line_of_a_list_holding_several_strings_is_a_call.kso:5:3
-   5 |   "confirmations" "registration" "resets"
-         ^
-error[type]: this element of the list is a string applied to 2 arguments, and a string cannot be called. A list written across lines takes one element per line
-  --> tests/golden/errors/a_line_of_a_list_holding_several_strings_is_a_call.kso:6:3
-   6 |   "session" "unlocks" "user_accounts_table"
-         ^
