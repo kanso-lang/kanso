@@ -77,11 +77,8 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
   <div class="code-panel-title">spec/runs/singular/profile.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
 
-<span class="k">pub</span> <span class="k">type</span> <span class="f">profile</span>
-  name
-
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _
-  <span class="s">"your profile is at {routes/path_to (profile "</span>ada<span class="s">")}"</span>
+  <span class="s">"your profile is at {routes/path_to "</span><span class="f">profile/show</span><span class="s">"}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> _ _
   <span class="s">"edit it"</span>
@@ -127,20 +124,11 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 
 <p>the server hands the action the parent's id first and its own id second. every action of a nested module takes the parent's id in that place, and one that does not is refused where it is declared. nesting goes one level deep, which is what Rails' guides advise: a comment's URL needs its post and nothing above it, so a module nested under <code>comments</code> answers under <code>/comments/:comment_id</code>.</p>
 
-<p>a nested route named from code takes the parent's id before its own: <code>path_to "comments/show" 3 4</code> is <code>/posts/3/comments/4</code>, and a call that leaves the parent out is refused with the form it should take. <code>path_to comment</code> reads the parent's id from the record's own <code>post_id</code>, so a nested record has that field.</p>
+<p>a nested route named from code takes the parent's id before its own: <code>path_to "comments/show" 3 4</code> is <code>/posts/3/comments/4</code>, and a call that leaves the parent out is refused with the form it should take.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/runs/nested_routes/comments.kso</div>
-  <pre><code><span class="c"># A comment, which names the post it is under, so its path can.</span>
-<span class="k">pub</span> <span class="k">type</span> <span class="f">comment</span>
-  id
-  post_id
-  body
-
-<span class="c"># The first comment on post 3, for the spec to place.</span>
-<span class="k">pub</span> <span class="f">first</span> <span class="o">=</span> comment 4 3 <span class="s">"first"</span>
-
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
   <span class="s">"the comments on post {post_id}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ post_id:int id:int
@@ -149,21 +137,17 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 
 <h2>naming a route</h2>
 
-<p><code>routes/path_to</code> answers a route's path, so a link or a redirect never spells a path by hand. it takes an action's name, with an id when the route has one, or a record whose type is declared in a module with a <code>show</code> action.</p>
+<p><code>routes/path_to</code> answers a route's path, so a link or a redirect never spells a path by hand. it takes the route's name, written whole as a string, and an id for each id the route has: the parent's first, then its own. there is one form, so a reader always sees which route a call names.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/runs/path_to/posts.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
 
-<span class="k">pub</span> <span class="k">type</span> <span class="f">post</span>
-  id
-  title
-
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _
   <span class="s">"every post: {routes/path_to "</span><span class="f">posts/index</span><span class="s">"}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ id:int
-  <span class="s">"post {id} is at {routes/path_to (post id "</span>hello<span class="s">")}"</span></code></pre>
+  <span class="s">"post {id} is at {routes/path_to "</span><span class="f">posts/show</span><span class="s">" id}"</span></code></pre>
 </div>
 <div class="code-output">
   <div class="code-panel-title">kanso run</div>
@@ -173,7 +157,9 @@ every post: /posts
 /</code></pre>
 </div>
 
-<p>both forms are checked while the app compiles. a name that is no route is refused at the call, and so is an id given to a route without one or left off a route that needs it.</p>
+<p>the call is checked while the app compiles. a name that is no route is refused at the call, and so is an id given to a route without one or left off a route that needs it. a first argument that is not a string written whole, such as a name bound to one, is refused with the form to write instead.</p>
+
+<p>a template names a route the same way, <code>a href=(path_to "notes/show" r.id)</code>, and the views guide shows it.</p>
 
 <h2>keeping an old URL</h2>
 
@@ -240,5 +226,5 @@ json_type <span class="o">=</span> <span class="s">"content-type: application/js
 
 <h2>what the derivation writes</h2>
 
-<p><code>derive app/conventions</code>, through <code>routes/rest</code>, writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
+<p><code>derive app/conventions</code>, through <code>routes/rest</code>, writes one constant, <code>routes</code>, a map from each method and path to its action, and holds each <code>path_to</code> an app writes, in its code and in its templates, to that table. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
 </article>

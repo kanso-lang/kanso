@@ -90,12 +90,9 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pr
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
 <span class="k">pub</span> <span class="f">create_notes</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>)
   (<span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>)
   (<span class="f">models/column</span> <span class="s">"pages"</span> <span class="s">"integer"</span>)
   (<span class="f">models/column</span> <span class="s">"cover"</span> <span class="s">"text not null default ''"</span>)
-  <span class="f">models/created_at</span>
-  <span class="f">models/updated_at</span>
 ]</code></pre>
 </div>
 
@@ -111,11 +108,8 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pr
 ]
 
 pages_table <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial primary key"</span>)
   (<span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>)
   (<span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>)
-  <span class="f">models/created_at</span>
-  <span class="f">models/updated_at</span>
 ]</code></pre>
 </div>
 
@@ -161,6 +155,7 @@ pages_table <span class="o">=</span> <span class="f">models/create_table</span> 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./note"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
@@ -178,17 +173,18 @@ per_page <span class="o">=</span> 25
   <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown req r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
-  effect (form req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} 200)
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/create"</span>
+  effect (form req path <span class="s">"POST"</span> blank {} 200)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  given <span class="o">=</span> sent (<span class="f">web/form</span> req.body)
+  given <span class="o">=</span> sent (<span class="f">web/input</span> req)
   <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (made req w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
   <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (editing req id r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
-  given <span class="o">=</span> picked (<span class="f">web/form</span> req.body)
+  given <span class="o">=</span> picked (<span class="f">web/input</span> req)
   <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (changed req id w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
@@ -204,7 +200,7 @@ per_page <span class="o">=</span> 25
   mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p.rows as_json)
   <span class="k">return</span> <span class="f">web/json</span> 200 mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/notes_index_view</span> p.rows p.number p.more
-  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
+  <span class="f">views/answer</span> req 200 <span class="s">"Notes"</span> page</code></pre>
 </div>
 
 <div class="code-panel">
@@ -213,16 +209,16 @@ per_page <span class="o">=</span> 25
 header
   h1 Notes
   p.lede
-    a href<span class="o">=</span><span class="s">"/notes/new"</span> New note
+    a href<span class="o">=</span>(path_to <span class="s">"notes/new"</span>) New note
 ul.notes
   each rows r <span class="o">-&gt;</span>
     li
-      a href<span class="o">=</span><span class="s">"/notes/{r.id}"</span> <span class="o">=</span> r.title
+      a href<span class="o">=</span>(path_to <span class="s">"notes/show"</span> r.id) <span class="o">=</span> r.title
 nav.pages
   <span class="k">if</span> number <span class="o">&gt;</span> 1
-    a href<span class="o">=</span><span class="s">"/notes?page={number - 1}"</span> Previous page
+    a href<span class="o">=</span><span class="s">"?page={number - 1}"</span> Previous page
   <span class="k">if</span> more
-    a href<span class="o">=</span><span class="s">"/notes?page={number + 1}"</span> Next page</code></pre>
+    a href<span class="o">=</span><span class="s">"?page={number + 1}"</span> Next page</code></pre>
 </div>
 
 <p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks. <code>note/find</code> answers none for an id no row has, and the first arm of <code>shown</code> answers that with a 404.</p>
@@ -236,7 +232,7 @@ nav.pages
   attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
   <span class="k">return</span> <span class="f">web/json</span> 200 attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
   page <span class="o">=</span> <span class="f">views/notes_show_view</span> record
-  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+  <span class="f">views/answer</span> req 200 <span class="s">"Note"</span> page</code></pre>
 </div>
 
 <p>senro's spec makes a note, asks for it as JSON, changes it, and asks for the list the same way. ids and times change from run to run, so the spec prints each id as N and each time as T:</p>
@@ -270,16 +266,18 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">made</span> req w:<span class="f">models/invalid</span>
-  form req <span class="s">"/notes"</span> <span class="s">"POST"</span> (filled w.record) w.problems 422
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/create"</span>
+  form req path <span class="s">"POST"</span> (filled w.record) w.problems 422
 
 <span class="k">fn</span> <span class="f">made</span> _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">made</span> _ w
-  <span class="f">web/redirect</span> <span class="s">"/notes/{w.id}"</span>
+  <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"notes/show"</span> w.id)
 
 <span class="k">fn</span> <span class="f">changed</span> req id w:<span class="f">models/invalid</span>
-  form req <span class="s">"/notes/{id}"</span> <span class="s">"PATCH"</span> (filled w.record) w.problems 422
+  path <span class="o">=</span> <span class="f">routes/path_to</span> <span class="s">"notes/update"</span> id
+  form req path <span class="s">"PATCH"</span> (filled w.record) w.problems 422
 
 <span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
@@ -288,7 +286,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">changed</span> _ id _
-  <span class="f">web/redirect</span> <span class="s">"/notes/{id}"</span>
+  <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"notes/show"</span> id)
 
 <span class="k">fn</span> <span class="f">gone</span> w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
@@ -297,7 +295,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">gone</span> _
-  <span class="f">web/redirect</span> <span class="s">"/notes"</span></code></pre>
+  <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"notes/index"</span>)</code></pre>
 </div>
 
 <h2>the views</h2>
@@ -310,7 +308,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 header
   h1 Note
   p.lede
-    a href<span class="o">=</span><span class="s">"/notes"</span> All notes
+    a href<span class="o">=</span>(path_to <span class="s">"notes/index"</span>) All notes
 form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
   input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
   label
@@ -516,9 +514,10 @@ read again: 404</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session.kso</div>
-  <pre><code><span class="c"># The key that signs every session. `generate authentication` made it at</span>
-<span class="c"># random. Keep it out of any repository the public can read; changing it</span>
-<span class="c"># signs every visitor out.</span>
+  <pre><code><span class="c"># The key that signs every session, which senro reads by its name.</span>
+<span class="c"># `generate authentication` made it at random for development; a deployed</span>
+<span class="c"># app sets `SENRO_SECRET` instead, which senro reads in its place, so the</span>
+<span class="c"># real one stays out of the repository. Changing it signs every visitor out.</span>
 <span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"made at random by generate authentication"</span>
 
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"new"</span>]
@@ -541,42 +540,26 @@ read again: 404</code></pre>
 
 <span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> 60
 
-<span class="c"># A locked account answers a wrong password as any wrong password is</span>
-<span class="c"># answered, and tells only the holder of the right one that it is locked.</span>
+<span class="c"># What a sign-in comes to is `accounts`' to decide: the password checked,</span>
+<span class="c"># the lock kept, and a right password counted and stamped. A locked account</span>
+<span class="c"># tells only the holder of the right password that it is locked.</span>
 <span class="k">fn</span> <span class="f">entered</span> req db email a password t
-  right <span class="o">=</span> <span class="f">passwords/matches?</span> password a.digest
-  <span class="k">return</span> effect (shut req email right) <span class="k">if</span> still_locked? a t
-  <span class="k">return</span> missed req db email a t <span class="k">if</span> <span class="k">not</span> right
-  <span class="f">accounts/arrived</span> req db <span class="f">user/user_model</span> a.id a.was_at a.was_ip t
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> signed req a)
+  model <span class="o">=</span> <span class="f">user/user_model</span>
+  <span class="f">accounts/attempt</span> req db model a password locks_after locked_minutes t
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> answered req email a v.outcome)
 
-<span class="k">fn</span> <span class="f">still_locked?</span> a t
-  <span class="f">accounts/locked?</span> a.locked locked_minutes t
+<span class="k">fn</span> <span class="f">answered</span> req _ a <span class="s">"signed"</span>
+  signed req a
 
-<span class="k">fn</span> <span class="f">shut</span> req email true
+<span class="k">fn</span> <span class="f">answered</span> req email _ <span class="s">"locked"</span>
   told <span class="o">=</span> <span class="s">"This account is locked. Try again in {locked_minutes} minutes."</span>
-  opened req email { <span class="s">"password"</span>:told } 403
+  effect (opened req email { <span class="s">"password"</span>:told } 403)
 
-<span class="k">fn</span> <span class="f">shut</span> req email false
-  refused req email
-
-<span class="c"># A wrong password counts against the account, and the one that makes the</span>
-<span class="c"># run long enough locks it.</span>
-<span class="k">fn</span> <span class="f">missed</span> req db email a t
-  <span class="k">return</span> effect (refused req email) <span class="k">if</span> a.id <span class="o">==</span> <span class="s">""</span>
-  <span class="f">accounts/missed</span> db <span class="f">user/user_model</span> a.id a.locked
-    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> locking req db email a counted t)
-
-<span class="k">fn</span> <span class="f">locking</span> req _ email _ _:<span class="f">web/absent</span> _
-  effect (refused req email)
-
-<span class="k">fn</span> <span class="f">locking</span> req db email a counted t
-  <span class="k">return</span> effect (refused req email) <span class="k">if</span> counted.failures <span class="o">!=</span> locks_after
-  <span class="f">accounts/locked_at</span> db <span class="f">user/user_model</span> a.id t
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (refused req email))</code></pre>
+<span class="k">fn</span> <span class="f">answered</span> req email _ _
+  effect (refused req email)</code></pre>
 </div>
 
-<p>a locked account answers a wrong password with the same 422 as ever, and tells only the holder of the right one that it is locked. the migration the generator writes for <code>users</code> holds the columns these functions keep, which <code>accounts/columns</code> lists. senro's spec drives the generated app to a lock:</p>
+<p>a locked account answers a wrong password with the same 422 as ever, and tells only the holder of the right one that it is locked. the migration the generator writes for <code>users</code> holds the columns <code>accounts/attempt</code> keeps, which <code>accounts/columns</code> lists. senro's spec drives the generated app to a lock:</p>
 
 <div class="code-output">
   <div class="code-panel-title">four wrong passwords, then five</div>
@@ -615,7 +598,7 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 
 <span class="c"># Every action asks for a sign-in unless its module lists it in</span>
 <span class="c"># `without_sign_in`.</span>
-signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes <span class="f">session/secret</span> <span class="f">session/signed_against</span>
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes <span class="f">session/signed_against</span>
 
 <span class="f">app/run</span> <span class="s">"notebook"</span> signed connected derived</code></pre>
 </div>

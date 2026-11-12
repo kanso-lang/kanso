@@ -421,9 +421,9 @@ served, with no worker beside it</code></pre>
 <span class="c"># letter is queued on `db` and sent by the worker beside the server. First, a</span>
 <span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
 <span class="c"># it works once.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> req db id email kept
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/{reset_token id kept t}/edit"</span>)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (reset_path req id kept t))
     <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))</code></pre>
 </div>
 
@@ -436,11 +436,11 @@ served, with no worker beside it</code></pre>
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> <span class="f">removal/act</span> <span class="f">removal/view</span>) }
 
-acting <span class="o">=</span> <span class="f">web/components</span> routes <span class="f">entries/secret</span> served
+acting <span class="o">=</span> <span class="f">web/components</span> routes served
 
 bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
 
-served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting <span class="f">entries/secret</span> bound_of
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting bound_of
 
 connected <span class="o">=</span> <span class="f">pg/from_env</span>
 

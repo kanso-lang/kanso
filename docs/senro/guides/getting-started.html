@@ -52,11 +52,11 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> <span class="f">removal/act</span> <span class="f">removal/view</span>) }
 
-acting <span class="o">=</span> <span class="f">web/components</span> routes <span class="f">entries/secret</span> served
+acting <span class="o">=</span> <span class="f">web/components</span> routes served
 
 bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
 
-served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting <span class="f">entries/secret</span> bound_of
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting bound_of
 
 connected <span class="o">=</span> <span class="f">pg/from_env</span>
 
@@ -76,7 +76,6 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
 <span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
   (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
   (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
 ]</code></pre>
@@ -124,6 +123,7 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/entries.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../models"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./removal"</span>
 <span class="k">import</span> <span class="s">"./signature"</span>
@@ -134,19 +134,16 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 <span class="c"># redirect that follows a signature or a sign-in; the page that shows the</span>
 <span class="c"># notice clears it.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
-  s <span class="o">=</span> <span class="f">web/session</span> req secret
+  s <span class="o">=</span> <span class="f">web/session</span> req
   <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> shown req book s (filled <span class="s">""</span> {}) 200)
-
-<span class="c"># A development secret. A deployed guestbook signs its sessions with its own.</span>
-<span class="k">pub</span> <span class="f">secret</span> <span class="o">=</span> <span class="s">"the guestbook's development secret"</span>
 
 <span class="c"># A signature is made through its model, whose rules decide whether it is</span>
 <span class="c"># fit to keep. It is signed with the name of the account signed in. The</span>
 <span class="c"># fields go to Postgres as parameters, so what a visitor types is stored as</span>
 <span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
-  f <span class="o">=</span> put (<span class="f">web/form</span> req.body) <span class="s">"name"</span> viewer
+  viewer <span class="o">=</span> <span class="f">web/viewer</span> req
+  f <span class="o">=</span> put (<span class="f">web/input</span> req) <span class="s">"name"</span> viewer
   <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> signed req db w)</code></pre>
 </div>
 
@@ -164,18 +161,18 @@ header
   p.lede Leave a line for whoever comes next.
 <span class="k">if</span> viewer <span class="o">==</span> <span class="s">""</span>
   nav.door
-    a href<span class="o">=</span><span class="s">"/session/new"</span> Sign in
-    a href<span class="o">=</span><span class="s">"/registration/new"</span> Make an account
+    a href<span class="o">=</span>(path_to <span class="s">"session/new"</span>) Sign in
+    a href<span class="o">=</span>(path_to <span class="s">"registration/new"</span>) Make an account
 else
-  form.out method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span><span class="s">"/session"</span>
+  form.out method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>(path_to <span class="s">"session/destroy"</span>)
     input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span><span class="s">"DELETE"</span>
     span Signed in as {viewer}.
-    a href<span class="o">=</span><span class="s">"/password/edit"</span> Your account
+    a href<span class="o">=</span>(path_to <span class="s">"password/edit"</span>) Your account
     button Sign out
 <span class="k">if</span> notice <span class="o">!=</span> <span class="s">""</span>
   p.notice <span class="o">=</span> notice
 <span class="k">if</span> viewer <span class="o">!=</span> <span class="s">""</span>
-  form.sign method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span><span class="s">"/entries"</span> enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
+  form.sign method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>(path_to <span class="s">"entries/create"</span>) enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
     textarea name<span class="o">=</span><span class="s">"message"</span> placeholder<span class="o">=</span><span class="s">"say something"</span> required<span class="o">=</span><span class="s">"required"</span> <span class="o">=</span> form.message
     <span class="k">if</span> form.problems[<span class="s">"message"</span>] <span class="o">!=</span> none
       p.problem <span class="o">=</span> form.problems[<span class="s">"message"</span>]
@@ -188,7 +185,7 @@ ol.entries
     li
       p.message <span class="o">=</span> e.message
       <span class="k">if</span> e.photo <span class="o">!=</span> <span class="s">""</span>
-        img.photo src<span class="o">=</span><span class="s">"/senro/blobs/{e.photo}"</span> alt<span class="o">=</span><span class="s">"a photo from {e.name}"</span>
+        img.photo src<span class="o">=</span>(blob_path e.photo) alt<span class="o">=</span><span class="s">"a photo from {e.name}"</span>
       p.who <span class="o">=</span> e.name
       <span class="o">==</span> removals[<span class="s">"{e.id}"</span>]</code></pre>
 </div>
