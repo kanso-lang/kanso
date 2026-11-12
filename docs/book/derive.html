@@ -1,0 +1,275 @@
+---
+layout: book
+title: "chapter 16—conventions at compile time"
+description: "a derivation is a kanso function the compiler runs during the build: it reads a description of the program and answers declarations that are checked like code you wrote. a command registry built from scratch, then senro's routes, schema, templates and jobs as a case study."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 16</span>
+<h1>conventions at compile time</h1>
+
+<p>a framework saves you typing by agreeing on names. in rails, a controller method called <code>show</code> in <code>PostsController</code> answers <code>GET /posts/:id</code>, and a model called <code>Post</code> reads the <code>posts</code> table. the app writes very little, and the framework fills in the rest by rule.</p>
+
+<p>rails applies those rules while the program runs, by looking at its own classes and methods. a broken convention says nothing until a request reaches it. a misspelled action is a 404, and a view that reads <code>post.titel</code> fails the first time someone opens the page.</p>
+
+<p>kanso applies a convention while the program compiles. a library writes it as an ordinary function, called a derivation, which the compiler runs during the build. the derivation is handed a description of the program and answers a list of declarations: constants, record types, source to add to a module, and compile errors. the compiler adds what it answered to the program before anything is checked, so a convention's output is checked like code you typed, and a mistake it finds is a compile error at the line that made it.</p>
+
+<p>this chapter builds a small derivation from nothing, sets out what a derivation is handed and what it may answer, and then reads senro, kanso's web framework, whose conventions are all derivations.</p>
+
+<h2>a convention is a function</h2>
+
+<p>a command-line program usually keeps a table from each command's name to the code that runs it, and the table drifts from the code. here the table is derived. every public function in a module called <code>commands</code> is a command, named for the function and handed the words that follow its name. the derivation lives in a library of its own:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">registry/registry.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/derive"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># Every pub function in the app's `commands` module is a command, named for</span>
+<span class="c"># the function and handed the words that follow its name.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">commands</span> p
+  found <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/select</span> p<span class="o">.</span><span class="f">modules</span> (m <span class="o">-&gt;</span> <span class="f">m</span><span class="o">.</span>name <span class="o">==</span> <span class="s">"commands"</span>))
+  <span class="f">return</span> [(<span class="f">derive/declare</span> <span class="s">"commands"</span> <span class="s">"commands"</span> {})] if length found <span class="o">==</span> <span class="n">0</span>
+  m <span class="o">=</span> found[<span class="n">1</span>]
+  table <span class="o">=</span> <span class="f">list/fold</span> m<span class="o">.</span>functions {} (<span class="f">acc</span> f <span class="o">-&gt;</span> <span class="f">put</span> acc f<span class="o">.</span><span class="f">name</span> f<span class="o">.</span>reference)
+  names <span class="o">=</span> <span class="f">list/sort</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> m<span class="o">.</span><span class="f">functions</span> (f <span class="o">-&gt;</span> <span class="f">f</span><span class="o">.</span>name)))
+  usage <span class="o">=</span> <span class="s">"commands: <span class="i">{text/join names </span>"</span>, <span class="s">"}"</span>
+  declared <span class="o">=</span> [
+    (<span class="f">derive/declare</span> <span class="s">"commands"</span> <span class="s">"commands"</span> table)
+    (<span class="f">derive/declare</span> <span class="s">"commands"</span> <span class="s">"usage"</span> usage)
+  ]
+  odd <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/select</span> m<span class="o">.</span><span class="f">functions</span> (f <span class="o">-&gt;</span> <span class="f">length</span> f<span class="o">.</span>params <span class="o">!=</span> <span class="n">1</span>))
+  <span class="f">list/concat</span> declared (<span class="f">list/to_list</span> (<span class="f">list/map</span> odd refused))
+
+<span class="k">fn</span> <span class="f">refused</span> f
+  said <span class="o">=</span> <span class="s">"a command takes one parameter, the words after its name"</span>
+  <span class="f">derive/refuse</span> <span class="s">"commands/<span class="i">{f.name}</span>"</span> said
+
+<span class="c"># Runs a command looked up in the table, or says there is none.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">run</span> none _
+  <span class="s">"no such command"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">run</span> command words
+  <span class="f">command</span> words</code></pre>
+</div>
+
+<p><code>commands</code> receives the program, <code>p</code>. it finds the module named <code>commands</code>, folds that module's functions into a map from each name to the function itself, and builds a usage line from the sorted names. <code>derive/declare</code> turns each into a constant. a function whose parameter count is wrong is refused, which the section on refusing comes back to. <code>run</code> is ordinary code for the entry to call.</p>
+
+<p>the app writes its commands as plain functions, with no table anywhere:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">commands/commands.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">greet</span> words
+  <span class="s">"hello, <span class="i">{text/join words </span>"</span> <span class="s">"}"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">count</span> words
+  <span class="s">"<span class="i">{length words}</span> words"</span></code></pre>
+</div>
+
+<p>the entry asks for the derivation with a <code>derive</code> line after its imports, and then uses the two constants it declared, <code>commands</code> and <code>usage</code>, as if it had written them:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">commands/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../registry"</span>
+<span class="k">import</span> <span class="s">"./commands"</span>
+
+<span class="k">derive</span> registry/commands
+
+<span class="f">print</span> usage
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">registry/run</span> commands[<span class="s">"greet"</span>] [<span class="s">"Ada"</span> <span class="s">"Lovelace"</span>]))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">registry/run</span> commands[<span class="s">"count"</span>] [<span class="s">"one"</span> <span class="s">"two"</span> <span class="s">"three"</span>]))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">registry/run</span> commands[<span class="s">"grete"</span>] []))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run commands</div>
+    <pre><code>commands: count, greet
+hello, Ada Lovelace
+3 words
+no such command</code></pre>
+  </div>
+</div>
+
+<p>adding a command means writing a function. <code>kanso derived commands</code> prints what the derivation wrote, the map and the usage line, each with the name of the derivation that wrote it, so the table is always there to read even though nobody keeps it.</p>
+
+<h2>what a derivation is handed</h2>
+
+<p>the program a derivation receives lists the entry first, under its file's name, and then every module the entry imports by a <code>./</code> path. a library reached through <code>../</code>, such as <code>registry</code> here, belongs to something else and is left out. the entry holds only statements, so it carries only its calls. for each module the description holds:</p>
+
+<ul>
+  <li><strong>functions</strong>: each public function's name, its parameters with their annotations (<code>id:int</code> gives the annotation <code>"int"</code>, an unannotated parameter <code>""</code>), and a reference to the function, which a declared table can hold and call.</li>
+  <li><strong>constants</strong>: each public constant, evaluated. a constant built from calls arrives as the value those calls return.</li>
+  <li><strong>records</strong>: each record type with its fields.</li>
+  <li><strong>calls</strong>: every call the module's functions and constants make to a named function, in the order they are written. each carries the function that makes it, the function it calls, the name of every argument that is a name, the text of every argument that is a string written whole, and the line and column of the call.</li>
+  <li><strong>files</strong>: the text of each file in the module's directory that is not kanso source, such as a template. a directory that holds such files and no kanso source is still a module, and its functions are the ones a derivation writes.</li>
+  <li><strong>sources</strong>: which file declares each function and constant, for a convention that orders things by file name.</li>
+</ul>
+
+<p>the program also carries the text files beside the entry, such as a <code>schema.sql</code> an app checks in. what it never carries is a function's body. a derivation sees a function's name, its shape and the calls it makes, which is enough to check how the function is used and not enough to depend on how it is written.</p>
+
+<h2>what a derivation answers</h2>
+
+<p>a derivation answers a list of declarations, each built by one of five functions in <code>std/derive</code>:</p>
+
+<ul>
+  <li><code>derive/declare origin name value</code> makes a constant in the entry. the value is data: ints, strings, bools, lists, maps, records and function references.</li>
+  <li><code>derive/declare_type origin name fields</code> makes a record type in the entry.</li>
+  <li><code>derive/define origin source</code> adds source text to the module <code>origin</code> names, compiled as one more of that module's files. the module checks it as code someone wrote there, so a record type defined this way is one the module's own functions can build and read. a module's files share their declarations but not their imports, so a definition that calls another module opens with the <code>import</code> lines it needs, written from the derivation's own module as that module's imports are.</li>
+  <li><code>derive/refuse origin message</code> makes a compile error at the function, constant or type <code>origin</code> names.</li>
+  <li><code>derive/refuse_call call message</code> makes a compile error at one of the calls the description listed.</li>
+</ul>
+
+<p>the first three add to the program and the last two stop it. a derivation cannot remove or edit anything an author wrote.</p>
+
+<p>derived source can say where each part of it came from. a comment of the form <code># from signed.kata:4</code>, naming a file in the module and a line, marks what follows it. a compile error in derived source then quotes the derived line and adds <code>= written from views/signed.kata:4</code>, from the nearest such comment above it in the same definition, so the author is sent to the file they wrote.</p>
+
+<h2>refusing what does not fit</h2>
+
+<p>a convention that skips what it cannot place leaves the author's mistake in the program. the registry refuses a command with the wrong number of parameters, so a command written with a second parameter does not compile:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shouty/commands.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">greet</span> words
+  <span class="s">"hello, <span class="i">{text/join words </span>"</span> <span class="s">"}"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">count</span> words
+  <span class="s">"<span class="i">{length words}</span> words"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">shout</span> words loud
+  <span class="f">if</span> loud (<span class="f">text/uppercase</span> (<span class="f">text/join</span> words <span class="s">" "</span>)) (<span class="f">text/join</span> words <span class="s">" "</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check shouty</div>
+    <pre><code><span class="k">error[derive]</span>: a command takes one parameter, the words after its name
+<span class="c">  --&gt; shouty/commands.kso:9:8</span>
+   9 | pub fn shout words loud
+              <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the error points at <code>shout</code>, in the app's file, because the refusal named <code>commands/shout</code> as its origin. the author reads it where they wrote the function, with no mention of the registry's code.</p>
+
+<h2>the rules a derivation runs under</h2>
+
+<p>a derivation only computes. it runs on the interpreter during the build, it cannot read a file, the clock or the network, and it learns about the app only from the description it is handed. a derivation that imports one of the modules it describes is refused. so the same source derives the same declarations every time, on every engine: a native build, an interpreted run and the compile in the playground all check the same derived code, and the rule that every engine behaves the same holds without extra work.</p>
+
+<p>what a derivation does inside is unrestricted. senro pluralizes model names, parses rate limits and compiles templates in its derivations. what comes out is a finite list of declarations, and that list is printed by <code>kanso derived</code> and checked by the compiler. the work costs compile time like any other code, and the compile corpus behind the <code>entry_instructions</code> golden derives, so that cost is measured on every change.</p>
+
+<h2>senro, a case study</h2>
+
+<p>senro is a web framework in the shape of rails. it has no routes file and no schema file, and its templates become kanso functions. all of that is derivations: an app writes one line, <code>derive app/conventions</code>, and that runs five of them, <code>kata/views</code>, <code>models/tables</code>, <code>routes/rest</code>, <code>jobs/performers</code> and <code>data/providers</code>. this section reads the first four. the excerpts below are senro's own code at the release this site pins, and the site's checks hold them to it.</p>
+
+<h3>routes from module and function names</h3>
+
+<p><code>routes/rest</code> reads each module of the app as a resource and each public function as one of the seven rest actions: <code>index</code> answers <code>GET /posts</code>, <code>show</code> answers <code>GET /posts/:id</code>, and so on. it builds the route table from the module's name, each function's name and each parameter: an action that takes <code>note_id</code> before <code>id</code> nests under <code>/notes/:note_id</code>, and an <code>id:int</code> annotation says the id is a number. the table is one constant, declared with <code>derive/declare</code>, and each row holds a reference to its action, so the server calls actions straight from it.</p>
+
+<p>a public function that is not one of the seven would be a dead route, and the derivation refuses it at the function:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/routes/routes.kso</div>
+  <pre><code>fn refused m f
+  actions = "index, new, create, show, edit, update or destroy"
+  said = "`{f.name}` is not an action: name it {actions}"
+  derive/refuse "{m.name}/{f.name}" said</code></pre>
+</div>
+
+<h3>links checked where they are written</h3>
+
+<p>an app builds a link with <code>routes/path_to "notes/show" id</code>. the route's name is a string written whole, so the description carries it among the module's calls, and the derivation checks each one against the table it just built:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/routes/routes.kso</div>
+  <pre><code>fn links_of m placed
+  links = list/select m.calls (c -&gt; c.callee == "routes/path_to")
+  list/fold links [] (acc c -&gt; list/concat acc (named c c.strings[1] placed))</code></pre>
+</div>
+
+<p>a link to a route that does not exist, or one that leaves out an id its route takes, is refused with <code>derive/refuse_call</code> at the line that wrote it.</p>
+
+<p>the same reading of calls is how an app keeps an old URL. its <code>legacy_route_aliases</code> constant is a list of calls, <code>(routes/moved "/signbook" entries/index)</code>, and <code>moved</code> itself does almost nothing:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/routes/routes.kso</div>
+  <pre><code>pub fn moved path action
+  old_path path action</code></pre>
+</div>
+
+<p>the work is in the derivation, which finds each call to <code>routes/moved</code> among the constant's calls and reads its path and the name of its action. because the action is written as code, the compiler resolves it as it resolves any name, so a misspelled action is an unknown name, and the alias takes its method from the action's route.</p>
+
+<h3>a schema from the migrations, records from the tables</h3>
+
+<p>an app's migrations are constants whose values are lists of changes, such as <code>models/create_table "pages" [...]</code>. constants arrive evaluated, so <code>models/tables</code> receives them as data, folds them in the order of their file names, which the description's sources give, and has the schema. for each model module, such as <code>page.kso</code> for the <code>pages</code> table, it writes the record type from the table's columns and adds it to that module:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/models/models.kso</div>
+  <pre><code>fn typed_in m schema
+  return [] if wrote_model? m schema
+  fields = column_names schema[names/plural m.name]
+  lines = list/to_list (list/map fields (f -&gt; "  {f}"))
+  source = "pub type {m.name}\n{text/join lines "\n"}\n"
+  [(derive/define m.name source)]</code></pre>
+</div>
+
+<p>the module's own functions then read <code>p.body</code> and <code>p.note_id</code> as fields of a record nobody typed, and the checker holds them to it: a field the table lacks is an error at the line that reads it. a module that declares its record itself keeps its own, and the derivation checks that record's fields against the columns instead.</p>
+
+<h3>templates that are functions</h3>
+
+<p>a module's directory can hold <code>.kata</code> templates, which arrive in the description's files. <code>kata/views</code> compiles each one into a function of that module with <code>derive/define</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/kata/views.kso</div>
+  <pre><code>pub fn views p
+  list/fold p.modules [] (acc m -&gt; list/concat acc (templated p m))</code></pre>
+</div>
+
+<p>so <code>views/signed.kata</code> is called as <code>views/signed</code>, and nothing is written to disk beside it. the compiled source marks each part with the template line it came from, so a misspelled field in a template is a compile error that quotes the derived line and adds <code>= written from ./views/list.kata:5</code>.</p>
+
+<h3>jobs named by their module</h3>
+
+<p>a module named <code>tidy_job</code> with a <code>perform</code> function is the job <code>tidy</code>, and <code>jobs/performers</code> declares the table the worker dispatches from. an app queues a job by its name, <code>jobs/perform_later db "tidy" args</code>, and the derivation reads every such call:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">senro/jobs/jobs.kso</div>
+  <pre><code>fn unnamed m names
+  calls = list/to_list (list/select m.calls (c -&gt; asks? c.callee))
+  list/fold calls [] (acc c -&gt; list/concat acc (stray c c.strings[2] names))
+
+fn asks? callee
+  callee == "jobs/perform_later" or callee == "jobs/perform_at"
+
+fn stray _ none _
+  []
+
+fn stray _ "" _
+  []
+
+fn stray c name names
+  return [] if list/any? names (n -&gt; n == name)
+  [(derive/refuse_call c "`{name}` names no job")]</code></pre>
+</div>
+
+<p>a job name with no module behind it is refused at the call that queues it, before the app has run at all.</p>
+
+<h3>what the four have in common</h3>
+
+<p>each of the four reads names and shapes the app already has, declares what the app would otherwise keep by hand, and refuses at the author's own line whatever does not fit. none of them needed a change to the compiler. the compiler gained the description and the five declarations once, and each of senro's conventions is a function in senro.</p>
+
+<h2>its relatives</h2>
+
+<p>other languages run code at compile time too, and the comparison shows what kanso chose. haskell's <code>deriving</code> writes a class instance from one type's shape, and template haskell runs haskell during compilation to produce syntax. rust's <code>#[derive]</code> and procedural macros take one item's tokens and answer tokens. f#'s type providers make types from an outside schema, such as a database's. zig runs ordinary code at compile time with <code>comptime</code>.</p>
+
+<p>a kanso derivation is handed a description of the whole program, and it answers declarations. it can add to the program and refuse parts of it, and it cannot change anything an author wrote. it sees each function's calls and none of its body. every error it raises lands on a line the author wrote. those limits are why a framework's conventions can be checked like the rest of the program.</p>
+
+<h2>what you can do now</h2>
+
+<p>you can write a convention as a function that reads the program's description and answers constants, record types, definitions and refusals. you can find what an app's functions, constants and calls say about it, refuse what does not fit at the author's own line, and print what a convention wrote with <code>kanso derived</code>. and you can read senro's routes, schema, templates and jobs as four uses of the same mechanism.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>give the registry a <code>help</code> command of its own that prints <code>usage</code>, and decide whether the derivation should refuse an app that also writes a function called <code>help</code>.</li>
+  <li>refuse a command whose name is not lowercase. which declaration does the refusal name as its origin, and where does the error point?</li>
+  <li>write a derivation that reads every call to <code>flags/on?</code> whose first argument is a string written whole, declares the list of flag names the code asks about, and refuses a name that is not in a <code>flags</code> constant the app keeps.</li>
+  <li>run <code>kanso derived</code> on senro's guestbook example and find the record type <code>models/tables</code> wrote for <code>signature</code>. which migration put each of its fields there?</li>
+</ol>

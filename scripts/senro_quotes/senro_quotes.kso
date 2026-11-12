@@ -19,6 +19,12 @@ type finding
 
 pages = "docs/senro"
 
+# The book's chapter on derivations takes senro as its case study. A panel
+# there names a senro file as `senro/<path>`, a path the kanso repository does
+# not hold, so book_quotes leaves it alone and it is checked here. The
+# chapter's other panels are its own samples, which the book's checks own.
+book_pages = ["docs/book/derive.html"]
+
 pub play = os/env "SENRO" .> checked
 
 fn checked none
@@ -26,7 +32,8 @@ fn checked none
     .> (_ -> os/exit 2)
 
 fn checked root
-  html_under pages .> (files -> read_all files [] root)
+  each = (files -> read_all (list/concat files book_pages) [] root)
+  html_under pages .> each
 
 fn html_under dir
   os/list_dir dir .> (names -> walked dir (list/sort names) [])
@@ -55,13 +62,15 @@ fn read_all files quoted root
 fn panels_in page html root
   opened = text/split html "<div class=\"code-panel-title\">"
   parts = list/to_list (list/drop opened 1)
-  quoting = list/to_list (list/select parts quotes?)
+  booked = list/any? book_pages (b -> b == page)
+  quoting = list/to_list (list/select parts (p -> quotes? booked p))
   checked_panels page quoting root []
 
-fn quotes? part
+fn quotes? booked part
   title = or_empty (text/split part "</div>")[1]
   kinds = [".kso" ".kata" ".sql"]
-  has? title "/" and list/any? kinds (k -> text/ends_with? title k)
+  kind = has? title "/" and list/any? kinds (k -> text/ends_with? title k)
+  kind and (not booked or text/starts_with? title "senro/")
 
 fn checked_panels page parts root found
   return effect found if length parts == 0
@@ -69,7 +78,7 @@ fn checked_panels page parts root found
   rest = list/to_list (list/drop parts 1)
   title = or_empty (text/split part "</div>")[1]
   code = plain (between part "<code>" "</code>")
-  os/read_file! "{root}/{title}"
+  os/read_file! "{root}/{in_senro title}"
     .> (file -> missing page title code (or_empty file))
     .> (more -> checked_panels page rest root (list/concat found more))
 
@@ -79,6 +88,12 @@ fn missing page title code file
   held = (b -> has? file (text/trim b))
   absent = list/to_list (list/reject blocks held)
   effect (list/to_list (list/map absent (b -> finding page title b)))
+
+# A book panel's title, `senro/routes/routes.kso`, as the file's path in the
+# checkout.
+fn in_senro title
+  return title if not text/starts_with? title "senro/"
+  text/join (list/to_list (list/drop (text/split title "senro/") 1)) "senro/"
 
 fn has? s part
   length (text/split s part) > 1

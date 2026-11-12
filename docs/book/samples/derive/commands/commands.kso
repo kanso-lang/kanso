@@ -1,0 +1,7 @@
+import "std/text"
+
+pub fn greet words
+  "hello, {text/join words " "}"
+
+pub fn count words
+  "{length words} words"

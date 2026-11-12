@@ -1,0 +1,30 @@
+import "std/derive"
+import "std/list"
+import "std/text"
+
+# Every pub function in the app's `commands` module is a command, named for
+# the function and handed the words that follow its name.
+pub fn commands p
+  found = list/to_list (list/select p.modules (m -> m.name == "commands"))
+  return [(derive/declare "commands" "commands" {})] if length found == 0
+  m = found[1]
+  table = list/fold m.functions {} (acc f -> put acc f.name f.reference)
+  names = list/sort (list/to_list (list/map m.functions (f -> f.name)))
+  usage = "commands: {text/join names ", "}"
+  declared = [
+    (derive/declare "commands" "commands" table)
+    (derive/declare "commands" "usage" usage)
+  ]
+  odd = list/to_list (list/select m.functions (f -> length f.params != 1))
+  list/concat declared (list/to_list (list/map odd refused))
+
+fn refused f
+  said = "a command takes one parameter, the words after its name"
+  derive/refuse "commands/{f.name}" said
+
+# Runs a command looked up in the table, or says there is none.
+pub fn run none _
+  "no such command"
+
+pub fn run command words
+  command words

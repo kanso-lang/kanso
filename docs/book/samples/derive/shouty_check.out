@@ -1,0 +1,4 @@
+error[derive]: a command takes one parameter, the words after its name
+  --> shouty/commands.kso:9:8
+   9 | pub fn shout words loud
+              ^

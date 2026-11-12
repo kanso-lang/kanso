@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a decoder handed out joins the corpus
-
-#2421 again, corpus first. The phase that reads a stream through an
-exported decoder took the record off the heap in #2431 for the two ways it
-was read: bound to a name across a module, and taken apart in a parameter.
-senro's `wire` reads a third way, and it is the one that keeps its record
-on the heap. A list's reader is handed the function that reads one item:
-`wire` hands `at` to its own list reader, and kata hands that reader the
-function it wrote for a record. No benchmark handed a decoder out.
-
-`framed/each` is that reader. It is handed `at` and reads the stream
-through it, and `taken` adds it to each pass. `at` says its position is a
-whole number, `p:int`, because a function handed out can be called with
-anything and the record goes by value only when its position is an int.
-The interpreter's corpus carries the same loop as `through`.
-
-The baseline shows what handing a decoder out costs. A function handed out
-is called through a wrapper that answers one boxed word, so the analysis
-keeps the type on the heap for every caller the decoder has. Handing `at`
-out once puts all three readers back on the heap: run_sh_rec 4,723,168 ->
-23,155,168, which is 1,500 passes of 192 reads at 64 bytes more, the 64
-through the value and the 128 direct reads #2431 had freed. run_allocs
-2,349,662 -> 2,637,662, run_alloc_bytes 256,552,163 -> 274,984,163,
-run_beat_iters 390,812 -> 582,812, run_evac_allocs 2,617 -> 5,617 and
-run_evac_bytes 4,625,408 -> 4,721,408.
-
-The run program's work rises: work_runbench 982,946,782 -> 1,035,809,998
-and work_runbench_dev 2,894,927,376 -> 3,028,058,391, both this
-container's readings less 109. The reader is 52,863,216 of the program,
-5.10%. runbench's emitted code reads defines=982 calls=10293
-branches=9278 lines=80296, the summed rows emitted_other_defines 2,411,
-emitted_other_calls 22,245, emitted_other_branches 19,794 and
-emitted_other_lines 185,367, and its machine code is 905,969 bytes, so
-the summed text is 5,978,073.
-
-The interpreter's corpus rises: interp_instructions 711,444,159 ->
-724,216,921, with interp_allocs 1,038,038 and interp_peak_bytes 1,496,663.
-The tab's rows rise with it: browser_compile_instructions 393,730,774 ->
-398,181,377, browser_compile_peak_bytes 965,297 -> 968,782 and
-browser_run_instructions 93,283,820 -> 95,675,366.
-
-The floor is re-based. The baselines of the seven rows that read the two
-programs are scaled by what each rose, and welfare stays where it was,
-95.29096728 before and 95.29096738 after.
-
 ## 2026-11-11 — a decoder handed out keeps its callers in registers
 
 #2421, the piece senro's `wire` was waiting on. A group that answers a
@@ -1853,3 +1808,29 @@ exactly their goldens. The rows are copied from the job log and the ten
 measured-on lines name 8.12. The welfare floor is re-based by the rise the
 revision gives, as a measurement of outside state (#2017), and its history
 says so.
+
+## 2026-11-12 — the book gains a chapter on derivations, with senro as its case study
+
+Clay asked whether derivations had solid documentation. The book had one
+section in the modules chapter: a routing example and three dense paragraphs.
+Chapter 16, "conventions at compile time", is now the home. It builds a
+command registry from nothing (`docs/book/samples/derive`, run and refused
+by book_check), lists everything a derivation is handed and the five
+declarations it may answer, states the rules it runs under, and reads four of
+senro's derivations (routes, links and aliases through calls, records from
+the schema, templates, job names) from senro's own source. A last section sets
+it beside Haskell's deriving and Template Haskell, Rust's derive and
+procedural macros, F# type providers and Zig's comptime. The modules chapter
+keeps its example and points to the new chapter, so the details have one
+home.
+
+The senro excerpts are titled `senro/<path>`, which no file in this
+repository holds, so book_quotes leaves them alone. senro_quotes now reads
+`docs/book/derive.html` as well as `docs/senro`, checking only its `senro/`
+panels against the pinned senro commit. Watched red with one word changed in
+the `fn refused` excerpt, which it named by page and title.
+
+The idea's origin is the #2186 ruling, 2026-10-28: Clay asked for "some
+language construct that can allow you to do compile time mapping" so that
+senro could place routes and tables by name and the compiler could check the
+result.
