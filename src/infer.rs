@@ -232,6 +232,14 @@ struct Ctx<'a> {
     /// re-folded it once per argument of every call, on every round. The
     /// third word of a `groups` value is where this group's row starts.
     caught: Vec<Set>,
+    /// By position in `group_members`: whether a call never reaches that arm.
+    /// Dispatch takes the first arm that matches, so once an arm whose every
+    /// parameter is a binder has been passed, a later arm runs only for a
+    /// failure it names. A module's own arms stand ahead of an import's of
+    /// the same name in a bare call, and the import's arm behind the module's
+    /// own `fn id_of n` never answers (#2473). It depends on the declarations
+    /// alone, so it is worked out once here rather than per call per round.
+    passed_over: Vec<bool>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
@@ -434,6 +442,21 @@ pub fn infer(program: &Program) -> Inference {
         group_members[slot.1 as usize] = i;
         slot.1 += 1;
     }
+    let mut passed_over = vec![false; program.fns.len()];
+    for &(start, end, _) in groups.values() {
+        let mut caught_all = false;
+        for (k, passed) in
+            passed_over.iter_mut().enumerate().take(end as usize).skip(start as usize)
+        {
+            let params = &program.fns[group_members[k]].params;
+            if caught_all && params.iter().all(|p| pattern_catches(p) == 0) {
+                *passed = true;
+                continue;
+            }
+            caught_all |=
+                params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)));
+        }
+    }
     // Fold `pattern_catches` over each group's arms, once. The fixpoint reads
     // this where it used to walk the arms per argument of every call.
     let mut caught: Vec<Set> = vec![0; caught_at as usize];
@@ -555,6 +578,7 @@ pub fn infer(program: &Program) -> Inference {
         groups,
         group_members,
         caught,
+        passed_over,
         yields: HashMap::default(),
         type_names,
         type_name_slots,
@@ -2275,22 +2299,14 @@ fn eval_call<'a>(
         }
         let folded = folded(args, arg_sets, ctx.lambda_answer);
         let receiver = pinned_receiver(name, args, env);
-        let mut caught_all = false;
         let mut passed_over = false;
         for k in start..end {
             let i = ctx.group_members[k];
             let params = &ctx.program.fns[i].params;
-            // Dispatch takes the first arm that matches, so once an arm whose
-            // every parameter is a binder has been passed, a later arm runs
-            // only for a failure it names. A module's own arms stand ahead of
-            // an import's of the same name in a bare call, and the import's
-            // arm behind the module's own `fn id_of n` never answers (#2473).
-            if caught_all && params.iter().all(|p| pattern_catches(p) == 0) {
+            if ctx.passed_over[k] {
                 passed_over = true;
                 continue;
             }
-            caught_all |=
-                params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)));
             // An arm a literal argument cannot reach neither sees the call
             // nor answers it: `text/split s "\n"` never runs `split _ ""`,
             // so what that arm raises is not something this call can answer.

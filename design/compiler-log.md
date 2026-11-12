@@ -2240,5 +2240,19 @@ and its allocations up 28. Built locally with each half of the change
 alone, the merge carried all of it: it split the dependency's functions
 with `partition`, which moves every one into a new vector while the old
 one is still held. `extract_if` takes out only the twins that go behind,
-and the local reading came back to within 84 bytes of main's (546,751 to
-546,835), with 16 allocations more for the set of the module's own names.
+and CI's second reading put the peak 84 bytes above main's (546,652).
+
+The instruction rows stayed up about 0.7%: `compile_instructions`
+22,642,405 to 22,800,026 on that reading. A callgrind diff of the check
+of `compile_corpus` against main split the 159,052 instructions between
+the two halves. The merge spent about 64,000 building a set of every
+function name the module declares, and inference about 84,000 testing,
+on every visit to every call, whether each arm's parameters were all
+binders. Both are facts about the declarations. Which arms a call passes
+over is now worked out once per group when inference starts, and the
+merge looks up the larger of the two name lists in a set of the smaller
+and keeps only the names both hold, which most modules have none of.
+Locally that took the check from 159,052 instructions over main to
+138,754, for 174 bytes more peak, which `welfare --score` prefers by a
+hair. What is left in `eval_expr` is the new branch in the call loop,
+which the precomputed table does not remove.
