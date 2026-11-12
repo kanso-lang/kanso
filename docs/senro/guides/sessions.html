@@ -399,7 +399,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <p>a locked account answers a wrong password the way every wrong password is answered, so a guesser learns nothing from it. only the right password is told that the account is locked, the same rule that keeps an unconfirmed account's existence to the holder of its password. the lock ends by itself after an hour (<code>session/locked_minutes</code>), and a right password, or a password reset, ends a run of wrong ones.</p>
 
-<p>the link leads to the <code>unlocks</code> resource, which follows <code>confirmations</code>: GET shows a button and changes nothing, and the button's PATCH clears the lock. the token is bound to the moment of the lock, so it works once. <code>held</code> reads the account the token names with <code>account/find</code> and checks the token against the lock it holds. nobody is signed in, so <code>opened</code> clears the lock as the app.</p>
+<p>the link leads to the <code>unlocks</code> resource, which follows <code>confirmations</code>: GET shows a button and changes nothing, and the button's PATCH clears the lock. the token, which <code>accounts/unlock_token</code> signs and <code>accounts/unlocks?</code> checks, is bound to the moment of the lock, so it works once. <code>held</code> reads the account the token names with <code>account/find</code> and checks the token against the lock it holds. nobody is signed in, so <code>opened</code> clears the lock as the app.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/unlocks.kso</div>
@@ -432,7 +432,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
   false
 
 <span class="k">fn</span> <span class="f">good?</span> req token a t
-  <span class="f">account_mailer/unlocks?</span> req token a.locked t</code></pre>
+  <span class="f">accounts/unlocks?</span> req token a.locked t</code></pre>
 </div>
 
 <h2>where sign-ins came from</h2>
@@ -665,7 +665,8 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/account_mailer.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../mail"</span>
+  <pre><code><span class="k">import</span> <span class="s">"../../accounts"</span>
+<span class="k">import</span> <span class="s">"../../mail"</span>
 <span class="k">import</span> <span class="s">"../../passwords"</span>
 <span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../tokens"</span>
@@ -701,10 +702,8 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
   subject <span class="o">=</span> <span class="s">"Reset your guestbook password"</span>
   <span class="f">mail/composed</span> <span class="f">entries/sender</span> email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)
 
-<span class="c"># A link to confirm the address an account was made with. It is bound to the</span>
-<span class="c"># address and to the account's `confirmed` column, which is empty until the</span>
-<span class="c"># link is followed, so it works once, and not at all once the address</span>
-<span class="c"># changes. It lasts a day.</span>
+<span class="c"># A link to confirm the address an account was made with, which</span>
+<span class="c"># `accounts/confirm_token` signs. It lasts a day and works once.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> req db id email
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (confirm_path req id email t))
@@ -712,16 +711,7 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 
 <span class="c"># The page the link opens, with the token in its path.</span>
 <span class="k">fn</span> <span class="f">confirm_path</span> req id email t
-  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"confirm"</span> req id (bound email <span class="s">""</span>) t 1440
-  <span class="f">routes/path_to</span> <span class="s">"confirmations/edit"</span> token
-
-<span class="c"># Whether `token` confirms the account that holds `email` and `confirmed`</span>
-<span class="c"># now, at `t`.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirms?</span> req token email confirmed t
-  <span class="f">tokens/valid?</span> <span class="s">"confirm"</span> req token (bound email confirmed) t
-
-<span class="k">fn</span> <span class="f">bound</span> email confirmed
-  <span class="s">"{email} {confirmed}"</span>
+  <span class="f">routes/path_to</span> <span class="s">"confirmations/edit"</span> (<span class="f">accounts/confirm_token</span> req id email t)
 
 <span class="k">fn</span> <span class="f">confirm_letter</span> email link
   lines <span class="o">=</span> [
@@ -736,9 +726,9 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
   subject <span class="o">=</span> <span class="s">"Confirm your guestbook address"</span>
   <span class="f">mail/composed</span> <span class="f">entries/sender</span> email subject (<span class="f">text/join</span> lines <span class="s">"\n"</span>)
 
-<span class="c"># A link to unlock an account that too many wrong passwords locked. It is</span>
-<span class="c"># bound to the moment of the lock, so it works once, and not at all once the</span>
-<span class="c"># lock has ended.</span>
+<span class="c"># A link to unlock an account that too many wrong passwords locked, which</span>
+<span class="c"># `accounts/unlock_token` signs over the moment of the lock. It lasts a day</span>
+<span class="c"># and works once.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> req db id email stamp
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (unlock_path req id stamp t))
@@ -746,12 +736,7 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 
 <span class="c"># The page the link opens, with the token in its path.</span>
 <span class="k">fn</span> <span class="f">unlock_path</span> req id stamp t
-  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"unlock"</span> req id stamp t 1440
-  <span class="f">routes/path_to</span> <span class="s">"unlocks/edit"</span> token
-
-<span class="c"># Whether `token` unlocks the account whose lock began at `stamp`, at `t`.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlocks?</span> req token stamp t
-  <span class="f">tokens/valid?</span> <span class="s">"unlock"</span> req token stamp t
+  <span class="f">routes/path_to</span> <span class="s">"unlocks/edit"</span> (<span class="f">accounts/unlock_token</span> req id stamp t)
 
 <span class="k">fn</span> <span class="f">unlock_letter</span> email link
   lines <span class="o">=</span> [
@@ -807,11 +792,11 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 
 <span class="k">fn</span> <span class="f">checked</span> req token id a t
   email <span class="o">=</span> a.email
-  good <span class="o">=</span> <span class="f">account_mailer/confirms?</span> req token email (said a.confirmed) t
+  good <span class="o">=</span> <span class="f">accounts/confirms?</span> req token email (said a.confirmed) t
   <span class="k">if</span> good (unconfirmed id email) none</code></pre>
 </div>
 
-<p>the token is made by <code>tokens/made</code>, the signing a reset token uses too, for the purpose "confirm" and bound to the address and to the <code>confirmed</code> column being empty. so it works once, it stops working if the address changes, and it lasts a day. a token made for one purpose opens nothing else. a password set through a reset link confirms the address as well, since following that link proves the visitor reads its mail.</p>
+<p>the token is made by <code>accounts/confirm_token</code> and checked by <code>accounts/confirms?</code>, which sign and check it with <code>tokens/made</code> and <code>tokens/valid?</code> as a reset token is signed and checked. it is made for the purpose "confirm" and bound to the address and to the <code>confirmed</code> column being empty, so it works once, it stops working if the address changes, and it lasts a day. a token made for one purpose opens nothing else. the mailer and the controller name only the two <code>accounts</code> functions, so the binding is written once, in senro. a password set through a reset link confirms the address as well, since following that link proves the visitor reads its mail.</p>
 
 <h2>requests from other sites</h2>
 

@@ -167,22 +167,25 @@ test_signing_in ... ok
 
 <h2>signing in</h2>
 
-<p>this is the spec <code>senro generate authentication</code> writes. it uses <code>signed</code>, and a group inside the spec with a hook of its own: every example under "with an account" starts with an account already made, which signs its visitor in.</p>
+<p>this is the spec <code>senro generate authentication</code> writes. it uses <code>signed</code>, and a group inside the spec with a hook of its own: every example under "with an account" starts with an account made, its address confirmed, and its visitor signed in. the hook reads the confirmation letter the way the visitor would. <code>visit/mailed v</code> answers the letters the visit's requests have queued, newest first, and <code>visit/link_in letter</code> the path of the first link a letter carries. an example outside the group checks that an account whose address is not confirmed yet is refused.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session_test.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../visit"</span>
 <span class="k">import</span> <span class="s">"std/expect"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/spec"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="c"># Signing in, asked for as a browser asks. `signed` is the app as the entry</span>
 <span class="c"># serves it, with the sign-in requirement around its routes, so an example</span>
 <span class="c"># meets the door a visitor meets. A visit keeps the cookies the app sets:</span>
-<span class="c"># the examples under "with an account" begin signed in, since `joined` has</span>
-<span class="c"># made the account and making one signs its visitor in.</span>
+<span class="c"># the examples under "with an account" begin signed in, since `joined` makes</span>
+<span class="c"># the account, follows the link mailed to confirm its address, and signs in.</span>
 test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</span> [
   around (<span class="f">visit/within</span> signed connected)
   it <span class="s">"is asked of a stranger"</span> turned_back
+  it <span class="s">"waits for the address to be confirmed"</span> held_back
   context <span class="s">"with an account"</span> [
     before joined
     it <span class="s">"opens the app"</span> opened
@@ -195,8 +198,23 @@ test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</
 <span class="k">fn</span> <span class="f">turned_back</span> v
   <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
 
+<span class="k">fn</span> <span class="f">held_back</span> v
+  <span class="f">visit/post</span> v <span class="s">"/registration"</span> account
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 403)))
+
 <span class="k">fn</span> <span class="f">joined</span> v
   <span class="f">visit/post</span> v <span class="s">"/registration"</span> account
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/mailed</span> v <span class="o">.&gt;</span> (letters <span class="o">-&gt;</span> confirmed v (<span class="f">list/first</span> letters)))
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
+
+<span class="c"># The link opens a page with a button, and the button's form sends a PATCH</span>
+<span class="c"># to the same path without `/edit`.</span>
+<span class="k">fn</span> <span class="f">confirmed</span> _ none
+  err <span class="s">"making the account mailed no link"</span>
+
+<span class="k">fn</span> <span class="f">confirmed</span> v letter
+  <span class="f">visit/patch</span> v (<span class="f">text/replace</span> (<span class="f">visit/link_in</span> letter) <span class="s">"/edit"</span> <span class="s">""</span>) {}
 
 <span class="k">fn</span> <span class="f">opened</span> v
   <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))

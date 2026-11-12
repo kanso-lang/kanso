@@ -67,10 +67,10 @@ sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
 
 <h2>a letter with a link</h2>
 
-<p>most of an app's mail exists to carry a link: confirm this address, choose a new password. the mailer that <code>senro generate authentication</code> writes has one.</p>
+<p>most of an app's mail exists to carry a link: confirm this address, choose a new password. the mailer that <code>senro generate authentication</code> writes, <code>account_mailer</code>, sends three such letters: a reset, a confirmation and an unlock. the reset is shown here.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/notebook/password_mailer.kso</div>
+  <div class="code-panel-title">examples/notebook/account_mailer.kso</div>
   <pre><code><span class="c"># The app's mail, as a Rails mailer holds it: what each letter says, and</span>
 <span class="c"># the signed link it carries, which starts with `mail/url_for`. Each letter</span>
 <span class="c"># is queued on `db` and sent by the worker beside the server.</span>
@@ -106,7 +106,7 @@ sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
 
 <p><code>mail/url_for path</code> is the address of a path on the app's own site. it reads the site from the <code>SENRO_URL</code> environment variable, such as <code>https://notebook.example</code>, and uses <code>http://127.0.0.1:3000</code> when that is unset, which is where a development server listens. it never reads the site from the request's <code>Host</code> header. whoever sends a request chooses that header, so a link built from it could carry a reset token to a site of theirs.</p>
 
-<p>the token in the path is made by <code>tokens/made</code> for the purpose <code>reset</code>: it is signed with the app's secret, which the request carries, and it expires. <a href="sessions.html">sessions and sign-in</a> covers how one is made and checked.</p>
+<p>the token in the path is made by <code>tokens/made</code> for the purpose <code>reset</code>: it is signed with the app's secret, which the request carries, and it expires. the confirmation and unlock letters take theirs from <code>accounts/confirm_token</code> and <code>accounts/unlock_token</code>, which bind each to what the link changes, so it works once, and give it a day. <a href="sessions.html">sessions and sign-in</a> covers how one is made and checked.</p>
 
 <h2>sending now, and sending later</h2>
 

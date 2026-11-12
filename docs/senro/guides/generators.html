@@ -476,20 +476,24 @@ read again: 404</code></pre>
 
 <h2>accounts and signing in</h2>
 
-<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes five modules and three views, the migration that makes a <code>users</code> table, and changes the entry.</p>
+<p><code>generate authentication</code> adds accounts to an app, as Rails 8's authentication generator does, with a sign-up page as Devise's registerable adds. it writes seven modules and five views, the migration that makes a <code>users</code> table, and changes the entry.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
   <pre><code>$ senro generate authentication
-  create ./password_mailer.kso
+  create ./account_mailer.kso
+  create ./confirmations.kso
   create ./registration.kso
   create ./resets.kso
   create ./session.kso
   create ./session_test.kso
+  create ./unlocks.kso
   create ./user.kso
+  create ./views/confirm_offered.kata
   create ./views/door.kata
   create ./views/reset_asked.kata
   create ./views/reset_chosen.kata
+  create ./views/unlock_offered.kata
   create ./migrations/20261111180514_create_users.kso
   change ./main.kso</code></pre>
 </div>
@@ -510,7 +514,7 @@ read again: 404</code></pre>
   true</code></pre>
 </div>
 
-<p>three resources work on the model. <code>registration</code> makes a user, at /registration/new, and signs it in. <code>session</code> signs in at /session/new and out with DELETE /session, and <code>resets</code> mails a link that sets a new password. they read and write through <code>user</code> by name, with <code>user/find_by</code>, <code>user/find</code> and <code>user/create</code>, and hold no SQL. nobody is signed in when a reset link is followed, so <code>resets</code> sets the new digest as the app: <code>user/update (models/as_app db) id { "digest":d }</code>. these are the guestbook's modules with less in them: no names, no confirmation, no lock. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
+<p>five resources work on the model. <code>registration</code> makes a user, at /registration/new, and mails a link that confirms its address. <code>session</code> signs in at /session/new and out with DELETE /session. <code>resets</code> mails a link that sets a new password, <code>confirmations</code> follows the link that confirms an address, and <code>unlocks</code> follows the one that unlocks an account. <code>account_mailer</code> writes the three letters. the resources read and write through <code>user</code> by name, with <code>user/find_by</code>, <code>user/find</code> and <code>user/create</code>, and hold no SQL. nobody is signed in when a mailed link is followed, so the resource behind it writes as the app: <code>user/update (models/as_app db) id { "digest":d }</code> sets a new password. these are the guestbook's modules with less in them: an account is known by its address alone, and there is no page for changing a password. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session.kso</div>
@@ -529,45 +533,50 @@ read again: 404</code></pre>
 
 <p>the secret that signs every session is 32 random bytes the generator made when it ran, so two apps never share one. keep it out of any repository the public can read; changing it signs every visitor out.</p>
 
-<p>the sign-in locks an account after five wrong passwords in a row, for an hour, as Devise's <code>lockable</code> does, and counts and stamps each sign-in, as its <code>trackable</code> does. the counting is senro's, in the <code>accounts</code> module; the generated file holds the two numbers and says what each outcome answers.</p>
+<p>an account signs in once its address is confirmed, as Devise's <code>confirmable</code> asks. the sign-in locks an account after five wrong passwords in a row, for an hour or until the link mailed to its address unlocks it, as Devise's <code>lockable</code> does, and counts and stamps each sign-in, as its <code>trackable</code> does. the counting is senro's, in the <code>accounts</code> module; the generated file holds the two numbers and says what each outcome answers.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session.kso</div>
-  <pre><code><span class="c"># Five wrong passwords in a row lock an account for an hour, as Devise's</span>
-<span class="c"># `lockable` does. A right password ends the run of wrong ones, and each</span>
-<span class="c"># sign-in is counted and stamped, as its `trackable` does (`accounts`).</span>
+  <pre><code><span class="c"># Five wrong passwords in a row lock an account for an hour, or until the</span>
+<span class="c"># link mailed to its address unlocks it, as Devise's `lockable` does. A</span>
+<span class="c"># right password ends the run of wrong ones, and each sign-in is counted</span>
+<span class="c"># and stamped, as its `trackable` does (`accounts`).</span>
 <span class="k">pub</span> <span class="f">locks_after</span> <span class="o">=</span> 5
 
 <span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> 60
 
 <span class="c"># What a sign-in comes to is `accounts`' to decide: the password checked,</span>
 <span class="c"># the lock kept, and a right password counted and stamped. A locked account</span>
-<span class="c"># tells only the holder of the right password that it is locked.</span>
+<span class="c"># tells only the holder of the right password that it is locked, and the</span>
+<span class="c"># wrong password that locks it mails the link that unlocks it. The right</span>
+<span class="c"># password for an address not yet confirmed sends the confirmation again.</span>
 <span class="k">fn</span> <span class="f">entered</span> req db email a password t
   model <span class="o">=</span> <span class="f">user/user_model</span>
   <span class="f">accounts/attempt</span> req db model a password locks_after locked_minutes t
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> answered req email a v.outcome)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> answered req db email a v)
 
-<span class="k">fn</span> <span class="f">answered</span> req _ a <span class="s">"signed"</span>
-  signed req a
-
-<span class="k">fn</span> <span class="f">answered</span> req email _ <span class="s">"locked"</span>
-  told <span class="o">=</span> <span class="s">"This account is locked. Try again in {locked_minutes} minutes."</span>
-  effect (opened req email { <span class="s">"password"</span>:told } 403)
-
-<span class="k">fn</span> <span class="f">answered</span> req email _ _
-  effect (refused req email)</code></pre>
+<span class="k">fn</span> <span class="f">answered</span> req db email a v
+  <span class="k">return</span> signed req a <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"signed"</span>
+  <span class="k">return</span> unconfirmed req db email a <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"inactive"</span>
+  <span class="k">return</span> shut req email <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"locked"</span>
+  <span class="k">return</span> effect (refused req email) <span class="k">if</span> v.stamp <span class="o">==</span> <span class="s">""</span>
+  <span class="f">account_mailer/unlock</span> req db a.id a.email v.stamp
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"no unlock mail: {u.reason}\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (refused req email))</code></pre>
 </div>
 
-<p>a locked account answers a wrong password with the same 422 as ever, and tells only the holder of the right one that it is locked. the migration the generator writes for <code>users</code> holds the columns <code>accounts/attempt</code> keeps, which <code>accounts/columns</code> lists. senro's spec drives the generated app to a lock:</p>
+<p>a locked account answers a wrong password with the same 422 as ever, and tells only the holder of the right one that it is locked. the migration the generator writes for <code>users</code> holds the columns <code>accounts/attempt</code> keeps, which <code>accounts/columns</code> lists, <code>confirmed</code> among them. senro's spec drives the generated app to a lock and follows the mailed link that opens it:</p>
 
 <div class="code-output">
-  <div class="code-panel-title">four wrong passwords, then five</div>
+  <div class="code-panel-title">four wrong passwords, then five, then the unlock link</div>
   <pre><code>four wrong passwords: 422 422 422 422
 the right one then: 303
 five wrong passwords: 422 422 422 422 422
-the right one then: 403 This account is locked. Try again in 60 minutes.
-a wrong one then: 422</code></pre>
+the right one then: 403 This account is locked. Follow the link we mailed to unlock it.
+a wrong one then: 422
+its unlock page: 200
+unlocking: 303 to /session/new Your account is unlocked. Sign in.
+the right one after: 303 to /</code></pre>
 </div>
 
 <div class="code-panel">
@@ -575,6 +584,7 @@ a wrong one then: 422</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"../../app"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
+<span class="k">import</span> <span class="s">"./confirmations"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
 <span class="k">import</span> <span class="s">"./note"</span>
@@ -586,6 +596,7 @@ a wrong one then: 422</code></pre>
 <span class="k">import</span> <span class="s">"./registration"</span>
 <span class="k">import</span> <span class="s">"./resets"</span>
 <span class="k">import</span> <span class="s">"./session"</span>
+<span class="k">import</span> <span class="s">"./unlocks"</span>
 <span class="k">import</span> <span class="s">"./user"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
@@ -603,9 +614,22 @@ signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> rou
 <span class="f">app/run</span> <span class="s">"notebook"</span> signed connected derived</code></pre>
 </div>
 
-<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the mail worker <code>new</code> set beside the server sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
+<p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the mail worker <code>new</code> set beside the server sends the letters <code>account_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>
 
-<p>senro's spec serves the generated app on both engines and uses it as a visitor would: it makes an account, works with notes and pages, signs out, and resets the password through the mail the app writes.</p>
+<p>senro's spec serves the generated app on both engines and uses it as a visitor would. it makes an account, is refused until it confirms the address through the mail the app writes, and follows the used link again to see it refused:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">making an account and confirming its address</div>
+  <pre><code>making an account: 303 to /session/new
+the same address again: That address has an account.
+signing in before confirming: 403 Confirm your address first. We have sent the link again.
+its confirmation page: 200
+confirming: 303 to /session/new Your address is confirmed. Sign in with it.
+the link again: 303 to /session/new That link has expired or was used. Sign in to have it sent again.
+signing in: 303 to /</code></pre>
+</div>
+
+<p>it then works with notes and pages, signs out, and resets the password through the mail.</p>
 
 <h2>the other generators</h2>
 
