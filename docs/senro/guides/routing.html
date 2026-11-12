@@ -17,7 +17,122 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 <span class="eyebrow">senro guides</span>
 <h1>routing</h1>
 
-<p>a senro app declares no routes. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide covers the seven actions, how an id reaches an action, singular resources, resources nested under another, naming a route from code, and keeping an old URL working.</p>
+<p>a senro app has no routes file. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide starts with a whole app's routes, then covers the seven actions, how an id reaches an action, singular resources, resources nested under another, naming a route from code, and keeping an old URL working.</p>
+
+<h2>the routes file you will not find</h2>
+
+<p>a Rails app lists its routes in <code>config/routes.rb</code>, as nested calls to <code>resources</code>. a senro app has no such file. the notebook that the <a href="generators.html">generators guide</a> builds has notes, pages that belong to a note, readings served as JSON, and accounts. in Rails, its routes file would read like this:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">config/routes.rb, as a Rails app would write it</div>
+  <pre><code>Rails.application.routes.draw <span class="k">do</span>
+  root <span class="s">"home#index"</span>
+
+  resources :notes <span class="k">do</span>
+    resources :pages
+  <span class="k">end</span>
+  resources :readings, except: [:new, :edit]
+
+  resource :registration, only: [:new, :create]
+  resource :session, only: [:new, :create, :destroy]
+  resources :resets, only: [:new, :create, :edit, :update]
+  resources :confirmations, only: [:edit, :update]
+  resources :unlocks, only: [:edit, :update]
+<span class="k">end</span></code></pre>
+</div>
+
+<p>senro reads the same table from the app's modules. each module is a resource, named for its file, and each public function in it is an action, named for the function. the notebook's three resource modules declare these actions, bodies left out:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">examples/notebook/notes.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int</code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">examples/notebook/pages.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db note_id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db note_id:int id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req db note_id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db note_id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db note_id:int id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db note_id:int id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db note_id:int id:int</code></pre>
+</div>
+
+<div class="code-output">
+  <div class="code-panel-title">examples/notebook/readings.kso</div>
+  <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ db id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int</code></pre>
+</div>
+
+<p>each line does the work of a line in <code>routes.rb</code>. <code>notes.kso</code> defines all seven actions, so it is <code>resources :notes</code>. every action in <code>pages.kso</code> takes a <code>note_id</code> before its own id, so the pages nest under the notes, as <code>resources :pages</code> does inside the notes' block. <code>readings.kso</code> has no <code>new</code> and no <code>edit</code>, so it has no routes for them, as <code>except: [:new, :edit]</code> says in Rails. the modules the authentication generator writes, <code>session.kso</code> and the rest, place theirs the same way.</p>
+
+<p><code>senro routes</code> prints the table the modules make: the method, the path and the action, with <code>open</code> beside a route that needs no sign-in and <code>limited</code> beside one that counts its calls. for the notebook:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell, in examples/notebook</div>
+  <pre><code>$ senro routes
+GET     /                               home/index
+PATCH   /confirmations/:id              confirmations/update  open
+GET     /confirmations/:id/edit         confirmations/edit    open
+GET     /notes                          notes/index
+POST    /notes                          notes/create
+GET     /notes/new                      notes/new
+GET     /notes/:id                      notes/show
+PATCH   /notes/:id                      notes/update
+DELETE  /notes/:id                      notes/destroy
+GET     /notes/:id/edit                 notes/edit
+GET     /notes/:note_id/pages           pages/index
+POST    /notes/:note_id/pages           pages/create
+GET     /notes/:note_id/pages/new       pages/new
+GET     /notes/:note_id/pages/:id       pages/show
+PATCH   /notes/:note_id/pages/:id       pages/update
+DELETE  /notes/:note_id/pages/:id       pages/destroy
+GET     /notes/:note_id/pages/:id/edit  pages/edit
+GET     /readings                       readings/index
+POST    /readings                       readings/create
+GET     /readings/:id                   readings/show
+PATCH   /readings/:id                   readings/update
+DELETE  /readings/:id                   readings/destroy
+POST    /registration                   registration/create   open
+GET     /registration/new               registration/new      open
+POST    /resets                         resets/create         open, limited
+GET     /resets/new                     resets/new            open
+PATCH   /resets/:id                     resets/update         open
+GET     /resets/:id/edit                resets/edit           open
+POST    /session                        session/create        open, limited
+DELETE  /session                        session/destroy
+GET     /session/new                    session/new           open
+PATCH   /unlocks/:id                    unlocks/update        open
+GET     /unlocks/:id/edit               unlocks/edit          open</code></pre>
+</div>
+
+<p>the table is the one to read when the question is which URL an app answers, and the sections below say how each kind of route is placed.</p>
 
 <h2>the seven actions</h2>
 
@@ -226,5 +341,13 @@ json_type <span class="o">=</span> <span class="s">"content-type: application/js
 
 <h2>what the derivation writes</h2>
 
-<p><code>derive app/conventions</code>, through <code>routes/rest</code>, writes one constant, <code>routes</code>, a map from each method and path to its action, and holds each <code>path_to</code> an app writes, in its code and in its templates, to that table. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
+<p><code>derive app/conventions</code>, through <code>routes/rest</code>, writes one constant, <code>routes</code>, a map from each method and path to its action, and holds each <code>path_to</code> an app writes, in its code and in its templates, to that table. <code>kanso derived</code> prints what the derivations wrote, and the table is the line that begins <code>routes =</code>. two of the notebook's rows:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso derived, in examples/notebook</div>
+  <pre><code>"GET /notes":{ "action":notes/index "id":"" "name":"notes/index" "secret":"made at random by generate authentication" }
+"GET /notes/:note_id/pages/:id":{ "action":pages/show "id":"int" "name":"pages/show" "secret":"made at random by generate authentication" "within":"int" }</code></pre>
+</div>
+
+<p>each row holds the function the request reaches, its name for <code>path_to</code>, how its own id is read (<code>""</code> for a route with none, <code>"int"</code> for an annotated one), and, for a nested route, how the parent's id is read, under <code>within</code>. <code>secret</code> is the one the app signs its sessions with, from <code>session.kso</code>; every row carries it, so the action can read the visitor's session. <code>senro routes</code> prints the same table as the columns shown at the top of this guide.</p>
 </article>
