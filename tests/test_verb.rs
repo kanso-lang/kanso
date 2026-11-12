@@ -281,3 +281,15 @@ fn a_spec_nests_and_its_hooks_close_around_a_failure() {
     assert_eq!(String::from_utf8_lossy(&output.stdout), out);
     assert_eq!(output.status.code(), Some(1));
 }
+
+/// A spec with one example says "1 example". The count is a noun with its
+/// number, as RSpec prints it. Watched red: the summary read "1 examples".
+#[test]
+fn a_spec_of_one_example_says_so_in_the_singular() {
+    let output = in_fixtures(&["test", "one_example"]);
+    let out = std::fs::read_to_string(fixture_dir().join("one_example.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}

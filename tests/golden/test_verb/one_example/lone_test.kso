@@ -1,0 +1,6 @@
+import "std/expect"
+import "std/spec"
+
+test_a_lone_example = describe "a spec of one" [
+  it "counts it once" (_ -> expect 1 . to (equal 1))
+]
