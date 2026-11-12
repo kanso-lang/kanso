@@ -282,6 +282,50 @@ fn a_spec_nests_and_its_hooks_close_around_a_failure() {
     assert_eq!(output.status.code(), Some(1));
 }
 
+/// A test file beside an entry reads the entry's bindings as names (#2463).
+/// The entry binds `front` and `told` and performs `told`. The first test
+/// reads `front`. The second performs `told`, an effect, so `post 1` is
+/// printed once and in the middle of the run: by the test, and never by the
+/// entry. Watched red with the bindings left behind: `unknown name` for both.
+#[test]
+fn a_test_file_beside_an_entry_reads_the_names_it_binds() {
+    let output = in_fixtures(&["test", "reads_the_entrys_names"]);
+    let out =
+        std::fs::read_to_string(fixture_dir().join("reads_the_entrys_names.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// A test file that declares a name the entry binds is refused at its own
+/// declaration, and told where the entry binds it. Watched red with the
+/// bindings left behind: the test file's `front` stood alone and passed.
+#[test]
+fn a_test_file_cannot_declare_a_name_the_entry_binds() {
+    let output = in_fixtures(&["test", "names_the_entry_bound"]);
+    let expected = std::fs::read_to_string(fixture_dir().join("names_the_entry_bound.stderr"))
+        .expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(output.status.code(), Some(2));
+}
+
+/// `kanso check` reads a test file as `kanso test` compiles it (#2463), so an
+/// editor and the test verb agree on its names. Watched red: checked by its
+/// content, a test file of constants was an entry with unused bindings, and
+/// the names the entry lends it were unknown.
+#[test]
+fn a_test_file_is_checked_as_it_is_tested() {
+    for file in ["beside_an_entry/posts_test.kso", "reads_the_entrys_names/posts_test.kso"] {
+        let output = in_fixtures(&["check", file]);
+
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "", "{file}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), format!("{file}: ok\n"), "{file}");
+    }
+}
+
 /// A spec with one example says "1 example". The count is a noun with its
 /// number, as RSpec prints it. Watched red: the summary read "1 examples".
 #[test]

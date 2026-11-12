@@ -1,0 +1,4 @@
+error[name]: `front` is a name the entry binds (names_the_entry_bound/main.kso:1), and a test file beside it reads that name: it cannot declare another
+  --> names_the_entry_bound/front_test.kso:1:1
+   1 | front = "another"
+       ^

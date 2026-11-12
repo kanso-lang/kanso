@@ -1,0 +1,5 @@
+# `both` is a local here, bound below a guard and held in a list.
+pub fn pair a
+  return [] if a == ""
+  both = "{a}{a}"
+  ["one" both ""]

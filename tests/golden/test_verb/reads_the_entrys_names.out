@@ -1,0 +1,4 @@
+test_a_binding_is_read ... ok
+post 1
+test_an_effect_is_performed_when_asked ... ok
+2 passed, 0 failed

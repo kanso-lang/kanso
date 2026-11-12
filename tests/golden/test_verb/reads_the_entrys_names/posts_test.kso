@@ -1,0 +1,7 @@
+# The entry binds `front` and `told`, and performs `told`. A test reads
+# both as names. `told` is an effect, a description of printing, so the
+# line is printed once, when the second test performs it, and never by the
+# entry.
+test_a_binding_is_read = front == "post 1"
+
+test_an_effect_is_performed_when_asked = told .> (_ -> effect true)

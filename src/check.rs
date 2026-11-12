@@ -614,7 +614,7 @@ fn per_node_walk<'a>(
     if flags.raised {
         err_as_value_at(expr, diags);
     }
-    call_shaped_at(expr, &tables.arities, &state.bound, diags);
+    call_shaped_at(expr, &tables.arities, &state.bound, state.own, diags);
     literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(
         expr,
@@ -806,6 +806,7 @@ fn call_shaped_at(
     expr: &Expr,
     arities: &crate::hash::Map<&str, usize>,
     bound: &crate::hash::Set<&str>,
+    own: bool,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::List(items, _) = expr {
@@ -821,12 +822,20 @@ fn call_shaped_at(
             // spells the same word with another shape, but in a list it can
             // only be the call: `[if b "x" "y"]` was four elements on the
             // interpreter and a refusal with no line natively
-            let takes =
-                arities.get(name.as_str()).copied().unwrap_or_else(|| match name.as_str() {
-                    "if" => 3,
-                    n if AMBIENT.contains(&n) => builtin_arity(n).unwrap_or(0),
-                    _ => 0,
-                });
+            // A dependency's declarations are walked with this module's
+            // table, where a bare name is one of this module's functions.
+            // Inside the dependency the same word is a local: its own
+            // functions were qualified when it was loaded, and its own check
+            // read its lists against them (#2466).
+            let declared = match own || crate::ast::has_slash(name) {
+                true => arities.get(name.as_str()).copied(),
+                false => None,
+            };
+            let takes = declared.unwrap_or_else(|| match name.as_str() {
+                "if" => 3,
+                n if AMBIENT.contains(&n) => builtin_arity(n).unwrap_or(0),
+                _ => 0,
+            });
             if takes > 0 && following > 0 {
                 diags.push(Diagnostic::new(
                     "syntax",
