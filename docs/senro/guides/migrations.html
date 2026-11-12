@@ -88,7 +88,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p>migrations run in the order of their files' names, and the stamp at the front of each name makes that the order they were written in. the order does not depend on the machine, on what the constants are called, or on the order the compiler reads the files in. two people who build a database from the same files get the same tables.</p>
 
-<p>the app's entry does not list the files. it asks for <code>migrations/all</code>, and <code>derive models/tables</code> writes <code>all</code> into the module from the files it finds: each stamp, beside what its file holds, oldest first. the same derivation folds the migrations, in the same order, into the schema the app is compiled against. so there is no schema file to keep in step, and a migration that renames a column the app still reads is a compile error at the read until the app is changed with it.</p>
+<p>the app's entry does not list the files. <code>derive app/conventions</code> reads them from the module: each stamp, beside what its file holds, oldest first. the same derivation folds the migrations, in the same order, into the schema the app is compiled against. so there is no schema file to keep in step, and a migration that renames a column the app still reads is a compile error at the read until the app is changed with it.</p>
 
 <p>a file whose name is not its stamp and its constant's name has no place in that order, and the app does not compile.</p>
 
@@ -114,7 +114,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <h2>running them</h2>
 
-<p>the entry runs <code>models/migrated db app migrations/all</code> as the app starts, so a server never answers a request against tables older than its code. <code>senro migrate</code> runs the same thing and stops, for a deploy that migrates before it restarts.</p>
+<p><code>app/run</code> runs them as the app starts, so a server never answers a request against tables older than its code. <code>senro migrate</code> runs the same thing and stops, for a deploy that migrates before it restarts.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>

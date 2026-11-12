@@ -57,7 +57,7 @@ SENRO_ONLY             "migrate" stops after migrating    unset</code></pre>
 <p>the rest is in the app, where a change to it is reviewed and versioned with everything else.</p>
 
 <ul>
-  <li><strong>the port.</strong> the entry calls <code>web/serve 3000 routes connected</code>. change the number there.</li>
+  <li><strong>the port.</strong> <code>app/run</code> serves on the port <code>PORT</code> names, 3000 when it is unset.</li>
   <li><strong>the session secret.</strong> <code>senro generate authentication</code> writes 32 random bytes into <code>session.kso</code> as <code>secret</code>. it signs every session and every link the app mails, so keep the file out of a public repository, and know that changing it signs every visitor out.</li>
   <li><strong>limits.</strong> a module's <code>rate_limits</code> says how often one client may call an action.</li>
   <li><strong>who gets in.</strong> <code>without_sign_in</code> and <code>admits</code> are declarations in each module, covered in <a href="sessions.html">sessions and sign-in</a> and <a href="authorization.html">authorization</a>.</li>

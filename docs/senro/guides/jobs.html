@@ -189,11 +189,11 @@ kept <span class="o">=</span> <span class="s">""</span>"
 <span class="c"># four at once, then three and sixty seconds on, then pairs far enough apart</span>
 <span class="c"># that every job still failing gets an attempt in each, until none has any</span>
 <span class="c"># left.</span>
-<span class="k">pub</span> <span class="f">t</span> <span class="o">=</span> <span class="n">1000000</span>
+<span class="k">pub</span> <span class="f">t</span> <span class="o">=</span> 1000000
 
-soon <span class="o">=</span> [t t t t (t <span class="o">+</span> <span class="n">3000</span>) (t <span class="o">+</span> <span class="n">60000</span>) (t <span class="o">+</span> <span class="n">60000</span>) (t <span class="o">+</span> <span class="n">60000</span>)]
+soon <span class="o">=</span> [t t t t (t <span class="o">+</span> 3000) (t <span class="o">+</span> 60000) (t <span class="o">+</span> 60000) (t <span class="o">+</span> 60000)]
 
-apart <span class="o">=</span> [<span class="n">1000000</span> <span class="n">1000000</span> <span class="n">10000000</span> <span class="n">10000000</span> <span class="n">100000000</span> <span class="n">100000000</span>]
+apart <span class="o">=</span> [1000000 1000000 10000000 10000000 100000000 100000000]
 
 <span class="k">pub</span> <span class="f">times</span> <span class="o">=</span> <span class="f">list/concat</span> soon (<span class="f">list/to_list</span> (<span class="f">list/map</span> apart (d <span class="o">-&gt;</span> t <span class="o">+</span> d)))
 
@@ -202,26 +202,26 @@ apart <span class="o">=</span> [<span class="n">1000000</span> <span class="n">1
 <span class="k">pub</span> <span class="f">performers</span> <span class="o">=</span> { <span class="s">"broken"</span>:broken <span class="s">"greet"</span>:greeted }
 
 <span class="k">fn</span> <span class="f">greeted</span> _ args
-  <span class="f">print</span> <span class="s">"hello, <span class="i">{args[</span>"</span>name<span class="s">"]}"</span>
+  print <span class="s">"hello, {args["</span>name<span class="s">"]}"</span>
 
 <span class="k">fn</span> <span class="f">broken</span> _ _
-  <span class="f">err</span> <span class="s">"it broke"</span>
+  err <span class="s">"it broke"</span>
 
 <span class="c"># Works the default queue once at each time in `times`, printing what each</span>
 <span class="c"># step did.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">stepped</span> db moments
-  <span class="f">list/fold</span> moments (<span class="f">effect</span> db) (<span class="f">acc</span> at <span class="o">-&gt;</span> <span class="f">acc</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">step</span> db at))
+  <span class="f">list/fold</span> moments (effect db) (acc at <span class="o">-&gt;</span> acc <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> step db at))
 
 <span class="k">fn</span> <span class="f">step</span> db at
   <span class="f">jobs/worked</span> db <span class="s">"default"</span> performers at
-    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at - t}</span>: <span class="i">{told said}</span>"</span>)
+    <span class="o">.&gt;</span> (said <span class="o">-&gt;</span> print <span class="s">"at {at - t}: {told said}"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> db)
 
 <span class="k">fn</span> <span class="f">told</span> none
   <span class="s">"nothing due"</span>
 
 <span class="k">fn</span> <span class="f">told</span> said
-  <span class="f">said</span></code></pre>
+  said</code></pre>
 </div>
 
 <div class="code-output">
@@ -296,7 +296,7 @@ at 100000000: nothing due
   print <span class="s">"tidying what is older than {args["</span>older_than<span class="s">"]} days"</span></code></pre>
 </div>
 
-<p>an entry that writes <code>derive jobs/performers</code> is given <code>performers</code>, the table from each job's name to its <code>perform</code>. nothing lists the jobs. the derivation finds every <code>_job</code> module the entry imports, the way <code>routes/rest</code> finds actions, and the routing convention leaves those modules alone. <code>jobs/perform_later db name args</code> queues a job for the next free worker, and <code>jobs/perform_at db name args t</code> queues it for a moment.</p>
+<p><code>derive app/conventions</code> runs <code>jobs/performers</code>, which reads the table from each job's name to its <code>perform</code>, and <code>app/run</code> starts a worker for it. nothing lists the jobs. the derivation finds every <code>_job</code> module the entry imports, the way <code>routes/rest</code> finds actions, and the routing convention leaves those modules alone. <code>jobs/perform_later db name args</code> queues a job for the next free worker, and <code>jobs/perform_at db name args t</code> queues it for a moment.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/performed/main.kso</div>
@@ -400,16 +400,16 @@ served, with no worker beside it</code></pre>
 <span class="c"># `delivered` does. A message `delivered` would refuse is refused here, before</span>
 <span class="c"># it is queued.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">delivered_later</span> db m
-  why <span class="o">=</span> <span class="f">refusal</span> m
-  <span class="f">return</span> err why if why <span class="o">!=</span> <span class="s">""</span>
-  fields <span class="o">=</span> { <span class="s">"body"</span>:m<span class="o">.</span><span class="f">body</span> <span class="s">"from"</span>:m<span class="o">.</span><span class="f">from</span> <span class="s">"subject"</span>:m<span class="o">.</span><span class="f">subject</span> <span class="s">"to"</span>:m<span class="o">.</span>to }
+  why <span class="o">=</span> refusal m
+  <span class="k">return</span> err why <span class="k">if</span> why <span class="o">!=</span> <span class="s">""</span>
+  fields <span class="o">=</span> { <span class="s">"body"</span>:m.body <span class="s">"from"</span>:m.from <span class="s">"subject"</span>:m.subject <span class="s">"to"</span>:m.to }
   <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">jobs/later</span> db <span class="s">"mail"</span> <span class="s">"deliver"</span> fields t)
 
 <span class="c"># The performers a worker on the `mail` queue runs.</span>
 <span class="k">pub</span> <span class="f">performers</span> <span class="o">=</span> { <span class="s">"deliver"</span>:deliver }
 
 <span class="k">fn</span> <span class="f">deliver</span> _ f
-  <span class="f">delivered</span> (<span class="f">message</span> f[<span class="s">"from"</span>] f[<span class="s">"to"</span>] f[<span class="s">"subject"</span>] f[<span class="s">"body"</span>])</code></pre>
+  delivered (message f[<span class="s">"from"</span>] f[<span class="s">"to"</span>] f[<span class="s">"subject"</span>] f[<span class="s">"body"</span>])</code></pre>
 </div>
 
 <p>a message <code>mail/delivered</code> would refuse, such as one whose subject holds a line break, is refused before it is queued, so the request that made it still hears about it. the guestbook's mailer queues each letter on the request's own session:</p>
@@ -423,17 +423,29 @@ served, with no worker beside it</code></pre>
 <span class="c"># it works once.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/<span class="i">{reset_token id kept t}</span>/edit"</span>)
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (<span class="f">reset_letter</span> email link))</code></pre>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/{reset_token id kept t}/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))</code></pre>
 </div>
 
-<p>and its entry serves through <code>jobs/beside</code>, so a worker on the <code>mail</code> queue runs as long as the server does:</p>
+<p>and since the app has a mailer, <code>app/run</code> starts a worker on the <code>mail</code> queue beside the server, which runs as long as the server does:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
-  <pre><code><span class="c"># The server, with a worker beside it that sends the mail the app queues.</span>
-serving <span class="o">=</span> <span class="f">web/serve</span> <span class="n">3000</span> served_routes connected</code></pre>
+  <pre><code><span class="k">derive</span> <span class="f">app/conventions</span>
+
+<span class="c"># The components whose actions run on the server.</span>
+served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> <span class="f">removal/act</span> <span class="f">removal/view</span>) }
+
+acting <span class="o">=</span> <span class="f">web/components</span> routes <span class="f">entries/secret</span> served
+
+bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
+
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting <span class="f">entries/secret</span> bound_of
+
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="f">app/run</span> <span class="s">"guestbook"</span> served_routes connected derived</code></pre>
 </div>
 
-<p>the entry's last step is <code>jobs/beside connected "mail" mail/performers serving</code>. a mail now arrives a second or so after the request that asked for it. the guestbook's browser spec waits for each one, and reads its counts of mail sent against the queue's order: once a later letter has arrived, any letter queued before it has arrived too.</p>
+<p>the entry's last line is <code>app/run</code>. a mail now arrives a second or so after the request that asked for it. the guestbook's browser spec waits for each one, and reads its counts of mail sent against the queue's order: once a later letter has arrived, any letter queued before it has arrived too.</p>
 </article>

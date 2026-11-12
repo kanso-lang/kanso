@@ -37,8 +37,8 @@ $ senro generate scaffold note title:text pages:int cover:attachment
   create ./note.kso
   create ./notes.kso
   create ./views/notes_index.kata
-  create ./views/note_shown.kata
-  create ./views/note_form.kata
+  create ./views/notes_show.kata
+  create ./views/notes_form.kata
   create ./notes_test.kso
   create ./given.kso
   create ./migrations/20261111180512_create_notes.kso
@@ -79,7 +79,7 @@ generate: cannot read `title:words`: a field is name:text, name:int, name:refere
 connected <span class="o">=</span> <span class="f">pg/from_env</span></code></pre>
 </div>
 
-<p>the rest of the entry <code>new</code> writes runs the migrations on that session, compares the database with the schema the app derives, closes it, and ends by serving on port 3000 with two workers beside the server: one sends the mail the app queues, and one performs the app's own jobs. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
+<p>the rest of the entry <code>new</code> writes is two lines. <code>derive app/conventions</code> runs every convention senro has an app follow: the views, the tables and their models, the routes, the jobs and the data providers. <code>app/run</code> runs the migrations, compares the database with the schema the app derives, and serves on the port <code>PORT</code> names, 3000 when it is unset. a worker runs beside the server for the app's jobs once it has one, and another sends its mail once it has a mailer. each <code>scaffold</code> adds the imports of the two modules it made, among the app's own imports and in order, so the entry reads as if it had been written by hand. the whole entry, as it stands after accounts are added, is shown below under accounts and signing in.</p>
 
 <h2>the migration</h2>
 
@@ -137,17 +137,17 @@ pages_table <span class="o">=</span> <span class="f">models/create_table</span> 
 <span class="c"># Anyone may make, change and remove a note. The models module asks these</span>
 <span class="c"># before it writes; narrow them to the visitors who should.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
-  <span class="f">true</span>
+  true
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update?</span> _ _
-  <span class="f">true</span>
+  true
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> _ _
-  <span class="f">true</span>
+  true
 
 <span class="c"># What makes a note fit to keep: each number is one its column takes.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> r
-  <span class="f">models/problems</span> [(<span class="f">models/whole_number</span> <span class="s">"pages"</span> r<span class="o">.</span>pages)]</code></pre>
+  <span class="f">models/problems</span> [(<span class="f">models/whole_number</span> <span class="s">"pages"</span> r.pages)]</code></pre>
 </div>
 
 <p>the derivation also writes the table's reads and writes into this module, and the rest of the app calls them by its name: <code>note/find db id</code>, <code>note/paged db number per</code>, <code>note/create db fields</code>. the models guide lists them all.</p>
@@ -169,30 +169,30 @@ pages_table <span class="o">=</span> <span class="f">models/create_table</span> 
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db
   number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
-  <span class="f">note/paged</span> db number per_page <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req p))
+  <span class="f">note/paged</span> db number per_page <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> effect (listing req p))
 
 <span class="c"># How many rows a page of the list shows.</span>
-per_page <span class="o">=</span> <span class="n">25</span>
+per_page <span class="o">=</span> 25
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db id:int
-  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req r))
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown req r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">new</span> req _
-  <span class="f">effect</span> (<span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} <span class="n">200</span>)
+  effect (form req <span class="s">"/notes"</span> <span class="s">"POST"</span> blank {} 200)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  given <span class="o">=</span> <span class="f">sent</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
-  <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">made</span> req w))
+  given <span class="o">=</span> sent (<span class="f">web/form</span> req.body)
+  <span class="f">note/create</span> db given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (made req w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db id:int
-  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">editing</span> req id r))
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (editing req id r))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id:int
-  given <span class="o">=</span> <span class="f">picked</span> (<span class="f">web/form</span> req<span class="o">.</span>body)
-  <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">changed</span> req id w))
+  given <span class="o">=</span> picked (<span class="f">web/form</span> req.body)
+  <span class="f">note/update</span> db id given <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (changed req id w))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ db id:int
-  <span class="f">note/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">gone</span> w))</code></pre>
+  <span class="f">note/destroy</span> db id <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> effect (gone w))</code></pre>
 </div>
 
 <p><code>index</code> shows a page of notes at a time. <code>models/page_number</code> reads the page the query string asks for, and anything that is not a whole number of 1 or more reads as the first page. <code>note/paged</code> reads that page of the notes, oldest first. it asks for one row more than <code>per_page</code> so that it knows whether another page follows, as Pagy does for a Rails app, and answers the page's records, its number, and whether there is more. the list links the page before and the page after, each only when there is one.</p>
@@ -201,28 +201,28 @@ per_page <span class="o">=</span> <span class="n">25</span>
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">listing</span> req p
   as_json <span class="o">=</span> <span class="f">note/note_attributes</span>
-  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p<span class="o">.</span><span class="f">rows</span> as_json)
-  <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
-  page <span class="o">=</span> <span class="f">views/notes_index_view</span> p<span class="o">.</span><span class="f">rows</span> p<span class="o">.</span><span class="f">number</span> p<span class="o">.</span><span class="f">more</span>
-  <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
+  mapped <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> p.rows as_json)
+  <span class="k">return</span> <span class="f">web/json</span> 200 mapped <span class="k">if</span> <span class="f">web/wants_json?</span> req
+  page <span class="o">=</span> <span class="f">views/notes_index_view</span> p.rows p.number p.more
+  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Notes"</span> page)</code></pre>
 </div>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_index.kata</div>
-  <pre><code><span class="k">takes</span> rows number more
-<span class="f">header</span>
-  <span class="f">h1</span> Notes
-  <span class="f">p</span>.lede
-    <span class="f">a</span> href=<span class="s">"/notes/new"</span> New note
-<span class="f">ul</span>.notes
-  <span class="k">each</span> rows r <span class="o">-&gt;</span>
-    <span class="f">li</span>
-      <span class="f">a</span> href=<span class="s">"/notes/{r.id}"</span> = r.title
-<span class="f">nav</span>.pages
-  <span class="k">if</span> number &gt; 1
-    <span class="f">a</span> href=<span class="s">"/notes?page={number - 1}"</span> Previous page
+  <pre><code>takes rows number more
+header
+  h1 Notes
+  p.lede
+    a href<span class="o">=</span><span class="s">"/notes/new"</span> New note
+ul.notes
+  each rows r <span class="o">-&gt;</span>
+    li
+      a href<span class="o">=</span><span class="s">"/notes/{r.id}"</span> <span class="o">=</span> r.title
+nav.pages
+  <span class="k">if</span> number <span class="o">&gt;</span> 1
+    a href<span class="o">=</span><span class="s">"/notes?page={number - 1}"</span> Previous page
   <span class="k">if</span> more
-    <span class="f">a</span> href=<span class="s">"/notes?page={number + 1}"</span> Next page</code></pre>
+    a href<span class="o">=</span><span class="s">"/notes?page={number + 1}"</span> Next page</code></pre>
 </div>
 
 <p>the list and the page for one note answer JSON when it is asked for, as a Rails scaffold's do. <code>/notes.json</code> answers the page's notes, each as <code>note_attributes</code> gives it, and <code>/notes/3.json</code> answers one. the routing guide says how a request asks. <code>note/find</code> answers none for an id no row has, and the first arm of <code>shown</code> answers that with a 404.</p>
@@ -234,9 +234,9 @@ per_page <span class="o">=</span> <span class="n">25</span>
 
 <span class="k">fn</span> <span class="f">shown</span> req record
   attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
-  <span class="k">return</span> <span class="f">web/json</span> <span class="n">200</span> attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
-  page <span class="o">=</span> <span class="f">views/note_shown_view</span> record
-  <span class="f">views/answer_as</span> req <span class="n">200</span> (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
+  <span class="k">return</span> <span class="f">web/json</span> 200 attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
+  page <span class="o">=</span> <span class="f">views/notes_show_view</span> record
+  <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
 </div>
 
 <p>senro's spec makes a note, asks for it as JSON, changes it, and asks for the list the same way. ids and times change from run to run, so the spec prints each id as N and each time as T:</p>
@@ -252,7 +252,7 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">picked</span> f
-  <span class="f">without_empty_files</span> (<span class="f">sent</span> f) [<span class="s">"cover"</span>]
+  without_empty_files (sent f) [<span class="s">"cover"</span>]
 
 <span class="k">fn</span> <span class="f">sent</span> f
   {
@@ -262,38 +262,38 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
   }
 
 <span class="k">fn</span> <span class="f">without_empty_files</span> given names
-  <span class="f">list/fold</span> names given (<span class="f">m</span> n <span class="o">-&gt;</span> <span class="f">if</span> (m[n] <span class="o">==</span> <span class="s">""</span>) (<span class="f">delete</span> m n) m)</code></pre>
+  <span class="f">list/fold</span> names given (m n <span class="o">-&gt;</span> <span class="k">if</span> (m[n] <span class="o">==</span> <span class="s">""</span>) (delete m n) m)</code></pre>
 </div>
 
 <p>what each write answers decides the response. a record that breaks a rule comes back as <code>models/invalid</code>, and the form is shown again with what was typed and a 422. a write a policy refuses is a <code>web/denied</code>, and a row that is not there is a <code>web/absent</code>; <code>web/refusal</code> answers them with a 403 and a 404. anything else is the record as stored, and the action redirects to it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/notes.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">made</span> req w:models/invalid
-  <span class="f">form</span> req <span class="s">"/notes"</span> <span class="s">"POST"</span> (<span class="f">filled</span> w<span class="o">.</span>record) w<span class="o">.</span><span class="f">problems</span> <span class="n">422</span>
+  <pre><code><span class="k">fn</span> <span class="f">made</span> req w:<span class="f">models/invalid</span>
+  form req <span class="s">"/notes"</span> <span class="s">"POST"</span> (filled w.record) w.problems 422
 
-<span class="k">fn</span> <span class="f">made</span> _ w:web/denied
+<span class="k">fn</span> <span class="f">made</span> _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">made</span> _ w
-  <span class="f">web/redirect</span> <span class="s">"/notes/<span class="i">{w.id}</span>"</span>
+  <span class="f">web/redirect</span> <span class="s">"/notes/{w.id}"</span>
 
-<span class="k">fn</span> <span class="f">changed</span> req id w:models/invalid
-  <span class="f">form</span> req <span class="s">"/notes/<span class="i">{id}</span>"</span> <span class="s">"PATCH"</span> (<span class="f">filled</span> w<span class="o">.</span>record) w<span class="o">.</span><span class="f">problems</span> <span class="n">422</span>
+<span class="k">fn</span> <span class="f">changed</span> req id w:<span class="f">models/invalid</span>
+  form req <span class="s">"/notes/{id}"</span> <span class="s">"PATCH"</span> (filled w.record) w.problems 422
 
-<span class="k">fn</span> <span class="f">changed</span> _ _ w:web/denied
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
 
-<span class="k">fn</span> <span class="f">changed</span> _ _ w:web/absent
+<span class="k">fn</span> <span class="f">changed</span> _ _ w:<span class="f">web/absent</span>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">changed</span> _ id _
-  <span class="f">web/redirect</span> <span class="s">"/notes/<span class="i">{id}</span>"</span>
+  <span class="f">web/redirect</span> <span class="s">"/notes/{id}"</span>
 
-<span class="k">fn</span> <span class="f">gone</span> w:web/denied
+<span class="k">fn</span> <span class="f">gone</span> w:<span class="f">web/denied</span>
   <span class="f">web/refusal</span> w
 
-<span class="k">fn</span> <span class="f">gone</span> w:web/absent
+<span class="k">fn</span> <span class="f">gone</span> w:<span class="f">web/absent</span>
   <span class="f">web/refusal</span> w
 
 <span class="k">fn</span> <span class="f">gone</span> _
@@ -305,30 +305,30 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 <p>three templates: the list, a note, and the form that makes and changes one. the form takes the path it is sent to and the method, so <code>new</code> sends it to <code>/notes</code> as a POST and <code>edit</code> to the note's own path as a PATCH, which the hidden <code>_method</code> field carries. each field shows the problem a rule found with it, if there was one.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/notebook/views/note_form.kata</div>
-  <pre><code><span class="k">takes</span> path method fields problems
-<span class="f">header</span>
-  <span class="f">h1</span> Note
-  <span class="f">p</span>.lede
-    <span class="f">a</span> href=<span class="s">"/notes"</span> All notes
-<span class="f">form</span> method=<span class="s">"post"</span> action=path enctype=<span class="s">"multipart/form-data"</span>
-  <span class="f">input</span> type=<span class="s">"hidden"</span> name=<span class="s">"_method"</span> value=method
-  <span class="f">label</span>
-    <span class="o">|</span> title
-    <span class="f">input</span> name=<span class="s">"title"</span> value=fields[<span class="s">"title"</span>]
-  <span class="k">if</span> problems[<span class="s">"title"</span>] != none
-    <span class="f">p</span>.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
-  <span class="f">label</span>
-    <span class="o">|</span> pages
-    <span class="f">input</span> name=<span class="s">"pages"</span> value=fields[<span class="s">"pages"</span>]
-  <span class="k">if</span> problems[<span class="s">"pages"</span>] != none
-    <span class="f">p</span>.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
-  <span class="f">label</span>
-    <span class="o">|</span> cover
-    <span class="f">input</span> type=<span class="s">"file"</span> name=<span class="s">"cover"</span>
-  <span class="k">if</span> fields[<span class="s">"cover"</span>] != <span class="s">""</span>
-    <span class="f">p</span>.kept Leave it empty to keep the file it has.
-  <span class="f">button</span> Save</code></pre>
+  <div class="code-panel-title">examples/notebook/views/notes_form.kata</div>
+  <pre><code>takes path method fields problems
+header
+  h1 Note
+  p.lede
+    a href<span class="o">=</span><span class="s">"/notes"</span> All notes
+form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
+  input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
+  label
+    | title
+    input name<span class="o">=</span><span class="s">"title"</span> value<span class="o">=</span>fields[<span class="s">"title"</span>]
+  <span class="k">if</span> problems[<span class="s">"title"</span>] <span class="o">!=</span> none
+    p.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
+  label
+    | pages
+    input name<span class="o">=</span><span class="s">"pages"</span> value<span class="o">=</span>fields[<span class="s">"pages"</span>]
+  <span class="k">if</span> problems[<span class="s">"pages"</span>] <span class="o">!=</span> none
+    p.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
+  label
+    | cover
+    input <span class="k">type</span><span class="o">=</span><span class="s">"file"</span> <span class="f">name</span><span class="o">=</span><span class="s">"cover"</span>
+  <span class="k">if</span> fields[<span class="s">"cover"</span>] <span class="o">!=</span> <span class="s">""</span>
+    p.kept Leave it empty to keep the file it has.
+  button Save</code></pre>
 </div>
 
 <h2>a resource under another</h2>
@@ -346,31 +346,31 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req db note_id:int
   number <span class="o">=</span> <span class="f">models/page_number</span> (<span class="f">web/value</span> (<span class="f">web/query</span> req) <span class="s">"page"</span>)
   asked <span class="o">=</span> <span class="f">page/paged</span> db <span class="s">"note_id"</span> note_id number per_page
-  listing_of <span class="o">=</span> (p <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">listing</span> req note_id p))
-  <span class="f">within</span> db note_id (<span class="f">asked</span> <span class="o">.&gt;</span> listing_of)
+  listing_of <span class="o">=</span> (p <span class="o">-&gt;</span> effect (listing req note_id p))
+  within db note_id (asked <span class="o">.&gt;</span> listing_of)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> req db note_id:int id:int
-  <span class="f">under</span> db note_id id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">shown</span> req r))
+  under db note_id id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (shown req r))
 
 <span class="c"># `then` when the note is there, and a 404 when it is not.</span>
 <span class="k">fn</span> <span class="f">within</span> db id then
-  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (found <span class="o">-&gt;</span> <span class="f">held</span> found then)
+  <span class="f">note/find</span> db id <span class="o">.&gt;</span> (found <span class="o">-&gt;</span> held found then)
 
 <span class="k">fn</span> <span class="f">held</span> none _
-  <span class="f">effect</span> http/not_found
+  effect <span class="f">http/not_found</span>
 
 <span class="k">fn</span> <span class="f">held</span> _ then
-  <span class="f">then</span>
+  then
 
 <span class="c"># The row with this id under this note, or none.</span>
 <span class="k">fn</span> <span class="f">under</span> db note_id id
-  <span class="f">page/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">owned</span> note_id r))
+  <span class="f">page/find</span> db id <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (owned note_id r))
 
 <span class="k">fn</span> <span class="f">owned</span> _ none
-  <span class="f">none</span>
+  none
 
 <span class="k">fn</span> <span class="f">owned</span> note_id r
-  <span class="f">if</span> (<span class="s">"<span class="i">{r.note_id}</span>"</span> <span class="o">==</span> <span class="s">"<span class="i">{note_id}</span>"</span>) r none</code></pre>
+  <span class="k">if</span> (<span class="s">"{r.note_id}"</span> <span class="o">==</span> <span class="s">"{note_id}"</span>) r none</code></pre>
 </div>
 
 <p><code>page/paged db "note_id" note_id number per_page</code> reads one page of the pages whose <code>note_id</code> is the note's. <code>under</code> finds a page by its id and keeps it only when it belongs to the note the path names, so <code>/notes/1/pages/7</code> finds nothing when page 7 belongs to note 2. listing a note's pages and making one first ask <code>note/find</code> whether the note is there, and answer 404 when it is not.</p>
@@ -509,7 +509,7 @@ read again: 404</code></pre>
 <span class="c"># Anyone may make an account, as Devise's registerable lets them. A reset</span>
 <span class="c"># link sets a password as the app, so no policy lets a viewer change one.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
-  <span class="f">true</span></code></pre>
+  true</code></pre>
 </div>
 
 <p>three resources work on the model. <code>registration</code> makes a user, at /registration/new, and signs it in. <code>session</code> signs in at /session/new and out with DELETE /session, and <code>resets</code> mails a link that sets a new password. they read and write through <code>user</code> by name, with <code>user/find_by</code>, <code>user/find</code> and <code>user/create</code>, and hold no SQL. nobody is signed in when a reset link is followed, so <code>resets</code> sets the new digest as the app: <code>user/update (models/as_app db) id { "digest":d }</code>. these are the guestbook's modules with less in them: no names, no confirmation, no lock. the <a href="sessions.html">sessions guide</a> explains each part, and the files are the app's own to change.</p>
@@ -525,7 +525,7 @@ read again: 404</code></pre>
 
 <span class="c"># What a sign-in rests on: the digest the account keeps now. A new password</span>
 <span class="c"># changes it, so a password reset signs out every session made before it.</span>
-<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (<span class="f">db</span> email <span class="o">-&gt;</span> <span class="f">user/find_by</span> db <span class="s">"email"</span> email <span class="o">.&gt;</span> kept_of)</code></pre>
+<span class="k">pub</span> <span class="f">signed_against</span> <span class="o">=</span> (db email <span class="o">-&gt;</span> <span class="f">user/find_by</span> db <span class="s">"email"</span> email <span class="o">.&gt;</span> kept_of)</code></pre>
 </div>
 
 <p>the secret that signs every session is 32 random bytes the generator made when it ran, so two apps never share one. keep it out of any repository the public can read; changing it signs every visitor out.</p>
@@ -589,12 +589,8 @@ a wrong one then: 422</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"../../jobs"</span>
-<span class="k">import</span> <span class="s">"../../kata"</span>
-<span class="k">import</span> <span class="s">"../../mail"</span>
-<span class="k">import</span> <span class="s">"../../models"</span>
+  <pre><code><span class="k">import</span> <span class="s">"../../app"</span>
 <span class="k">import</span> <span class="s">"../../pg"</span>
-<span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../web"</span>
 <span class="k">import</span> <span class="s">"./home"</span>
 <span class="k">import</span> <span class="s">"./migrations"</span>
@@ -610,10 +606,7 @@ a wrong one then: 422</code></pre>
 <span class="k">import</span> <span class="s">"./user"</span>
 <span class="k">import</span> <span class="s">"./views"</span>
 
-<span class="k">derive</span> <span class="f">jobs/performers</span>
-<span class="k">derive</span> <span class="f">kata/views</span>
-<span class="k">derive</span> <span class="f">models/tables</span>
-<span class="k">derive</span> <span class="f">routes/rest</span>
+<span class="k">derive</span> <span class="f">app/conventions</span>
 
 <span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
 <span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
@@ -624,17 +617,7 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 <span class="c"># `without_sign_in`.</span>
 signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes <span class="f">session/secret</span> <span class="f">session/signed_against</span>
 
-<span class="c"># Two workers run beside the server. One sends the mail the app queues,</span>
-<span class="c"># and the other does the jobs its `_job` modules perform.</span>
-serving <span class="o">=</span> <span class="f">web/serve</span> 3000 signed connected
-
-working <span class="o">=</span> <span class="f">jobs/beside</span> connected <span class="f">jobs/default_queue</span> performers serving
-
-connected
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/migrated</span> db <span class="s">"notebook"</span> <span class="f">migrations/all</span>)
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">models/compared</span> db schema)
-  <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">pg/close</span> db)
-  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">jobs/beside</span> connected <span class="s">"mail"</span> <span class="f">mail/performers</span> working)</code></pre>
+<span class="f">app/run</span> <span class="s">"notebook"</span> signed connected derived</code></pre>
 </div>
 
 <p>the entry now serves its routes through <code>web/requiring_sign_in</code>, so every action asks for a sign-in unless its module lists it in <code>without_sign_in</code>. that includes the home page and the notes, as in a Rails 8 app after the generator runs. a visitor who has not signed in is sent to /session/new, and back to the page they asked for once they have. the mail worker <code>new</code> set beside the server sends the reset letters <code>password_mailer</code> queues; the <a href="jobs.html">background jobs guide</a> covers it.</p>

@@ -48,7 +48,7 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
   <span class="s">"every post"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ id:int
-  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+  <span class="s">"post {id}"</span></code></pre>
 </div>
 
 <p>the annotation matters for more than conversion. <code>GET /posts/new</code> and <code>GET /posts/:id</code> would both answer <code>/posts/new</code> if <code>id</code> could be any word, and senro refuses the pair.</p>
@@ -59,7 +59,7 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
   <span class="s">"a blank form"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ id
-  <span class="s">"post <span class="i">{id}</span>"</span></code></pre>
+  <span class="s">"post {id}"</span></code></pre>
 </div>
 <div class="code-output">
   <div class="code-panel-title">kanso check</div>
@@ -77,11 +77,11 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
   <div class="code-panel-title">spec/runs/singular/profile.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
 
-<span class="k">pub</span> <span class="k">type</span> profile
-  <span class="f">name</span>
+<span class="k">pub</span> <span class="k">type</span> <span class="f">profile</span>
+  name
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _
-  <span class="s">"your profile is at <span class="i">{routes/path_to (profile </span>"</span>ada<span class="s">")}"</span>
+  <span class="s">"your profile is at {routes/path_to (profile "</span>ada<span class="s">")}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> _ _
   <span class="s">"edit it"</span>
@@ -113,16 +113,16 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"index"</span> <span class="s">"create"</span> <span class="s">"show"</span>]
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
-  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"the comments on post <span class="i">{post_id}</span>"</span>)
+  effect (<span class="f">http/text_page</span> <span class="s">"the comments on post {post_id}"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> _ _ post_id:int
-  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"a comment made on post <span class="i">{post_id}</span>"</span>)
+  effect (<span class="f">http/text_page</span> <span class="s">"a comment made on post {post_id}"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ post_id:int id:int
-  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"comment <span class="i">{id}</span> on post <span class="i">{post_id}</span>"</span>)
+  effect (<span class="f">http/text_page</span> <span class="s">"comment {id} on post {post_id}"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ _ post_id:int id:int
-  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"comment <span class="i">{id}</span> gone from post <span class="i">{post_id}</span>"</span>)</code></pre>
+  effect (<span class="f">http/text_page</span> <span class="s">"comment {id} gone from post {post_id}"</span>)</code></pre>
 </div>
 
 <p>the server hands the action the parent's id first and its own id second. every action of a nested module takes the parent's id in that place, and one that does not is refused where it is declared. nesting goes one level deep, which is what Rails' guides advise: a comment's URL needs its post and nothing above it, so a module nested under <code>comments</code> answers under <code>/comments/:comment_id</code>.</p>
@@ -132,19 +132,19 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 <div class="code-panel">
   <div class="code-panel-title">spec/runs/nested_routes/comments.kso</div>
   <pre><code><span class="c"># A comment, which names the post it is under, so its path can.</span>
-<span class="k">pub</span> <span class="k">type</span> comment
-  <span class="f">id</span>
-  <span class="f">post_id</span>
-  <span class="f">body</span>
+<span class="k">pub</span> <span class="k">type</span> <span class="f">comment</span>
+  id
+  post_id
+  body
 
 <span class="c"># The first comment on post 3, for the spec to place.</span>
-<span class="k">pub</span> <span class="f">first</span> <span class="o">=</span> <span class="f">comment</span> <span class="n">4</span> <span class="n">3</span> <span class="s">"first"</span>
+<span class="k">pub</span> <span class="f">first</span> <span class="o">=</span> comment 4 3 <span class="s">"first"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _ post_id:int
-  <span class="s">"the comments on post <span class="i">{post_id}</span>"</span>
+  <span class="s">"the comments on post {post_id}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ _ post_id:int id:int
-  <span class="s">"comment <span class="i">{id}</span> on post <span class="i">{post_id}</span>"</span></code></pre>
+  <span class="s">"comment {id} on post {post_id}"</span></code></pre>
 </div>
 
 <h2>naming a route</h2>
@@ -155,15 +155,15 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
   <div class="code-panel-title">spec/runs/path_to/posts.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
 
-<span class="k">pub</span> <span class="k">type</span> post
-  <span class="f">id</span>
-  <span class="f">title</span>
+<span class="k">pub</span> <span class="k">type</span> <span class="f">post</span>
+  id
+  title
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _
-  <span class="s">"every post: <span class="i">{routes/path_to </span>"</span>posts/index<span class="s">"}"</span>
+  <span class="s">"every post: {routes/path_to "</span><span class="f">posts/index</span><span class="s">"}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">show</span> _ id:int
-  <span class="s">"post <span class="i">{id}</span> is at <span class="i">{routes/path_to (post id </span>"</span>hello<span class="s">")}"</span></code></pre>
+  <span class="s">"post {id} is at {routes/path_to (post id "</span>hello<span class="s">")}"</span></code></pre>
 </div>
 <div class="code-output">
   <div class="code-panel-title">kanso run</div>
@@ -202,8 +202,8 @@ every post: /posts
 <span class="c"># What the action read from the query string.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req _
   q <span class="o">=</span> <span class="f">web/query</span> req
-  shown <span class="o">=</span> <span class="s">"q=<span class="i">{web/value q </span>"</span>q<span class="s">"} page=<span class="i">{web/value q </span>"</span>page<span class="s">"}"</span>
-  <span class="f">effect</span> (<span class="f">http/text_page</span> <span class="s">"<span class="i">{req.path}</span>: <span class="i">{shown}</span>"</span>)</code></pre>
+  shown <span class="o">=</span> <span class="s">"q={web/value q "</span>q<span class="s">"} page={web/value q "</span>page<span class="s">"}"</span>
+  effect (<span class="f">http/text_page</span> <span class="s">"{req.path}: {shown}"</span>)</code></pre>
 </div>
 
 <p>senro's spec asks for that path, for <code>/search</code> with no query, and for <code>/search</code> with a forged header, and the action answers:</p>
@@ -224,7 +224,7 @@ every post: /posts
   <pre><code><span class="c"># `answer` as JSON with `status`, as Rails' `render json:` answers: a map or</span>
 <span class="c"># a list of maps, such as a model's `note_attributes` gives.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">json</span> status answer
-  <span class="f">http/respond</span> status [json_type] <span class="s">"<span class="i">{json/encode answer}</span>\n"</span>
+  <span class="f">http/respond</span> status [json_type] <span class="s">"{json/encode answer}\n"</span>
 
 json_type <span class="o">=</span> <span class="s">"content-type: application/json; charset=utf-8"</span>
 
@@ -233,12 +233,12 @@ json_type <span class="o">=</span> <span class="s">"content-type: application/js
 <span class="c"># route is matched without the `.json`, so `/notes.json` and `/notes/3.json`</span>
 <span class="c"># reach the actions `/notes` and `/notes/3` do.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">wants_json?</span> req
-  accepted <span class="o">=</span> <span class="f">blank_if_none</span> req<span class="o">.</span>headers[<span class="s">"accept"</span>]
-  ends <span class="o">=</span> <span class="f">text/ends_with?</span> req<span class="o">.</span>path <span class="s">".json"</span>
-  ends <span class="k">or</span> <span class="f">length</span> (<span class="f">text/split</span> accepted <span class="s">"application/json"</span>) <span class="o">&gt;</span> <span class="n">1</span></code></pre>
+  accepted <span class="o">=</span> blank_if_none req.headers[<span class="s">"accept"</span>]
+  ends <span class="o">=</span> <span class="f">text/ends_with?</span> req.path <span class="s">".json"</span>
+  ends <span class="k">or</span> length (<span class="f">text/split</span> accepted <span class="s">"application/json"</span>) <span class="o">&gt;</span> 1</code></pre>
 </div>
 
 <h2>what the derivation writes</h2>
 
-<p><code>derive routes/rest</code> writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
+<p><code>derive app/conventions</code>, through <code>routes/rest</code>, writes one constant, <code>routes</code>, a map from each method and path to its action, and the arms that make <code>path_to</code> work for records. <code>kanso derived</code> prints both. the guestbook's table is the line that begins <code>routes =</code> in its output.</p>
 </article>

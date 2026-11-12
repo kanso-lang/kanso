@@ -20,134 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a lazy binding a callback captured is not its frame's to free
-
-Fixes #2409.
-
-**What was wrong.** Natively, a lazy binding could be read after the
-frame that made it had freed it, and what was read was a later
-binding's value. Two shapes did it.
-
-A callback captured the binding. This program binds `twice` in each of
-three passes and reads it in a callback that runs after a sleep:
-
-```
-fn shown 0 _
-  effect 0
-
-fn shown n twice
-  print "pass {n} read {twice + 0}"
-
-fn handled n
-  twice = doubled n
-  time/sleep 2 .> (_ -> shown n twice)
-```
-
-The interpreter prints 6, 4 and 2 for passes 3, 2 and 1. The native
-build printed 2 for all three.
-
-A function handed the binding back and the caller kept it:
-
-```
-fn held false _
-  ""
-
-fn held true words
-  words
-
-fn listed n
-  a = built n
-  [(held true a)]
-```
-
-Two lists made by `listed 1` and `listed 2` read "kept 1" and "kept 2"
-on the interpreter. Natively both read "kept 2".
-
-**Why.** Each binding is lazy because the function it is handed to has
-an arm that discards it, so it is a cell. `src/demand.rs` decides
-whether the frame that made a cell may free it on the way out, and it
-decided by looking at the position the binding was handed to. A
-position is safe when the parameter there is only read, or answered
-unread as the function's own result. Both positions above are safe by
-that test, so both cells were marked releasable, and the frame's
-epilogue put them on the free list. The next lazy binding took the same
-cell.
-
-The test was missing two questions about the frame that binds the
-name. It never asked whether the use sat inside a callback, which is
-called after the frame has returned. And it took an arm that answers
-its parameter unread to be harmless, on the strength of the epilogue's
-own guard: the epilogue does not free a cell that is the frame's
-result. That guard sees the cell leave only when the call is the
-frame's last expression. A call whose answer goes into a list, under a
-name or into another call's arguments has put the cell somewhere the
-epilogue does not look.
-
-The callback question was missing on the callee's side as well: a
-function that reads its parameter inside a callback of its own keeps
-the cell past its caller's frame.
-
-A binding read through a call, such as `length page`, was never
-affected. That position was already unsafe, so the cell was never
-freed.
-
-**What changed.** Three checks, all in `src/demand.rs`.
-- `captured`: a callback in the binding function that reads the name
-  keeps the cell from being released.
-- `param_stays_local`: a callback in the callee that reads the
-  parameter makes the position unsafe.
-- `keeps_what_is_handed_back`: a call that may answer the cell unread
-  releases it only where the answer is the frame's result or is read on
-  the spot, as an operand, an interpolation, an index or the subject of
-  `.>`.
-
-All three are conservative. A callback handed to `list/map` is finished
-before the frame returns, and its cell is kept all the same.
-
-**The specs.** `a_callback_reads_the_lazy_binding_it_captured` holds the
-callback beside the binding and the callback in the callee.
-`a_lazy_binding_handed_back_and_kept_is_read_later` keeps the answer in
-a list, under a name and in an argument. Both are in
-`tests/golden/micro`, and on main's native build each printed the last
-value bound on every line.
-
-**How it was found.** While building the fix for #2408 on another
-branch I added a mode that marks a freed cell and dies when one is read.
-A fixture written to stress that change died twice, once for each
-shape, and both faults reproduced on main without the change.
-`a_lazy_effect_handed_through_a_function_still_runs`, already in the
-corpus, has the first shape and died under the mode too. It has passed
-all along because nothing in it binds a second cell before the first is
-read.
-
-**Rows.** No runtime counter moves and every benchmark's machine code is
-byte for byte what it was: no benchmark binds a lazy value in either
-shape. clang reads the same programs, so the two codegen rows stay where
-they were. What moves is the front end, which asks two more questions of
-every lazy binding.
-- `browser_compile_instructions` rises 18,918 to 352,283,482: the tab
-  compiles its corpus through the same analysis.
-- `interp_instructions` rises 3,510 to 622,571,818. The row runs the
-  interpreted corpus from source, so it carries the front end too.
-- `compile_instructions` falls 18 to 24,152,633, `entry_instructions`
-  falls 163 to 156,082,814, `library_instructions` falls 86 to 73,608,570
-  and `emit_instructions` falls 62 to 5,642,423. These four move with the
-  compiler's binary. None of their corpora binds a lazy value.
-
-I set the three compile rows from a count here and CI agreed with them.
-I did not run the interpreter's sweep or the tab's before pushing, so
-CI found those two rows and the emitter's.
-
-**Welfare.** The sum falls by 0.0000166, from 95.09254193 to 95.09252535,
-and the floor follows it. `welfare.kso` weighs every change but one: a
-change that makes the engines agree ships at whatever it costs. The tool
-never lowers the floor itself, so the floor's value was set by hand and
-its history says why.
-
-**Open.** A cell its frame cannot free lives until the program exits,
-and these cells have joined that set. A server makes one for each
-request that binds one (#2408).
-
 ## 2026-11-10 — a lazy binding a callback holds joins the corpus
 
 Corpus first, before #2408. A senro app built natively held 184 bytes more
@@ -2484,3 +2356,49 @@ std/spec: `compile_instructions` 22,652,874 -> 22,642,731,
 -> 412,081,396. The welfare score rose, and the floor is set to it,
 95.39230375032061 -> 95.39235548899775. The check verb's route for a test
 file reaches no compile any row measures.
+
+## 2026-11-12 — gavel: senro fitted to one way of doing each thing (#2468)
+
+Clay asked the committee to go over senro as one would fit a bicycle:
+everything an app needs, nothing it doesn't, and one convention for each
+job. The committee's reading is on #2468. It is built from an inventory of
+every public name in senro's seventeen modules, the three example apps,
+and what the generators write. It rules in eleven sections and orders the
+work as six builds.
+
+**Rulings built so far.**
+
+- One name for a notice. The views took `flash` while the server said
+  `notice`, and the views now say `notice` too. A scaffold's views are named
+  for the plural, `notes_show.kata` and `notes_form.kata`. `visit/sees?`,
+  `visit/sent_to?` and `passwords/stand_in_at` leave the public surface.
+  The other names the inventory found no caller for outside senro's own
+  specs stay public: those specs are how senro is driven
+  (kanso-lang/senro#127).
+- One call starts an app. An entry is `derive app/conventions`, a
+  connection from `pg/from_env`, and
+  `app/run "<name>" routes connected derived`. The new `app` module sits
+  above `web`, `models`, `jobs` and `mail`, since `web` is below all
+  three. A derivation can declare only plain data, and only a record's own
+  module may build one, so `derived` is a map, and each migration in it is
+  its version and its SQL. The port is `PORT`, 3000 when unset. A mail
+  worker starts when the app has a mailer or calls one
+  (kanso-lang/senro#128).
+
+**Read again while building, and settled.**
+
+- `models/integer?` and `wire/whole?` were listed for removal. senro's
+  specs call both. The search that missed them ended in a word boundary
+  after `?`, which never matches. Both stay.
+- The resource controller keeps reading a field with `sent[n]` instead of
+  `web/value`. A field the request leaves out is left out of an update,
+  and `web/value` would read it as "" and blank it.
+- The scaffold's refusal arms stay. Dropping them needs a refused write to
+  bubble past the arm that reads the record. kanso lets a rescue open only
+  a failure another package raised, and `models` and `web` are one package.
+  A wrapper in every writing action would trade the arms for a call in
+  each action.
+
+Builds 3 (one way to answer and to read a request) and 4 (tables that
+supply their id and timestamps) are in review as kanso-lang/senro#129
+and its successor. The site follows the senro pin.
