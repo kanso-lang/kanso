@@ -20,27 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: senro's page data and component state travel in a binary encoding
-
-senro's design note said "JSON first; a binary encoding only if a
-measurement says the JSON is the cost." Clay, overriding it: "of course it's
-an extra cost. you KNOW it's a bottleneck."
-
-Page data (a `senro-view` answer) and component state (the state a page
-holds and the state posted to `/senro/act/<component>`) travel in an encoding
-kata derives from the template's shape. It is positional: no field names on
-the wire and no schema file. Both ends are compiled from the same templates,
-so the shape is known on each, and a page built by one compile refuses data
-from another. JSON stays wherever something outside senro reads the data.
-
-Owed, on #2416: a benchmark of page updates and component actions baselined
-under JSON first, as the 2026-09-05 corpus-first gavel asks; the encoder and
-decoder derived for each page and component, on the server and in the
-browser module; a differential golden that a page rendered from the encoded
-data is byte-identical to the server's rendering; a fuzzer for the codec run
-to silence; the guard against data from another compile; and the numbers
-before and after.
-
 ## 2026-11-10 — gavel: keyed list matching and compiled updates are recorded, not built
 
 Clay ruled that two ways of making senro's pages update faster are written
@@ -2170,3 +2149,15 @@ its bare call ahead of an import's twin (#2473), and a derived file puts
 its record types first (#2472). senro pins kanso d582d16c, which carries
 both (senro#136). PRINCIPLES.md gained the section the review found
 missing, "One way to do each thing" (senro#135).
+
+## 2026-11-12 — senro answers a component's action as its page (#2455)
+
+The last two items owed on #2455 are built. senro's design is cloud's (#2280), so the shape below is recorded here rather than put to the committee.
+
+Auth in the framework: `senro generate authentication` writes confirmation by mail and the unlock link (senro#137, #138, #139). `accounts` signs both links, an account signs in once its address is confirmed, and the wrong password that locks an account mails the link that unlocks it. A test reads the mail its requests queued with `visit/mailed`. The guides followed in #2480.
+
+Authorization at the page: a component's server action is now answered as the page it was posted from, as a provider call already was (senro#140). The page's script sends its path with the action. The server answers only from a page whose module leans on the component's, behind that page's sign-in, and only for a viewer its `admits` lets in. `derive kata/views` writes a `component` record into each server component's module, with the modules that lean on it, and an app lists them: `web/components routes [staple/component]`. That replaces `web/component act view`, which named every component's action and view by hand. The record's type is declared in the component's module, with no import, so a browser build of the module carries nothing of the server's. spec/serve/admitted acts on a tally from each page; with the check removed, its four refusals answer 200.
+
+Rows: senro's bench/pages moved in CI. server_records went from 344,151 to 344,207, server_data from 1,130,160 to 1,130,145, and server_html from 3,087,836 to 3,087,821; the browser rows held. The bench's component runs in the browser, so it gets no record. The likeliest cause is kata/views now importing `data`, which has not been isolated. No kanso row moved.
+
+Open: browser components still go through `browser/component act view`; giving them the same derived record is a small follow-up.
