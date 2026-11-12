@@ -1,0 +1,10 @@
+import "std/derive"
+
+# Writes an arm that reads `m`'s record first, and the record second, so the
+# module's derived file is handed the function before the type.
+pub fn arm _
+  [(derive/define "m" "pub fn shown t:thing\n  \"thing \{t.n}\"\n")]
+
+pub fn kind _
+  made = "pub fn made n\n  thing n\n"
+  [(derive/define "m" "pub type thing\n  n\n") (derive/define "m" made)]
