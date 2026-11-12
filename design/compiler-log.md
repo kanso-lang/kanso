@@ -20,26 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — gavel: keyed list matching and compiled updates are recorded, not built
-
-Clay ruled that two ways of making senro's pages update faster are written
-into senro's `design/live-views.md` as later work, and that neither is built
-yet (#2418).
-
-Keyed list matching: the page script's morph matches children by position,
-so a list that gains an item at the top re-patches every element after it.
-Matching on a stable key moves the existing elements, with `moveBefore()`
-where the browser has it and `insertBefore` elsewhere. Compiled updates:
-kata knows which fields each part of a template reads, so it could compile a
-template into direct updates of the nodes that show a changed field. A
-virtual DOM is declined, and the note says so.
-
-Each is measured before it is built. The issue gives an order for when the
-time comes: keyed matching, then the binary encoding, then compiled updates
-if a benchmark shows the morph is the cost. The encoding is ruled and owed
-on #2416, so cloud reads the order as placing the two later items around it
-and builds the encoding now. The note went in with senro#105.
-
 ## 2026-11-10 — a built module's wasm instructions can be counted from outside the tests
 
 #2416 owes a benchmark that counts what a page update costs in the browser,
@@ -2161,3 +2141,32 @@ Authorization at the page: a component's server action is now answered as the pa
 Rows: senro's bench/pages moved in CI. server_records went from 344,151 to 344,207, server_data from 1,130,160 to 1,130,145, and server_html from 3,087,836 to 3,087,821; the browser rows held. The bench's component runs in the browser, so it gets no record. The likeliest cause is kata/views now importing `data`, which has not been isolated. No kanso row moved.
 
 Open: browser components still go through `browser/component act view`; giving them the same derived record is a small follow-up.
+
+## 2026-11-12 — a browser component is listed by its record (senro#141)
+
+The follow-up the last entry left open. A server component was listed by
+the record `derive kata/views` writes into its module, and a browser
+component was named by hand, `browser/component planner/act planner/view`,
+under a name typed again in a map. kata now writes the record for every
+component, and a browser module lists them as an entry lists its server
+components: `browser/answer_pages [planner/component] views/rendered`.
+`browser/component` is gone. A browser component's record names no pages,
+since its actions never reach the server.
+
+The record names the one template that draws a component's state, so a
+component with two templates that bind actions is now refused on both
+sides, where only a server component was before.
+`spec/errors/component_drawn_by_two` is a browser counter with two such
+templates; senro's main checks it clean.
+
+Rows: senro's bench/pages moved. The first cut folded the list into a map
+before the module read its event and read about 7,000 instructions more on
+every browser row. Looking the component up when its event arrives, and
+recording no pages for it, brought them to browser_start 13,643 -> 16,873,
+browser_page 3,667,266 -> 3,670,780 and browser_act 115,229 -> 119,357, with
+server_data 1,130,145 -> 1,130,451 and server_html 3,087,821 -> 3,088,133.
+The derived code differs from main's only by the record and its type, and
+taking out `std/list` or `browser`'s own type left start-up where it was, so
+what remains is building a record of five fields where the module built one
+of two and a map. No kanso row moved. The site's views guide quotes the new
+lists, and the pin is d247faa.
