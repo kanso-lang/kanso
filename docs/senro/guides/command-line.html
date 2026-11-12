@@ -174,4 +174,22 @@ senro on port 3000</code></pre>
 
 <p><code>senro test</code>, or <code>senro t</code>, runs the specs in the app's <code>*_test.kso</code> files, and <code>senro test notes_test.kso</code> runs one file. it works on a database of its own, the app's with <code>_test</code> after its name, which it makes when the server has none by that name and migrates before anything runs. it exits with a failure when an example fails. the <a href="testing.html">testing guide</a> covers what a spec holds.</p>
 
+<div class="code-output">
+  <div class="code-panel-title">shell, in examples/notebook</div>
+  <pre><code>$ senro test notes_test.kso
+senro: made the database `notebook_test`
+notes
+  are listed
+  are made from the form and shown
+  are changed from the form
+  are not made from a field that breaks its rule
+  are gone once removed
+
+5 examples, 0 failed
+test_notes ... ok
+1 passed, 0 failed</code></pre>
+</div>
+
+<p>the first line appears only on the run that makes the test database.</p>
+
 </article>

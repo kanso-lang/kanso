@@ -220,5 +220,21 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 
 <p>when a request that is not a GET finishes, the server notifies Postgres's <code>senro</code> channel, and every page holding <code>/senro/live</code> open fetches itself again. one visitor's signature appears on another's screen without a reload, and a field someone is typing in keeps what they typed, unless it was in the form they just sent.</p>
 
+<p>the app writes none of this. the server sends the notice itself, after the action and before the answer goes out:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">web/web.kso</div>
+  <pre><code><span class="c"># A request that is not a GET may have changed what the app stores, so the</span>
+<span class="c"># server says so on Postgres's `senro` channel before it answers, and every</span>
+<span class="c"># page listening at /senro/live fetches itself again. The notification names</span>
+<span class="c"># the page that sent the request, from its senro-page header, so that page</span>
+<span class="c"># leaves it alone: the answer it is about to get is already the new page.</span>
+<span class="k">fn</span> told _ <span class="s">"GET"</span> _ r
+  effect r
+
+<span class="k">fn</span> told db _ by r
+  <span class="f">pg/query</span> db <span class="s">"select pg_notify('senro', $1)"</span> [by] .&gt; (_ -&gt; effect r)</code></pre>
+</div>
+
 <p>the server listens on one Postgres session however many pages are open, so a hundred open tabs hold a hundred connections to the server and one to the database. it writes each page a line every fifteen seconds, which is how it learns that a tab has closed and gives the connection back.</p>
 </article>

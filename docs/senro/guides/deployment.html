@@ -64,6 +64,24 @@ SENRO_ONLY             "migrate" stops after migrating    unset</code></pre>
   <li><strong>the schema.</strong> the migrations are compiled into the app. there is no separate schema file to deploy.</li>
 </ul>
 
+<p>the notebook's entry ends with the part a deploy cares about. the database comes from the environment, every action asks for a sign-in unless its module says otherwise, and <code>app/run</code> serves on <code>PORT</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/main.kso</div>
+  <pre><code><span class="k">derive</span> <span class="f">app/conventions</span>
+
+<span class="c"># The database comes from PGHOST, PGPORT, PGUSER, PGDATABASE and</span>
+<span class="c"># PGPASSWORD, as libpq reads them, so the app runs wherever its host</span>
+<span class="c"># sets them.</span>
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="c"># Every action asks for a sign-in unless its module lists it in</span>
+<span class="c"># `without_sign_in`.</span>
+signed <span class="o">=</span> <span class="f">web/requiring_sign_in</span> routes <span class="f">session/signed_against</span>
+
+<span class="f">app/run</span> <span class="s">"notebook"</span> signed connected derived</code></pre>
+</div>
+
 <h2>building</h2>
 
 <p><code>senro server</code> compiles the app and runs it, which suits development. a deploy builds a binary once and copies it to where it runs.</p>

@@ -83,6 +83,30 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
 
 <p>each does nothing when its work is already done: a table is made if it is not there, a column added if the table lacks it. a database that was built before its migrations were recorded takes them all safely the first time.</p>
 
+<p>the notebook's pages belong to a note, so the migration that makes their table also adds the foreign key. the one that makes its users lets an address appear once:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/migrations/20261111180513_create_pages.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+
+<span class="k">pub</span> create_pages <span class="o">=</span> [
+  pages_table
+  (<span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>)
+]
+
+pages_table <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [
+  (<span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text"</span>)
+  (<span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>)
+]</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/migrations/20261111180514_create_users.kso</div>
+  <pre><code><span class="k">pub</span> create_users <span class="o">=</span> [users_table (<span class="f">models/add_unique_index</span> <span class="s">"users"</span> <span class="s">"email"</span>)]</code></pre>
+</div>
+
+<p>a change is a value, so a migration can name its changes and list them, as these do with <code>pages_table</code> and <code>users_table</code>.</p>
+
 <h2>the order they run in</h2>
 
 <p>migrations run in the order of their files' names, and the stamp at the front of each name makes that the order they were written in. the order does not depend on the machine, on what the constants are called, or on the order the compiler reads the files in. two people who build a database from the same files get the same tables.</p>
@@ -165,6 +189,25 @@ pub add_color_to_tags = [
 <h2>one file, for a small app</h2>
 
 <p>a module that is a single file, <code>migrations.kso</code>, and writes <code>pub all = [...]</code> itself is read as it is, and each change is recorded by its place in the list. senro's own specs use this for apps of a few lines. the generators write files, and leave an app that keeps one file alone.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/associated/migrations.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+
+<span class="k">pub</span> all <span class="o">=</span> [notes pages pages_to_notes]
+
+notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [title]
+
+pages <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [note_id body]
+
+pages_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
+
+title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text not null"</span>
+
+note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>
+
+body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text not null"</span></code></pre>
+</div>
 
 <h2>what is not here</h2>
 
