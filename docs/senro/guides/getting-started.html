@@ -50,7 +50,7 @@ description: "build senro's guestbook one file at a time: the entry, the schema,
 <span class="k">derive</span> <span class="f">app/conventions</span>
 
 <span class="c"># The components whose actions run on the server.</span>
-served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> <span class="f">removal/act</span> <span class="f">removal/view</span>) }
+served <span class="o">=</span> [<span class="f">removal/component</span>]
 
 acting <span class="o">=</span> <span class="f">web/components</span> routes served
 

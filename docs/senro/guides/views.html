@@ -143,6 +143,8 @@ button.remove on-click<span class="o">=</span>removed aria-label<span class="o">
 
 <p>its state is the entry's id, which anyone can send, so the action removes the entry through the model. the <code>db</code> a server action is handed knows who is signed in, as an action's does, so <code>signature/destroy db id</code> asks the policy about that visitor, and the policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself, so every write a component makes goes through a policy.</p>
 
+<p>the click also sends the path of the page the component is on, and the server answers the action as it would answer that page: only from a page whose module leans on the component's, behind that page's sign-in, and only for a viewer the page's <code>admits</code> lets in. the <a href="authorization.html">authorization guide</a> shows it refusing each of the others. <code>derive kata/views</code> writes <code>component</code> into the module of each server component for this, and the entry lists them with <code>web/components routes [removal/component]</code>.</p>
+
 <h2>data from the server</h2>
 
 <p>an action that runs in the browser can still read what only the server holds, through a provider. a provider is a function whose first two parameters are the viewer and a database session. the planner's check button asks which staples the week would run short of, and the answer comes from the shelf in the database:</p>
@@ -178,7 +180,7 @@ button.remove on-click<span class="o">=</span>removed aria-label<span class="o">
 
 <span class="c"># The components whose actions run on the server. The planner runs in the</span>
 <span class="c"># browser, from browser.kso.</span>
-served <span class="o">=</span> { <span class="s">"staple"</span>:(<span class="f">web/component</span> <span class="f">staple/act</span> <span class="f">staple/view</span>) }
+served <span class="o">=</span> [<span class="f">staple/component</span>]
 
 <span class="c"># The planner asks the server for the staples the week runs short of, through</span>
 <span class="c"># the provider in item.kso.</span>

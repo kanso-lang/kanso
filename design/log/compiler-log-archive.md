@@ -115671,3 +115671,24 @@ reading here; `work_runbench`, clang's rows and the tab's are CI's.
 95.0994448300099 that #2414 banked. The objective's header sets a fix
 that makes the engines agree outside the sum, so the floor moves to what
 the fix costs and its history says so.
+
+## 2026-11-10 — gavel: senro's page data and component state travel in a binary encoding
+
+senro's design note said "JSON first; a binary encoding only if a
+measurement says the JSON is the cost." Clay, overriding it: "of course it's
+an extra cost. you KNOW it's a bottleneck."
+
+Page data (a `senro-view` answer) and component state (the state a page
+holds and the state posted to `/senro/act/<component>`) travel in an encoding
+kata derives from the template's shape. It is positional: no field names on
+the wire and no schema file. Both ends are compiled from the same templates,
+so the shape is known on each, and a page built by one compile refuses data
+from another. JSON stays wherever something outside senro reads the data.
+
+Owed, on #2416: a benchmark of page updates and component actions baselined
+under JSON first, as the 2026-09-05 corpus-first gavel asks; the encoder and
+decoder derived for each page and component, on the server and in the
+browser module; a differential golden that a page rendered from the encoded
+data is byte-identical to the server's rendering; a fuzzer for the codec run
+to silence; the guard against data from another compile; and the numbers
+before and after.

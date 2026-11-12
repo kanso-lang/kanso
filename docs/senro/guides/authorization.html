@@ -27,6 +27,7 @@ description: "how a senro module says who may reach its pages, and how that one 
   <div class="code-panel-title">spec/serve/admitted/ledger.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../data"</span>
 <span class="k">import</span> <span class="s">"./books"</span>
+<span class="k">import</span> <span class="s">"./tally"</span>
 <span class="k">import</span> <span class="s">"std/net/http"</span>
 
 <span class="c"># Only the bookkeeper, viewer 1, may reach the ledger.</span>
@@ -34,10 +35,11 @@ description: "how a senro module says who may reach its pages, and how that one 
   effect (viewer <span class="o">==</span> <span class="s">"1"</span>)
 
 <span class="c"># The ledger asks the server for the books' total, as a component's action</span>
-<span class="c"># would from the browser.</span>
+<span class="c"># would from the browser, and draws the tally, whose action runs there.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> _ _
   asks <span class="o">=</span> <span class="f">data/asking?</span> (<span class="f">books/total</span> 3)
-  effect (<span class="f">http/text_page</span> <span class="s">"the ledger, which asks the server: {asks}"</span>)</code></pre>
+  drawn <span class="o">=</span> <span class="f">tally/view</span> <span class="s">"raised by nobody"</span>
+  effect (<span class="f">http/text_page</span> <span class="s">"the ledger, which asks the server: {asks}\n{drawn}"</span>)</code></pre>
 </div>
 
 <p><code>admits</code> takes the action's name, the viewer's id and a database session, and answers an effect of true or false. it is asked once a request is past the sign-in, before the action runs. a viewer it refuses is answered 403, and the action does not run. a module with no <code>admits</code> admits whoever the sign-in does.</p>
@@ -88,46 +90,74 @@ description: "how a senro module says who may reach its pages, and how that one 
   <span class="f">ledger/index</span> req db</code></pre>
 </div>
 
-<p>the front page is open to all and asks the server for nothing. the entry names the providers and then puts the table behind the sign-in; either order works.</p>
+<p>the front page is open to all and asks the server for nothing. the entry names the providers and the component, and then puts the table behind the sign-in.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/serve/admitted/main.kso</div>
   <pre><code><span class="k">derive</span> <span class="f">data/providers</span>
+<span class="k">derive</span> <span class="f">kata/views</span>
 <span class="k">derive</span> <span class="f">routes/rest</span>
 
 connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> 54329 <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
 
-answering <span class="o">=</span> <span class="f">web/providers</span> routes <span class="f">books/provided</span>
+acting <span class="o">=</span> <span class="f">web/components</span> routes [<span class="f">tally/component</span>]
+
+answering <span class="o">=</span> <span class="f">web/providers</span> acting <span class="f">books/provided</span>
 
 guarded <span class="o">=</span> <span class="f">web/requiring_sign_in</span> answering <span class="f">web/unbound</span>
 
 <span class="f">web/serve</span> 24420 guarded connected</code></pre>
 </div>
 
-<p>the spec then sends ten requests and records each answer.</p>
+<p>the spec then sends sixteen requests and records each answer.</p>
 
 <div class="code-output">
-  <div class="code-panel-title">what the ten requests were answered</div>
+  <div class="code-panel-title">what the sixteen requests were answered</div>
   <pre><code>HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
 HTTP/1.1 403 Forbidden: Forbidden
 HTTP/1.1 403 Forbidden: Forbidden
 HTTP/1.1 403 Forbidden: Forbidden
 HTTP/1.1 200 OK: ["3 years of books, read for viewer 2"]
 HTTP/1.1 403 Forbidden: Forbidden
 HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 403 Forbidden: Forbidden
+HTTP/1.1 200 OK: &lt;div data-component="tally" data-runs="server" data-state="i3JhaXNlZCBieSAy"&gt;&lt;div class="tally"&gt;&lt;span&gt;raised by 2&lt;/span&gt;&lt;button data-on-click="raised"&gt;+&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
 HTTP/1.1 200 OK: the ledger, which asks the server: true
+&lt;div data-component="tally" data-runs="server" data-state="kHJhaXNlZCBieSBub2JvZHk="&gt;&lt;div class="tally"&gt;&lt;span&gt;raised by nobody&lt;/span&gt;&lt;button data-on-click="raised"&gt;+&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
 HTTP/1.1 200 OK: ["3 years of books, read for viewer 1"]
-HTTP/1.1 404 Not Found: not found</code></pre>
+HTTP/1.1 404 Not Found: not found
+HTTP/1.1 200 OK: &lt;div data-component="tally" data-runs="server" data-state="i3JhaXNlZCBieSAx"&gt;&lt;div class="tally"&gt;&lt;span&gt;raised by 1&lt;/span&gt;&lt;button data-on-click="raised"&gt;+&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;</code></pre>
 </div>
 
-<p>line by line: a visitor who has not signed in asks for the books from the desk, which wants a sign-in, and from the front page, which does not use them, and is refused both times. viewer 2 signs in and asks for the ledger page, and is refused by <code>admits</code>. viewer 2 then asks for the books from the ledger and is refused by the same check; from the desk, and is answered, because the desk admits anyone signed in; from the front page, and is refused because that page does not use them; and without naming a page, and is refused. viewer 1 gets the ledger page, and the books from it. the last request names a provider the app does not have, which is not found.</p>
+<p>line by line: a visitor who has not signed in asks for the books from the desk, which wants a sign-in, and from the front page, which does not use them, and is refused both times, and is refused the tally's action from the desk too. viewer 2 signs in and asks for the ledger page, and is refused by <code>admits</code>. viewer 2 then asks for the books from the ledger and is refused by the same check; from the desk, and is answered, because the desk admits anyone signed in; from the front page, and is refused because that page does not use them; and without naming a page, and is refused. viewer 2's posts of the tally's action go the same way: refused from the ledger, the front page and no page, and answered from the desk with the tally drawn again. viewer 1 gets the ledger page, which draws the tally, and the books from it. the next request names a provider the app does not have, which is not found, and the last is viewer 1 raising the tally from the ledger.</p>
 
 <h2>what stays with the provider</h2>
 
 <p>a page decides which providers it calls, and it also chooses their arguments. a page that may list the viewer's own notes could be made to ask for somebody else's by id. that question belongs to the record, and the model answers it: a provider that reads through a model, as every read in an app does, gets only what the model's <code>visible?</code> lets that viewer see, as the <a href="models.html">models guide</a> describes. the page's check covers whether the viewer may be here, and the model's covers which rows are theirs.</p>
 
-<h2>what is not here</h2>
+<h2>a component's actions</h2>
 
-<p>a server component's actions, the ones that write to the database from a click without a page load, are open to any visitor and rely on their models' policies to refuse a write. they are not yet answered as their page is.</p>
+<p>a server component's action, the kind that writes to the database from a click without a page load, is answered the same way. the click posts the component's state to <code>/senro/act/&lt;component&gt;</code> with the path of the page it is on, and the server checks the same three things: the page's module leans on the component's module, the visitor has the sign-in the page asks for, and the page's module admits them. the ledger draws a tally whose action asks for the viewer, so it runs on the server:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/tally/tally.kso</div>
+  <pre><code><span class="c"># A note of who last raised the tally. The action asks for the viewer, so it</span>
+<span class="c"># runs on the server, and the server answers it as the page that asks.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">raised</span> viewer _
+  effect <span class="s">"raised by {viewer}"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/serve/admitted/tally/view.kata</div>
+  <pre><code>takes said
+div.tally
+  span <span class="o">=</span> said
+  button on-click<span class="o">=</span>raised +</code></pre>
+</div>
+
+<p><code>derive kata/views</code> writes <code>component</code> into the tally's module, with the modules whose pages may act on it worked out from the app's calls, as a provider's are, and the entry lists it: <code>web/components routes [tally/component]</code>. the action's own write still goes through a model, whose policy says which rows the viewer may change.</p>
 
 </article>
