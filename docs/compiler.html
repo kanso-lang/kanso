@@ -4556,6 +4556,14 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The first cut ran the check as a walk of its own over every expression, and the entry corpus's check rose 184,858 instructions. The two existing checks that already take a list's elements and a call's head apart now ask the question instead, and the rise is 12,583 on the entry corpus and 23,662 for the compile in the tab.</p>
 
+<h2 id="unoptimized"><span class="sec-num">304</span>the dev tier stays unoptimized</h2>
+
+<p>A dev build compiles the program at <code>-O0</code> and links a runtime that was optimized once and cached. Its run of the run benchmark costs three times the release build's, and dev run speed has improved less than any other term in the objective. So each optimizing pipeline was tried on the run benchmark's dev module, counting what the tools spent and what the binary then ran.</p>
+
+<p>Plain <code>-O1</code> cut the run by 40% and cost the codegen five times over. Most of that gain comes from the backend: the selection DAG and the greedy register allocator, in place of fast instruction selection. The middle end's passes alone recovered about a tenth of the run. A short list of them (scalar replacement, early common subexpressions, instruction combining, control-flow simplification) made the run slower. The cheapest pipeline that moved the run was the backend alone at <code>-O1</code>, which took a quarter off the run for 2.6 times the codegen.</p>
+
+<p>Under the objective's weights that trade loses. The dev codegen term saturates early, as compile cost does, so 2.6 times its cost takes about 0.017 from the development side, and a quarter off the dev run gives back about 0.007. The tier stays at <code>-O0</code> until the weights change.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
