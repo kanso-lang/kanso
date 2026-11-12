@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a session's trip through base64 joins the corpus
-
-The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
-holds a component's state in the page as base64, and its benchmark showed
-an action costing more than it had in JSON, with base64 the larger part.
-senro also spells and reads base64 for every request that carries a
-session. `std/base64` is written in kanso: it joins a string for each group
-of three bytes, reads each letter out of its alphabet with a slice, and
-builds the bytes it decodes by pushing onto a list. No benchmark held a
-trip through it, so a fix would have scored as nothing.
-
-`sealed` joins the run program: 800 passes, each spelling a cookie of about
-sixty bytes and reading it back. Built with the phase and with it reading
-nothing, the program retires 991,852,481 instructions against 952,721,301
-in this container, so the phase is 39,131,180 of them, 3.95%, and a trip
-costs about 49,000. The same trip joins the interpreter's corpus at 15
-passes, where it costs 3.1 million instructions a trip.
-
-CI's rows. work_runbench 952,714,702 -> 991,852,372 and work_runbench_dev
-2,805,694,975 -> 2,894,015,349. interp_instructions 680,822,127 ->
-727,482,475, interp_allocs 984,852 -> 1,043,722 and interp_peak_bytes
-1,377,499 -> 1,489,302. In the tab, browser_compile_instructions
-358,139,032 -> 413,857,607, browser_compile_peak_bytes 862,043 -> 975,975
-and browser_run_instructions 91,173,579 -> 95,460,118, with
-browser_run_peak_bytes still 1,572,864. The tab's compile rises by 15.6%:
-the corpus now imports `std/base64` and through it `std/bits`, and the tab
-compiles both. The compile rows that read other programs did not move.
-
-The run program's counters rise with the phase: run_allocs 2,372,861,
-run_alloc_bytes 261,860,897, run_perm_allocs 161, run_beat_iters 197,248,
-run_push_mut_slow 1,658,292 (and run_push_mut_fast 1,398,651),
-run_bytes_malloc 9,468, run_str_scans 52,203, run_str_scan_bytes
-19,043,424, run_sh_str 19,617,504, run_sh_buf 102,043,040 and run_sh_bytes
-43,560, with run_buf_reuse at 7,390. `std/base64` joins the program's
-emitted code, so runbench reads defines=975 calls=10294 branches=9407
-lines=80567 and the summed rows emitted_other_defines 2,406,
-emitted_other_calls 22,268, emitted_other_branches 19,938 and
-emitted_other_lines 185,688. Its machine code is 912,641 bytes, and the
-summed text 5,954,425.
-
-The floor is re-based and the score is not a gain. Seven baselines are
-scaled by the new reading over the old, as the last corpus additions did,
-so the meta moves only by their rounding, 95.09928563621176 to
-95.09928566956496.
-
 ## 2026-11-10 — base64 is spelled and read by the runtime
 
 #2420. `std/base64` was written in kanso, and a trip through it for a
@@ -2111,3 +2066,31 @@ compile work, and it was not kept. What the fixture needs is for a function
 value's parameters to hold what is actually passed to it at the calls made
 through values, in place of every type. That is a flow analysis of function
 values.
+
+## 2026-11-12 — the dev tier stays at -O0 (measured)
+
+The dev tier compiles a program at `-O0` and links the cached optimized
+runtime. Its run of runbench costs three times the release build's, and
+`dev_run_instructions` has improved least of any term (+13% on its
+baseline). So I measured what optimizing the program module would buy, on
+runbench's dev `.ll` (main at a759d16b, this container, clang 19.1.1). The
+codegen column is the tool's own instructions on that one module.
+
+| pipeline | codegen | run |
+|---|---|---|
+| `clang -O0` (today) | 2,886,553,773 | 3,057,358,794 |
+| `clang -O1` | 14,923,691,533 | 1,847,473,765 |
+| `llc -O0` | 2,891,930,318 | 3,148,019,518 |
+| `opt -O1`, then `llc -O0` | 4,862,823,427 + 4,302,492,751 | 2,782,998,016 |
+| `opt` with sroa, early-cse, instcombine and simplifycfg, then `llc -O0` | 1,103,876,794 + 2,815,114,850 | 3,267,742,793 |
+| `llc -O1` (the same at `-O2`) | 7,474,749,318 | 2,365,328,093 |
+| `llc -O0 -fast-isel=false` | 3,511,909,510 | 3,350,254,256 |
+
+Most of what `-O1` buys comes from the backend: selection DAG and the greedy
+allocator in place of fast instruction selection. A middle-end-only pipeline
+recovers a fraction, and the short pass list makes the run slower. The
+cheapest pipeline that moves the run is the backend at `-O1`: 25% off the run
+for 2.6 times the codegen. At today's ratios that is about +0.007 on the
+development side from `dev run speed` against about -0.017 from `dev
+codegen`, whose satiation is 0.5. Plain `-O1` is worse, at -0.025. Under the
+weights as written the dev tier stays at `-O0`.
