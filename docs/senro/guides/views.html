@@ -31,18 +31,18 @@ header
   p.lede Leave a line for whoever comes next.
 <span class="k">if</span> viewer <span class="o">==</span> <span class="s">""</span>
   nav.door
-    a href<span class="o">=</span><span class="s">"/session/new"</span> Sign in
-    a href<span class="o">=</span><span class="s">"/registration/new"</span> Make an account
+    a href<span class="o">=</span>(path_to <span class="s">"session/new"</span>) Sign in
+    a href<span class="o">=</span>(path_to <span class="s">"registration/new"</span>) Make an account
 else
-  form.out method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span><span class="s">"/session"</span>
+  form.out method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>(path_to <span class="s">"session/destroy"</span>)
     input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span><span class="s">"DELETE"</span>
     span Signed in as {viewer}.
-    a href<span class="o">=</span><span class="s">"/password/edit"</span> Your account
+    a href<span class="o">=</span>(path_to <span class="s">"password/edit"</span>) Your account
     button Sign out
 <span class="k">if</span> notice <span class="o">!=</span> <span class="s">""</span>
   p.notice <span class="o">=</span> notice
 <span class="k">if</span> viewer <span class="o">!=</span> <span class="s">""</span>
-  form.sign method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span><span class="s">"/entries"</span> enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
+  form.sign method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>(path_to <span class="s">"entries/create"</span>) enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
     textarea name<span class="o">=</span><span class="s">"message"</span> placeholder<span class="o">=</span><span class="s">"say something"</span> required<span class="o">=</span><span class="s">"required"</span> <span class="o">=</span> form.message
     <span class="k">if</span> form.problems[<span class="s">"message"</span>] <span class="o">!=</span> none
       p.problem <span class="o">=</span> form.problems[<span class="s">"message"</span>]
@@ -55,7 +55,7 @@ ol.entries
     li
       p.message <span class="o">=</span> e.message
       <span class="k">if</span> e.photo <span class="o">!=</span> <span class="s">""</span>
-        img.photo src<span class="o">=</span><span class="s">"/senro/blobs/{e.photo}"</span> alt<span class="o">=</span><span class="s">"a photo from {e.name}"</span>
+        img.photo src<span class="o">=</span>(blob_path e.photo) alt<span class="o">=</span><span class="s">"a photo from {e.name}"</span>
       p.who <span class="o">=</span> e.name
       <span class="o">==</span> removals[<span class="s">"{e.id}"</span>]</code></pre>
 </div>
@@ -148,9 +148,9 @@ button.remove on-click<span class="o">=</span>removed aria-label<span class="o">
 <p>an action that runs in the browser can still read what only the server holds, through a provider. a provider is a function whose first two parameters are the viewer and a database session. the planner's check button asks which staples the week would run short of, and the answer comes from the shelf in the database:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">examples/pantry/stock.kso</div>
+  <div class="code-panel-title">examples/pantry/item.kso</div>
   <pre><code><span class="c"># The staples the shelf holds fewer of than `meals`, by name. The planner asks</span>
-<span class="c"># for them as `stock/short meals`, and this body runs only on the server.</span>
+<span class="c"># for them as `item/short meals`, and this body runs only on the server.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">short</span> _ db meals
   where db <span class="s">"staple"</span> true <span class="o">.&gt;</span> (items <span class="o">-&gt;</span> effect (under items meals))
 
@@ -159,25 +159,35 @@ button.remove on-click<span class="o">=</span>removed aria-label<span class="o">
   <span class="f">list/to_list</span> (<span class="f">list/map</span> low (i <span class="o">-&gt;</span> i.name))</code></pre>
 </div>
 
-<p><code>stock.kso</code> holds the pantry's item model, so the derivation writes the model's calls into it, and the provider calls <code>where</code> bare: the staples are the items whose <code>staple</code> column holds true. the session a provider is handed knows the viewer, as an action's does, so <code>short</code> leaves its first parameter unnamed.</p>
+<p><code>item.kso</code> holds the pantry's item model, so the derivation writes the model's calls into it, and the provider calls <code>where</code> bare: the staples are the items whose <code>staple</code> column holds true. the session a provider is handed knows the viewer, as an action's does, so <code>short</code> leaves its first parameter unnamed.</p>
 
-<p>the action calls the provider with two arguments fewer, as it calls any function. with <code>derive app/conventions</code> in the entry, the derivation writes that shorter <code>short meals</code> into <code>stock.kso</code>, and called in the browser it asks the server for the answer:</p>
+<p>the action calls the provider with two arguments fewer, as it calls any function. with <code>derive app/conventions</code> in the entry, the derivation writes that shorter <code>short meals</code> into <code>item.kso</code>, and called in the browser it asks the server for the answer:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
   <pre><code><span class="k">pub</span> <span class="k">fn</span> <span class="f">checked</span> plan
-  asked <span class="o">=</span> <span class="f">stock/short</span> (meals_of plan)
+  asked <span class="o">=</span> <span class="f">item/short</span> (meals_of plan)
   <span class="f">data/then</span> asked (names <span class="o">-&gt;</span> put plan <span class="s">"note"</span> (noted names))</code></pre>
 </div>
 
-<p><code>checked</code> answers what it asks for instead of its next state. the page sends the call to <code>POST /senro/data</code>, runs the action again with the answer, and renders the plan it comes to: one click, one request. calls an action gathers with <code>data/all</code> go in one request however many there are, and a call inside <code>data/then</code> that needs an earlier answer waits a round. the server answers from the table the derivation writes beside the providers, <code>stock/provided</code>:</p>
+<p><code>checked</code> answers what it asks for instead of its next state. the page sends the call to <code>POST /senro/data</code>, runs the action again with the answer, and renders the plan it comes to: one click, one request. calls an action gathers with <code>data/all</code> go in one request however many there are, and a call inside <code>data/then</code> that needs an earlier answer waits a round. the server answers from the table the derivation writes beside the providers, <code>item/provided</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/pantry/main.kso</div>
-  <pre><code><span class="c"># The planner asks the server for the staples the week runs short of, through</span>
-<span class="c"># the provider in stock.kso.</span>
-answering <span class="o">=</span> <span class="f">web/components</span> routes secret served
-served_with_data <span class="o">=</span> <span class="f">web/providers</span> answering secret <span class="f">stock/provided</span></code></pre>
+  <pre><code><span class="k">derive</span> <span class="f">app/conventions</span>
+
+<span class="c"># The components whose actions run on the server. The planner runs in the</span>
+<span class="c"># browser, from browser.kso.</span>
+served <span class="o">=</span> { <span class="s">"staple"</span>:(<span class="f">web/component</span> <span class="f">staple/act</span> <span class="f">staple/view</span>) }
+
+<span class="c"># The planner asks the server for the staples the week runs short of, through</span>
+<span class="c"># the provider in item.kso.</span>
+answering <span class="o">=</span> <span class="f">web/components</span> routes served
+served_with_data <span class="o">=</span> <span class="f">web/providers</span> answering <span class="f">item/provided</span>
+
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="f">app/run</span> <span class="s">"pantry"</span> served_with_data connected derived</code></pre>
 </div>
 
 <p>a page can reach only a provider the app's own code calls that way, and only from senro's page script. anyone with a session can still call one with arguments of their choosing, so a provider reads through a model, whose policy decides what the viewer may see. <code>routes/rest</code> gives a provider no route, so it can sit in a resource's module beside the actions. the browser module compiles the provider's body without running it, so the pantry's browser entry derives the models too.</p>
