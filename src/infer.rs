@@ -2289,7 +2289,8 @@ fn eval_call<'a>(
                 passed_over = true;
                 continue;
             }
-            caught_all |= params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)));
+            caught_all |=
+                params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)));
             // An arm a literal argument cannot reach neither sees the call
             // nor answers it: `text/split s "\n"` never runs `split _ ""`,
             // so what that arm raises is not something this call can answer.
