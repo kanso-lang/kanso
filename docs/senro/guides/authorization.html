@@ -92,9 +92,16 @@ description: "how a senro module says who may reach its pages, and how that one 
 
 <div class="code-panel">
   <div class="code-panel-title">spec/serve/admitted/main.kso</div>
-  <pre><code>answering <span class="o">=</span> <span class="f">web/providers</span> routes <span class="f">session/secret</span> <span class="f">books/provided</span>
+  <pre><code><span class="k">derive</span> <span class="f">data/providers</span>
+<span class="k">derive</span> <span class="f">routes/rest</span>
 
-guarded <span class="o">=</span> <span class="f">web/requiring_sign_in</span> answering <span class="f">session/secret</span> <span class="f">web/unbound</span></code></pre>
+connected <span class="o">=</span> <span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> 54329 <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
+
+answering <span class="o">=</span> <span class="f">web/providers</span> routes <span class="f">books/provided</span>
+
+guarded <span class="o">=</span> <span class="f">web/requiring_sign_in</span> answering <span class="f">web/unbound</span>
+
+<span class="f">web/serve</span> 24420 guarded connected</code></pre>
 </div>
 
 <p>the spec then sends ten requests and records each answer.</p>

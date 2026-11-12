@@ -42,7 +42,6 @@ description: "how senro keeps an app's migrations one to a file, orders them by 
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
 <span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
   (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
   (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
 ]</code></pre>
@@ -96,10 +95,7 @@ blank_text <span class="o">=</span> <span class="s">"text not null default ''"</
   <div class="code-panel-title">spec/errors/migration_misnamed/migrations/create_notes.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../../models"</span>
 
-<span class="k">pub</span> <span class="f">create_notes</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
-  (<span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>)
-]</code></pre>
+<span class="k">pub</span> <span class="f">create_notes</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [(<span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text"</span>)]</code></pre>
 </div>
 
 <div class="code-output">

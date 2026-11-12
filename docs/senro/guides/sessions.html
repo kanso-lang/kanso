@@ -21,9 +21,9 @@ description: "senro keeps a session in a signed cookie, stretches passwords with
 
 <h2>the session</h2>
 
-<p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. an action reads it with <code>web/session req secret</code> and keeps a changed one by answering <code>web/kept response secret session</code>. an answer that would set the session the request already carried sets none, so a page the server read before a sign-out cannot sign the visitor back in when its answer reaches the browser last.</p>
+<p>a session is a map of strings the browser keeps in a cookie and sends back with each request. the cookie holds the map as JSON beside an HMAC-SHA-256 of it under the app's secret, so a session the browser altered, or one another app signed, reads as an empty map. the app's secret is <code>pub secret</code> in its session module, which senro reads by that name and the route table carries, and a deployed app sets <code>SENRO_SECRET</code>, which senro reads in its place. the secret rides on the request an action is handed and never in a header, so nothing a client sends can name it. an action reads the session with <code>web/session req</code> and keeps a changed one by answering <code>web/kept req response session</code>. an answer that would set the session the request already carried sets none, so a page the server read before a sign-out cannot sign the visitor back in when its answer reaches the browser last.</p>
 
-<p><code>web/signed_in req response secret session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req secret</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
+<p><code>web/signed_in req response session id bound</code> keeps the session with <code>id</code> as its viewer. <code>bound</code> is what the sign-in rests on, which the section on pages that ask for a sign-in describes. <code>web/viewer req</code> reads the viewer back, or <code>""</code> for a visitor who has not signed in. a sign-in lasts <code>web/session_days</code>, fourteen. the server stamps each request with the time it arrived, and a request later than that reads the session without its viewer; whatever else it keeps survives.</p>
 
 <p>the cookie itself lasts as long as the browser, so closing the browser signs the visitor out. a session made <code>web/lasting</code> keeps its cookie for those fourteen days instead, which is Devise's "remember me". the mark is in the session itself, so every later response that keeps the session keeps the cookie as long. the guestbook's sign-in form has a "Keep me signed in" box, and <code>signed</code> below marks the session when it is ticked. <code>web/signed_out session</code> forgets the sign-in, the mark with it, and keeps the rest.</p>
 
@@ -48,14 +48,10 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="k">fn</span> <span class="f">leaves_notice?</span> h
   <span class="f">text/starts_with?</span> h <span class="s">"set-cookie: {notice_cookie}="</span>
 
-<span class="c"># The answer `r`, leaving `message` for the request after it to show, as</span>
-<span class="c"># Rails' `redirect_to path, notice: message` does:</span>
-<span class="c">#</span>
-<span class="c">#   web/noticed (web/redirect "/") "Thank you for signing."</span>
-<span class="c">#</span>
-<span class="c"># The next request reads it with `notice`, and the server forgets it once</span>
-<span class="c"># that request is answered.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">noticed</span> r message
+<span class="c"># The answer `r`, leaving `message` for the request after it to show. The</span>
+<span class="c"># next request reads it with `notice`, and the server forgets it once that</span>
+<span class="c"># request is answered.</span>
+<span class="k">fn</span> <span class="f">noticed</span> r message
   kept_lines <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/reject</span> r.headers leaves_notice?)
   line <span class="o">=</span> <span class="s">"set-cookie: {notice_cookie}={escaped message}; Path=/; HttpOnly"</span>
   <span class="f">http/respond</span> r.status (push kept_lines <span class="s">"{line}; SameSite=Lax"</span>) r.body
@@ -108,7 +104,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># eight characters or more. Both are looked up before the password is</span>
 <span class="c"># stretched, so a sign-up that cannot succeed costs no hashing.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  f <span class="o">=</span> <span class="f">web/form</span> req.body
+  f <span class="o">=</span> <span class="f">web/input</span> req
   name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
   email <span class="o">=</span> <span class="f">text/lowercase</span> (<span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"email"</span>))
   asked <span class="o">=</span> signup name email (<span class="f">web/value</span> f <span class="s">"password"</span>)
@@ -132,20 +128,20 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
   fields <span class="o">=</span> { <span class="s">"email"</span>:email <span class="s">"name"</span>:name }
   <span class="f">passwords/digested</span> password
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">account/create</span> db (put fields <span class="s">"digest"</span> d))
-    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> made db w)
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> made req db w)
 
 <span class="c"># A new account is not signed in: its holder confirms the address first,</span>
 <span class="c"># through the link the mail carries, as Devise's `confirmable` asks. A mail</span>
 <span class="c"># that cannot be queued is logged, as the worker logs one it cannot send,</span>
 <span class="c"># and the account can ask again by signing in.</span>
-<span class="k">fn</span> <span class="f">made</span> db kept:<span class="f">account/account</span>
+<span class="k">fn</span> <span class="f">made</span> req db kept:<span class="f">account/account</span>
   told <span class="o">=</span> <span class="s">"Welcome, {kept.name}. Confirm your address with the link we sent."</span>
-  welcomed <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) told
-  <span class="f">account_mailer/confirmation</span> db kept.id kept.email
+  welcomed <span class="o">=</span> <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) told
+  <span class="f">account_mailer/confirmation</span> req db kept.id kept.email
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: {u.reason}\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect welcomed)
 
-<span class="k">fn</span> <span class="f">made</span> _ _
+<span class="k">fn</span> <span class="f">made</span> _ _ _
   effect <span class="f">web/denied</span></code></pre>
 </div>
 
@@ -168,26 +164,28 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <h2>signing in</h2>
 
-<p>the session is a singular resource: <code>session/new</code> is the form, <code>session/create</code> signs in, and <code>session/destroy</code> signs out. <code>create</code> reads the account by its name with <code>account/find_by</code>, and <code>held</code> makes a <code>holder</code> of what it found: the fields a sign-in checks, and the record as it was read, in <code>was</code>. a name with no account gets a holder too, with the stand-in digest and no record.</p>
+<p>the session is a singular resource: <code>session/new</code> is the form, <code>session/create</code> signs in, and <code>session/destroy</code> signs out. <code>create</code> reads the account by its name with <code>account/find_by</code>, and <code>held</code> makes a <code>holder</code> of what it found: the fields a sign-in checks, when and from where the account last signed in, and whether its address is confirmed, as <code>active</code>. a name with no account gets a holder too, with the stand-in digest. <code>entered</code> hands the holder and the password to <code>accounts/attempt</code>, which decides what the sign-in comes to, and <code>answered</code> says what the guestbook answers for each verdict.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/session.kso</div>
-  <pre><code><span class="c"># What a sign-in checks of the account a name holds, and the account as it</span>
-<span class="c"># was read. A name with no account holds the stand-in digest, which no</span>
-<span class="c"># password matches, and no account.</span>
+  <pre><code><span class="c"># What a sign-in checks of the account a name holds, and when and from</span>
+<span class="c"># where it last signed in. A name with no account holds the stand-in</span>
+<span class="c"># digest, which no password matches. An account signs in once its address</span>
+<span class="c"># is confirmed (`active`).</span>
 <span class="k">type</span> <span class="f">holder</span>
   id
   digest
   email
-  confirmed
   locked
-  was
+  was_at
+  was_ip
+  active
 
 <span class="c"># A name with no account is checked against nothing at the same cost, so a</span>
 <span class="c"># refusal takes as long whether or not the name exists, and the answer is</span>
 <span class="c"># the same: a name and a password that do not match.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  f <span class="o">=</span> <span class="f">web/form</span> req.body
+  f <span class="o">=</span> <span class="f">web/input</span> req
   name <span class="o">=</span> <span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"name"</span>)
   password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
   remember <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"remember"</span> <span class="o">==</span> <span class="s">"yes"</span>
@@ -196,26 +194,37 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
     <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> entered req db name a password remember t))
 
 <span class="k">fn</span> <span class="f">held</span> none
-  <span class="f">passwords/stand_in</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> effect (holder <span class="s">""</span> d <span class="s">""</span> <span class="s">""</span> <span class="s">""</span> none))
+  <span class="f">passwords/stand_in</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> effect (holder <span class="s">""</span> d <span class="s">""</span> <span class="s">""</span> <span class="s">""</span> <span class="s">""</span> false))
 
 <span class="k">fn</span> <span class="f">held</span> a
-  effect (holder <span class="s">"{a.id}"</span> a.digest a.email (said a.confirmed) a.locked a)
+  at <span class="o">=</span> a.current_sign_in_at
+  from <span class="o">=</span> a.current_sign_in_ip
+  ready <span class="o">=</span> said a.confirmed <span class="o">!=</span> <span class="s">""</span>
+  effect (holder <span class="s">"{a.id}"</span> a.digest a.email a.locked at from ready)
 
-<span class="c"># A locked account answers a wrong password as any other wrong password is</span>
-<span class="c"># answered, and tells only the holder of the right one that it is locked.</span>
+<span class="c"># What a sign-in comes to is `accounts`' to decide. A locked account tells</span>
+<span class="c"># only the holder of the right password that it is locked, and the wrong</span>
+<span class="c"># password that locks it mails the link that unlocks it.</span>
 <span class="k">fn</span> <span class="f">entered</span> req db name a password remember t
-  right <span class="o">=</span> <span class="f">passwords/matches?</span> password a.digest
-  <span class="k">return</span> shut req name right <span class="k">if</span> locked? a t
-  <span class="k">return</span> missed req db name a t <span class="k">if</span> <span class="k">not</span> right
-  <span class="k">return</span> unconfirmed req db name a <span class="k">if</span> a.confirmed <span class="o">==</span> <span class="s">""</span>
-  arrived req db a.was t <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> signed req name a remember)
+  model <span class="o">=</span> <span class="f">account/account_model</span>
+  <span class="f">accounts/attempt</span> req db model a password locks_after locked_minutes t
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> answered req db name a remember v)
+
+<span class="k">fn</span> <span class="f">answered</span> req db name a remember v
+  <span class="k">return</span> signed req name a remember <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"signed"</span>
+  <span class="k">return</span> unconfirmed req db name a <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"inactive"</span>
+  <span class="k">return</span> shut req name <span class="k">if</span> v.outcome <span class="o">==</span> <span class="s">"locked"</span>
+  <span class="k">return</span> refused req name <span class="k">if</span> v.stamp <span class="o">==</span> <span class="s">""</span>
+  <span class="f">account_mailer/unlock</span> req db a.id a.email v.stamp
+    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: {u.reason}\n"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> refused req name)
 
 <span class="k">fn</span> <span class="f">signed</span> req name a remember
-  s <span class="o">=</span> <span class="f">web/session</span> req <span class="f">entries/secret</span>
-  back <span class="o">=</span> <span class="f">web/return_to</span> req <span class="f">entries/secret</span> <span class="s">"/"</span>
+  s <span class="o">=</span> <span class="f">web/session</span> req
+  back <span class="o">=</span> <span class="f">web/return_to</span> req (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>)
   signing <span class="o">=</span> kept_if (delete s <span class="s">"return_to"</span>) remember
-  home <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> back) <span class="s">"Signed in as {name}."</span>
-  effect (<span class="f">web/signed_in</span> req home <span class="f">entries/secret</span> signing name a.digest)
+  home <span class="o">=</span> <span class="f">web/redirect</span> back <span class="s">"Signed in as {name}."</span>
+  effect (<span class="f">web/signed_in</span> req home signing name a.digest)
 
 <span class="c"># A visitor who ticked "Keep me signed in" keeps the sign-in after the</span>
 <span class="c"># browser closes.</span>
@@ -230,7 +239,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># password learns that the account exists.</span>
 <span class="k">fn</span> <span class="f">unconfirmed</span> req db name a
   first <span class="o">=</span> <span class="s">"Confirm your address first. We have sent the link again."</span>
-  <span class="f">account_mailer/confirmation</span> db a.id a.email
+  <span class="f">account_mailer/confirmation</span> req db a.id a.email
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no confirmation mail: {u.reason}\n"</span>)
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (opened req name { <span class="s">"password"</span>:first } 403))
 
@@ -240,12 +249,12 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <span class="c"># Signing out keeps the rest of the session and forgets the sign-in.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> req _
-  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req <span class="f">entries/secret</span>)
-  r <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Signed out."</span>
-  effect (<span class="f">web/kept</span> r <span class="f">entries/secret</span> s)</code></pre>
+  s <span class="o">=</span> <span class="f">web/signed_out</span> (<span class="f">web/session</span> req)
+  r <span class="o">=</span> <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) <span class="s">"Signed out."</span>
+  effect (<span class="f">web/kept</span> req r s)</code></pre>
 </div>
 
-<p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match. only after the password matches does the action look at whether the address is confirmed, so only the holder of the password learns that an unconfirmed account exists.</p>
+<p>two details keep a refusal from saying more than it should. a name with no account is checked against <code>passwords/stand_in</code>, a digest no password matches, at the same rounds, so a refusal takes as long whether or not the name exists. and <code>passwords/matches?</code> compares the two digests over every byte, whichever differs first, so the time a refusal takes says nothing about how much of a guess was right. the answer is the same in both cases: a name and a password that do not match. only after the password matches does <code>attempt</code> look at whether the account is active, so only the holder of the password learns that an unconfirmed account exists.</p>
 
 <h2>too many tries</h2>
 
@@ -286,45 +295,73 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <span class="k">pub</span> <span class="f">locked_minutes</span> <span class="o">=</span> 60
 
-<span class="k">fn</span> <span class="f">locked?</span> a t
-  <span class="f">accounts/locked?</span> a.locked locked_minutes t
-
-<span class="k">fn</span> <span class="f">shut</span> req name true
+<span class="k">fn</span> <span class="f">shut</span> req name
   told <span class="o">=</span> <span class="s">"This account is locked. Follow the link we mailed to unlock it."</span>
-  effect (opened req name { <span class="s">"password"</span>:told } 403)
-
-<span class="k">fn</span> <span class="f">shut</span> req name false
-  refused req name
-
-<span class="c"># A wrong password for an account counts against it, and the one that makes</span>
-<span class="c"># the run long enough locks it and mails the link that unlocks it. A lock</span>
-<span class="c"># that has run out counts as none, so the count starts again. The count is</span>
-<span class="c"># added in one statement, so of several wrong passwords at once exactly one</span>
-<span class="c"># sees the run reach its length.</span>
-<span class="k">fn</span> <span class="f">missed</span> req db name a t
-  <span class="k">return</span> refused req name <span class="k">if</span> a.id <span class="o">==</span> <span class="s">""</span>
-  <span class="f">accounts/missed</span> db <span class="f">account/account_model</span> a.id a.locked
-    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> locking req db name a counted t)
-
-<span class="k">fn</span> <span class="f">locking</span> req _ name _ _:<span class="f">web/absent</span> _
-  refused req name
-
-<span class="k">fn</span> <span class="f">locking</span> req db name a counted t
-  <span class="k">return</span> refused req name <span class="k">if</span> counted.failures <span class="o">!=</span> locks_after
-  <span class="f">accounts/locked_at</span> db <span class="f">account/account_model</span> a.id t
-    <span class="o">.&gt;</span> (stamp <span class="o">-&gt;</span> <span class="f">account_mailer/unlock</span> db a.id a.email stamp)
-    <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no unlock mail: {u.reason}\n"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> refused req name)</code></pre>
+  effect (opened req name { <span class="s">"password"</span>:told } 403)</code></pre>
 </div>
 
-<p>the counting and the lock itself are senro's, in its <code>accounts</code> module, so every app that locks accounts shares them. the guestbook supplies its model, its two numbers, and what happens when a lock begins.</p>
+<p>the checking, the counting and the lock itself are senro's, in its <code>accounts</code> module, so every app that locks accounts shares them. the guestbook supplies its model, its two numbers, and what it answers. <code>accounts/attempt</code> answers a verdict: <code>signed</code>, <code>inactive</code> for an account the app holds back, <code>locked</code> for the right password on a locked account, or <code>wrong</code>. when a wrong password is the one that locks the account, the verdict carries the lock's stamp, and the guestbook mails a link bound to it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">accounts/accounts.kso</div>
-  <pre><code><span class="c"># Whether an account locked at `stamp`, the moment in milliseconds as text</span>
+  <pre><code><span class="c"># What an account keeps beside its password, as Devise's lockable and</span>
+<span class="c"># trackable keep it: a run of wrong passwords that locks the account for a</span>
+<span class="c"># while, and a count and a stamp of each sign-in. An app's sign-in hands</span>
+<span class="c"># `attempt` the account it found and the password typed, and answers the</span>
+<span class="c"># verdict; its table holds the columns `attempt` writes, which `columns`</span>
+<span class="c"># lists. Each is written as the app itself (`models/as_app`), since nobody</span>
+<span class="c"># is signed in while a sign-in is being decided.</span>
+<span class="c">#</span>
+<span class="c"># What a sign-in comes to. `outcome` is "signed" for the right password on</span>
+<span class="c"># an open account the app lets in, which `attempt` has counted and stamped;</span>
+<span class="c"># "inactive" for the right password on one the app holds back, such as an</span>
+<span class="c"># address not yet confirmed; "locked" for the right password on a locked</span>
+<span class="c"># account; and "wrong" for every other. `stamp` is the lock's stamp when</span>
+<span class="c"># this wrong password is the one that locked the account, and "" otherwise.</span>
+<span class="k">pub</span> <span class="k">type</span> <span class="f">verdict</span>
+  outcome
+  stamp
+
+<span class="c"># A sign-in with `password` for the account `a`, as the app found it</span>
+<span class="c"># (`found`): its `id`, or "" when there is none, `digest`, a stand-in's when</span>
+<span class="c"># there is none so that the check costs the same, `locked`, the sign-in</span>
+<span class="c"># before this one, `was_at` from `was_ip`, and `active`, whether the app</span>
+<span class="c"># lets the account sign in at all. A run of `after` wrong passwords locks</span>
+<span class="c"># an account for `minutes`, which the app's `session.kso` decides. A locked</span>
+<span class="c"># account answers a wrong password as any wrong password is answered, so</span>
+<span class="c"># only the holder of the right one learns that it is locked.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">attempt</span> req db model a password after minutes t
+  right <span class="o">=</span> <span class="f">passwords/matches?</span> password a.digest
+  <span class="k">return</span> effect (verdict (shut right) <span class="s">""</span>) <span class="k">if</span> locked? a.locked minutes t
+  <span class="k">return</span> missed_by db model a after t <span class="k">if</span> <span class="k">not</span> right
+  <span class="k">return</span> effect (verdict <span class="s">"inactive"</span> <span class="s">""</span>) <span class="k">if</span> <span class="k">not</span> a.active
+  arrived req db model a.id a.was_at a.was_ip t
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (verdict <span class="s">"signed"</span> <span class="s">""</span>))
+
+<span class="k">fn</span> <span class="f">shut</span> true
+  <span class="s">"locked"</span>
+
+<span class="k">fn</span> <span class="f">shut</span> false
+  <span class="s">"wrong"</span>
+
+<span class="c"># A wrong password counts against the account, and the one that makes the</span>
+<span class="c"># run `after` long locks it.</span>
+<span class="k">fn</span> <span class="f">missed_by</span> db model a after t
+  <span class="k">return</span> effect (verdict <span class="s">"wrong"</span> <span class="s">""</span>) <span class="k">if</span> a.id <span class="o">==</span> <span class="s">""</span>
+  missed db model a.id a.locked
+    <span class="o">.&gt;</span> (counted <span class="o">-&gt;</span> locking db model a.id counted after t)
+
+<span class="k">fn</span> <span class="f">locking</span> _ _ _ _:<span class="f">web/absent</span> _ _
+  effect (verdict <span class="s">"wrong"</span> <span class="s">""</span>)
+
+<span class="k">fn</span> <span class="f">locking</span> db model id counted after t
+  <span class="k">return</span> effect (verdict <span class="s">"wrong"</span> <span class="s">""</span>) <span class="k">if</span> counted.failures <span class="o">!=</span> after
+  locked_at db model id t <span class="o">.&gt;</span> (stamp <span class="o">-&gt;</span> effect (verdict <span class="s">"wrong"</span> stamp))
+
+<span class="c"># Whether an account locked at `stamp`, the moment in milliseconds as text</span>
 <span class="c"># or "" for one that is open, is still locked at `t`, when a lock lasts</span>
 <span class="c"># `minutes`.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">locked?</span> stamp minutes t
+<span class="k">fn</span> <span class="f">locked?</span> stamp minutes t
   <span class="k">return</span> false <span class="k">if</span> stamp <span class="o">==</span> <span class="s">""</span>
   t <span class="o">&lt;</span> moment (<span class="f">text/to_int</span> stamp) <span class="o">+</span> minutes <span class="o">*</span> 60 <span class="o">*</span> 1000
 
@@ -339,7 +376,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># out counts as none, so the run starts again. Postgres adds in the</span>
 <span class="c"># statement that answers, so of several wrong passwords at once exactly one</span>
 <span class="c"># sees the run reach a given length.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">missed</span> db model id locked
+<span class="k">fn</span> <span class="f">missed</span> db model id locked
   reopened db model id locked
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">models/increment</span> (<span class="f">models/as_app</span> db) model id <span class="s">"failures"</span>)
 
@@ -352,13 +389,13 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <span class="c"># Locks the account `id` at `t`, answering the stamp the lock is kept</span>
 <span class="c"># under, which a link that unlocks it is bound to.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">locked_at</span> db model id t
+<span class="k">fn</span> <span class="f">locked_at</span> db model id t
   stamp <span class="o">=</span> <span class="s">"{t}"</span>
   <span class="f">models/update</span> (<span class="f">models/as_app</span> db) model id { <span class="s">"locked"</span>:stamp }
     <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect stamp)</code></pre>
 </div>
 
-<p><code>accounts/missed</code> counts a wrong password with <code>models/increment (models/as_app db) model id "failures"</code>. the increment adds one in the statement that answers the record, so several wrong passwords that arrive at once each see a count of their own, and exactly one of them sees the count reach <code>locks_after</code>. that request stamps <code>locked</code> with the moment and mails the account a link to unlock it. senro's <code>spec/db/counted</code> runs eight increments at once on eight connections, and they see the counts 1 through 8. a lock that has run out is cleared before the count, in <code>reopened</code>, so the run starts again at one.</p>
+<p><code>missed</code> counts a wrong password with <code>models/increment (models/as_app db) model id "failures"</code>. the increment adds one in the statement that answers the record, so several wrong passwords that arrive at once each see a count of their own, and exactly one of them sees the count reach <code>locks_after</code>. that request stamps <code>locked</code> with the moment, and its verdict carries the stamp, so the guestbook mails the account a link to unlock it. senro's <code>spec/db/counted</code> runs eight increments at once on eight connections, and they see the counts 1 through 8. a lock that has run out is cleared before the count, in <code>reopened</code>, so the run starts again at one.</p>
 
 <p>a locked account answers a wrong password the way every wrong password is answered, so a guesser learns nothing from it. only the right password is told that the account is locked, the same rule that keeps an unconfirmed account's existence to the holder of its password. the lock ends by itself after an hour (<code>session/locked_minutes</code>), and a right password, or a password reset, ends a run of wrong ones.</p>
 
@@ -376,45 +413,31 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># Unlocking clears the lock and the count of wrong passwords, which also</span>
 <span class="c"># retires the link: it was bound to the moment of the lock.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
-  held db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> opened req db id good)
+  held req db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> opened req db id good)
 
 <span class="k">fn</span> <span class="f">opened</span> _ _ _ false
-  effect (told stale)
+  effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) stale)
 
 <span class="k">fn</span> <span class="f">opened</span> _ db token true
   id <span class="o">=</span> id_text (<span class="f">tokens/id_of</span> token)
   <span class="f">account/update</span> (<span class="f">models/as_app</span> db) id { <span class="s">"failures"</span>:<span class="s">"0"</span> <span class="s">"locked"</span>:<span class="s">""</span> }
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (told <span class="s">"Your account is unlocked. Sign in."</span>))
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (<span class="f">web/redirect</span> home <span class="s">"Your account is unlocked. Sign in."</span>))
 
 <span class="c"># Whether `token` is good now for the account it names.</span>
-<span class="k">fn</span> <span class="f">held</span> db token
+<span class="k">fn</span> <span class="f">held</span> req db token
   id <span class="o">=</span> id_text (<span class="f">tokens/id_of</span> token)
-  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (good? token a t)))
+  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (good? req token a t)))
 
-<span class="k">fn</span> <span class="f">good?</span> _ none _
+<span class="k">fn</span> <span class="f">good?</span> _ _ none _
   false
 
-<span class="k">fn</span> <span class="f">good?</span> token a t
-  <span class="f">account_mailer/unlocks?</span> token a.locked t</code></pre>
+<span class="k">fn</span> <span class="f">good?</span> req token a t
+  <span class="f">account_mailer/unlocks?</span> req token a.locked t</code></pre>
 </div>
 
 <h2>where sign-ins came from</h2>
 
-<p>the guestbook keeps what Devise's <code>trackable</code> keeps: how many times an account has signed in, and when and from which address the latest sign-in and the one before it came. five columns hold them, each added by a migration of its own. after a right password, the guestbook's <code>arrived</code> hands the account to <code>accounts/arrived</code>, which writes them as the app. one update ends the run of wrong passwords, moves the latest time and address to the <code>last_</code> columns and stamps the new ones, and <code>account/increment</code> then counts the sign-in. the time is the app's clock, which <code>clock/utc_minute</code> writes as UTC to the minute: "2026-11-10 02:31 UTC". the address is <code>web/peer req</code>, the address the connection came from, which behind a proxy is the proxy's.</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">examples/guestbook/session.kso</div>
-  <pre><code><span class="c"># The right password ends a run of wrong ones, and the sign-in is counted and</span>
-<span class="c"># stamped, the one before it kept beside it. The app writes these on its own</span>
-<span class="c"># account, and the time is the app's clock, written as UTC to the minute.</span>
-<span class="k">fn</span> <span class="f">arrived</span> _ _ none _
-  effect none
-
-<span class="k">fn</span> <span class="f">arrived</span> req db was t
-  at <span class="o">=</span> was.current_sign_in_at
-  from <span class="o">=</span> was.current_sign_in_ip
-  <span class="f">accounts/arrived</span> req db <span class="f">account/account_model</span> was.id at from t</code></pre>
-</div>
+<p>the guestbook keeps what Devise's <code>trackable</code> keeps: how many times an account has signed in, and when and from which address the latest sign-in and the one before it came. five columns hold them, each added by a migration of its own. after a right password on an open account, <code>accounts/attempt</code> writes them as the app, from the <code>was_at</code> and <code>was_ip</code> the holder carries. one update ends the run of wrong passwords, moves the latest time and address to the <code>last_</code> columns and stamps the new ones, and <code>models/increment</code> then counts the sign-in. the time is the app's clock, which <code>clock/utc_minute</code> writes as UTC to the minute: "2026-11-10 02:31 UTC". the address is <code>web/peer req</code>, the address the connection came from, which behind a proxy is the proxy's.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">accounts/accounts.kso</div>
@@ -422,7 +445,7 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 <span class="c"># lock is lifted, and the sign-in is counted and stamped with the app's</span>
 <span class="c"># clock, as UTC to the minute, and the address the request came from. The</span>
 <span class="c"># sign-in before it, `was_at` from `was_ip`, is kept beside it.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">arrived</span> req db model id was_at was_ip t
+<span class="k">fn</span> <span class="f">arrived</span> req db model id was_at was_ip t
   changes <span class="o">=</span> {
     <span class="s">"current_sign_in_at"</span>:(<span class="f">clock/utc_minute</span> t)
     <span class="s">"current_sign_in_ip"</span>:(<span class="f">web/peer</span> req)
@@ -443,14 +466,20 @@ notice_cookie <span class="o">=</span> <span class="s">"senro_notice"</span>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/main.kso</div>
-  <pre><code><span class="c"># The components whose actions run on the server.</span>
+  <pre><code><span class="k">derive</span> <span class="f">app/conventions</span>
+
+<span class="c"># The components whose actions run on the server.</span>
 served <span class="o">=</span> { <span class="s">"removal"</span>:(<span class="f">web/component</span> <span class="f">removal/act</span> <span class="f">removal/view</span>) }
 
-acting <span class="o">=</span> <span class="f">web/components</span> routes <span class="f">entries/secret</span> served
+acting <span class="o">=</span> <span class="f">web/components</span> routes served
 
 bound_of <span class="o">=</span> <span class="f">session/signed_against</span>
 
-served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting <span class="f">entries/secret</span> bound_of</code></pre>
+served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</span> acting bound_of
+
+connected <span class="o">=</span> <span class="f">pg/from_env</span>
+
+<span class="f">app/run</span> <span class="s">"guestbook"</span> served_routes connected derived</code></pre>
 </div>
 
 <p><code>web/requiring_sign_in routes secret bound_of</code> wraps every action in the table, and a component's action is one of them, so the table goes through <code>web/components</code> first. an action that is not open asks for a sign-in. a visitor who has not signed in is sent to <code>/session/new</code>, and on a GET the path they asked for is kept in the session as <code>return_to</code>. once the password matches, <code>session/create</code> sends them back there with <code>web/return_to req secret fallback</code>, which answers the fallback when nothing was kept. a name in <code>without_sign_in</code> that is not an action of the module is refused when the app compiles.</p>
@@ -468,8 +497,8 @@ served_routes <span class="o">=</span> <span class="f">web/requiring_sign_in</sp
 
 <span class="c"># Anyone who asks is signed in as ada, for as long as she keeps asking.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
-  s <span class="o">=</span> <span class="f">web/idle_after</span> (<span class="f">web/session</span> req secret) idle_minutes
-  effect (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/notes"</span>) secret s <span class="s">"ada"</span> <span class="s">""</span>)</code></pre>
+  s <span class="o">=</span> <span class="f">web/idle_after</span> (<span class="f">web/session</span> req) idle_minutes
+  effect (<span class="f">web/signed_in</span> req (<span class="f">web/redirect</span> <span class="s">"/notes"</span>) s <span class="s">"ada"</span> <span class="s">""</span>)</code></pre>
 </div>
 
 <p>each answer to a signed-in request rewrites the cookie with the time the session was last seen, once a second has passed since the time it holds. a request that arrives after the window has run out reads without its viewer, so a page that asks for a sign-in sends the visitor to the sign-in form. the window is measured by the time the server stamps on each request, as the fourteen days are.</p>
@@ -503,7 +532,7 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># The page says how often the account has signed in and where the sign-in</span>
 <span class="c"># before this one came from, so a holder can see one that was not theirs.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">edit</span> req db
-  name <span class="o">=</span> <span class="f">web/viewer</span> req <span class="f">entries/secret</span>
+  name <span class="o">=</span> <span class="f">web/viewer</span> req
   <span class="f">account/find_by</span> db <span class="s">"name"</span> name
     <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> effect (changing req {} 200 (arrivals a)))
 
@@ -520,8 +549,8 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># stays. The write goes through the model as the holder, whose policy lets</span>
 <span class="c"># an account's holder change it.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db
-  f <span class="o">=</span> <span class="f">web/form</span> req.body
-  name <span class="o">=</span> <span class="f">web/viewer</span> req <span class="f">entries/secret</span>
+  f <span class="o">=</span> <span class="f">web/input</span> req
+  name <span class="o">=</span> <span class="f">web/viewer</span> req
   current <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"current"</span>
   password <span class="o">=</span> <span class="f">web/value</span> f <span class="s">"password"</span>
   <span class="f">account/find_by</span> db <span class="s">"name"</span> name <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> changed req db current password a)
@@ -539,9 +568,9 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">account/update</span> db a.id { <span class="s">"digest"</span>:d } <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> kept_on req a d))
 
 <span class="k">fn</span> <span class="f">kept_on</span> req a digest
-  s <span class="o">=</span> <span class="f">web/session</span> req <span class="f">entries/secret</span>
-  home <span class="o">=</span> <span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Your password is changed."</span>
-  effect (<span class="f">web/signed_in</span> req home <span class="f">entries/secret</span> s a.name digest)</code></pre>
+  s <span class="o">=</span> <span class="f">web/session</span> req
+  home <span class="o">=</span> <span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) <span class="s">"Your password is changed."</span>
+  effect (<span class="f">web/signed_in</span> req home s a.name digest)</code></pre>
 </div>
 
 <h2>sending mail</h2>
@@ -556,7 +585,7 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
   <div class="code-panel-title">examples/guestbook/resets.kso</div>
   <pre><code><span class="c"># A visitor who has lost a password asks for a link by email, follows it,</span>
 <span class="c"># and chooses a new one, as Rails 8's generated PasswordsController has it.</span>
-<span class="c"># The link carries a token `passwords/reset_token` signs over the account</span>
+<span class="c"># The link carries a token `tokens/made` signs over the account</span>
 <span class="c"># and the digest it keeps, so nothing is stored, and a link works once and</span>
 <span class="c"># for fifteen minutes.</span>
 <span class="k">pub</span> <span class="f">without_sign_in</span> <span class="o">=</span> [<span class="s">"create"</span> <span class="s">"edit"</span> <span class="s">"new"</span> <span class="s">"update"</span>]
@@ -566,32 +595,35 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># which addresses are registered. A failure to queue goes to standard error,</span>
 <span class="c"># and the worker logs a failure to send.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  f <span class="o">=</span> <span class="f">web/form</span> req.body
+  f <span class="o">=</span> <span class="f">web/input</span> req
   email <span class="o">=</span> <span class="f">text/lowercase</span> (<span class="f">text/trim</span> (<span class="f">web/value</span> f <span class="s">"email"</span>))
   <span class="f">account/find_by</span> db <span class="s">"email"</span> email
-    <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> sent db a)
+    <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> sent req db a)
     <span class="o">.?</span> (u <span class="o">-&gt;</span> <span class="f">io/write_err</span> <span class="s">"guestbook: no reset mail: {u.reason}\n"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (told <span class="s">"/"</span> on_its_way))
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) on_its_way))
 
-<span class="k">fn</span> <span class="f">sent</span> _ none
+<span class="k">fn</span> <span class="f">sent</span> _ _ none
   effect <span class="s">""</span>
 
-<span class="k">fn</span> <span class="f">sent</span> db a
-  <span class="f">account_mailer/reset</span> db a.id a.email a.digest
+<span class="k">fn</span> <span class="f">sent</span> req db a
+  <span class="f">account_mailer/reset</span> req db a.id a.email a.digest
 
 <span class="c"># A new password of eight characters or more, set through a link that is</span>
 <span class="c"># still good. Setting it changes the digest, which is what retires the link.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
-  password <span class="o">=</span> <span class="f">web/value</span> (<span class="f">web/form</span> req.body) <span class="s">"password"</span>
-  checked db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> chose req db id password good)
+  password <span class="o">=</span> <span class="f">web/value</span> (<span class="f">web/input</span> req) <span class="s">"password"</span>
+  checked req db id <span class="o">.&gt;</span> (good <span class="o">-&gt;</span> chose req db id password good)
+
+<span class="k">fn</span> <span class="f">chose</span> _ _ _ _ false
+  effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"resets/new"</span>) expired)
 
 <span class="k">fn</span> <span class="f">chose</span> req db token password true
   short <span class="o">=</span> { <span class="s">"password"</span>:<span class="s">"Use eight characters or more."</span> }
   <span class="k">return</span> effect (chosen req token short 422) <span class="k">if</span> length password <span class="o">&lt;</span> 8
-  id <span class="o">=</span> id_of (<span class="f">passwords/reset_id</span> token)
+  id <span class="o">=</span> id_text (<span class="f">tokens/id_of</span> token)
   <span class="f">passwords/digested</span> password
     <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> renewed db a d t)))
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (told <span class="s">"/"</span> changed))
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) changed))
 
 <span class="c"># A reset link proves the address as well as a confirmation link does, so</span>
 <span class="c"># setting a password through one confirms an address that was not yet, and</span>
@@ -611,20 +643,20 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
   <span class="f">account/update</span> (<span class="f">models/as_app</span> db) a.id changes
 
 <span class="c"># Whether `token` is good now for the account it names.</span>
-<span class="k">fn</span> <span class="f">checked</span> db token
-  id <span class="o">=</span> id_of (<span class="f">passwords/reset_id</span> token)
-  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (good? token a t)))
+<span class="k">fn</span> <span class="f">checked</span> req db token
+  id <span class="o">=</span> id_text (<span class="f">tokens/id_of</span> token)
+  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (good? req token a t)))
 
-<span class="k">fn</span> <span class="f">good?</span> _ none _
+<span class="k">fn</span> <span class="f">good?</span> _ _ none _
   false
 
-<span class="k">fn</span> <span class="f">good?</span> token a t
-  <span class="f">passwords/reset_valid?</span> <span class="f">entries/secret</span> token a.digest t</code></pre>
+<span class="k">fn</span> <span class="f">good?</span> req token a t
+  <span class="f">tokens/valid?</span> <span class="s">"reset"</span> req token a.digest t</code></pre>
 </div>
 
 <p><code>create</code> reads the account by its address with <code>account/find_by</code>, and <code>checked</code> reads the one a token names with <code>account/find</code>. nobody is signed in when the link is followed, so <code>renewed</code> writes as the app, to the account the checked token names. besides setting the digest it ends a run of wrong passwords and clears a lock, and it stamps <code>confirmed</code> for an address that was not confirmed yet. <code>first_of</code> keeps the stamp of one that was.</p>
 
-<p>the link carries a token from <code>passwords/reset_token</code>: the account's id, the moment the token stops working, and an HMAC-SHA-256 over both and the digest the account keeps now. it stands in the route as the member's <code>id</code>. nothing is stored. setting the new password changes the digest, so the link works once, and it stops working fifteen minutes after it was made. <code>passwords/reset_valid?</code> checks a token against the digest the account holds when the link is followed, comparing the signatures over every byte.</p>
+<p>the link carries a token from <code>tokens/made</code> with the purpose <code>"reset"</code>: the account's id, the moment the token stops working, and an HMAC-SHA-256 over both, the purpose, and the digest the account keeps now, signed under the secret the request carries. it stands in the route as the member's <code>id</code>. nothing is stored. setting the new password changes the digest, so the link works once, and it stops working <code>passwords/reset_minutes</code> after it was made, fifteen minutes. <code>tokens/valid?</code> checks a token against the digest the account holds when the link is followed, comparing the signatures over every byte. the purpose keeps a reset token from opening a confirmation link, or the other way round.</p>
 
 <p>the guestbook's mail is written in <code>account_mailer.kso</code>, which holds each letter's text and builds its link with <code>mail/url_for</code>. a module whose name ends in <code>_mailer</code> makes the app's mail, as a Rails mailer does, and none of its functions is a route, so several resources can call it. the link starts with <code>SENRO_URL</code> and never with the request's Host header. whoever sends a request chooses that header, and a reset link built from it would carry the token to a site of their choosing.</p>
 <h2>confirming an address</h2>
@@ -635,6 +667,7 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
   <div class="code-panel-title">examples/guestbook/account_mailer.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../mail"</span>
 <span class="k">import</span> <span class="s">"../../passwords"</span>
+<span class="k">import</span> <span class="s">"../../routes"</span>
 <span class="k">import</span> <span class="s">"../../tokens"</span>
 <span class="k">import</span> <span class="s">"./entries"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
@@ -645,13 +678,15 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># letter is queued on `db` and sent by the worker beside the server. First, a</span>
 <span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
 <span class="c"># it works once.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> req db id email kept
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/{reset_token id kept t}/edit"</span>)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (reset_path req id kept t))
     <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))
 
-<span class="k">fn</span> <span class="f">reset_token</span> id kept t
-  <span class="f">passwords/reset_token</span> <span class="f">entries/secret</span> id kept t
+<span class="c"># The page the link opens, with the token in its path.</span>
+<span class="k">fn</span> <span class="f">reset_path</span> req id kept t
+  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"reset"</span> req id kept t <span class="f">passwords/reset_minutes</span>
+  <span class="f">routes/path_to</span> <span class="s">"resets/edit"</span> token
 
 <span class="k">fn</span> <span class="f">reset_letter</span> email link
   lines <span class="o">=</span> [
@@ -670,18 +705,20 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># address and to the account's `confirmed` column, which is empty until the</span>
 <span class="c"># link is followed, so it works once, and not at all once the address</span>
 <span class="c"># changes. It lasts a day.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> db id email
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirmation</span> req db id email
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/confirmations/{confirm_token id email t}/edit"</span>)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (confirm_path req id email t))
     <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (confirm_letter email link))
 
-<span class="k">fn</span> <span class="f">confirm_token</span> id email t
-  <span class="f">tokens/made</span> <span class="s">"confirm"</span> <span class="f">entries/secret</span> id (bound email <span class="s">""</span>) t 1440
+<span class="c"># The page the link opens, with the token in its path.</span>
+<span class="k">fn</span> <span class="f">confirm_path</span> req id email t
+  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"confirm"</span> req id (bound email <span class="s">""</span>) t 1440
+  <span class="f">routes/path_to</span> <span class="s">"confirmations/edit"</span> token
 
 <span class="c"># Whether `token` confirms the account that holds `email` and `confirmed`</span>
 <span class="c"># now, at `t`.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirms?</span> token email confirmed t
-  <span class="f">tokens/valid?</span> <span class="s">"confirm"</span> <span class="f">entries/secret</span> token (bound email confirmed) t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">confirms?</span> req token email confirmed t
+  <span class="f">tokens/valid?</span> <span class="s">"confirm"</span> req token (bound email confirmed) t
 
 <span class="k">fn</span> <span class="f">bound</span> email confirmed
   <span class="s">"{email} {confirmed}"</span>
@@ -702,17 +739,19 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># A link to unlock an account that too many wrong passwords locked. It is</span>
 <span class="c"># bound to the moment of the lock, so it works once, and not at all once the</span>
 <span class="c"># lock has ended.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> db id email stamp
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlock</span> req db id email stamp
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/unlocks/{unlock_token id stamp t}/edit"</span>)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (unlock_path req id stamp t))
     <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (unlock_letter email link))
 
-<span class="k">fn</span> <span class="f">unlock_token</span> id stamp t
-  <span class="f">tokens/made</span> <span class="s">"unlock"</span> <span class="f">entries/secret</span> id stamp t 1440
+<span class="c"># The page the link opens, with the token in its path.</span>
+<span class="k">fn</span> <span class="f">unlock_path</span> req id stamp t
+  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"unlock"</span> req id stamp t 1440
+  <span class="f">routes/path_to</span> <span class="s">"unlocks/edit"</span> token
 
 <span class="c"># Whether `token` unlocks the account whose lock began at `stamp`, at `t`.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlocks?</span> token stamp t
-  <span class="f">tokens/valid?</span> <span class="s">"unlock"</span> <span class="f">entries/secret</span> token stamp t
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">unlocks?</span> req token stamp t
+  <span class="f">tokens/valid?</span> <span class="s">"unlock"</span> req token stamp t
 
 <span class="k">fn</span> <span class="f">unlock_letter</span> email link
   lines <span class="o">=</span> [
@@ -746,28 +785,29 @@ HTTP/1.1 303 See Other, setting a session to /session/new</code></pre>
 <span class="c"># Confirming stamps the account with the moment, which also retires the link:</span>
 <span class="c"># it was bound to the column being empty.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">update</span> req db id
-  held db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> confirmed req db a)
+  held req db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> confirmed req db a)
 
 <span class="k">fn</span> <span class="f">confirmed</span> _ _ none
-  effect (told stale)
+  effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) stale)
 
 <span class="k">fn</span> <span class="f">confirmed</span> _ db a
   <span class="f">time/now</span>
     <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">account/update</span> (<span class="f">models/as_app</span> db) a.id { <span class="s">"confirmed"</span>:<span class="s">"{t}"</span> })
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (told <span class="s">"Your address is confirmed. Sign in with it."</span>))
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect (<span class="f">web/redirect</span> home confirmed_notice))
 
 <span class="c"># The account a token confirms now, or none when the token is no good for</span>
 <span class="c"># the account it names.</span>
-<span class="k">fn</span> <span class="f">held</span> db token
+<span class="k">fn</span> <span class="f">held</span> req db token
   id <span class="o">=</span> id_text (<span class="f">tokens/id_of</span> token)
-  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (checked token id a t)))
+  confirms <span class="o">=</span> (a t <span class="o">-&gt;</span> checked req token id a t)
+  <span class="f">account/find</span> db id <span class="o">.&gt;</span> (a <span class="o">-&gt;</span> <span class="f">time/now</span> <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> effect (confirms a t)))
 
-<span class="k">fn</span> <span class="f">checked</span> _ _ none _
+<span class="k">fn</span> <span class="f">checked</span> _ _ _ none _
   none
 
-<span class="k">fn</span> <span class="f">checked</span> token id a t
+<span class="k">fn</span> <span class="f">checked</span> req token id a t
   email <span class="o">=</span> a.email
-  good <span class="o">=</span> <span class="f">account_mailer/confirms?</span> token email (said a.confirmed) t
+  good <span class="o">=</span> <span class="f">account_mailer/confirms?</span> req token email (said a.confirmed) t
   <span class="k">if</span> good (unconfirmed id email) none</code></pre>
 </div>
 
