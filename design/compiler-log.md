@@ -2233,3 +2233,12 @@ mark `math/round` already uses.
 `tests/golden/own_arms_first` is the postcard from the issue, run on both
 engines by `tests/own_arms_first.rs`. It was watched red with each change
 taken out alone, both times with the refusal above.
+
+**What the first push cost.** CI's reading of the first push put the
+front end's peak on `compile_corpus` up 12,643 bytes (546,568 to 559,211)
+and its allocations up 28. Built locally with each half of the change
+alone, the merge carried all of it: it split the dependency's functions
+with `partition`, which moves every one into a new vector while the old
+one is still held. `extract_if` takes out only the twins that go behind,
+and the local reading came back to within 84 bytes of main's (546,751 to
+546,835), with 16 allocations more for the set of the module's own names.
