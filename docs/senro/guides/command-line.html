@@ -49,6 +49,31 @@ senro: usage: senro new &lt;app&gt;
 
 <p>the entry imports senro by the path from the new app to senro's own directory, so the app compiles where it stands. every other command is run from inside the app.</p>
 
+<p>an app can also name senro's modules by repository, as kanso reads any hako from GitHub, and then it needs no checkout of senro beside it:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"kanso-lang/senro/app"</span>
+<span class="k">import</span> <span class="s">"kanso-lang/senro/pg"</span>
+
+<span class="k">derive</span> <span class="f">app/conventions</span>
+
+connected = <span class="f">pg/from_env</span>
+
+<span class="f">app/run</span> <span class="s">"shelf"</span> routes connected derived</code></pre>
+</div>
+
+<p><code>kanso install</code> reads the imports, fetches senro's newest release, the highest <code>vX.Y.Z</code> tag on its repository, and writes the version and its commit into <code>hako.lock</code>.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">shell</div>
+  <pre><code>$ kanso install .
+installed 1 hako(s):
+  kanso-lang/senro v0.1.0</code></pre>
+</div>
+
+<p>the compiler reads the lock and the cache and never the network, so the app builds offline from then on, against the release the lock names. <code>kanso update</code> moves the lock to a later release, and <code>kanso list</code> shows what it pins.</p>
+
 <h2>generators</h2>
 
 <p><code>senro generate</code>, or <code>senro g</code>, writes code. with nothing after it, it lists the generators it can find.</p>
@@ -76,7 +101,7 @@ senro: usage: senro new &lt;app&gt;
   <li><code>migration add_rating_to_notes rating:int</code> writes a migration, reading what it does from its name.</li>
   <li><code>mailer account welcome</code> writes <code>account_mailer.kso</code> with a function for each letter.</li>
   <li><code>job tidy</code> writes <code>tidy_job.kso</code>, a job the worker beside the server performs.</li>
-  <li><code>authentication</code> adds accounts: signing up, in and out, locking an account after a run of wrong passwords, and resetting a lost password by mail.</li>
+  <li><code>authentication</code> adds accounts: signing up, confirming an address by a mailed link, signing in and out, locking an account after a run of wrong passwords and mailing a link that unlocks it, and resetting a lost password by mail.</li>
 </ul>
 
 <p>every generator prints each file it writes or changes. none writes over a file that is there: one that would stops before it writes anything, and says which file.</p>
