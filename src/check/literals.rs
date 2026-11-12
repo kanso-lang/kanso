@@ -275,6 +275,64 @@ fn literal_argument_at(
     }
 }
 
+/// A literal applied as a function (#2479). No literal can be called, so
+/// `"a" "b"` type-checked and failed only when the line ran. A list written
+/// across lines takes one element per line, and two strings on one of its
+/// lines read as exactly this call, so an element of a list says so.
+fn literal_applied_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    match expr {
+        Expr::List(items, _) => {
+            for item in items {
+                let Some((what, args, span)) = applied_literal(item) else { continue };
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!(
+                        "this element of the list is {what} applied to {}, and {what} cannot \
+                         be called. A list written across lines takes one element per line",
+                        counted(args)
+                    ),
+                    span,
+                ));
+            }
+        }
+        Expr::App { .. } => {
+            let Some((what, args, span)) = applied_literal(expr) else { return };
+            // the list above has already said this, in the words for a list
+            if diags.iter().any(|d| d.span == span) {
+                return;
+            }
+            diags.push(Diagnostic::new(
+                "type",
+                format!("{what} cannot be called, and here it is applied to {}", counted(args)),
+                span,
+            ));
+        }
+        _ => {}
+    }
+}
+
+/// What a literal at the head of an application is, how many arguments it is
+/// handed, and where it stands.
+fn applied_literal(e: &Expr) -> Option<(&'static str, usize, Span)> {
+    let Expr::App { head, args, .. } = e else { return None };
+    let what = match head.as_ref() {
+        Expr::Int(..) => "an int",
+        Expr::Float(..) => "a float",
+        Expr::Str(..) => "a string",
+        Expr::List(..) => "a list",
+        Expr::MapLit(..) => "a map",
+        _ => return None,
+    };
+    Some((what, args.len(), head.span()))
+}
+
+fn counted(args: usize) -> String {
+    match args {
+        1 => "1 argument".to_string(),
+        n => format!("{n} arguments"),
+    }
+}
+
 fn describe_literal(kind: LitKind) -> &'static str {
     match kind {
         LitKind::Int => "an int",

@@ -615,6 +615,7 @@ fn per_node_walk<'a>(
         err_as_value_at(expr, diags);
     }
     call_shaped_at(expr, &tables.arities, &state.bound, state.own, diags);
+    literal_applied_at(expr, diags);
     literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(
         expr,
