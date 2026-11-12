@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a session's trip through base64 joins the corpus
-
-The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
-holds a component's state in the page as base64, and its benchmark showed
-an action costing more than it had in JSON, with base64 the larger part.
-senro also spells and reads base64 for every request that carries a
-session. `std/base64` is written in kanso: it joins a string for each group
-of three bytes, reads each letter out of its alphabet with a slice, and
-builds the bytes it decodes by pushing onto a list. No benchmark held a
-trip through it, so a fix would have scored as nothing.
-
-`sealed` joins the run program: 800 passes, each spelling a cookie of about
-sixty bytes and reading it back. Built with the phase and with it reading
-nothing, the program retires 991,852,481 instructions against 952,721,301
-in this container, so the phase is 39,131,180 of them, 3.95%, and a trip
-costs about 49,000. The same trip joins the interpreter's corpus at 15
-passes, where it costs 3.1 million instructions a trip.
-
-CI's rows. work_runbench 952,714,702 -> 991,852,372 and work_runbench_dev
-2,805,694,975 -> 2,894,015,349. interp_instructions 680,822,127 ->
-727,482,475, interp_allocs 984,852 -> 1,043,722 and interp_peak_bytes
-1,377,499 -> 1,489,302. In the tab, browser_compile_instructions
-358,139,032 -> 413,857,607, browser_compile_peak_bytes 862,043 -> 975,975
-and browser_run_instructions 91,173,579 -> 95,460,118, with
-browser_run_peak_bytes still 1,572,864. The tab's compile rises by 15.6%:
-the corpus now imports `std/base64` and through it `std/bits`, and the tab
-compiles both. The compile rows that read other programs did not move.
-
-The run program's counters rise with the phase: run_allocs 2,372,861,
-run_alloc_bytes 261,860,897, run_perm_allocs 161, run_beat_iters 197,248,
-run_push_mut_slow 1,658,292 (and run_push_mut_fast 1,398,651),
-run_bytes_malloc 9,468, run_str_scans 52,203, run_str_scan_bytes
-19,043,424, run_sh_str 19,617,504, run_sh_buf 102,043,040 and run_sh_bytes
-43,560, with run_buf_reuse at 7,390. `std/base64` joins the program's
-emitted code, so runbench reads defines=975 calls=10294 branches=9407
-lines=80567 and the summed rows emitted_other_defines 2,406,
-emitted_other_calls 22,268, emitted_other_branches 19,938 and
-emitted_other_lines 185,688. Its machine code is 912,641 bytes, and the
-summed text 5,954,425.
-
-The floor is re-based and the score is not a gain. Seven baselines are
-scaled by the new reading over the old, as the last corpus additions did,
-so the meta moves only by their rounding, 95.09928563621176 to
-95.09928566956496.
-
 ## 2026-11-10 — base64 is spelled and read by the runtime
 
 #2420. `std/base64` was written in kanso, and a trip through it for a
@@ -2072,6 +2027,45 @@ taking out `std/list` or `browser`'s own type left start-up where it was, so
 what remains is building a record of five fields where the module built one
 of two and a map. No kanso row moved. The site's views guide quotes the new
 lists, and the pin is d247faa.
+
+## 2026-11-12 — gavel: the analysis, and no lint, carries a handed-out function's types (#2433)
+
+A function handed out as a value has its parameters sent to every type,
+because a value can be called with anything. A decoder whose position is
+then not known to be an int keeps its record on the heap for its direct
+callers too. Today the author's remedy is `p:int`, and nothing says it is
+missing. The issue offered two directions, and the committee took the first.
+
+**The lint is declined.** check.rs says kanso has no linter layer and refuses
+what a linter elsewhere would warn about. A program without the annotation is
+correct and only slower, so a refusal would refuse a program that runs.
+Knowing that an annotation would change the answer also needs inference to
+keep the direct callers' join apart from the value's, which is most of the
+fix.
+
+**Decision.** Inference keeps a handed-out group's types as its direct
+callers prove them, and the value's wrapper takes anything. Under the
+corpus-first gavel, the baseline lands first:
+`a_decoder_handed_out_without_an_annotation_boxes_every_read` is
+`a_decoder_handed_out_still_answers_its_callers_by_value` with `:int` taken
+off `at`. It pins `sh_rec=3200` and `allocs=57` against its twin's 512 and
+15, which is the issue's table. The fix scores as that fixture falling to its
+twin. No other golden moved, and welfare does not read the mem vein. The
+issue stays p3 because no benchmark pays this today (the measurement on
+#2433, 2026-11-11).
+
+**Copying the group does not reach it (measured the same day).** The
+cheapest form of the decision is a source pass beside `flat::flatten`. It
+copies a group that is both handed out and called from elsewhere, and sends
+every mention by value to the copy. Built that way, the pass chose `at` and
+the fixture still read `sh_rec=3200`. Inference joins a record type's fields
+over every place that builds one. The copy builds `read bs[p] (p + 1)` with a
+position of any type, so `read.next` widens, and `summed` hands that position
+back to the direct `at`. No other mem golden moved, so the copy would only add
+compile work, and it was not kept. What the fixture needs is for a function
+value's parameters to hold what is actually passed to it at the calls made
+through values, in place of every type. That is a flow analysis of function
+values.
 
 ## 2026-11-12 — the dev tier stays at -O0 (measured)
 

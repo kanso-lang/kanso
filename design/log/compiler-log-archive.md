@@ -115846,3 +115846,48 @@ field at the template's line.
 
 Nothing in kanso changed, so no row here moves. The site's views guide
 describes the bytes, and its senro pin moves to 43a2ca5.
+
+## 2026-11-10 — a session's trip through base64 joins the corpus
+
+The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
+holds a component's state in the page as base64, and its benchmark showed
+an action costing more than it had in JSON, with base64 the larger part.
+senro also spells and reads base64 for every request that carries a
+session. `std/base64` is written in kanso: it joins a string for each group
+of three bytes, reads each letter out of its alphabet with a slice, and
+builds the bytes it decodes by pushing onto a list. No benchmark held a
+trip through it, so a fix would have scored as nothing.
+
+`sealed` joins the run program: 800 passes, each spelling a cookie of about
+sixty bytes and reading it back. Built with the phase and with it reading
+nothing, the program retires 991,852,481 instructions against 952,721,301
+in this container, so the phase is 39,131,180 of them, 3.95%, and a trip
+costs about 49,000. The same trip joins the interpreter's corpus at 15
+passes, where it costs 3.1 million instructions a trip.
+
+CI's rows. work_runbench 952,714,702 -> 991,852,372 and work_runbench_dev
+2,805,694,975 -> 2,894,015,349. interp_instructions 680,822,127 ->
+727,482,475, interp_allocs 984,852 -> 1,043,722 and interp_peak_bytes
+1,377,499 -> 1,489,302. In the tab, browser_compile_instructions
+358,139,032 -> 413,857,607, browser_compile_peak_bytes 862,043 -> 975,975
+and browser_run_instructions 91,173,579 -> 95,460,118, with
+browser_run_peak_bytes still 1,572,864. The tab's compile rises by 15.6%:
+the corpus now imports `std/base64` and through it `std/bits`, and the tab
+compiles both. The compile rows that read other programs did not move.
+
+The run program's counters rise with the phase: run_allocs 2,372,861,
+run_alloc_bytes 261,860,897, run_perm_allocs 161, run_beat_iters 197,248,
+run_push_mut_slow 1,658,292 (and run_push_mut_fast 1,398,651),
+run_bytes_malloc 9,468, run_str_scans 52,203, run_str_scan_bytes
+19,043,424, run_sh_str 19,617,504, run_sh_buf 102,043,040 and run_sh_bytes
+43,560, with run_buf_reuse at 7,390. `std/base64` joins the program's
+emitted code, so runbench reads defines=975 calls=10294 branches=9407
+lines=80567 and the summed rows emitted_other_defines 2,406,
+emitted_other_calls 22,268, emitted_other_branches 19,938 and
+emitted_other_lines 185,688. Its machine code is 912,641 bytes, and the
+summed text 5,954,425.
+
+The floor is re-based and the score is not a gain. Seven baselines are
+scaled by the new reading over the old, as the last corpus additions did,
+so the meta moves only by their rounding, 95.09928563621176 to
+95.09928566956496.

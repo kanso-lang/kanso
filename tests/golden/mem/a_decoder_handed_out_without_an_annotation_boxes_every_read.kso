@@ -1,0 +1,48 @@
+# The decoder of `a_decoder_handed_out_still_answers_its_callers_by_value`
+# with `:int` taken off `at`'s position. Handing `at` to the list reader
+# sends its parameters to every type, since a value can be called with
+# anything, so the position may be a float and the record goes on the heap
+# for every read, the direct ones too. This pins that
+# cost as the baseline for #2433: when inference keeps the direct callers'
+# types apart from the value's, this fixture's sh_rec falls to its
+# annotated twin's 512.
+import "std/text"
+
+type read
+  value
+  next
+
+fn at bs p
+  read bs[p] (p + 1)
+
+fn worth none
+  0
+
+fn worth v
+  v
+
+fn summed 0 _ (read _ _) acc
+  acc
+
+fn summed n bs (read v p) acc
+  summed (n - 1) bs (at bs p) (acc + worth v)
+
+fn listed _ _ 0 _ acc
+  acc
+
+fn listed bs p n one acc
+  item bs (one bs p) (n - 1) one acc
+
+fn item bs r n one acc
+  listed bs r.next n one (acc + worth r.value)
+
+fn shown (read v p)
+  "{worth v} then {p}"
+
+fn total s
+  bs = text/bytes s
+  direct = summed 40 bs (at bs 1) 0
+  through = listed bs 1 8 at 0
+  "{direct} {through} {shown (at bs 3)}"
+
+pub play = print (total "forty bytes of text for a decoder to read")
