@@ -20,202 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a fiber waiting on a socket is waited for
-
-A read that found nothing arrived, or an accept that found nobody calling,
-put its fiber back in the queue to be asked again a millisecond later. Both
-engines did this. Two costs followed, and senro's server showed both
-(#2405). A request that asks Postgres a question waits for the answer, and
-each wait rounded up to the next millisecond. A server with a listener and
-nothing to do woke a thousand times a second.
-
-**What changed.** When every fiber is waiting and at least one waits on a
-socket, the scheduler waits on those sockets with `poll`, for as long as
-the earliest fiber on the clock allows, and for good when no fiber is on
-the clock. A socket that is ready makes its fiber due now. The clock moves
-to the time that passed and no further than the fiber it was waiting for,
-so a sleeping fiber still runs at its own time.
-
-- What a fiber waits on is read from the work it has left. A fiber the
-  scheduler holds with an accept or a read at the bottom of its chain
-  asked it and was told not yet, so the scheduler walks down the chain
-  words to that description and takes the handle from it. Nothing is kept
-  per fiber and nothing is done per step.
-- A flag says whether to look at all. An accept that finds nobody and a
-  read that finds nothing raise it, and the scheduler puts it down when it
-  looks and finds no fiber on a socket. A program without sockets pays one
-  test of the flag each time every fiber is waiting.
-- Natively the wait is `k_sched_await`, which reads each descriptor from
-  the socket table. In the interpreter it is `awaited`, which asks the
-  executor's `await_sockets`. An executor without sockets answers `None`
-  and the scheduler ticks as before, which is what the scripted executor
-  and the tab do.
-- An accept the system refused for a reason other than nobody calling
-  keeps its one-millisecond tick natively, and its description carries an
-  int to say so. The listener stays ready through such a refusal, so a
-  wait on it would come straight back.
-- `libc` becomes a dependency of the compiler on unix, for `poll`. It was
-  already in the lock file.
-
-**The counter.** `sock_waits` counts the scheduler's waits on sockets, on
-both engines, and is printed only when it is not nought, as `delete_marks`
-is, so no golden without a socket carries it.
-`tests/golden/mem/a_reader_waits_on_its_socket` has a reader with nothing
-to read beside a writer that sleeps fifty milliseconds first: two waits,
-one for the writer's clock and one for the bytes. Its `.mem` pins
-`sock_waits=2` natively and
-`tests/a_fiber_waiting_on_a_socket_is_not_asked_again.rs` holds the
-interpreter to the same number. Thirty runs on each engine all read 2.
-With the wait taken out of either engine the count is not printed and the
-spec fails. The trend gate lists it among the counters a fall is a loss
-for.
-
-**The fiber table is one array.** The native scheduler kept its fibers
-as an array per field, so each insert and each remove called `memmove`
-once per field, and a fork does both. It keeps one array of records now
-and moves the fibers after a fork once. runbench forks sixteen thousand
-times and retires 3,089,651 fewer instructions for it, and the tab, which
-runs the interpreted corpus through the same scheduler built for wasm,
-retires 1,244,416 fewer.
-
-**Two specs, and two faults of mine they caught.**
-`a_reader_is_told_when_its_socket_closes` has a reader on a connection
-another fiber closes; that fiber then dials, and the new connection takes
-the descriptor the closed one had. On main both engines tell the reader
-`that is not a connection`. My first native version held the descriptor
-and would have waited on the new connection for good. The interpreter
-held the handle and still hung: it asked `poll` to pass over the missing
-socket and then waited with no time limit. A wait that includes a handle
-naming nothing now returns at once, and the spec that was red on that
-hang is green on both engines.
-
-The second fault was the first design. It kept the awaited handle in a
-field per fiber and cleared it before every step. Native kept it as a
-fourth array, which a fork then moved as well: runbench retired 1,407,682
-more instructions on this machine than the tree under it, and CI read
-`interp_instructions` 153,945 higher.
-Those rows are what the objective counts, and it does not count wall
-time, so the design scored as a loss. Reading the handle from the fiber's
-own work removed the field and the clearing. Left where
-the compiler put it, the interpreter's new function still cost its corpus
-59,991 instructions; kept cold and out of line it costs 9,993.
-
-**Measured.** One sitting, 2026-11-10, in the development container: a
-senro app answering 300 requests over loopback after twenty to warm up,
-each on its own connection, with Postgres on a local socket, served by
-this branch's compiler and by the one before it in turn. Mean time per
-request:
-
-| | before | after |
-|---|---|---|
-| native, no query | 1.25 ms | 0.12 ms |
-| native, one query | 2.48 ms | 0.34 ms |
-| native, five queries | 7.28 ms | 0.66 ms |
-| interpreted, no query | 2.70 ms | 1.82 ms |
-| interpreted, one query | 4.58 ms | 2.50 ms |
-| interpreted, five queries | 12.66 ms | 6.73 ms |
-
-The same app left idle for five seconds used 15 clock ticks of CPU
-natively and 17 interpreted before, and none on either engine after. An
-earlier count with `KANSO_SCHED_DEBUG` had an idle native server sleep
-1,004 times in a second.
-
-**Rows.** Counted on this machine with the toolchain the goldens name,
-set from each row's distance to main's here, and then counted by CI on
-the golden's own silicon, which agreed with every one. The two codegen
-rows are CI's.
-- Work: all fifteen rows fall. `runbench` 913,657,054 to 910,567,403 and
-  its dev-tier build 2,763,752,866 to 2,759,705,221; the other thirteen
-  by between 194 and 1,713.
-- `browser_run_instructions` 78,426,179 to 77,181,763.
-- `interp_instructions` rises 9,993 to 622,568,308. The corpus opens no
-  socket, so this is the scheduler's loop laid out around one more call.
-  `entry_instructions` rises 12 to 156,082,977 with the binary's layout.
-- Machine code: each benchmark carries 48 fewer bytes of `.text` than on
-  main, and `text` sums to 5,875,561.
-- clang compiles the wait: `codegen_instructions_dev` rises 27,295 over
-  main to 116,882,342 and `codegen_instructions_release` 154,850 to
-  372,180,706.
-
-**Welfare.** The sum rises by 0.0080, from 95.0845 to 95.0925, and is
-banked. The falls in the run program and the tab outweigh the two codegen
-rows and the interpreter's 9,993.
-
-**Open.** `net/write` still blocks the whole program on a client that
-reads slowly.
-
-## 2026-11-10 — senro's server logs its requests and lets its connections go
-
-Five senro pull requests and one here, all found by running the guestbook
-as a server for longer than a spec does. The site's pin moves to senro
-5b17eac with them.
-
-**A request log (senro#101).** The server writes a line to stdout for each
-request as it answers: `GET /entries/3 200 in 2ms`. The method is the one
-a form stands for, so a confirmation's button reads `PATCH`. The query
-string is left out. A path segment shaped like one of senro's signed
-tokens is written `:token`, and an uploaded file's key `:key`, so a kept
-log holds no link that confirms an address or resets a password.
-`/senro/live` gets no line. `spec/serve/logged` pins the lines, with the
-milliseconds masked.
-
-**Every accepted connection is closed (senro#102).** The server closed a
-connection after answering it and at no other time. A client that
-connected and hung up without a request left its socket open on the
-server for good, and about sixty of those ended a natively built app at
-the runtime's table of 64 (#2402, fixed here in #2404). The close now
-happens in one place, after whatever became of the connection. A
-connection that sent nothing closes silently and any other early ending
-is written to stderr. `spec/serve/hung_up` sends 320 such clients to a
-server limited to 256 open files and then asks it a question.
-
-**An action that answers no response (senro#102).** An action that
-answered a string ended the request with no reply and nothing in the log.
-The cause is a rule of the language working as written: a failure raised
-inside a package is not caught by a `.?` in that same package, so `web`
-could not rescue the err it raised itself, and the fiber's failure waited
-for a join the accept loop never reaches. `web` now answers a 500 and
-reports the value directly. `spec/serve/answered` pins the reply and the
-report.
-
-**One session listens for every page (senro#103).** Each open tab's
-`/senro/live` stream held a Postgres session of its own, and a tab that
-closed was noticed only when the next change was written to it. One fiber
-now listens on one session and passes each change to every open page.
-The server writes each page a line every fifteen seconds, and a page
-whose write fails twice is let go. `spec/live` opens twenty pages and
-reads the server's own descriptor count: twenty more files and no more
-sessions, and none more once they have left.
-
-**A lock that runs out (senro#100).** The guestbook locks an account
-after three wrong passwords and mails a link, and the lock lapses after
-an hour. Nothing had run the hour. `spec/lapsed` moves the lock's time
-back in the database and watches the right password work again.
-
-**The guides sat off the left edge (#2401).** Clay reported the views
-guide against the left edge of the window. The nine guide pages had
-`spec-doc`, which sets a column's width, and lacked `essay`, which
-centres it; they had lacked it since they were written. `prose_check`
-gained a family, "no reading column", that fails a page whose article has
-a width and no centring.
-
-**What I got wrong.**
-- senro#102's first CI run was red on its own spec. The script read the
-  server's log after stopping the server, and the log by then held the
-  line kanso prints for a program ended by a signal. It reads the log
-  first.
-- #2401's first commit message said the pages had been checked in a
-  narrow window, which I had not established. The message now says only
-  that the class was missing.
-- The spec for many callers stalled at eighty dials, and I put a pause
-  between dials before finding the cause. It was the listen queue of 16,
-  which #2404 isolated.
-
-**Open.** A native server's resident memory grew from 3,140 kB to 3,692 kB
-over 1,500 connections, and I have not found what holds it. The runtime
-never frees a pool, which is why the live streams reuse their seats.
-`net/write` blocks the whole program on a client that reads slowly.
-
 ## 2026-11-10 — a lazy binding a callback captured is not its frame's to free
 
 Fixes #2409.
@@ -2589,3 +2393,94 @@ language applies.
 the library and `kanso test` adds its own line for the constant, so a
 file's count of tests is its count of specs, with the examples counted on
 the line above. senro's hooks, generated specs and guide are next.
+
+## 2026-11-11 — a test beside an entry reads the names the entry binds (#2463)
+
+The first test written for a senro app needed the app as its entry wires
+it: `signed`, the route table with the sign-in requirement around it, and
+`connected`, the effect that opens a database session. Both are bindings
+among the entry's statements, and #2460 lent a test file the entry's
+imports and derivations and nothing else. The test would have had to wire
+the app a second time, and would then be testing its own wiring.
+
+**The search.** The entries on the test verb (2026-10-12, 2026-10-14,
+2026-10-29, and the two above) and on the entry (`an entry names a group`,
+2026-10-29; `a lazy binding of an effect, handed back unread, still runs`,
+2026-11-05) say nothing on a test reading an entry's names. No fixture
+under `tests/golden/test_verb` had a binding in an entry.
+
+**The decision**, by the committee, recorded on #2463. A test file beside
+an entry reads the entry's bindings as names. An entry's statements are of
+two kinds: a binding gives a value a name, and a bare expression is
+performed. An effect is a value, so a binding performs nothing even when
+its value is one, and naming it in a test evaluates what the entry wrote.
+#2460's "none of the entry's statements run" still holds.
+
+Moving the wiring into a module a test could import was turned down:
+every app would be laid out for the test verb's sake, and one that kept
+its wiring in the entry, where `senro new` puts it, could not be tested
+as wired.
+
+**Built.** In `compile_library_beside`, each `name = value` among the
+statements of the entry beside a test file becomes a constant of the test
+file's program, stamped with the entry's file. A test file that declares
+one of those names is refused at its own declaration and told where the
+entry binds it. A pattern on the left lends no names.
+
+Two fixtures. `reads_the_entrys_names` binds a string and an effect that
+prints it, and performs the effect; its test file reads the string and
+performs the effect itself, and the golden shows the line printed once,
+between the two tests. `names_the_entry_bound` pins the refusal. Watched
+red with the bindings left behind: `unknown name` for both names in the
+first, and in the second the test file's own `front` stood alone and
+passed.
+
+Tried on senro's `examples/notebook`: a test file reads `signed`.
+
+**`kanso check` agrees.** A test file was checked by its content, as any
+other file is: one holding constants alone was an entry with unused
+bindings, and one with a function was a library that knew none of the
+names the test verb lends it. So an editor showed `unknown name` on every
+line of a test that passed. `compile_source` now hands a `*_test.kso`
+file under `check` to `compile_test_file`, which the check verb and the
+language server both reach. Watched red on the two fixtures' test files,
+which `kanso test` ran and `kanso check` refused.
+
+**Open.** A binding that takes its value apart lends nothing, and a test
+that names one of its parts is told only that the name is unknown.
+
+## 2026-11-12 — a dependency's local in a list is not the importer's function (#2466)
+
+senro's spec generator is a new module that declares `fn listed s` and
+imports the scaffold generator, which binds a local `listed` below a guard
+and holds it in a list. `kanso check` refused the scaffold's list, in a
+file the change had not touched: "`listed` takes 1 argument(s), and a list
+element is one atom".
+
+**The fault.** `call_shaped_at` asks whether a bare name in a list is a
+function that takes arguments, and reads a table built from every
+declaration of the module being checked. That module's dependencies are
+walked with the same table, so a dependency's local was looked up among
+the importer's functions. The walk's bound names would have excused it,
+but they hold parameters and top-level binds, and a bind below a guard is
+neither. Inside one module the collision cannot arise, because binding a
+name a declaration has is refused first.
+
+**Built.** For a declaration that is not the module's own, a bare name is
+not looked up in the table. The dependency's own functions are qualified
+when it is loaded, and its own check reads its lists against them, so a
+bare call in a dependency's list is still refused where it is written.
+
+Two fixtures under `tests/golden/shadowing`. `held` is the postcard from
+the issue, run on both engines; watched red with the refusal above naming
+`held/pair.kso`. `called` pins that a dependency's own bare call in its
+own list is refused at its line, which passed before and after.
+
+**Rows.** Skipping the lookup for every declaration from a dependency makes
+three compile rows cheaper, as CI measured them against the main before
+std/spec: `compile_instructions` 22,652,874 -> 22,642,731,
+`entry_instructions` 119,166,434 -> 119,108,712 and `library_instructions`
+63,634,765 -> 63,609,813. `browser_compile_instructions` worsened, 412,081,336
+-> 412,081,396. The welfare score rose, and the floor is set to it,
+95.39230375032061 -> 95.39235548899775. The check verb's route for a test
+file reaches no compile any row measures.

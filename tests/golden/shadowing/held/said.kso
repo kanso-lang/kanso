@@ -1,0 +1,8 @@
+import "./pair"
+
+# `both` is a function here, and takes an argument.
+fn both a
+  a
+
+pub fn said a
+  both (pair/pair a)
