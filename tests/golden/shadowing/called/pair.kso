@@ -1,0 +1,6 @@
+fn twice a
+  "{a}{a}"
+
+# A call in a list with no parentheses: three elements, and a refusal.
+pub fn pair a
+  ["one" twice a]
