@@ -115599,3 +115599,75 @@ distance to main's reading here. Clang's rows and the tab's are CI's.
 - The tab's run of the compiled corpus, from CI, rises 40,000 to
   `browser_run_instructions` 91,172,686. Its other three rows hold. I
   did not look for where the 40,000 are.
+
+## 2026-11-10 — a lazy binding under two holders keeps its slots in tenure
+
+Fixes #2415.
+
+**What was wrong.** Natively, a lazy binding held by two values could be
+read after its argument had been written over. The interpreter printed
+the program's answer and the native build ran out of stack, on main and
+on a compiler from 2026-11-07.
+
+A cell is malloc'd and keeps its identity, so the copy walk copies its
+slots (its arguments, and its result once forced) and writes them back in
+place. The copy map then says the cell was seen, and a second meeting in
+the same walk returned at once. An ordinary node met first from the carry
+pair and again under tenure is copied a second time, into tenure, because
+the tenured parent is pruned at by the next walk and the pair is written
+over the stage after. The cell had no such second copy. Its slots stayed
+in the pair.
+
+`k_slots_survive` refuses to share a node that holds a cell directly, so
+a tenured list of cells is walked again at every stage. It asks only about
+the immediate interior. A tenured `[[c]]` has an interior of ordinary
+survivors, and every later walk pruned there without reaching the cell.
+
+**How it was found.** Read from the code while the registry was built
+(#2408), and filed as a hazard without a program. Three programs later
+it had one. The first two never tenured anything. The third took the
+shape of a fixture whose counters show tenure, and still answered right.
+A print on the cell arm showed the sequence happening in it all the
+same: first meeting from the pair, second under tenure, and no walk
+after. The answer had stayed right because later laps wrote less into
+the pair than the lap that planted the cell. Carrying a list one string
+longer each lap wrote past the argument, and the program died.
+
+**The fix.** The walk keeps the slots of each cell it meets from the
+pair, as it found them (`k_cellsave`, emptied when the copy map moves
+on). A second meeting under tenure copies them again from that record,
+into tenure, and the map then says the cell is settled. The originals
+are needed because the first meeting wrote over the cell's own slots,
+which an ordinary node's copy never does.
+
+**The specs.** `tests/golden/mem/a_lazy_binding_under_two_holders_outlives_the_first`
+is the program: one cell under `[c]` and `[[c]]`, the first dropped a lap
+later, nineteen more laps each carrying a longer list. Its counters pin
+that the chain staged and tenured (`ten_blocks=1`, `evac_allocs=1806`),
+so a change that stops it reaching the path moves a number.
+`tests/golden/micro/a_lazy_binding_under_tenure_is_read_twice` reads the
+binding at lap 10 as well, when only the tenured holder has it, and
+again at the end. Both were red on main natively.
+
+**Rows.** Counts from this machine set by their distance to main's
+reading here; `work_runbench`, clang's rows and the tab's are CI's.
+- A walk pays about three instructions for each cell it meets from the
+  pair. `work_runbench` rises 47,849 to 952,714,702 and
+  `work_runbench_dev` 47,787 to 2,805,694,975 for the run program's
+  16,050 cells. `work_livebench` rises 459 to 938,655,379,
+  `work_pendbench` 289 to 154,094,164 and `work_scanbench` 2 to 267,927.
+- Seven fall, by layout: `work_encodebench` 1,266 to 2,335,340,193,
+  `work_deepbench` 1,098 to 198,293,720, `work_oneshot` 500 to
+  9,979,351, `work_widebench` 23, `work_digestbench` 18, and
+  `work_jsonbench` and `work_readbench` 3 each.
+- The record is 496 bytes of machine code in every program, and the
+  fourteen text rows sum to `text` 5,926,809.
+- Clang compiles the record: `codegen_instructions_dev` rises 7,036 to
+  116,951,956 and `codegen_instructions_release` 72,166 to 372,142,712.
+- The tab runs the same runtime, and `browser_run_instructions` rises
+  893 to 91,173,579.
+
+**The floor.** Welfare reads 95.09928563621176 with these rows, under the
+95.0994448300099 that #2414 banked. The objective's header sets a fix
+that makes the engines agree outside the sum, so the floor moves to what
+the fix costs and its history says so.
