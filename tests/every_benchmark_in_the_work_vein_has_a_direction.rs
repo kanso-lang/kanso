@@ -9,7 +9,7 @@
 //!
 //! Every row of `bench/instructions_golden.txt` is one benchmark's retired
 //! instructions, and fewer is better in all of them, so the vein's entry in
-//! the gate's `bench_goldens` carries `"lower"` for every row it holds, and a
+//! the gate's `prefixed` list carries `"lower"` for every row it holds, and a
 //! benchmark added to `bench/benchmarks.txt` needs no entry of its own. This
 //! asserts the entry still says so.
 
@@ -27,7 +27,7 @@ fn the_work_vein_carries_its_direction_into_the_trend_gate() {
     assert_eq!(
         fields,
         ["bench/instructions_golden.txt", "work_", "lower"],
-        "the work vein's entry in `bench_goldens` names no direction, so a rise \
+        "the work vein's entry in `prefixed` names no direction, so a rise \
          in any benchmark reads as UNCLASSIFIED drift and the trend gate exits green"
     );
 }

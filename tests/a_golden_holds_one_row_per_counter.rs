@@ -42,24 +42,17 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+#[path = "support/trend_goldens.rs"]
+mod trend_goldens;
+
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
 }
 
-/// The gate's own list, read the way
-/// tests/the_objective_reads_what_the_gate_watches.rs reads it, so a golden
-/// added to the gate is covered here without a second list to keep.
-fn watched(gate: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in gate.lines() {
-        let Some(open) = line.find("[\"bench/") else { continue };
-        let rest = &line[open + 2..];
-        let mut parts = rest.split('"').filter(|p| !p.contains('[') && !p.contains(']'));
-        if let Some(file) = parts.next() {
-            out.push(file.to_string());
-        }
-    }
-    out
+/// The goldens the gate walks, read as the gate reads them
+/// (tests/support/trend_goldens.rs).
+fn watched(_gate: &str) -> Vec<String> {
+    trend_goldens::walked().into_iter().map(|(file, _)| file).collect()
 }
 
 /// A golden's numeric rows, in the two spellings the goldens use: `name=value`

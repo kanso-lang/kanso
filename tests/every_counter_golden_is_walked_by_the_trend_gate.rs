@@ -1,107 +1,54 @@
-//! Every counter-bearing golden in bench/ is one the trend gate walks.
-//!
-//! The gate reads a hand-written list of `["bench/…" "prefix_"]` rows,
-//! and that list has been short five times. Three cost goldens were simply
-//! never entered. Then readbench joined the OBJECTIVE with two of its rows as
-//! welfare terms while this gate could not see its golden at all, so either
-//! row could have moved by any amount in silence. Then livebench. Then the
-//! consolidated run program, whose four rows are the objective's entire
-//! runtime side. The gate's own comments say how each was found: "by asking
-//! which files in bench/ this program names, which is now the only method
-//! that has ever found one of these."
-//!
-//! This asks it mechanically. A golden the gate does not walk is one whose
-//! regressions arrive unpriced, and finding that by hand a sixth time is not
-//! a plan.
-//!
-//! The excuse list is one file long and carries its reason, the way the page
-//! sweep's and the compile sweep's do. An entry here is a claim about what a
-//! file holds, so it says what that is.
+//! The trend gate walks bench/ itself, so the only hand-kept parts are its
+//! `prefixed` rows and its `not_counters` list. Each must name a file that is
+//! there: a row whose file is gone stops meaning anything, and a golden
+//! renamed out from under its prefix would have its fields summed under bare
+//! names, beside a vein they collide with.
 
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+#[path = "support/trend_goldens.rs"]
+mod trend_goldens;
 
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
+use std::path::Path;
+
+fn gate() -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    std::fs::read_to_string(root.join("scripts/trend_gate/trend_gate.kso"))
+        .expect("the trend gate reads")
 }
 
-const GATE: &str = include_str!("../scripts/trend_gate/trend_gate.kso");
-
-/// The one golden with no number in it to trend. The gate says what it holds
-/// in its comment on the read vein, and each entry carries the short of it.
-const EXCUSED: [(&str, &str); 1] = [(
-    "compile_libraries_golden.txt",
-    "five sonames rather than counters; its own gate diffs it byte for byte",
-)];
-
-/// Every `["bench/…" …]` row the gate names.
-fn walked() -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    for line in GATE.lines() {
-        let Some(open) = line.find("[\"bench/") else { continue };
-        let rest = &line[open + 2..];
-        let Some(close) = rest.find('"') else { continue };
-        out.insert(rest[..close].trim_start_matches("bench/").to_string());
-    }
-    out
-}
-
-/// Every golden in bench/, by file name.
-fn goldens_on_disk() -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    for entry in std::fs::read_dir(root().join("bench")).expect("the bench directory reads") {
-        let path = entry.expect("a directory entry reads").path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
-        if name.contains("golden") && name.ends_with(".txt") {
-            out.insert(name.to_string());
-        }
-    }
-    out
+fn on_disk(path: &str) -> bool {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(path).is_file()
 }
 
 #[test]
-fn the_gate_walks_every_golden_it_does_not_excuse() {
-    let walked = walked();
-    assert!(!walked.is_empty(), "the gate names at least one golden");
-    let excused: BTreeSet<&str> = EXCUSED.iter().map(|(name, _)| *name).collect();
-    let missing: Vec<_> = goldens_on_disk()
-        .into_iter()
-        .filter(|g| !walked.contains(g) && !excused.contains(g.as_str()))
-        .collect();
+fn every_prefix_names_a_golden_that_exists() {
+    let rows = trend_goldens::prefixed(&gate());
+    assert!(rows.len() > 10, "the gate's `prefixed` list read as {} rows", rows.len());
+    let gone: Vec<_> = rows.iter().map(|(p, _)| p).filter(|p| !on_disk(p)).collect();
+    assert!(gone.is_empty(), "the trend gate prefixes {gone:?}, and bench/ has no such file");
+}
+
+#[test]
+fn every_golden_kept_out_exists() {
+    let kept_out = trend_goldens::rows(&gate(), "not_counters = [");
+    assert!(!kept_out.is_empty(), "the gate's `not_counters` list read as empty");
+    let gone: Vec<_> = kept_out.iter().filter(|p| !on_disk(p)).collect();
+    assert!(gone.is_empty(), "the trend gate keeps out {gone:?}, and bench/ has no such file");
+}
+
+#[test]
+fn the_walk_reaches_the_goldens_on_disk() {
+    let walked = trend_goldens::walked();
+    assert!(walked.len() > 20, "the walk found {} goldens", walked.len());
     assert!(
-        missing.is_empty(),
-        "scripts/trend_gate/trend_gate.kso does not walk {missing:?}. A golden \
-         the gate does not walk is one whose regressions arrive unpriced — \
-         list it beside its siblings, or excuse it here with what it holds \
-         instead of counters."
+        walked.iter().any(|(p, x)| p == "bench/compile_allocs_golden.txt" && x.is_empty()),
+        "an unprefixed golden is walked with no prefix"
     );
-}
-
-/// And an excuse names a file that is there. A stale excuse is how a list
-/// stops being checked: the name stops matching anything, the entry stops
-/// meaning anything, and the file it was written for is long gone.
-#[test]
-fn every_excuse_names_a_golden_that_exists() {
-    let on_disk = goldens_on_disk();
-    for (name, why) in EXCUSED {
-        assert!(
-            on_disk.contains(name),
-            "this spec excuses {name} ({why}) and bench/ has no such file"
-        );
-    }
-}
-
-/// And an excused golden is one the gate really does not walk. An excuse for
-/// a file already on the list reads as coverage the list does not owe, and
-/// hides the day the list drops it.
-#[test]
-fn no_excuse_covers_a_golden_the_gate_already_walks() {
-    let walked = walked();
-    let redundant: Vec<_> =
-        EXCUSED.iter().map(|(name, _)| *name).filter(|name| walked.contains(*name)).collect();
     assert!(
-        redundant.is_empty(),
-        "the gate walks {redundant:?} and this spec also excuses them — an \
-         excuse for a listed golden hides the day it leaves the list"
+        walked.iter().any(|(p, x)| p == "bench/cost_golden_run.txt" && x == "run_"),
+        "a prefixed golden is walked with its prefix"
+    );
+    assert!(
+        !walked.iter().any(|(p, _)| p == "bench/compile_libraries_golden.txt"),
+        "a golden kept out is not walked"
     );
 }
