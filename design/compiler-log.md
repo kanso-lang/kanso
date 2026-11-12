@@ -20,91 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a write that would wait yields its fiber
-
-Fixes #2407.
-
-**What was wrong.** `net/write` wrote to a blocking socket and came back
-when every byte was taken. A fiber waiting to read or to accept yields to
-the scheduler (#2208, #2405), and a write did not. While one client's
-socket was full, no other fiber ran, on either engine. The issue was read
-from the code and had no case. The case turned out worse than a stall: a
-program that is both ends of a connection and writes more than the
-sockets between them hold never ends, because the fiber that would read
-is one of the fibers the write holds.
-
-**What changed.** Inside the scheduler a write asks the connection for
-what it will take without waiting. When it will take no more, the fiber
-is left holding the write and the count of bytes gone, and goes back in
-the queue. The scheduler's wait on sockets (`k_sched_await`, `awaited`)
-asks about room for those fibers, where it asks about arrival for a
-reader. The fiber picks up at the byte it stopped on, so no byte is
-copied to remember the rest. Natively the part-done write is one more
-description (42: the write, and how much has gone); the interpreter's is
-`Desc::Sending`.
-
-Outside the scheduler nothing changes. A write at the top of a program
-has no other fiber to yield to and waits where it stands.
-
-**TLS.** A TLS session writes whole records and has no call for "as much
-as fits". A secured connection is asked only when its socket says it has
-room, and is handed at most one record, 16,384 bytes, each time. That
-write can still wait briefly if the room is less than a record. It is the
-same on both engines.
-
-**The specs.** `tests/golden/micro/a_writer_waits_for_its_reader` is the
-program that is both ends: twelve megabytes written to a reader in the
-same group. It never ended on either engine and now prints the count.
-`tests/a_slow_reader_holds_only_its_own_fiber.rs` is the issue's case
-with clients outside the program: one asks for twelve megabytes and
-reads none of it, and a second is answered while the first still reads
-nothing. With the yield taken out of both engines the second client's
-read timed out natively, where the test stops, and the micro program was
-killed at twenty seconds on each engine.
-
-**The scheduler's loop.** The first build put the write into both
-switches and cost programs that open no socket. Each cost had one cause,
-and each was found by a row that had no reason to move.
-- deepbench rose 1,867,728. 1.2 million of that was in `k_exec`, whose
-  entry had gained one `mov`: a changed switch made clang keep the
-  function's argument in a second register. `k_exec` is as it was. A write outside the scheduler has no
-  other fiber to yield to, and a part-done write never reaches it,
-  because only the scheduler steps a fiber it holds. The write's step is
-  its own function, out of line.
-- Every program rose 443. `send` with `MSG_DONTWAIT` says "what you can
-  take now" in one call, and was one more name for the loader to find at
-  every program's start. The write sets the socket not to wait with
-  `fcntl`, writes, and sets it back; both names were already there.
-- With those gone, runbench fell 383,692 at the release tier and rose
-  415,722 at the dev tier, all of the rise in `k_schedule`. The wait on
-  sockets was inlined into the scheduler's loop, and its body decided
-  how the loop kept its own registers. Out of line and called with the
-  addresses of the loop's fiber table and clock, it was better at the
-  release tier (a fall of 800,791) and worse at the dev tier (a rise of
-  767,174), because a variable whose address is taken lives in memory.
-  Called with copies of the two, made only on the path that waits, it
-  is better at both. Three builds of the same source that differ only
-  in where the wait sits gave those three pairs.
-
-**Rows.** The work rows are counts from this machine set by their
-distance to main's reading here. Clang's rows and the tab's are CI's.
-- `work_runbench` falls 1,216,098 to 952,666,853 and `work_runbench_dev`
-  falls 320,187 to 2,805,647,188, for the wait leaving the loop.
-- Three programs rise a little: `work_encodebench` 616 to 2,335,341,459,
-  `work_livebench` 301 to 938,654,920 and `work_oneshot` 98 to
-  9,979,851. The other ten are unmoved.
-- The interpreter's step has one more arm to pass: `interp_instructions`
-  rises 7,995 to 680,822,127. Its send is out of line and cold, as its
-  wait on sockets already was.
-- The write's step and the wait as a function are 928 bytes of machine
-  code in every program, and the fourteen text rows sum to `text`
-  5,919,865.
-- Clang's rows, from CI: `codegen_instructions_release` falls 109,950 to
-  372,070,546 and `codegen_instructions_dev` rises 5,675 to 116,944,920.
-- The tab's run of the compiled corpus, from CI, rises 40,000 to
-  `browser_run_instructions` 91,172,686. Its other three rows hold. I
-  did not look for where the 40,000 are.
-
 ## 2026-11-10 — a lazy binding under two holders keeps its slots in tenure
 
 Fixes #2415.
@@ -2205,6 +2120,28 @@ work as six builds.
 Builds 3 (one way to answer and to read a request) and 4 (tables that
 supply their id and timestamps) are in review as kanso-lang/senro#129
 and its successor. The site follows the senro pin.
+
+## 2026-11-12 — a derived file puts its types first (#2472)
+
+A module's derived file was written in the order its definitions arrived,
+so a derivation that wrote a function into a module ahead of another that
+wrote a record there made a file the formatter refused: "canonical order
+places type declarations before functions; move `thing` up". The app had
+done nothing wrong, and the fix it was left with was to reorder its
+`derive` lines. senro's pantry carried a comment explaining why
+`models/tables` had to run first.
+
+`load_with_definitions` now keeps a module's record types apart from the
+rest of its definitions and writes them first. A definition joins the
+types when its first line past its imports, blanks and comments opens
+`type` or `pub type`. Within each half the definitions keep the order they
+arrived in, so a file that was accepted before is written the same way.
+
+The spec is `tests/golden/derive/a_type_defined_after_a_function_comes_first`:
+one derivation writes `shown`, which takes a `thing`, and a second writes
+the `thing` record and its maker. Without the fix both engines refuse the
+derived file with the formatter's message above; with it they print
+`thing 3`.
 
 ## 2026-11-12 — a module's own arm answers its bare call (#2473)
 

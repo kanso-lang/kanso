@@ -1,0 +1,7 @@
+import "./m"
+import "./writes"
+
+derive writes/arm
+derive writes/kind
+
+print (m/shown (m/made 3))

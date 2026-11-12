@@ -81,13 +81,15 @@ sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
 
 <span class="c"># A link to choose a new password, bound to the digest the account keeps,</span>
 <span class="c"># so it works once.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> req db id email kept
   <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/{reset_token id kept t}/edit"</span>)
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (reset_path req id kept t))
     <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))
 
-<span class="k">fn</span> <span class="f">reset_token</span> id kept t
-  <span class="f">passwords/reset_token</span> <span class="f">session/secret</span> id kept t
+<span class="c"># The page the link opens, with the token in its path.</span>
+<span class="k">fn</span> <span class="f">reset_path</span> req id kept t
+  token <span class="o">=</span> <span class="f">tokens/made</span> <span class="s">"reset"</span> req id kept t <span class="f">passwords/reset_minutes</span>
+  <span class="f">routes/path_to</span> <span class="s">"resets/edit"</span> token
 
 <span class="k">fn</span> <span class="f">reset_letter</span> email link
   lines <span class="o">=</span> [
@@ -104,7 +106,7 @@ sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
 
 <p><code>mail/url_for path</code> is the address of a path on the app's own site. it reads the site from the <code>SENRO_URL</code> environment variable, such as <code>https://notebook.example</code>, and uses <code>http://127.0.0.1:3000</code> when that is unset, which is where a development server listens. it never reads the site from the request's <code>Host</code> header. whoever sends a request chooses that header, so a link built from it could carry a reset token to a site of theirs.</p>
 
-<p>the token in the path is signed and expires. <a href="sessions.html">sessions and sign-in</a> covers how one is made and checked.</p>
+<p>the token in the path is made by <code>tokens/made</code> for the purpose <code>reset</code>: it is signed with the app's secret, which the request carries, and it expires. <a href="sessions.html">sessions and sign-in</a> covers how one is made and checked.</p>
 
 <h2>sending now, and sending later</h2>
 

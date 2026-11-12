@@ -667,6 +667,13 @@ fn opening_imports(source: &str) -> (Vec<&str>, &str) {
     (imports, rest)
 }
 
+/// Whether a definition's text, past its imports, declares a record type:
+/// its first line that is not blank or a comment opens `type` or `pub type`.
+fn declares_type(text: &str) -> bool {
+    let first = text.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#'));
+    first.is_some_and(|l| l.starts_with("type ") || l.starts_with("pub type "))
+}
+
 /// A definition's import line as the module it joins reads it. A relative
 /// path is written from the derivation's own module, as that module's own
 /// imports are, so a convention names its library however the app reached
@@ -718,9 +725,13 @@ fn load_with_definitions(
     definitions: &[(String, String, String)],
 ) -> Result<Loaded, String> {
     // Per module, in the order its first definition arrives: the imports its
-    // definitions open with, and the rest of their text.
+    // definitions open with, its record types, and the rest of their text.
+    // The types go first whichever derivation wrote them, since a file puts
+    // its types before its functions and the derivations' order is no part
+    // of the program (#2472).
     let mut order: Vec<(String, String)> = Vec::new();
-    let mut parts: crate::hash::Map<String, (Vec<String>, String)> = crate::hash::Map::default();
+    let mut parts: crate::hash::Map<String, (Vec<String>, String, String)> =
+        crate::hash::Map::default();
     for (path, source, from) in definitions {
         let dir = resolve_import(base, path)
             .unwrap_or_else(|_| std::path::PathBuf::from(path.strip_prefix("./").unwrap_or(path)));
@@ -729,18 +740,24 @@ fn load_with_definitions(
             order.push((key.clone(), derived_name(&dir)));
         }
         let writer = resolve_import(base, from).ok();
-        let (imports, body) = parts.entry(key).or_default();
+        let (imports, types, body) = parts.entry(key).or_default();
         let (opened, rest) = opening_imports(source);
         imports.extend(opened.into_iter().map(|line| reread(line, writer.as_deref(), &dir)));
-        if !body.is_empty() {
-            body.push('\n');
+        let held = if declares_type(rest) { types } else { body };
+        if !held.is_empty() {
+            held.push('\n');
         }
-        body.push_str(rest);
+        held.push_str(rest);
     }
     let mut files: crate::hash::Map<String, String> = crate::hash::Map::default();
     let mut texts: crate::hash::Map<String, String> = crate::hash::Map::default();
     for (key, name) in order {
-        let (mut imports, body) = parts.remove(&key).unwrap_or_default();
+        let (mut imports, types, rest) = parts.remove(&key).unwrap_or_default();
+        let body = match (types.is_empty(), rest.is_empty()) {
+            (false, false) => format!("{types}\n{rest}"),
+            (false, true) => types,
+            _ => rest,
+        };
         imports.sort_unstable();
         imports.dedup();
         let text =

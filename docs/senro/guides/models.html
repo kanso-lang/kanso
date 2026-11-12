@@ -28,7 +28,6 @@ description: "senro's schema is folded from migrations while the app compiles; a
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
 <span class="k">pub</span> <span class="f">create_signatures</span> <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"signatures"</span> [
-  (<span class="f">models/column</span> <span class="s">"id"</span> <span class="s">"serial"</span>)
   (<span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text"</span>)
   (<span class="f">models/column</span> <span class="s">"message"</span> <span class="s">"text"</span>)
 ]</code></pre>
@@ -56,7 +55,7 @@ failures <span class="o">=</span> <span class="f">models/column</span> <span cla
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/stamped/migrations.kso</div>
-  <pre><code>notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> (<span class="f">list/concat</span> [id body] <span class="f">models/timestamps</span>)</code></pre>
+  <pre><code>notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [body]</code></pre>
 </div>
 
 <p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint over one column in <code>schema.sql</code>, and the model names the column. the model's <code>create</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. its <code>update</code> asks before it writes.</p>
@@ -198,21 +197,21 @@ pub type signature
 <span class="c"># fields go to Postgres as parameters, so what a visitor types is stored as</span>
 <span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
-  viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
-  f <span class="o">=</span> put (<span class="f">web/form</span> req.body) <span class="s">"name"</span> viewer
+  viewer <span class="o">=</span> <span class="f">web/viewer</span> req
+  f <span class="o">=</span> put (<span class="f">web/input</span> req) <span class="s">"name"</span> viewer
   <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> signed req db w)
 
 <span class="c"># A signature the rules turned back: the page again, answered 422, with the</span>
 <span class="c"># form as the visitor filled it in and what to fix.</span>
 <span class="k">fn</span> <span class="f">signed</span> req db w:<span class="f">models/invalid</span>
-  s <span class="o">=</span> <span class="f">web/session</span> req secret
+  s <span class="o">=</span> <span class="f">web/session</span> req
   form <span class="o">=</span> filled w.record.message w.problems
   <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> shown req book s form 422)
 
 <span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
 <span class="c"># reloading it does not sign the book again.</span>
 <span class="k">fn</span> <span class="f">signed</span> _ _ _
-  effect (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
+  effect (<span class="f">web/redirect</span> (<span class="f">routes/path_to</span> <span class="s">"home/index"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
 </div>
 
 <h2>underneath</h2>
