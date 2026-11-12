@@ -293,3 +293,17 @@ fn a_test_file_cannot_declare_a_name_the_entry_binds() {
     assert_eq!(String::from_utf8_lossy(&output.stdout), "");
     assert_eq!(output.status.code(), Some(2));
 }
+
+/// `kanso check` reads a test file as `kanso test` compiles it (#2463), so an
+/// editor and the test verb agree on its names. Watched red: checked by its
+/// content, a test file of constants was an entry with unused bindings, and
+/// the names the entry lends it were unknown.
+#[test]
+fn a_test_file_is_checked_as_it_is_tested() {
+    for file in ["beside_an_entry/posts_test.kso", "reads_the_entrys_names/posts_test.kso"] {
+        let output = in_fixtures(&["check", file]);
+
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "", "{file}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), format!("{file}: ok\n"), "{file}");
+    }
+}

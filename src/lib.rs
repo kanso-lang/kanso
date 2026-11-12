@@ -918,6 +918,13 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     if std::path::Path::new(file).file_name().is_some_and(|n| n == "main.kso") {
         return compile_entry(file, source);
     }
+    // A test file is checked as `kanso test` compiles it, with the module or
+    // the entry beside it. Checked by its content it was an entry when it
+    // held constants alone, and a library that knew none of the names the
+    // test verb lends it (#2463).
+    if command == "check" && is_test_file(std::path::Path::new(file)) {
+        return compile_test_file(file, source);
+    }
     // Which compile a file gets is decided by what it declares, not by what
     // its text happens to contain: a comment or a string mentioning `pub
     // play` used to reroute the whole file and reject a valid entry with a
