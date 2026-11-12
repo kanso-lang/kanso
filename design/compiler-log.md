@@ -2138,3 +2138,16 @@ off `at`. It pins `sh_rec=3200` and `allocs=57` against its twin's 512 and
 twin. No other golden moved, and welfare does not read the mem vein. The
 issue stays p3 because no benchmark pays this today (the measurement on
 #2433, 2026-11-11).
+
+**Copying the group does not reach it (measured the same day).** The
+cheapest form of the decision is a source pass beside `flat::flatten`. It
+copies a group that is both handed out and called from elsewhere, and sends
+every mention by value to the copy. Built that way, the pass chose `at` and
+the fixture still read `sh_rec=3200`. Inference joins a record type's fields
+over every place that builds one. The copy builds `read bs[p] (p + 1)` with a
+position of any type, so `read.next` widens, and `summed` hands that position
+back to the direct `at`. No other mem golden moved, so the copy would only add
+compile work, and it was not kept. What the fixture needs is for a function
+value's parameters to hold what is actually passed to it at the calls made
+through values, in place of every type. That is a flow analysis of function
+values.
