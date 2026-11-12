@@ -615,7 +615,6 @@ fn per_node_walk<'a>(
         err_as_value_at(expr, diags);
     }
     call_shaped_at(expr, &tables.arities, &state.bound, state.own, diags);
-    literal_applied_at(expr, diags);
     literal_argument_at(expr, tables, &state.bound, state.file, diags);
     field_read_at(
         expr,
@@ -812,6 +811,10 @@ fn call_shaped_at(
 ) {
     if let Expr::List(items, _) = expr {
         for (at, item) in items.iter().enumerate() {
+            if let Some((what, args, span)) = applied_literal(item) {
+                diags.push(literal_in_a_list(what, args, span));
+                continue;
+            }
             let Expr::Ident(name, span, _) = item else {
                 continue;
             };
