@@ -2578,8 +2578,9 @@ check runs. Breaking the panel's expected output turned the check red.
 **Rows.** The compiler's table of shipped modules holds one more name, and
 the four rows that pass through it worsened: `compile_instructions`
 22,652,542 -> 22,652,874, `entry_instructions` 119,166,322 ->
-119,166,434, `library_instructions` 63,634,689 -> 63,634,765, and the
-browser's compile row 412,081,305 -> 412,081,336. The welfare floor is
+119,166,434, `library_instructions` 63,634,689 -> 63,634,765, and
+`browser_compile_instructions` 412,081,305 -> 412,081,336. The welfare
+floor is
 lowered by what that costs, 95.3923041102071 -> 95.39230375032061: the
 directive asked for the library, so the exception for a ruled part of the
 language applies.
