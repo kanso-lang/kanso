@@ -1,0 +1,251 @@
+---
+layout: default
+title: "testing a senro app"
+description: "specs beside an app's modules: what the generators write, running them against a test database, visits that ask for pages with no server, a transaction around every example, and signing in."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>testing</h1>
+
+<p>a senro app's tests are specs that sit beside its modules, in files named <code>&lt;something&gt;_test.kso</code>. an example asks the app for a page the way a browser does and looks at what came back. the request goes straight to the route table the app serves, with no server started and no socket opened. this guide covers what the generators write, how to run it, and how to write more.</p>
+
+<h2>what a generator writes</h2>
+
+<p><code>senro generate scaffold note title:text pages:int</code> writes a spec for the notes beside the module that serves them. it lists them, makes one, changes it, sends a page count that is no number, and removes one.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/notes_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../visit"</span>
+<span class="k">import</span> <span class="s">"./given"</span>
+<span class="k">import</span> <span class="s">"std/expect"</span>
+<span class="k">import</span> <span class="s">"std/spec"</span>
+
+<span class="c"># The notes, asked for as a browser asks. `senro test` runs these against</span>
+<span class="c"># the test database, and each example runs in a transaction that is rolled</span>
+<span class="c"># back, so none of them sees what another wrote.</span>
+test_notes <span class="o">=</span> describe <span class="s">"notes"</span> [
+  around (<span class="f">visit/within</span> routes connected)
+  it <span class="s">"are listed"</span> listed
+  it <span class="s">"are made from the form and shown"</span> made
+  it <span class="s">"are changed from the form"</span> changed
+  it <span class="s">"are not made from a field that breaks its rule"</span> refused
+  it <span class="s">"are gone once removed"</span> removed
+]
+
+<span class="k">fn</span> <span class="f">listed</span> v
+  <span class="f">visit/get</span> v <span class="s">"/notes"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
+
+<span class="k">fn</span> <span class="f">made</span> v
+  <span class="f">visit/post</span> v <span class="s">"/notes"</span> <span class="f">given/note</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/followed</span> v)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.body . to (contain <span class="s">"milk"</span>)))
+
+<span class="k">fn</span> <span class="f">changed</span> v
+  <span class="f">visit/post</span> v <span class="s">"/notes"</span> <span class="f">given/note</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/patch</span> v (<span class="f">visit/location</span> v) edited)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/followed</span> v)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.body . to (contain <span class="s">"bread"</span>)))
+
+<span class="k">fn</span> <span class="f">refused</span> v
+  <span class="f">visit/post</span> v <span class="s">"/notes"</span> broken
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 422)))
+
+<span class="k">fn</span> <span class="f">removed</span> v
+  <span class="f">visit/post</span> v <span class="s">"/notes"</span> <span class="f">given/note</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> gone v (<span class="f">visit/location</span> v))
+
+<span class="k">fn</span> <span class="f">gone</span> v at
+  <span class="f">visit/remove</span> v at
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/get</span> v at)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 404)))
+
+edited <span class="o">=</span> put <span class="f">given/note</span> <span class="s">"title"</span> <span class="s">"bread"</span>
+
+broken <span class="o">=</span> put <span class="f">given/note</span> <span class="s">"pages"</span> <span class="s">"many"</span></code></pre>
+</div>
+
+<p>the map an example posts comes from the app's <code>given</code> module, which holds one map for each model: what a form sends to make one. a generator adds its model's map there. it is the app's to edit, like everything else a generator writes, and a spec of your own can read the same maps.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/given.kso</div>
+  <pre><code><span class="c"># What the app's specs make rows from: a map for each model, holding what a</span>
+<span class="c"># form sends to make one. The generators add a model's map here, and a spec</span>
+<span class="c"># reads it as `given/&lt;model&gt;`.</span>
+<span class="k">pub</span> <span class="f">note</span> <span class="o">=</span> { <span class="s">"pages"</span>:<span class="s">"3"</span> <span class="s">"title"</span>:<span class="s">"milk"</span> }
+
+<span class="k">pub</span> <span class="f">page</span> <span class="o">=</span> { <span class="s">"body"</span>:<span class="s">"milk"</span> }
+
+<span class="k">pub</span> <span class="f">reading</span> <span class="o">=</span> { <span class="s">"minutes"</span>:<span class="s">"3"</span> <span class="s">"title"</span>:<span class="s">"milk"</span> }</code></pre>
+</div>
+
+<p><code>senro generate resource</code> writes a spec of its API in the same shape, and <code>senro generate authentication</code> writes one of signing in, which is further down this page.</p>
+
+<h2>running them</h2>
+
+<p><code>senro test</code> runs every spec in the app, and <code>senro test notes_test.kso</code> runs one file. this is the notebook example, whose specs are the ones its generators wrote:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">senro test</div>
+  <pre><code>the home page
+  is shown
+
+1 examples, 0 failed
+test_home ... ok
+notes
+  are listed
+  are made from the form and shown
+  are changed from the form
+  are not made from a field that breaks its rule
+  are gone once removed
+
+5 examples, 0 failed
+test_notes ... ok
+pages
+  are listed
+  are made from the form and shown
+  are changed from the form
+  are gone once removed
+
+4 examples, 0 failed
+test_pages ... ok
+readings
+  are listed
+  are made from what is posted
+  are not made from a field that breaks its rule
+
+3 examples, 0 failed
+test_readings ... ok
+signing in
+  is asked of a stranger
+  with an account
+    opens the app
+    is over once the visitor signs out
+    takes the address and password again
+    refuses a wrong password
+
+5 examples, 0 failed
+test_signing_in ... ok
+5 passed, 0 failed</code></pre>
+</div>
+
+<p>the command exits with a failure when any example fails, so it can gate a build. a failing example is named by its full description, with what it answered beside what was expected.</p>
+
+<p>tests have a database of their own. its name is the app's with <code>_test</code> after it, so the rows you typed while trying the app are never in a test's way. <code>senro test</code> makes that database when the server has none by the name, brings it up to the app's migrations, and then runs the specs. the first run of a new app needs nothing set up beyond the Postgres the app already uses.</p>
+
+<p>passwords are stretched by one round while tests run, as Devise sets its stretches to one in a Rails app's tests. the specs run on kanso's interpreter, where the rounds an app ships with would take minutes for each sign-up.</p>
+
+<h2>the shape of a spec</h2>
+
+<p>a spec is a constant whose name begins <code>test_</code>. <code>describe</code> takes a name and a list, one item to a line. <code>it</code> names an example and the function that runs it. <code>context</code> is a group inside a group, and groups nest as deep as you like. the example passes when its function answers what an expectation answers for a match, and <code>expect value . to (matcher)</code> is how one is written. <code>std/expect</code> has <code>equal</code>, <code>contain</code>, <code>have_length</code>, <code>start_with</code>, <code>end_with</code>, <code>be_none</code>, <code>be_true</code>, <code>be_false</code> and <code>satisfy</code>, and <code>not_to</code> for the opposite.</p>
+
+<p>three hooks set an example up. <code>before</code> takes a function that is handed what the hooks so far built and answers what the example gets. <code>after</code> runs once the example has answered. <code>around</code> is handed the value so far and the rest of the example, and decides what happens on each side of it. a group's hooks wrap those of the groups inside it, and they run afresh for every example, so no example sees what another left. the book's chapter on modules has <a href="/book/modules.html">the whole of it</a>.</p>
+
+<h2>a visit</h2>
+
+<p>the value a senro example is handed is a visit: one visitor's dealings with the app. <code>visit/get</code>, <code>visit/post</code>, <code>visit/patch</code> and <code>visit/remove</code> each ask for a path and answer the visit as it stands afterwards. <code>visit/post</code> and <code>visit/patch</code> take a map and send it as a form, and <code>visit/post_json</code> sends JSON to an API. the last answer is on the visit: <code>v.status</code>, <code>v.body</code>, and <code>visit/header v "location"</code> for a header. <code>visit/location v</code> is where a redirect points, and <code>visit/followed v</code> goes there.</p>
+
+<p>a visit keeps the cookies the app sets and sends them with the next request. an example that signs in is signed in for what it asks next, and a notice set by one answer shows on the page after it. a request goes through everything a served one does: the route table, the check for a form posted from another site, sessions, the sign-in requirement and the page's <code>admits</code>.</p>
+
+<h2>the transaction around an example</h2>
+
+<p>the first line of a generated spec is its hook:</p>
+
+<pre><code>around (visit/within routes connected)</code></pre>
+
+<p><code>visit/within</code> opens a database session, begins a transaction, hands the example a visit that has asked for nothing yet, and rolls the transaction back when the example has answered. it rolls back when the example fails too. every example therefore starts from the same database, and they can run in any order. a Rails test is wrapped in a transaction the same way.</p>
+
+<p><code>routes</code> and <code>connected</code> come from the app's entry: the route table it derives and the effect that opens its database. a test file beside a <code>main.kso</code> reads the names the entry binds, so a spec tests the app as the entry wires it. an entry made with authentication also binds <code>signed</code>, the same routes with the sign-in requirement around them. a spec that passes <code>routes</code> is testing its resource alone, and one that passes <code>signed</code> meets the sign-in page first.</p>
+
+<h2>signing in</h2>
+
+<p>this is the spec <code>senro generate authentication</code> writes. it uses <code>signed</code>, and a group inside the spec with a hook of its own: every example under "with an account" starts with an account already made, which signs its visitor in.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../visit"</span>
+<span class="k">import</span> <span class="s">"std/expect"</span>
+<span class="k">import</span> <span class="s">"std/spec"</span>
+
+<span class="c"># Signing in, asked for as a browser asks. `signed` is the app as the entry</span>
+<span class="c"># serves it, with the sign-in requirement around its routes, so an example</span>
+<span class="c"># meets the door a visitor meets. A visit keeps the cookies the app sets:</span>
+<span class="c"># the examples under "with an account" begin signed in, since `joined` has</span>
+<span class="c"># made the account and making one signs its visitor in.</span>
+test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</span> [
+  around (<span class="f">visit/within</span> signed connected)
+  it <span class="s">"is asked of a stranger"</span> turned_back
+  context <span class="s">"with an account"</span> [
+    before joined
+    it <span class="s">"opens the app"</span> opened
+    it <span class="s">"is over once the visitor signs out"</span> over
+    it <span class="s">"takes the address and password again"</span> returned
+    it <span class="s">"refuses a wrong password"</span> refused
+  ]
+]
+
+<span class="k">fn</span> <span class="f">turned_back</span> v
+  <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
+
+<span class="k">fn</span> <span class="f">joined</span> v
+  <span class="f">visit/post</span> v <span class="s">"/registration"</span> account
+
+<span class="k">fn</span> <span class="f">opened</span> v
+  <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
+
+<span class="k">fn</span> <span class="f">over</span> v
+  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/get</span> v <span class="s">"/"</span>)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
+
+<span class="k">fn</span> <span class="f">returned</span> v
+  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/get</span> v <span class="s">"/"</span>)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
+
+<span class="k">fn</span> <span class="f">refused</span> v
+  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> mistaken)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 422)))
+
+account <span class="o">=</span> { <span class="s">"email"</span>:<span class="s">"ada@example.test"</span> <span class="s">"password"</span>:<span class="s">"a long password"</span> }
+
+mistaken <span class="o">=</span> put account <span class="s">"password"</span> <span class="s">"another password"</span>
+
+door <span class="o">=</span> <span class="s">"/session/new"</span></code></pre>
+</div>
+
+<p>to test a page of your own as a signed-in visitor, put its examples in a group with the same <code>before</code>.</p>
+
+<h2>a resource under another</h2>
+
+<p>a nested resource needs its parent before any of its paths exist. the generated spec makes one through the parent's model and answers the path under it. <code>v.db</code> is the session the example's transaction is on, so a row made this way is rolled back with the rest.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/pages_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">listed</span> v
+  pages_path v
+    <span class="o">.&gt;</span> (at <span class="o">-&gt;</span> <span class="f">visit/get</span> v at)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
+
+<span class="c"># A note for an example's pages to sit under, and the path to them.</span>
+<span class="k">fn</span> <span class="f">pages_path</span> v
+  <span class="f">note/create</span> v.db <span class="f">given/note</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> effect <span class="s">"/notes/{n.id}/pages"</span>)</code></pre>
+</div>
+
+<p>the same works for anything an example needs in the database first: call the model with <code>v.db</code>, as an action would.</p>
+
+<h2>what a spec does not reach</h2>
+
+<p>a visit asks for pages and reads them. it does not run the scripts on them, so a live view's updates in the browser and a component compiled to wasm are outside it. senro's own suite drives those in Firefox and Chromium. a single example cannot yet be run by name, only a file.</p>
+
+</article>
