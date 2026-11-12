@@ -20,53 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a decoder read across a module joins the corpus
-
-#2421, corpus first. A decoder written in kanso answers each value with
-the position after it, as a record of two fields, and no benchmark built
-one. `framed` is such a decoder, a stream of numbers at one byte or two,
-and `taken` reads it from another module. A record cannot be taken apart
-across an import, so `taken` binds what `framed/at` answers to a name and
-reads its two fields, which is how the readers senro derives call `wire`.
-Each pass also has `framed` sum the stream itself, with the record taken
-apart in a parameter, value first as its type declares it. The run program
-makes 1,500 passes over 64 numbers, and the interpreter's corpus carries
-the same two loops in its one module for 12.
-
-The baseline already says something about the leads. Both loops build
-every record on the heap: run_sh_rec goes from 4,723,232 to 17,011,296,
-which is 1,500 passes of 128 reads at 64 bytes and one record more. So the
-loop that takes the record apart in a parameter misses the by-value path
-too, on the order of its fields.
-
-The run program's work rises: work_runbench 954,999,153 -> 997,844,059
-and work_runbench_dev 2,808,131,450 -> 2,924,577,667. Both are this
-container's readings less 109, which is what every work row here reads
-above CI's. The phase is 42,844,906 of the program, 4.29%. Its other
-counters: run_allocs 2,541,664, run_alloc_bytes 268,840,291,
-run_perm_allocs 136, run_beat_iters 390,812, run_evac_allocs 5,617,
-run_evac_bytes 4,721,376, run_append_fast 5,329,378, run_append_grow
-1,081, run_bytes_malloc 7,869 and run_sh_bytes 24,384. runbench's emitted
-code reads defines=978 calls=10213 branches=9202 lines=79617, the summed
-rows emitted_other_defines 2,409, emitted_other_calls 22,187,
-emitted_other_branches 19,733 and emitted_other_lines 184,738, and its
-machine code is 900,801 bytes, so the summed text is 5,969,001.
-
-The interpreter's corpus rises: interp_instructions 681,004,692 ->
-711,444,159, with interp_allocs 1,026,142 and interp_peak_bytes 1,487,351.
-The tab's rows rise with it: browser_compile_instructions 366,327,369 ->
-390,565,528, browser_run_instructions 91,307,704 -> 93,856,364 and
-browser_compile_peak_bytes 867,315 -> 958,848. The first sizing was 40 passes,
-which cost the interpreter 95 million instructions, about 18,500 for each
-value read. That looked like a cliff and is not one: building the stream
-costs it about 7,000 instructions a number at 64, 256 and 1,024 numbers
-alike, the bare loop about 5,200 a value, the bound record 16,900 and the
-record taken apart 12,500. The phase was sized down to 12.
-
-The floor is re-based. The baselines of the seven rows that read the two
-programs are scaled by what each rose, and welfare stays where it was,
-95.25752068 before and 95.25752070 after.
-
 ## 2026-11-10 — a decoder's answer stays in registers
 
 #2421, and #2428 on the way. The by-value return packs one int beside one
@@ -2014,3 +1967,32 @@ raises `VERSION`, and that the site's `senro-version` names a tagged commit.
 The site now pins dba26a72. The command-line guide gains a section on
 naming senro by repository, and its summary of `authentication` now names
 the confirmation and unlock links senro#139 added.
+
+## 2026-11-12 — directive: legacy route aliases are code
+
+Clay, reading the routing guide: "I would prefer a legacy route aliases to
+use code rather than the strings so that they are analyzed that compile time
+obviously. get, put etc should be methods." An alias was a string map,
+`{ "GET /signbook":"entries/index" }`, so the compiler saw neither the
+action nor the method.
+
+senro#144 makes each alias a call, `(routes/moved "/signbook"
+entries/index)`, in the module's `legacy_route_aliases` list. The action is
+a name, so the compiler resolves it. `routes/rest` reads each call through
+the module's `calls`, as it reads `path_to`, and refuses a mistake at the
+call. The methods are not functions. `put` and `delete` are taken by the
+built-ins (`error[name]: the name put is already taken`), so two of the five
+cannot be written, and an alias's action already fixes its method: the alias
+takes the method of its action's route. The old map form is refused at the
+declaration. senro's `VERSION` goes to 0.2.0 with it, since an app on 0.1.0
+must rewrite its aliases.
+
+The same question asked how senro spells member and collection routes,
+deeper nesting and the rest of a Rails routes file. The routing guide gains
+two sections. "actions beyond the seven" shows a member action as a nested
+singular resource (`publication`, with `create` and `destroy` taking
+`post_id`) and a collection action as a resource of its own (`searches`),
+quoted from senro's new `spec/runs/actions_as_resources`. "what senro's
+routing does not have" lists namespaces, renamed paths, nesting past one
+level, constraints and hand-declared routes. A Readwise article on `derive`
+and the conventions built on it went to Clay's reader.

@@ -115996,3 +115996,50 @@ layout: work_encodebench rises 350 to 2,335,340,543, work_oneshot rises
 `runtime/base64_decode_takes_a_string` pins the other refusal, a value
 that is not a string handed to `decode`, on both engines. Welfare rises
 from 95.09928567 to 95.25752069, and the floor is banked there.
+
+## 2026-11-10 — a decoder read across a module joins the corpus
+
+#2421, corpus first. A decoder written in kanso answers each value with
+the position after it, as a record of two fields, and no benchmark built
+one. `framed` is such a decoder, a stream of numbers at one byte or two,
+and `taken` reads it from another module. A record cannot be taken apart
+across an import, so `taken` binds what `framed/at` answers to a name and
+reads its two fields, which is how the readers senro derives call `wire`.
+Each pass also has `framed` sum the stream itself, with the record taken
+apart in a parameter, value first as its type declares it. The run program
+makes 1,500 passes over 64 numbers, and the interpreter's corpus carries
+the same two loops in its one module for 12.
+
+The baseline already says something about the leads. Both loops build
+every record on the heap: run_sh_rec goes from 4,723,232 to 17,011,296,
+which is 1,500 passes of 128 reads at 64 bytes and one record more. So the
+loop that takes the record apart in a parameter misses the by-value path
+too, on the order of its fields.
+
+The run program's work rises: work_runbench 954,999,153 -> 997,844,059
+and work_runbench_dev 2,808,131,450 -> 2,924,577,667. Both are this
+container's readings less 109, which is what every work row here reads
+above CI's. The phase is 42,844,906 of the program, 4.29%. Its other
+counters: run_allocs 2,541,664, run_alloc_bytes 268,840,291,
+run_perm_allocs 136, run_beat_iters 390,812, run_evac_allocs 5,617,
+run_evac_bytes 4,721,376, run_append_fast 5,329,378, run_append_grow
+1,081, run_bytes_malloc 7,869 and run_sh_bytes 24,384. runbench's emitted
+code reads defines=978 calls=10213 branches=9202 lines=79617, the summed
+rows emitted_other_defines 2,409, emitted_other_calls 22,187,
+emitted_other_branches 19,733 and emitted_other_lines 184,738, and its
+machine code is 900,801 bytes, so the summed text is 5,969,001.
+
+The interpreter's corpus rises: interp_instructions 681,004,692 ->
+711,444,159, with interp_allocs 1,026,142 and interp_peak_bytes 1,487,351.
+The tab's rows rise with it: browser_compile_instructions 366,327,369 ->
+390,565,528, browser_run_instructions 91,307,704 -> 93,856,364 and
+browser_compile_peak_bytes 867,315 -> 958,848. The first sizing was 40 passes,
+which cost the interpreter 95 million instructions, about 18,500 for each
+value read. That looked like a cliff and is not one: building the stream
+costs it about 7,000 instructions a number at 64, 256 and 1,024 numbers
+alike, the bare loop about 5,200 a value, the bound record 16,900 and the
+record taken apart 12,500. The phase was sized down to 12.
+
+The floor is re-based. The baselines of the seven rows that read the two
+programs are scaled by what each rose, and welfare stays where it was,
+95.25752068 before and 95.25752070 after.
