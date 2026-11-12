@@ -157,7 +157,10 @@ pub struct Inference {
     /// The calls, by the span of the name called, that reach an arm typed
     /// per call (see `per_call_builtin`) and cannot answer `none` for the
     /// arguments they pass: `math/round 7`, where the group's own set holds
-    /// the `none` a float caller gets. The checker's none question reads it.
+    /// the `none` a float caller gets. A call that never reaches some arms of
+    /// its group is read the same way, by the arms it does reach: a module's
+    /// own `fn id_of n` stands ahead of an import's `id_of`, and the import's
+    /// none is not this call's. The checker's none question reads it.
     pub none_free: crate::hash::Set<crate::diag::Span>,
 }
 
@@ -2272,12 +2275,25 @@ fn eval_call<'a>(
         }
         let folded = folded(args, arg_sets, ctx.lambda_answer);
         let receiver = pinned_receiver(name, args, env);
+        let mut caught_all = false;
+        let mut passed_over = false;
         for k in start..end {
             let i = ctx.group_members[k];
+            let params = &ctx.program.fns[i].params;
+            // Dispatch takes the first arm that matches, so once an arm whose
+            // every parameter is a binder has been passed, a later arm runs
+            // only for a failure it names. A module's own arms stand ahead of
+            // an import's of the same name in a bare call, and the import's
+            // arm behind the module's own `fn id_of n` never answers (#2473).
+            if caught_all && params.iter().all(|p| pattern_catches(p) == 0) {
+                passed_over = true;
+                continue;
+            }
+            caught_all |= params.iter().all(|p| matches!(p, Pattern::Var(..) | Pattern::Wildcard(_)));
             // An arm a literal argument cannot reach neither sees the call
             // nor answers it: `text/split s "\n"` never runs `split _ ""`,
             // so what that arm raises is not something this call can answer.
-            if !arm_can_run(&ctx.program.fns[i].params, args, &ctx.consts) {
+            if !arm_can_run(params, args, &ctx.consts) {
                 continue;
             }
             // A field read through a name annotated with its type runs that
@@ -2299,6 +2315,11 @@ fn eval_call<'a>(
                 None if folds && is_shipped_fold(&ctx.program.fns[i]) => ctx.returns[i] & folded,
                 None => ctx.returns[i],
             };
+        }
+        // The group's own set holds what the arms passed over answer, so the
+        // checker's none question reads this call by the arms it reaches.
+        if passed_over {
+            *ctx.per_call_none.entry(*name_span).or_insert(false) |= out & NONE != 0;
         }
         return out | piped_bits;
     }

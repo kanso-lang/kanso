@@ -20,129 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a beat frees the lazy bindings its frames could not
-
-Fixes #2408.
-
-**What was wrong.** A lazy binding is a cell, and the frame that made it
-frees it when the front end can show nothing else holds it. A cell a
-callback captured, or one that left its frame in a tail call's arguments
-or as the frame's answer, had no owner after that and lived to exit. A
-senro app made one for every request it answered, in `web/text_at`.
-
-**The beat that made the cell holds it.** The emitter calls
-`k_thunk_new_held` for a lazy binding its frame will not release, and the
-runtime holds a cell the same way when it leaves its frame in a tail call
-or is handed back. A held cell goes in a registry kept for each beat
-depth. A cell made outside every beat has no rewind to wait for and lives
-to exit, as it did.
-
-**The copy walk says which cells are still reachable.** A beat's rewind
-already copies out whatever survives the lap. The walk now marks each
-held cell it passes, and after the walk the rewind frees every held cell
-with no mark. There are three marks. Seen this lap is cleared at the
-rewind. Reached under tenured storage keeps the cell until the beat ends,
-because no later walk enters tenure. Copied into storage no beat owns, a
-constant's or a pool's, keeps it for good. A beat that ends and is
-rewound whole frees all but the last kind. A beat that ends and keeps its
-region hands its cells to the enclosing beat with everything else it
-built. A work-ahead task that dies inside its beats frees what those
-beats held.
-
-**Why a marked cell is the only kind still held.** The beat analysis
-never lets a value that may be a cell cross a rewind unless the copy walk
-carries it, and the type set's `THUNK` bit is what it reads. So a holder
-on the far side of a rewind is one the walk passed through.
-
-**A check that reads for it.** A counting build run with
-`KANSO_CELL_CHECK` set never hands a freed cell out again. It marks the
-cell, and a read or a carry of a marked cell ends the program saying so.
-A shipping build compiles neither test. The read's was first written
-unguarded, and cost every forced binding two instructions, 32,050 in
-runbench, until CI's listing of new diagnostics drew the eye to it.
-With the check forced on, the whole suite here ran (256 test binaries),
-then senro's (186 specs) and kq's, with no read of a freed cell. Twelve
-programs written to break the registry ran under it too, and four of them
-are micro goldens now: a binding read after many rewinds, bindings in a
-carried list that are swapped and read, a parked fiber that keeps its
-binding, and a binding that holds another. The check found the two
-frame-release miscompiles that kanso#2410 fixed before this could land.
-
-**The spec.** `tests/a_callback_lets_go_of_the_lazy_binding_it_read.rs`
-runs a server's loop with a lazy page a callback reads, at 4,000 passes
-and at 16,000, and asks that one cell is live at exit both times. Without
-the registry it read 4,000 against 1. The same program is a `.mem`
-golden: 4,000 cells made, 3,999 freed.
-
-**Measured on the app.** One sitting in the development container on
-2026-11-10, the senro app from #2408 built natively and sent 20,000
-requests over loopback. Before, its resident memory grew 3,844 kB. Now it
-grows 100 kB in the first thousand requests and stays there to the end.
-
-**Rows.** The counters are this machine's and agree with the goldens'
-arithmetic. The work rows are counts from this machine set by their
-distance to the corpus branch's reading here. Clang's rows and the tab's
-are CI's.
-- The run program frees every cell it makes: `run_thunk_frees` goes from
-  0 to 16,050, `run_thunk_live_exit` from 16,050 to 0, and
-  `run_held_peak_bytes` from 3,201,888 back to 248,688, the figure it
-  read before the corpus held a cell. `run_peak_bytes`, the welfare
-  term, goes from 10,852,497 to 7,899,297. pendbench frees its 200:
-  `pend_thunk_frees` 200, `pend_thunk_live_exit` 0,
-  `pend_held_peak_bytes` 368. `many_cells` frees its 40.
-- `work_runbench` falls 1,480,340 to 953,882,951 and `work_runbench_dev`
-  falls 1,480,512 to 2,805,967,375. A freed cell goes back on the free
-  list and the next binding takes it, so the allocator retires 2.94
-  million fewer instructions. Holding, the lap over the registry and the
-  release cost 1.46 million of that back.
-  `work_pendbench` falls 30,552 to 154,093,875 the same way.
-- A program that holds no cell pays for one test at a rewind and at a
-  pop. Three of the rest rise by more than 50: `work_encodebench` 1,775
-  to 2,335,340,843, `work_jsonbench` 472 to 549,338,002 and
-  `work_digestbench` 414 to 3,107,797. Seven rise by 50 or fewer:
-  `work_indexbench` 1,887,800, `work_scanbench` 267,925, `work_basket`
-  18,295,405, `work_deepbench` 198,294,818, `work_escapebench`
-  40,308,987, `work_readbench` 4,583,687 and `work_widebench`
-  28,701,610. Two fall: `work_oneshot` 268 to 9,979,753 and
-  `work_livebench` 888 to 938,654,619.
-- The registry is 1,680 bytes of machine code in every program, so the
-  fourteen text rows sum to `text` 5,906,873.
-- The emitter picks between three calls where it picked between two:
-  `emit_instructions` rises 1,114 to 5,643,537.
-- Clang's rows, from CI: `codegen_instructions_dev` rises 56,903 to
-  116,939,245 and `codegen_instructions_release` falls 281 to
-  372,180,496.
-- The tab runs the compiled corpus on the same runtime built for wasm,
-  so the registry is in its rows too, from CI. Its run frees its cells
-  and gives back the four pages the corpus entry cost:
-  `browser_run_peak_bytes` falls from 1,835,008 to 1,572,864. It pays
-  for the registry without the allocator's saving, and
-  `browser_run_instructions` rises 203,408 to 91,132,686.
-  `browser_compile_instructions` rises 3,211 to 358,139,032.
-
-**Tried and reverted.** `k_beat_rewind_slow` gained one test, and three
-ways of making it cheaper each made runbench slower than the plain form:
-a short path for a rewind with cells and nothing else to flush (97,000
-instructions worse than main, where the plain form was 57,000), guarding
-the flushes behind the mark's summary bits (69,000), and folding the cell
-test into the permanent-storage test (92,000). Those were measured before
-the corpus held a cell. Of the plain form's 57,000, 46,000 were `memcpy`
-inside `realloc`: the same 3,884 moves of a growing permanent buffer,
-each copying more because the allocator placed it differently. That part
-is layout.
-
-**Limits.** A chain of effects, and a loop that carries a value, copy
-their survivors out and rewind once the arena has drifted a quarter
-megabyte past the last time they did, and held cells are freed then. So a
-program holds one drift's worth of cells at a time: the 4,000-pass
-fixture peaks at 68,816 held bytes, which is 374 cells. A loop that makes
-held cells and allocates nothing in the arena never drifts, and its cells
-wait for the loop to end. A cell made outside every beat still lives to
-exit.
-
-**Open.** senro and kq pin a kanso from before this. The app's memory is
-worth re-measuring from senro's own tree once its pin moves.
-
 ## 2026-11-10 — a write that would wait yields its fiber
 
 Fixes #2407.
@@ -2328,3 +2205,31 @@ work as six builds.
 Builds 3 (one way to answer and to read a request) and 4 (tables that
 supply their id and timestamps) are in review as kanso-lang/senro#129
 and its successor. The site follows the senro pin.
+
+## 2026-11-12 — a module's own arm answers its bare call (#2473)
+
+senro's notebook declares `fn id_of` in a module that imports `tokens`,
+which exports an `id_of` of its own. A bare `id_of` there calls the
+module's own function, and both engines run it, but the check refused the
+caller: "this can be a none and `wanted` has no arm for it". The import's
+`id_of` can answer none, and the module's own never does.
+
+**The fault.** A name a module declares and one of its imports exports is
+one overload group inside the module, and dispatch tries its arms in
+order. `qualify` puts the module's own arms ahead of the import's, so an
+importer runs them in that order. The module's own check merges its
+dependencies in first, so there the import's arm stood ahead. Inference
+then read the call's answer as the union of every arm the arguments could
+reach, the import's included, and the none question read that union.
+
+**Built.** Two changes, each needed. Where a module and its dependencies
+are merged for the module's check, an import's twin of a name the module
+declares goes in behind the module's own arms, as `qualify` orders them.
+Inference stops at the first arm whose parameters are all binders: a later
+arm answers that call only for a failure it names. A call that passes over
+arms is marked by the arms it reaches, through `none_free`, the per-call
+mark `math/round` already uses.
+
+`tests/golden/own_arms_first` is the postcard from the issue, run on both
+engines by `tests/own_arms_first.rs`. It was watched red with each change
+taken out alone, both times with the refusal above.

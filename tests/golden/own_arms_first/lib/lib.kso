@@ -1,0 +1,4 @@
+import "std/text"
+
+pub fn id_of s
+  text/to_int s

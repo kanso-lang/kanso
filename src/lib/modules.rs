@@ -1649,12 +1649,28 @@ fn compile_module_loaded(
         root: String::new(),
     };
     merged.types.extend(dep_program.types);
-    merged.fns.extend(dep_program.fns);
+    // An import's twin of a name the module also declares goes in behind the
+    // module's own arms, as `qualify` orders that group for every program
+    // that imports this one: dispatch tries the arms in order, so the check
+    // reads the group as it will run. Ahead of them, the import's `id_of`
+    // answered for a call the module's own `fn id_of n` takes (#2473).
+    let own_names: crate::hash::Set<&str> = parsed
+        .iter()
+        .flat_map(|(_, _, program)| program.fns.iter())
+        .filter(|f| !f.synthetic && !f.is_getter() && !ast::has_slash(&f.name))
+        .map(|f| f.name.as_str())
+        .filter(|n| !is_operator(n))
+        .collect();
+    let behind = |f: &ast::FnDecl| f.synthetic && own_names.contains(f.name.as_str());
+    let (held, ahead): (Vec<ast::FnDecl>, Vec<ast::FnDecl>) =
+        dep_program.fns.into_iter().partition(|f| behind(f));
+    merged.fns.extend(ahead);
     for ((_, _, mut program), travels) in parsed.into_iter().zip(file_travels) {
         rename_travels(&mut program, &travels);
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
+    merged.fns.extend(held);
     own_types_beat_twins(&mut merged);
     if require_entry {
         enroll_travelers(&mut merged)?;
