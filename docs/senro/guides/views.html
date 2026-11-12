@@ -117,7 +117,7 @@ div.planner
   planned (<span class="k">if</span> (n <span class="o">&gt;</span> 0) (n - 1) 0)</code></pre>
 </div>
 
-<p>where an action runs depends on what it asks for. an action that takes only the state runs in the browser, in the app's browser module, without asking the server. one that also asks for <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server: the click posts the state to <code>/senro/act/&lt;component&gt;</code>, and the page morphs the component's next rendering into place. the guestbook's remove button is that kind:</p>
+<p>where an action runs depends on what it asks for. an action that takes only the state runs in the browser, in the app's browser module, without asking the server. <code>derive kata/views</code> writes a <code>component</code> record into the module of every component, and the browser module lists the ones it runs: the pantry's ends with <code>browser/answer_pages [planner/component] views/rendered</code>. one that also asks for <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server: the click posts the state to <code>/senro/act/&lt;component&gt;</code>, and the page morphs the component's next rendering into place. the guestbook's remove button is that kind:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/guestbook/removal/view.kata</div>
@@ -143,7 +143,7 @@ button.remove on-click<span class="o">=</span>removed aria-label<span class="o">
 
 <p>its state is the entry's id, which anyone can send, so the action removes the entry through the model. the <code>db</code> a server action is handed knows who is signed in, as an action's does, so <code>signature/destroy db id</code> asks the policy about that visitor, and the policy says no to anyone but the signer. kata refuses a server action that calls <code>pg/query</code> or <code>pg/run</code> itself, so every write a component makes goes through a policy.</p>
 
-<p>the click also sends the path of the page the component is on, and the server answers the action as it would answer that page: only from a page whose module leans on the component's, behind that page's sign-in, and only for a viewer the page's <code>admits</code> lets in. the <a href="authorization.html">authorization guide</a> shows it refusing each of the others. <code>derive kata/views</code> writes <code>component</code> into the module of each server component for this, and the entry lists them with <code>web/components routes [removal/component]</code>.</p>
+<p>the click also sends the path of the page the component is on, and the server answers the action as it would answer that page: only from a page whose module leans on the component's, behind that page's sign-in, and only for a viewer the page's <code>admits</code> lets in. the <a href="authorization.html">authorization guide</a> shows it refusing each of the others. the entry lists server components by the same record: <code>web/components routes [removal/component]</code>.</p>
 
 <h2>data from the server</h2>
 
@@ -211,7 +211,7 @@ connected <span class="o">=</span> <span class="f">pg/from_env</span>
 <span class="c"># The guestbook's pages, compiled for the browser with</span>
 <span class="c"># `kanso build browser.kso --wasm`. Its one component, the remove button,</span>
 <span class="c"># runs on the server, so the module holds no component of its own.</span>
-<span class="f">browser/answer_pages</span> {} <span class="f">views/rendered</span></code></pre>
+<span class="f">browser/answer_pages</span> [] <span class="f">views/rendered</span></code></pre>
 </div>
 
 <p>the module is built with <code>kanso build browser.kso --wasm</code>. senro's page script keeps it in the browser's Cache Storage under its modification time, so a returning visitor does not download it again, and a page opened before a deploy loads itself again once. kanso's differential law is what makes this safe: every engine answers the same bytes, so the browser's rendering of a page and the server's cannot drift apart. senro's specs render a page both ways and compare them byte for byte.</p>
