@@ -77,6 +77,16 @@ set-cookie: senro_notice=Noted%3B%20thank%20you.; Path=/; HttpOnly; SameSite=Lax
 
 <p>two limits slow a guesser down, and they count different things. a module's <code>rate_limits</code> counts calls from one address: the generated sign-in allows ten tries in three minutes and answers 429 after that. the account's own count of wrong passwords does not care where they came from: five in a row lock the account for an hour, and a right password is told so while a wrong one is answered as any wrong password is. the first stops one machine hammering the form. the second stops many machines sharing the work.</p>
 
+<p>the first is a declaration in the module that signs visitors in, as <code>senro generate authentication</code> writes it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/session.kso</div>
+  <pre><code><span class="c"># One address may try to sign in ten times in three minutes, as Rails 8's</span>
+<span class="c"># generated sessions controller allows. Past that, `over_limit` answers the</span>
+<span class="c"># sign-in page again, saying why.</span>
+<span class="k">pub</span> rate_limits <span class="o">=</span> { <span class="s">"create"</span>:<span class="s">"10 per 3 minutes"</span> }</code></pre>
+</div>
+
 <h2>links in mail</h2>
 
 <p>a link that resets a password or confirms an address carries a signed token: the account's id, the moment the link stops working, and an HMAC over both, the link's purpose, and a value the account holds now. nothing is stored. a reset token is signed over the digest the reset will replace, so it works once, and the purpose keeps a token made for one kind of link from opening another.</p>
@@ -88,6 +98,24 @@ set-cookie: senro_notice=Noted%3B%20thank%20you.; Path=/; HttpOnly; SameSite=Lax
 <p><strong>SQL.</strong> an app's modules hold no SQL. reads and writes go through its models, which send every value to Postgres as a parameter beside the statement and never as part of its text. a value a visitor typed cannot become SQL, because nothing an app writes assembles a statement from text.</p>
 
 <p><strong>HTML.</strong> a kata template escapes what it writes. <code>= expr</code> and <code>{expr}</code> in text both turn <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code> and quotes into entities. writing a value raw takes a different operator, <code>==</code>, which the layout uses for the page body it was handed. a search of an app's templates for <code>==</code> finds every place raw HTML can enter.</p>
+
+<p>the guestbook's layout has both. the page's title is written with <code>=</code>, so a title holding <code>&lt;script&gt;</code> shows as text. the body, which the page's own template has already escaped, is written with <code>==</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/guestbook/views/layout.kata</div>
+  <pre><code>takes title body
+doctype html
+html
+  head
+    meta charset="utf-8"
+    meta name="viewport" content="width=device-width, initial-scale=1"
+    title = title
+    link rel="stylesheet" href="/site.css"
+    script src="/senro.js" defer="defer"
+  body
+    main
+      == body</code></pre>
+</div>
 
 <p><strong>mail headers.</strong> a message whose subject or address holds a line break is refused before it is sent or queued, so text from a form cannot add a header such as <code>Bcc</code>.</p>
 
