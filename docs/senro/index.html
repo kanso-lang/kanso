@@ -176,7 +176,7 @@ ol.entries
       <div class="feature">
         <span class="feature-num">01</span>
         <h3>routes</h3>
-        <p>every route is one of a resource's seven actions, placed by its module and its name. singular resources such as <code>/profile</code> follow the same rule. an old URL is kept with <code>legacy_route_aliases</code>, which redirects to the resource's route.</p>
+        <p>every route is one of a resource's seven actions, placed by its module and its name. singular resources such as <code>/profile</code> follow the same rule. an old URL is kept with <code>legacy_route_aliases</code>, a list of calls such as <code>(routes/moved "/signbook" entries/index)</code> that the compiler checks, each redirecting to its action's route.</p>
       </div>
       <div class="feature">
         <span class="feature-num">02</span>

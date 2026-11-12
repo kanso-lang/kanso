@@ -25,20 +25,20 @@
 # enormous regression and is not one: regenerate every row in one go and say
 # so in the log. The gate reads the two lines below and refuses any host they
 # do not name.
-# measured-on glibc=2.39-0ubuntu8.9
+# measured-on glibc=2.39-0ubuntu8.12
 # measured-on clang=19.1.1
-jsonbench 549338015
-encodebench 2335340622
-oneshot 9978975
+jsonbench 549338014
+encodebench 2335340621
+oneshot 9978974
 basket 18295405
-widebench 28701603
+widebench 28701602
 deepbench 198293720
 escapebench 40308987
 pendbench 154094164
 indexbench 1887800
 scanbench 267843
-digestbench 3107795
-readbench 4583700
-livebench 938654576
-runbench 1059837846
-runbench_dev 3057251699
+digestbench 3107794
+readbench 4583699
+livebench 938654575
+runbench 1059837845
+runbench_dev 3057251698

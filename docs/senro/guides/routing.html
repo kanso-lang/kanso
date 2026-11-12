@@ -17,7 +17,7 @@ description: "how senro places an app's routes: a resource's seven actions, ids,
 <span class="eyebrow">senro guides</span>
 <h1>routing</h1>
 
-<p>a senro app has no routes file. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide starts with a whole app's routes, then covers the seven actions, how an id reaches an action, singular resources, resources nested under another, naming a route from code, and keeping an old URL working.</p>
+<p>a senro app has no routes file. each public function in one of its modules is an action, and the module's name and the function's name place it. this guide starts with a whole app's routes, then covers the seven actions, what to do with an action that is not one of them, how an id reaches an action, singular resources, resources nested under another, naming a route from code, keeping an old URL working, and what senro's routing cannot express.</p>
 
 <h2>the routes file you will not find</h2>
 
@@ -153,6 +153,57 @@ GET     /unlocks/:id/edit               unlocks/edit          open</code></pre>
 
 <p>a module named <code>home</code> is the exception: <code>home/index</code> answers <code>GET /</code>. a browser's form can only send GET and POST, so a form that means PATCH or DELETE posts a hidden field, <code>_method</code>, and the server reads the request as that method. a public function with any other name is refused where it is declared, so a misspelled action never becomes a dead route.</p>
 
+<h2>actions beyond the seven</h2>
+
+<p>a Rails app reaches past the seven actions with a member route, <code>post :publish, on: :member</code>, or a collection route, <code>get :search, on: :collection</code>. senro has neither. a public function in a resource's module is one of the seven or it is refused:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso check, in spec/errors/misspelled_action</div>
+  <pre><code>error[derive]: `destory` is not an action: name it index, new, create, show, edit, update or destroy
+  --&gt; ./posts.kso:4:8
+   4 | pub fn destory _
+              ^</code></pre>
+</div>
+
+<p>the custom action becomes a resource of its own, the way DHH describes the controllers at 37signals. publishing a post makes its publication, and withdrawing it removes the publication. a post has one, so the module is singular, and its actions take the post's id, so it nests under posts:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/actions_as_resources/publication.kso</div>
+  <pre><code><span class="c"># Publishing a post is making its publication, and withdrawing it is</span>
+<span class="c"># removing that, as Rails' `resource :publication` nested under posts has</span>
+<span class="c"># it. There is one publication to a post, so the actions take the post's id</span>
+<span class="c"># and no id of their own.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> _ _ post_id:int
+  <span class="s">"post {post_id} published"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy</span> _ _ post_id:int
+  <span class="s">"post {post_id} withdrawn"</span></code></pre>
+</div>
+
+<p>a search over the posts is a resource too, with an index that reads the query string:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/runs/actions_as_resources/searches.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../../../web"</span>
+
+<span class="c"># A search over the posts is a resource of its own: its index reads the</span>
+<span class="c"># query string.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">index</span> req _
+  q <span class="o">=</span> <span class="f">web/query</span> req
+  <span class="s">"posts matching {web/value q "q"}"</span></code></pre>
+</div>
+
+<p>with a <code>posts</code> module that has <code>index</code> and <code>show</code>, the app's routes, and the paths <code>path_to "publication/create" 3</code> and <code>path_to "searches/index"</code> name, are these:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso run, in spec/runs/actions_as_resources</div>
+  <pre><code>["DELETE /posts/:post_id/publication" "GET /posts" "GET /posts/:id" "GET /searches" "POST /posts/:post_id/publication"]
+/posts/3/publication
+/searches</code></pre>
+</div>
+
+<p>the same move covers the other actions people add to a controller. archiving is an <code>archive</code> resource nested under what it archives, a bulk edit is an <code>edit</code> on a resource named for the batch, and a dashboard is the <code>index</code> or <code>show</code> of a module named for it. each new module is a file with an obvious name, and its actions get the same checks as any other.</p>
+
 <h2>ids</h2>
 
 <p>an action whose route has <code>:id</code> takes it as a third argument. annotated as an int, it reaches the action as one, and a segment that is not a number is not that route.</p>
@@ -278,18 +329,31 @@ every post: /posts
 
 <h2>keeping an old URL</h2>
 
-<p>an app that must keep an old path working declares <code>legacy_route_aliases</code> in one of its modules: a map from the old method and path to the action that answers it now. the name says what it is, a measure for compatibility, and each alias answers with a permanent redirect (308) to its action's route, so a resource keeps one URL.</p>
+<p>an app that must keep an old path working declares <code>legacy_route_aliases</code> in one of its modules: a list of calls to <code>routes/moved</code>, each naming an old path and the action that answers it now. the name says what it is, a measure for compatibility, and each alias answers with a permanent redirect (308) to its action's route, so a resource keeps one URL.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/runs/aliases/legacy.kso</div>
-  <pre><code><span class="k">pub</span> <span class="f">legacy_route_aliases</span> <span class="o">=</span> {
-  <span class="s">"GET /entry/:id"</span>:<span class="s">"entries/show"</span>
-  <span class="s">"GET /signbook"</span>:<span class="s">"entries/index"</span>
-  <span class="s">"POST /sign"</span>:<span class="s">"entries/create"</span>
-}</code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"../../../routes"</span>
+<span class="k">import</span> <span class="s">"./entries"</span>
+
+<span class="k">pub</span> <span class="f">legacy_route_aliases</span> <span class="o">=</span> [
+  (<span class="f">routes/moved</span> <span class="s">"/entry/:id"</span> <span class="f">entries/show</span>)
+  (<span class="f">routes/moved</span> <span class="s">"/signbook"</span> <span class="f">entries/index</span>)
+  (<span class="f">routes/moved</span> <span class="s">"/sign"</span> <span class="f">entries/create</span>)
+]</code></pre>
 </div>
 
-<p>an alias must name a route, take <code>:id</code> as its second segment exactly when its route does, use its route's method, and answer no request that a route or another alias answers. each of those mistakes is a compile error at the declaration.</p>
+<p>the action is code, so the compiler resolves <code>entries/index</code> as it resolves any name, and a misspelled one is an unknown name. an alias takes its method from its action's route: <code>entries/index</code> answers GET, so <code>/signbook</code> is a GET, and <code>entries/create</code> answers POST, so <code>/sign</code> is a POST. there is no method to write, so there is none to get wrong.</p>
+
+<p>the derivation reads each call where it is written, as it reads a call to <code>path_to</code>. the old path is written whole as a string that starts with <code>/</code>; the action is a route that is not nested; the path takes <code>:id</code> as its second segment exactly when the route does; and no alias answers a request that a route or another alias answers. each mistake is a compile error at the call:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">kanso check, in spec/errors/alias_without_id</div>
+  <pre><code>error[derive]: `/entry` has no `:id`, but `entries/show` takes one
+  --&gt; ./legacy.kso:4:30
+   4 | pub legacy_route_aliases = [(routes/moved "/entry" entries/show)]
+                                    ^</code></pre>
+</div>
 
 <h2>a query string</h2>
 
@@ -338,6 +402,18 @@ json_type <span class="o">=</span> <span class="s">"content-type: application/js
   ends <span class="o">=</span> <span class="f">text/ends_with?</span> req.path <span class="s">".json"</span>
   ends <span class="k">or</span> length (<span class="f">text/split</span> accepted <span class="s">"application/json"</span>) <span class="o">&gt;</span> 1</code></pre>
 </div>
+
+<h2>what senro's routing does not have</h2>
+
+<p>a Rails routes file can say several things that senro's conventions have no way to say.</p>
+
+<ul>
+  <li><strong>namespaces and scopes.</strong> there is no <code>namespace :admin</code> and no shared prefix such as <code>/api/v1</code>. a module's path is its name.</li>
+  <li><strong>renamed paths.</strong> there is no <code>path: "p"</code>. a resource named <code>photos</code> lives at <code>/photos</code>.</li>
+  <li><strong>nesting deeper than one level.</strong> a module nests under one parent, as described above.</li>
+  <li><strong>constraints, subdomains and mounted engines.</strong> a route is found by its method and path alone.</li>
+  <li><strong>a route declared by hand.</strong> the only path that is not a resource's is an alias, and an alias only redirects to a resource's route. a webhook with a URL fixed by somebody else is served by a resource at that path, or, when the path cannot be a resource's, by a proxy in front of the app.</li>
+</ul>
 
 <h2>what the derivation writes</h2>
 
