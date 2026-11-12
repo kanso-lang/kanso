@@ -82,7 +82,7 @@ per_page <span class="o">=</span> 25</code></pre>
   <pre><code><span class="c"># The form a note is made and changed with: its fields as typed, and the</span>
 <span class="c"># problem with each, if any.</span>
 <span class="k">fn</span> <span class="f">form</span> req path method fields problems code
-  page <span class="o">=</span> <span class="f">views/note_form_view</span> path method fields problems
+  page <span class="o">=</span> <span class="f">views/notes_form_view</span> path method fields problems
   <span class="f">views/answer_as</span> req code (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
 </div>
 
@@ -164,7 +164,7 @@ per_page <span class="o">=</span> 25</code></pre>
 <span class="k">fn</span> <span class="f">shown</span> req record
   attributes <span class="o">=</span> <span class="f">note/note_attributes</span> record
   <span class="k">return</span> <span class="f">web/json</span> 200 attributes <span class="k">if</span> <span class="f">web/wants_json?</span> req
-  page <span class="o">=</span> <span class="f">views/note_shown_view</span> record
+  page <span class="o">=</span> <span class="f">views/notes_show_view</span> record
   <span class="f">views/answer_as</span> req 200 (<span class="f">views/layout_view</span> <span class="s">"Note"</span> page)</code></pre>
 </div>
 

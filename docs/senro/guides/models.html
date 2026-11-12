@@ -50,7 +50,7 @@ description: "senro's schema is folded from migrations while the app compiles; a
 failures <span class="o">=</span> <span class="f">models/column</span> <span class="s">"failures"</span> <span class="s">"integer not null default 0"</span></code></pre>
 </div>
 
-<p><code>derive models/tables</code> folds the files, in the order of their names, into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. the entry runs <code>models/migrated db app migrations/all</code> as it starts, where <code>all</code> is the same files in the same order, written into the module by the derivation. it runs the migrations the database has not yet run and records each in a <code>senro_migrations</code> table under the app's name and its stamp, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change is a new migration. each change does nothing when its work is already done, so a database made before migrations were recorded takes them safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
+<p><code>derive app/conventions</code> folds the files, in the order of their names, into the schema while the app compiles. there is no schema file to keep in step, and no command to regenerate one. <code>app/run</code> takes the same files in the same order as the app starts. it runs the migrations the database has not yet run and records each in a <code>senro_migrations</code> table under the app's name and its stamp, beside the SQL it ran, as Rails records them in <code>schema_migrations</code>. a migration runs once, and one whose SQL has changed since it ran stops the app, naming it, so a new change is a new migration. each change does nothing when its work is already done, so a database made before migrations were recorded takes them safely the first time. then it runs <code>models/compared db schema</code>, which reads the live tables and refuses to serve if a column's name, type or nullness differs or a table is missing. defaults and constraints are not compared.</p>
 
 <p>a table that lists <code>models/timestamps</code> among its columns gets <code>created_at</code> and <code>updated_at</code>, the two columns Rails' <code>t.timestamps</code> adds. each is <code>timestamptz not null default now()</code>, so Postgres sets both when a row is made. a change written through the model sets <code>updated_at</code>, and neither making a record nor changing one takes a form's value for either column, so a request cannot backdate a row. the two are also <code>models/created_at</code> and <code>models/updated_at</code>, one at a time, which is how the scaffold ends every table it makes.</p>
 
@@ -86,11 +86,11 @@ pub type signature
 
 <div class="code-panel">
   <div class="code-panel-title">spec/errors/field_without_column/notes.kso</div>
-  <pre><code><span class="k">pub</span> <span class="k">type</span> note
-  <span class="f">bdoy</span>
+  <pre><code><span class="k">pub</span> <span class="k">type</span> <span class="f">note</span>
+  bdoy
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">shown</span> n
-  <span class="f">n</span><span class="o">.</span><span class="f">bdoy</span></code></pre>
+  n.bdoy</code></pre>
 </div>
 <div class="code-output">
   <div class="code-panel-title">kanso check</div>
@@ -132,9 +132,9 @@ pub type signature
   <div class="code-panel-title">spec/errors/order_not_a_column/main.kso</div>
   <pre><code><span class="c"># An order written out that the comments table does not have, asked of the</span>
 <span class="c"># model by its module's name.</span>
-<span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> <span class="n">54329</span> <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
+<span class="f">pg/connect</span> <span class="s">"127.0.0.1"</span> 54329 <span class="s">"postgres"</span> <span class="s">"postgres"</span> <span class="s">""</span>
   <span class="o">.&gt;</span> (db <span class="o">-&gt;</span> <span class="f">comment/ordered</span> db <span class="s">"written_at"</span>)
-  <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> <span class="f">print</span> cs)</code></pre>
+  <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> print cs)</code></pre>
 </div>
 <div class="code-output">
   <div class="code-panel-title">kanso check</div>
@@ -165,19 +165,19 @@ pub type signature
 <span class="c"># asks this policy before it deletes anything, and nothing else in the</span>
 <span class="c"># guestbook removes a signature.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">destroy?</span> viewer s
-  <span class="f">s</span><span class="o">.</span>name <span class="o">==</span> viewer
+  s.name <span class="o">==</span> viewer
 
 <span class="c"># Anyone may sign the book.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create?</span> _ _
-  <span class="f">true</span>
+  true
 
 <span class="c"># A signature needs a name and a message, and a message short enough to</span>
 <span class="c"># read at a glance.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">problems</span> s
   <span class="f">models/problems</span> [
-    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">text/trim</span> s<span class="o">.</span>name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say who you are."</span>)
-    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">text/trim</span> s<span class="o">.</span>message <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say something."</span>)
-    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">length</span> s<span class="o">.</span>message <span class="o">&gt;</span> <span class="n">280</span>) <span class="s">"Keep it under 280."</span>)
+    (<span class="f">models/rule</span> <span class="s">"name"</span> (<span class="f">text/trim</span> s.name <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say who you are."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (<span class="f">text/trim</span> s.message <span class="o">==</span> <span class="s">""</span>) <span class="s">"Say something."</span>)
+    (<span class="f">models/rule</span> <span class="s">"message"</span> (length s.message <span class="o">&gt;</span> 280) <span class="s">"Keep it under 280."</span>)
   ]</code></pre>
 </div>
 
@@ -199,20 +199,20 @@ pub type signature
 <span class="c"># text and never read as SQL.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req db
   viewer <span class="o">=</span> <span class="f">web/viewer</span> req secret
-  f <span class="o">=</span> <span class="f">put</span> (<span class="f">web/form</span> req<span class="o">.</span>body) <span class="s">"name"</span> viewer
-  <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">signed</span> req db w)
+  f <span class="o">=</span> put (<span class="f">web/form</span> req.body) <span class="s">"name"</span> viewer
+  <span class="f">signature/create</span> db f <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> signed req db w)
 
 <span class="c"># A signature the rules turned back: the page again, answered 422, with the</span>
 <span class="c"># form as the visitor filled it in and what to fix.</span>
-<span class="k">fn</span> <span class="f">signed</span> req db w:models/invalid
+<span class="k">fn</span> <span class="f">signed</span> req db w:<span class="f">models/invalid</span>
   s <span class="o">=</span> <span class="f">web/session</span> req secret
-  form <span class="o">=</span> <span class="f">filled</span> w<span class="o">.</span><span class="f">record</span><span class="o">.</span><span class="f">message</span> w<span class="o">.</span><span class="f">problems</span>
-  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> <span class="f">shown</span> req book s form <span class="n">422</span>)
+  form <span class="o">=</span> filled w.record.message w.problems
+  <span class="f">signature/newest</span> db <span class="o">.&gt;</span> (book <span class="o">-&gt;</span> shown req book s form 422)
 
 <span class="c"># A signature kept. The answer sends the browser back to the list, so</span>
 <span class="c"># reloading it does not sign the book again.</span>
 <span class="k">fn</span> <span class="f">signed</span> _ _ _
-  <span class="f">effect</span> (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
+  effect (<span class="f">web/noticed</span> (<span class="f">web/redirect</span> <span class="s">"/"</span>) <span class="s">"Thank you for signing."</span>)</code></pre>
 </div>
 
 <h2>underneath</h2>
@@ -227,29 +227,29 @@ pub type signature
 <span class="k">import</span> <span class="s">"std/list"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">post</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db post/post_model id <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">said</span> db (<span class="f">titled</span> p))
+  <span class="f">models/found</span> <span class="s">""</span> db <span class="f">post/post_model</span> id <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> said db (titled p))
 
 <span class="k">fn</span> <span class="f">titled</span> none
   <span class="s">"no post"</span>
 
 <span class="k">fn</span> <span class="f">titled</span> p
-  <span class="s">"post: <span class="i">{p.title}</span>"</span>
+  <span class="s">"post: {p.title}"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">comments</span> viewer db id
-  <span class="f">models/where</span> viewer db comment/comment_model <span class="s">"post_id"</span> id
-    <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"as [<span class="i">{viewer}</span>]: <span class="i">{bodies cs}</span>"</span>)
+  <span class="f">models/where</span> viewer db <span class="f">comment/comment_model</span> <span class="s">"post_id"</span> id
+    <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> said db <span class="s">"as [{viewer}]: {bodies cs}"</span>)
 
 <span class="k">fn</span> <span class="f">bodies</span> cs
-  <span class="f">list/to_list</span> (<span class="f">list/map</span> cs (c <span class="o">-&gt;</span> <span class="f">c</span><span class="o">.</span>body))
+  <span class="f">list/to_list</span> (<span class="f">list/map</span> cs (c <span class="o">-&gt;</span> c.body))
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">unread</span> db
   field <span class="o">=</span> <span class="s">"author_id"</span>
-  <span class="f">models/where</span> <span class="s">""</span> db comment/comment_model field <span class="n">1</span>
-    <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"read <span class="i">{length cs}</span>"</span>)
-    <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"refused: <span class="i">{e.reason}</span>"</span>)
+  <span class="f">models/where</span> <span class="s">""</span> db <span class="f">comment/comment_model</span> field 1
+    <span class="o">.&gt;</span> (cs <span class="o">-&gt;</span> said db <span class="s">"read {length cs}"</span>)
+    <span class="o">.?</span> (e <span class="o">-&gt;</span> said db <span class="s">"refused: {e.reason}"</span>)
 
 <span class="k">fn</span> <span class="f">said</span> db line
-  <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
+  print line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect db)</code></pre>
 </div>
 
 <p>the SQL these functions write goes to Postgres through <code>pg</code>, a client written in kanso. it speaks Postgres's wire protocol, logs in with SCRAM-SHA-256, and secures the connection with TLS when <code>pg/connect_tls</code> asks for it. what a visitor types goes to Postgres as a parameter and is never read as SQL.</p>
@@ -268,17 +268,17 @@ pub type signature
 <span class="k">import</span> <span class="s">"std/list"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">pages_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db note/note_model id
+  <span class="f">models/found</span> <span class="s">""</span> db <span class="f">note/note_model</span> id
     <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">page/of_note</span> <span class="s">""</span> db n)
-    <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"note <span class="i">{id}</span>: <span class="i">{list/to_list (list/map ps page/bodied)}</span>"</span>)
+    <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> said db <span class="s">"note {id}: {list/to_list (list/map ps page/bodied)}"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">note_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db page/page_model id
+  <span class="f">models/found</span> <span class="s">""</span> db <span class="f">page/page_model</span> id
     <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">note/of_page</span> <span class="s">""</span> db p)
-    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">said</span> db <span class="s">"page <span class="i">{id}</span>: <span class="i">{note/titled n}</span>"</span>)
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> said db <span class="s">"page {id}: {note/titled n}"</span>)
 
 <span class="k">fn</span> <span class="f">said</span> db line
-  <span class="f">print</span> line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> db)</code></pre>
+  print line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect db)</code></pre>
 </div>
 
 <div class="code-output">
@@ -299,25 +299,25 @@ page 2: note: second</code></pre>
 <span class="c"># holds, which says whether another page follows, and that row is not shown.</span>
 <span class="c"># `sql` ends where a limit may follow it, after its `order by`.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">paged</span> db sql params number per
-  n <span class="o">=</span> <span class="f">length</span> params
-  limited <span class="o">=</span> <span class="s">"<span class="i">{sql}</span> limit $<span class="i">{n + 1}</span> offset $<span class="i">{n + 2}</span>"</span>
-  asked <span class="o">=</span> <span class="f">list/concat</span> params [<span class="s">"<span class="i">{per + 1}</span>"</span> <span class="s">"<span class="i">{(number - 1) * per}</span>"</span>]
-  <span class="f">pg/query</span> db limited asked <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">page_of</span> r<span class="o">.</span><span class="f">rows</span> number per))
+  n <span class="o">=</span> length params
+  limited <span class="o">=</span> <span class="s">"{sql} limit ${n + 1} offset ${n + 2}"</span>
+  asked <span class="o">=</span> <span class="f">list/concat</span> params [<span class="s">"{per + 1}"</span> <span class="s">"{(number - 1) * per}"</span>]
+  <span class="f">pg/query</span> db limited asked <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> effect (page_of r.rows number per))
 
 <span class="k">fn</span> <span class="f">page_of</span> rows number per
   on_it <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> rows per)
-  <span class="f">page</span> on_it number (<span class="f">length</span> rows <span class="o">&gt;</span> per)
+  page on_it number (length rows <span class="o">&gt;</span> per)
 
 <span class="c"># The page a query string asks for: its whole number when that is 1 or</span>
 <span class="c"># more, and 1 for anything else, a missing `page` among them.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">page_number</span> asked
-  <span class="f">at_least_one</span> (<span class="f">text/to_int</span> asked)
+  at_least_one (<span class="f">text/to_int</span> asked)
 
 <span class="k">fn</span> <span class="f">at_least_one</span> none
-  <span class="n">1</span>
+  1
 
 <span class="k">fn</span> <span class="f">at_least_one</span> n
-  <span class="f">if</span> (n <span class="o">&lt;</span> <span class="n">1</span>) <span class="n">1</span> n</code></pre>
+  <span class="k">if</span> (n <span class="o">&lt;</span> 1) 1 n</code></pre>
 </div>
 
 <p>senro's spec pages through five rows two at a time, asks for a page past the end, and reads six asked-for pages, of which only <code>2</code> is a page number:</p>

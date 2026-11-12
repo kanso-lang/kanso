@@ -33,7 +33,7 @@ description: "senro reads a request as bytes, turns a multipart form into the fo
 <span class="c">#</span>
 <span class="c"># The most a request's body may hold, 10 MiB. A request that promises more</span>
 <span class="c"># is answered 413 before its body is read.</span>
-body_limit <span class="o">=</span> <span class="n">10485760</span>
+body_limit <span class="o">=</span> 10485760
 
 <span class="c"># A read is one segment of what the client sent, and a browser often sends a</span>
 <span class="c"># request's head in one packet and its body in the next. The server reads</span>
@@ -41,35 +41,35 @@ body_limit <span class="o">=</span> <span class="n">10485760</span>
 <span class="c"># stops sending. `wanted` is the whole request's length once its head is in,</span>
 <span class="c"># and -1 until then.</span>
 <span class="k">fn</span> <span class="f">gathered</span> c had wanted
-  <span class="f">net/read_bytes</span> c <span class="o">.&gt;</span> (more <span class="o">-&gt;</span> <span class="f">gathered_after</span> c had wanted more)
+  <span class="f">net/read_bytes</span> c <span class="o">.&gt;</span> (more <span class="o">-&gt;</span> gathered_after c had wanted more)
 
 <span class="k">fn</span> <span class="f">gathered_after</span> c had wanted more
-  <span class="f">return</span> effect had if length more <span class="o">==</span> <span class="n">0</span>
+  <span class="k">return</span> effect had <span class="k">if</span> length more <span class="o">==</span> 0
   raw <span class="o">=</span> <span class="f">text/append</span> had more
-  want <span class="o">=</span> <span class="f">wanted_of</span> raw wanted
-  <span class="f">return</span> effect raw if whole? raw want
-  <span class="f">return</span> continued c raw want if wanted <span class="o">&lt;</span> <span class="n">0</span> and want <span class="o">&gt;=</span> <span class="n">0</span> and expects? raw
-  <span class="f">gathered</span> c raw want
+  want <span class="o">=</span> wanted_of raw wanted
+  <span class="k">return</span> effect raw <span class="k">if</span> whole? raw want
+  <span class="k">return</span> continued c raw want <span class="k">if</span> wanted <span class="o">&lt;</span> 0 <span class="k">and</span> want <span class="o">&gt;=</span> 0 <span class="k">and</span> expects? raw
+  gathered c raw want
 
-<span class="k">fn</span> <span class="f">wanted_of</span> raw <span class="o">-</span><span class="n">1</span>
-  <span class="f">head_end</span> raw (<span class="f">found</span> raw blank_line <span class="n">1</span>)
+<span class="k">fn</span> <span class="f">wanted_of</span> raw -1
+  head_end raw (found raw blank_line 1)
 
 <span class="k">fn</span> <span class="f">wanted_of</span> _ w
-  <span class="f">w</span>
+  w
 
 <span class="k">fn</span> <span class="f">head_end</span> _ none
-  <span class="o">-</span><span class="n">1</span>
+  -1
 
 <span class="c"># A body larger than the limit is not waited for: the request is whole at</span>
 <span class="c"># its head, and `opened` refuses it.</span>
 <span class="k">fn</span> <span class="f">head_end</span> raw at
-  head <span class="o">=</span> <span class="f">ascii_of</span> (<span class="f">some_bytes</span> (<span class="f">text/slice</span> raw <span class="n">1</span> (at <span class="o">-</span> <span class="n">1</span>)))
-  promised <span class="o">=</span> <span class="f">length_promised</span> (<span class="f">header_in</span> head <span class="s">"content-length"</span>)
-  <span class="f">return</span> at <span class="o">+</span> <span class="n">3</span> if promised <span class="o">&gt;</span> body_limit
-  at <span class="o">+</span> <span class="n">3</span> <span class="o">+</span> promised
+  head <span class="o">=</span> ascii_of (some_bytes (<span class="f">text/slice</span> raw 1 (at - 1)))
+  promised <span class="o">=</span> length_promised (header_in head <span class="s">"content-length"</span>)
+  <span class="k">return</span> at <span class="o">+</span> 3 <span class="k">if</span> promised <span class="o">&gt;</span> body_limit
+  at <span class="o">+</span> 3 <span class="o">+</span> promised
 
 <span class="k">fn</span> <span class="f">whole?</span> raw w
-  w <span class="o">&gt;=</span> <span class="n">0</span> and length raw <span class="o">&gt;=</span> w</code></pre>
+  w <span class="o">&gt;=</span> 0 <span class="k">and</span> length raw <span class="o">&gt;=</span> w</code></pre>
 </div>
 
 <p>a body longer than 10 MiB is not waited for. the request counts as whole once its head is in, and the server answers 413 Content Too Large without reading the body. curl and other HTTP clients send <code>Expect: 100-continue</code> before a large upload and wait to be told to go on, so the server says so once the head is in:</p>
@@ -79,11 +79,11 @@ body_limit <span class="o">=</span> <span class="n">10485760</span>
   <pre><code><span class="c"># A client that sends `Expect: 100-continue` waits to hear that the server</span>
 <span class="c"># will take its body before it sends it, as curl does for a large upload.</span>
 <span class="k">fn</span> <span class="f">continued</span> c raw want
-  <span class="f">net/write</span> c <span class="s">"HTTP/1.1 100 Continue\r\n\r\n"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">gathered</span> c raw want)
+  <span class="f">net/write</span> c <span class="s">"HTTP/1.1 100 Continue\r\n\r\n"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> gathered c raw want)
 
 <span class="k">fn</span> <span class="f">expects?</span> raw
-  at <span class="o">=</span> <span class="f">found</span> raw blank_line <span class="n">1</span>
-  <span class="f">continue_asked?</span> raw at</code></pre>
+  at <span class="o">=</span> found raw blank_line 1
+  continue_asked? raw at</code></pre>
 </div>
 
 <p>the head's <code>content-length</code> and <code>content-type</code> are read from its own lines, with each byte past ASCII read as a question mark, so a head that is not text is still measured rather than refused halfway through.</p>
@@ -95,25 +95,25 @@ body_limit <span class="o">=</span> <span class="n">10485760</span>
 <div class="code-panel">
   <div class="code-panel-title">web/uploads.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">stored_as</span> p none
-  <span class="f">text_or_blank</span> p<span class="o">.</span><span class="f">content</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) v])
+  text_or_blank p.content <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect [(field_name p.name) v])
 
 <span class="k">fn</span> <span class="f">stored_as</span> p <span class="s">""</span>
-  <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) <span class="s">""</span>]
+  effect [(field_name p.name) <span class="s">""</span>]
 
 <span class="k">fn</span> <span class="f">stored_as</span> p filename
-  <span class="f">os/random_bytes</span> <span class="n">16</span>
-    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> <span class="f">written</span> (<span class="f">hexed</span> r) p filename)
-    <span class="o">.&gt;</span> (key <span class="o">-&gt;</span> <span class="f">effect</span> [(<span class="f">field_name</span> p<span class="o">.</span>name) key])
+  <span class="f">os/random_bytes</span> 16
+    <span class="o">.&gt;</span> (r <span class="o">-&gt;</span> written (hexed r) p filename)
+    <span class="o">.&gt;</span> (key <span class="o">-&gt;</span> effect [(field_name p.name) key])
 
 <span class="k">fn</span> <span class="f">written</span> key p filename
-  <span class="f">storage_dir</span>
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/make_dir</span> dir <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> dir))
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"<span class="i">{dir}</span>/<span class="i">{key}</span>"</span> p<span class="o">.</span><span class="f">content</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> dir))
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"<span class="i">{dir}</span>/<span class="i">{key}</span>.meta"</span> <span class="s">"<span class="i">{p.kind}</span>\n<span class="i">{filename}</span>"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">effect</span> key)
+  storage_dir
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/make_dir</span> dir <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect dir))
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}"</span> p.content <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect dir))
+    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}.meta"</span> <span class="s">"{p.kind}\n{filename}"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect key)
 
 <span class="c"># Where files are kept: SENRO_STORAGE, or storage/ beside the app.</span>
-storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_STORAGE"</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> <span class="f">effect</span> (<span class="f">dir_or</span> d))</code></pre>
+storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_STORAGE"</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> effect (dir_or d))</code></pre>
 </div>
 
 <p>the fields are then written out the way a browser writes an ordinary form, <code>title=a%20cat&amp;photo=4f1c…</code>, so an action reads them with <code>web/form</code> and <code>web/value</code> as it reads any other. it stores the key in a column the way it stores a title.</p>
@@ -128,9 +128,9 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
 <span class="c"># What a form with two files and a title reads as: the title as typed, and</span>
 <span class="c"># each file as the key it was stored under.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
-  f <span class="o">=</span> <span class="f">web/form</span> req<span class="o">.</span><span class="f">body</span>
+  f <span class="o">=</span> <span class="f">web/form</span> req.body
   said <span class="o">=</span> <span class="f">list/map</span> [<span class="s">"title"</span> <span class="s">"photo"</span> <span class="s">"notes"</span>] (n <span class="o">-&gt;</span> <span class="f">web/value</span> f n)
-  <span class="f">effect</span> (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
+  effect (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
 </div>
 
 <p>a scaffold field declared <code>name:attachment</code> writes all of this: a text column for the key, a file input in a form sent as <code>multipart/form-data</code>, and an update that keeps the stored file when the input is left empty. the generators guide shows the notebook's <code>cover</code>.</p>
@@ -146,8 +146,8 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
   <pre><code><span class="k">fn</span> <span class="f">blob_headers</span> kind filename
   shown <span class="o">=</span> <span class="f">list/any?</span> inline_kinds (k <span class="o">-&gt;</span> k <span class="o">==</span> kind)
   [
-    <span class="s">"content-type: <span class="i">{shown_kind shown kind}</span>"</span>
-    <span class="s">"content-disposition: <span class="i">{disposition shown filename}</span>"</span>
+    <span class="s">"content-type: {shown_kind shown kind}"</span>
+    <span class="s">"content-disposition: {disposition shown filename}"</span>
     <span class="s">"x-content-type-options: nosniff"</span>
     <span class="s">"cache-control: private, max-age=31536000, immutable"</span>
   ]
@@ -162,7 +162,7 @@ inline_kinds <span class="o">=</span> [
 ]
 
 <span class="k">fn</span> <span class="f">shown_kind</span> true kind
-  <span class="f">kind</span>
+  kind
 
 <span class="k">fn</span> <span class="f">shown_kind</span> false _
   <span class="s">"application/octet-stream"</span>
@@ -171,8 +171,8 @@ inline_kinds <span class="o">=</span> [
   <span class="s">"inline"</span>
 
 <span class="k">fn</span> <span class="f">disposition</span> false filename
-  bare <span class="o">=</span> <span class="f">without</span> (<span class="f">without</span> filename <span class="s">"\""</span>) <span class="s">"\\"</span>
-  <span class="s">"attachment; filename=\"<span class="i">{bare}</span>\""</span></code></pre>
+  bare <span class="o">=</span> without (without filename <span class="s">"\""</span>) <span class="s">"\\"</span>
+  <span class="s">"attachment; filename=\"{bare}\""</span></code></pre>
 </div>
 
 <p>a key is unguessable, so a file is as private as its link. an app that must keep a file from someone who has the link should serve it from an action that checks the viewer instead.</p>
