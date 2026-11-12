@@ -20,169 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — a decoder's answer stays in registers
-
-#2421, and #2428 on the way. The by-value return packs one int beside one
-value into three words, and it existed for the json scanner's `_parsed`,
-whose int comes first and whose callers take it apart in a parameter. A
-decoder a library exports is written the other way round in four places,
-and each kept its record on the heap.
-
-The int had to be the first field. `read value next` declares the value
-first, as a type that says what was read and where to go on would. The
-escape analysis now asks inference which of the two fields is an int and
-nothing else, the emitter builds and takes apart in that order, and the
-runtime has `k_parsed_box_back`, `k_parsed_words_back` and
-`k_parsed_int_back` for the second order. The three words are laid out the
-same either way.
-
-A guard's early return was not a tail. `return read b p if b < 128`
-refused the type, because only a tail `if` and a tail construction were
-recognised. A guard in tail position is read as the tail `if` it is.
-
-A constant of the type, named bare in a tail, was not counted as answering
-it, so a decoder that answers `lost` for a short read was said to answer
-something else. It counts now. Returned from a by-value function, a kept
-constant is a built record, and the return took any value it was handed
-for a failure and sent its tag and pointer back as words; the constant's
-words are read off it there.
-
-A record bound to a name was built on the heap again for every field read
-off it, since a getter is handed a record. `r.next` on a name that holds a
-record by value reads the field out of the words, and a failure riding in
-them comes back as itself. `.reason`, `.cause` and `.origin` are left to
-the getter, which answers them for an err whatever record was expected.
-The record was also built once more on its way into a call in any program
-with a lazy binding, to ask whether it was a cell to force. It is not
-asked.
-
-The loop's carry was the fifth. A loop that rewinds its arena each lap
-staged a by-value record built, a heap record a lap, and
-`mem/a_failure_crosses_a_beat_carry_in_two_words` said so in its comment.
-On the way that skips the rewind, taken when another argument may be a
-failure, the record stayed three words, the two ways met in a phi of two
-types, and clang refused the module: #2428, a program main cannot build.
-The carry stages the record's two fields, a slot each, and packs them on
-the far side, by value on both ways. When the fields would not fit the
-buffer's eight slots the record is staged built and its words read back.
-
-A record built at the loop's own call was the sixth, #2430, and it also did
-not build on main. Written at the call for a by-value slot, a record is
-packed into words in place and has no operand among the emitted ones. The
-carry staged the emitted operand at every carried position and wrote
-`call void @k_carry_stage(%KValue )`. The packed words join the emitted
-operands at a carried slot and cross as the two fields. A record built on
-the way into the loop from outside it, which is not a tail call, is still
-built and read back, once for each entry.
-
-A boxed answer was the seventh, #2432, and on main it is a wrong answer
-with no complaint. A name a module declares can also be one of an
-import's: `std/list` exports `first`, so a bare `first` in a module that
-declares one calls into the module's own overload space, and a group
-there stays boxed. A decoder that answers in registers and ends in such a
-call is handed a built record. Its return took whatever value it was
-handed for a failure, sent the record's tag and pointer on as the value,
-and the caller read the whole record where the value belonged and 0 for
-the position: main prints `shared/read 2 97 then 0` where the
-interpreter prints `97 then 2`. The analysis now keeps the groups that
-answer the type and stay boxed, a call to one is noted where it comes
-back, and the return reads the record's words off a noted value. Any
-other value still goes back as a failure's two words. Reading the words
-off every value not known to be a failure was tried first and put 234
-calls into the decoder's emitted code, since inference rarely knows.
-`micro/a_bare_name_shared_with_an_import_answers_its_record` holds every
-engine to the interpreter's two lines.
-
-Measured. `mem/a_record_held_by_value_crosses_a_loop_s_rewind` did not
-build and reads sh_rec 0. `mem/a_record_built_at_a_loop_s_call_crosses_its_rewind`
-did not build either, and reads the one record its entry builds over 76
-laps. `mem/a_record_whose_int_comes_second_goes_back_by_value`
-read sh_rec 2,624 and reads 0. `mem/a_failure_crosses_a_beat_carry_in_two_words`
-falls from 64,000 to 0, and three scanning fixtures lose a record each.
-The run program's decoder phase builds none: run_sh_rec 17,011,296 ->
-4,723,168, run_allocs 2,541,664 -> 2,349,662, run_alloc_bytes 268,840,291
--> 256,552,163, run_evac_allocs 5,617 -> 2,617 and run_evac_bytes
-4,721,376 -> 4,625,408; scan_allocs 97 -> 96 and scan_sh_rec 1,872 ->
-1,808. work_runbench falls 997,844,059 -> 982,946,782 and
-work_runbench_dev 2,924,577,667 -> 2,894,927,376, with the phase at about
-146 instructions a value where it was 223. The tab runs its corpus in
-93,283,820 instructions where it took 93,856,364.
-
-What rises. The runtime's three conversions are linked into every
-program, 368 bytes each; scanbench falls 512 and runbench 800, and the
-summed text goes 5,969,001 -> 5,972,105. The emitter asks more:
-emit_instructions 5,644,746 -> 5,651,651. The tab's compile rises with
-it, browser_compile_instructions 390,565,528 -> 393,730,774 and
-browser_compile_peak_bytes 958,848 -> 965,297. Clang and the linker read
-a little more: codegen_instructions_dev 116,980,709 -> 117,010,179 and
-codegen_instructions_release 372,052,045 -> 372,177,641, both CI's
-readings. The container's move added to CI's last reading had predicted
-67 and 80,559 fewer, so that sum is a guide for these two rows and no
-more. Three programs move by
-layout with the grown runtime: work_encodebench rises 350 to
-2,335,340,893, work_oneshot 854 to 9,980,359 and work_livebench 742 to
-938,655,477; work_scanbench falls 84 to 267,843 with its record.
-runbench's emitted code reads defines=975 calls=10169 branches=9172
-lines=79632 and scanbench's defines=331 calls=3190 branches=3019
-lines=26106. Welfare rises 95.25752070 -> 95.29096728, and the floor is
-banked there.
-
-Checked against the interpreter. `micro/a_record_held_by_value_reads_like_one_built`
-walks a short read, an early answer, a field read off a bound name, the
-record handed whole and kept in a list, a string carried round a rewinding
-loop, a position too wide for a word and a failure where the record was
-expected, on every engine and through the tab's translator. With the
-constant's branch taken out it prints the record where its field should
-be. The 2,163 programs of the numeric differential and the eight other
-differentials agree.
-
-What this does not reach. senro's `wire` is unmoved: its benchmark page
-reads the same six rows with this compiler. Three things keep its `read`
-on the heap, found by asking the analysis which test refused it. Inference
-cannot say the position is an int: a count is read into the same `value`
-field as every other value, so the position after a string, the position
-of its bytes plus their count, may be a float, and the tag `bs[p]` is
-unknown because nothing says `bs` is bytes. `wire` hands its decoder out
-as a value, to read a list's items. And it passes the record whole to a
-helper that binds it. The analysis is all or nothing for a type, so one
-such use anywhere costs every read. The first is senro's to write
-differently, with a record of two ints for a count and `:int` where a
-position comes in from outside; the other two are the next piece of
-#2421 here.
-
-Two ratchet rows moved with the change, and the ratchet's own run found
-both. `a thunk site returns a record unboxed` patched one line that is six
-since the field order became an argument, so its mutation no longer
-applied; it takes the call from its opening to its close now, and clang
-refuses `micro/a_lazy_record_call_somebody_makes_still_builds` under it
-as before. `a failure read as a record on the far side of a carry` had
-gone blind. Its mutation takes out the ask `k_parsed_words` makes before
-it reads a record's fields, and its fixture reached that ask through the
-carry, which unpacks no built record now that it stages the two fields.
-The ask is still needed wherever a built record is unpacked, and a
-failure a boxed group hands back to a by-value return is one such place:
-`mem/a_failure_handed_back_by_a_boxed_group_stays_a_failure` prints
-`stopped: end of input` with the ask and stops on a runtime error
-without it.
-
-A third row ended CI's runner, twice. `a group answering other values by
-value` skips the check that every arm of a group answers the record or a
-failure. On main `micro/a_greedy_run_of_one_character_backs_off_in_order`
-still prints its golden under that mutation. Here more groups are
-candidates, regexp's among them, and the same fixture builds into a binary
-that allocates without end. Nothing bounded a program a golden
-runs, so the kernel ended it once the machine was out of memory, and on a
-runner that ends the job with a shutdown signal and a log that cannot be
-read. `run_kanso_env` in tests/golden.rs now hands each program 8 GiB of
-address space on Linux, where the ratchet runs. Under the bound the binary
-is refused an allocation and says `out of memory`, and the row reads red
-in 24 seconds. `a_program_a_golden_runs_may_map_only_so_much` reads the
-limit from a shell the program starts, on both engines, and reads
-`unlimited` without the bound. The whole golden suite passes under it. A
-test that starts kanso some other way has no bound yet (#2436). The spec's
-first draft read `/proc/self/limits` and found that the native runtime
-reads such a file as empty (#2435).
-
 ## 2026-11-11 — a decoder handed out joins the corpus
 
 #2421 again, corpus first. The phase that reads a stream through an
@@ -1996,3 +1833,23 @@ quoted from senro's new `spec/runs/actions_as_resources`. "what senro's
 routing does not have" lists namespaces, renamed paths, nesting past one
 level, constraints and hand-declared routes. A Readwise article on `derive`
 and the conventions built on it went to Clay's reader.
+
+## 2026-11-12 — the runner image moved to glibc 2.39-0ubuntu8.12
+
+The cost-goldens job on kanso#2493, a docs change, refused every glibc-keyed
+gate: the rows were measured on glibc 2.39-0ubuntu8.9 and the runner now
+carries 8.12, with clang 19.1.1 and rustc 1.98.1 unchanged. main's last run
+was on 8.9 and green, so main would refuse the same way if it ran again, and a
+branch opened to carry the re-measure lands on the same new image. It rides
+here, as the 8.8 -> 8.9 re-measure rode with its PR in September.
+
+CI measured every row on 8.12 and none rose. Of the fifteen work rows six are
+byte-identical and nine fell by one instruction (jsonbench, encodebench,
+oneshot, widebench, digestbench, readbench, livebench, runbench and
+runbench_dev). `codegen_instructions_dev` fell 117,027,868 -> 117,027,866 and
+`codegen_instructions_release` 372,208,803 -> 372,208,799. The compile,
+entry, library, start-up, interpreter, interpreter-memory and emit rows read
+exactly their goldens. The rows are copied from the job log and the ten
+measured-on lines name 8.12. The welfare floor is re-based by the rise the
+revision gives, as a measurement of outside state (#2017), and its history
+says so.
