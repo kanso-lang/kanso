@@ -28,6 +28,7 @@ description: "how senro's generators write an app and a resource, and what each 
   <pre><code>$ senro new notebook
   create notebook/main.kso
   create notebook/home.kso
+  create notebook/home_test.kso
   create notebook/migrations/.keep
   create notebook/views/layout.kata
   create notebook/views/home.kata
@@ -38,6 +39,8 @@ $ senro generate scaffold note title:text pages:int cover:attachment
   create ./views/notes_index.kata
   create ./views/note_shown.kata
   create ./views/note_form.kata
+  create ./notes_test.kso
+  create ./given.kso
   create ./migrations/20261111180512_create_notes.kso
   change ./main.kso
 $ senro generate scaffold page body:text note:references
@@ -46,11 +49,13 @@ $ senro generate scaffold page body:text note:references
   create ./views/pages_index.kata
   create ./views/page_shown.kata
   create ./views/page_form.kata
+  create ./pages_test.kso
+  change ./given.kso
   create ./migrations/20261111180513_create_pages.kso
   change ./main.kso</code></pre>
 </div>
 
-<p>each line names a file and what happened to it. <code>scaffold</code> writes its migration as a file of its own and changes one file that <code>new</code> wrote, the entry, which gains the resource's import. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
+<p>each line names a file and what happened to it. <code>scaffold</code> writes its migration as a file of its own, a spec of the resource beside its module, and the resource's map in <code>given.kso</code>, which the specs make rows from; the <a href="testing.html">testing guide</a> covers both. it changes one file that <code>new</code> wrote, the entry, which gains the resource's import. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -389,6 +394,8 @@ generate: cannot read `page:references`: a resource nests under one parent</code
   <pre><code>$ senro generate resource reading title:text minutes:int
   create ./reading.kso
   create ./readings.kso
+  create ./readings_test.kso
+  change ./given.kso
   create ./migrations/20261111180515_create_readings.kso
   change ./main.kso</code></pre>
 </div>
@@ -480,6 +487,7 @@ read again: 404</code></pre>
   create ./registration.kso
   create ./resets.kso
   create ./session.kso
+  create ./session_test.kso
   create ./user.kso
   create ./views/door.kata
   create ./views/reset_asked.kata
