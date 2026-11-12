@@ -1,0 +1,181 @@
+---
+layout: default
+title: "mailers in senro"
+description: "how a senro app writes its mail in mailer modules: a letter and the link it carries, sending it now or from a queue, where SENRO_MAIL sends it, and what is refused."
+---
+<style>
+.senro-hero .hero-kanji { letter-spacing: 0.2em; }
+.guide-list { list-style: none; margin: 1.5rem 0; padding: 0; }
+.guide-list li { border-top: 1px solid var(--rule, #e5e0d8); padding: 1.1rem 0; }
+.guide-list a { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; }
+.guide-list p { color: var(--muted); margin: 0.3rem 0 0; }
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>mailers</h1>
+
+<p>an app's mail is written in mailer modules, as a Rails app keeps it in mailers. a module whose name ends in <code>_mailer</code> holds one function to a letter. an action calls the function, the letter is queued, and a worker beside the server sends it. this guide covers writing a letter, the links it carries, how it is sent, and how to read mail in development.</p>
+
+<h2>a mailer</h2>
+
+<p><code>senro generate mailer account welcome password_changed</code> writes <code>account_mailer.kso</code> with a letter for each name after the mailer's.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">what the generator wrote</div>
+  <pre><code><span class="k">import</span> <span class="s">"&lt;senro&gt;/mail"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="c"># The app's account mail, as a Rails mailer holds it: what each</span>
+<span class="c"># letter says. Each is queued on `db` and sent by the worker beside the</span>
+<span class="c"># server.</span>
+<span class="c">#</span>
+<span class="c"># The address the app's mail comes from. Change it to one the mail</span>
+<span class="c"># server `SENRO_MAIL` names will send as.</span>
+sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">welcome</span> db to
+  <span class="f">mail/delivered_later</span> db (welcome_letter to)
+
+<span class="k">fn</span> <span class="f">welcome_letter</span> to
+  lines <span class="o">=</span> [
+    <span class="s">"Hello,"</span>
+    <span class="s">""</span>
+    <span class="s">"Write what this letter says here, one line of it to a string."</span>
+  ]
+  body <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">"\n"</span>
+  <span class="f">mail/composed</span> sender to <span class="s">"Welcome"</span> body
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">password_changed</span> db to
+  <span class="f">mail/delivered_later</span> db (password_changed_letter to)
+
+<span class="k">fn</span> <span class="f">password_changed_letter</span> to
+  lines <span class="o">=</span> [
+    <span class="s">"Hello,"</span>
+    <span class="s">""</span>
+    <span class="s">"Write what this letter says here, one line of it to a string."</span>
+  ]
+  body <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">"\n"</span>
+  <span class="f">mail/composed</span> sender to <span class="s">"Password changed"</span> body</code></pre>
+</div>
+
+<p>the first import is written with the app's own path to senro, shown here as <code>&lt;senro&gt;</code>. each letter is two functions. the pub one is what an action calls, with the database session and the address to write to. the private one says what the letter holds. <code>mail/composed from to subject body</code> makes the message: plain text from one address to one address. an address is bare, <code>ana@example.com</code>, or follows a name, <code>Ana &lt;ana@example.com&gt;</code>.</p>
+
+<p>the routing convention leaves a mailer alone. its pub functions are called by actions in other modules, and none of them answers a request.</p>
+
+<h2>a letter with a link</h2>
+
+<p>most of an app's mail exists to carry a link: confirm this address, choose a new password. the mailer that <code>senro generate authentication</code> writes has one.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/notebook/password_mailer.kso</div>
+  <pre><code><span class="c"># The app's mail, as a Rails mailer holds it: what each letter says, and</span>
+<span class="c"># the signed link it carries, which starts with `mail/url_for`. Each letter</span>
+<span class="c"># is queued on `db` and sent by the worker beside the server.</span>
+<span class="c">#</span>
+<span class="c"># The address the app's mail comes from. Change it to one the mail server</span>
+<span class="c"># `SENRO_MAIL` names will send as.</span>
+sender <span class="o">=</span> <span class="s">"noreply@example.com"</span>
+
+<span class="c"># A link to choose a new password, bound to the digest the account keeps,</span>
+<span class="c"># so it works once.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> db id email kept
+  <span class="f">time/now</span>
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> <span class="s">"/resets/{reset_token id kept t}/edit"</span>)
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))
+
+<span class="k">fn</span> <span class="f">reset_token</span> id kept t
+  <span class="f">passwords/reset_token</span> <span class="f">session/secret</span> id kept t
+
+<span class="k">fn</span> <span class="f">reset_letter</span> email link
+  lines <span class="o">=</span> [
+    <span class="s">"Someone asked to reset the password of your account."</span>
+    <span class="s">""</span>
+    <span class="s">"Choose a new one here, within fifteen minutes:"</span>
+    <span class="s">""</span>
+    link
+    <span class="s">""</span>
+    <span class="s">"If it was not you, there is nothing to do: your password is unchanged."</span>
+  ]
+  <span class="f">mail/composed</span> sender email <span class="s">"Reset your password"</span> (<span class="f">text/join</span> lines <span class="s">"\n"</span>)</code></pre>
+</div>
+
+<p><code>mail/url_for path</code> is the address of a path on the app's own site. it reads the site from the <code>SENRO_URL</code> environment variable, such as <code>https://notebook.example</code>, and uses <code>http://127.0.0.1:3000</code> when that is unset, which is where a development server listens. it never reads the site from the request's <code>Host</code> header. whoever sends a request chooses that header, so a link built from it could carry a reset token to a site of theirs.</p>
+
+<p>the token in the path is signed and expires. <a href="sessions.html">sessions and sign-in</a> covers how one is made and checked.</p>
+
+<h2>sending now, and sending later</h2>
+
+<p><code>mail/delivered message</code> sends a message during the request and answers the text it sent. <code>mail/delivered_later db message</code> writes it to the jobs table instead, as Action Mailer's <code>deliver_later</code> does, and the request answers without waiting on a mail server. the entry <code>senro new</code> writes runs a worker on the <code>mail</code> queue beside the server, and that worker sends each letter a moment later. a letter whose delivery fails is tried again, as any job is. <a href="jobs.html">background jobs</a> covers the table and the worker.</p>
+
+<p>the generated letters all use <code>delivered_later</code>. an action that queues one has usually just written something, and it should answer whether or not the mail server is up.</p>
+
+<h2>where mail goes</h2>
+
+<p>the <code>SENRO_MAIL</code> environment variable says how mail leaves the app.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">SENRO_MAIL</div>
+  <pre><code>unset or ""                    standard error, for development
+dir:&lt;path&gt;                     a file of its own under &lt;path&gt;
+smtp://user:pass@host:587      SMTP, after STARTTLS
+smtps://user:pass@host:465     SMTP inside TLS from the first byte
+smtp+insecure://host:1025      SMTP in the clear, for a mail catcher</code></pre>
+</div>
+
+<p>the name and password in an SMTP address are optional and percent-encoded, as in any URL, so an address used as a name is written <code>me%40example.com</code>.</p>
+
+<p><code>smtp://</code> refuses a server that does not offer STARTTLS. the alternative is sending in the clear, and a reset link read off the wire is as good as a password. the conversation ends before the sender or the recipient is named.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">smtp:// to a server with no STARTTLS</div>
+  <pre><code>C: EHLO guestbook.test
+C: QUIT
+not sent: err "the mail server at 127.0.0.1 offers no STARTTLS, and smtp:// sends only through TLS"</code></pre>
+</div>
+
+<h2>what a message looks like</h2>
+
+<p>with <code>SENRO_MAIL</code> unset, each message is written to standard error as it would go on the wire, so a developer reads the app's mail in the terminal the server runs in and follows the link from there.</p>
+
+<div class="code-output">
+  <div class="code-panel-title">a message on standard error</div>
+  <pre><code>Date: Mon, 26 Oct 2026 07:33:20 +0000
+From: Guestbook &lt;noreply@guestbook.test&gt;
+To: ana@example.com
+Subject: Reset your password
+Message-ID: &lt;spec@guestbook.test&gt;
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Follow this link:
+.
+https://guestbook.test/r/1</code></pre>
+</div>
+
+<p>a subject that is not ASCII travels as RFC 2047 encoded words, and a body that is not ASCII, or holds a line longer than SMTP allows, travels as base64. the mailer writes ordinary text and the mail module chooses the encoding.</p>
+
+<p><code>dir:&lt;path&gt;</code> writes each message to a file of its own under the path. senro's specs read mail that way: they drive an app over HTTP, wait for the file addressed to the account they made, and follow the link inside it.</p>
+
+<h2>what is refused</h2>
+
+<p>a message is checked before it is sent or queued.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">mail/mail.kso</div>
+  <pre><code><span class="c"># What is wrong with a message, or "" when nothing is. A header holding a line</span>
+<span class="c"># break would let whoever wrote it add headers of their own, so it is refused</span>
+<span class="c"># before anything is sent.</span>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">refusal</span> m
+  <span class="k">return</span> <span class="s">"mail needs a From address with an @"</span> <span class="k">if</span> <span class="k">not</span> addressed? m.from
+  <span class="k">return</span> <span class="s">"mail needs a To address with an @"</span> <span class="k">if</span> <span class="k">not</span> addressed? m.to
+  <span class="k">return</span> <span class="s">"a mail header cannot hold a line break"</span> <span class="k">if</span> broken? m
+  <span class="s">""</span></code></pre>
+</div>
+
+<p>the line-break rule is about forms. a subject or an address that came from a visitor could hold a line break followed by a header of the visitor's choosing, such as a <code>Bcc</code>. a header with a line break in it is refused, so nothing a visitor types can add one.</p>
+
+</article>
