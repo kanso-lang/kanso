@@ -1,0 +1,12 @@
+import "std/expect"
+import "std/spec"
+
+test_a_stack = describe "a stack" [
+  before (_ -> [])
+  it "starts empty" (s -> expect s . to (have_length 0))
+  context "after a push" [
+    before (s -> push s 7)
+    it "holds one" (s -> expect s . to (have_length 1))
+    it "holds what was pushed" (s -> expect s . to (contain 7))
+  ]
+]

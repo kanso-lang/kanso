@@ -1,3 +1,6 @@
+import "std/list"
+import "std/text"
+
 # What a failing test is allowed to tell you.
 #
 # A test is a constant and `==` is the assertion, which is enough to decide
@@ -30,8 +33,22 @@ pub type mismatch
 pub type not_true
   got
 
+# What a matcher other than `equal` answers when it does not match: what it
+# wanted, in words, and what it got.
+pub type unmet
+  wanted
+  got
+
+pub fn expect none
+  none
+
 pub fn expect v
   v
+
+# A value that may be none is a value like any other here: `be_none` is a
+# matcher, so `to` takes none and hands it on.
+pub fn to none m
+  m none
 
 pub fn to v m
   m v
@@ -52,3 +69,67 @@ fn true_answer _ true
 
 fn true_answer got false
   not_true got
+
+pub be_false = (got -> met (false? got) "to be false" got)
+
+pub be_none = (got -> met (got == none) "to be none" got)
+
+# A text that holds `part`, or a list that holds it as an element.
+pub fn contain part
+  (got -> met (holds? got part) "to contain {shown part}" got)
+
+pub fn have_length n
+  (got -> met (length got == n) "to have length {n}" got)
+
+pub fn start_with prefix
+  (got -> met (text/starts_with? got prefix) "to start with {shown prefix}" got)
+
+pub fn end_with suffix
+  (got -> met (text/ends_with? got suffix) "to end with {shown suffix}" got)
+
+# Whatever `fits?` says of the value, for the check no matcher here makes.
+pub fn satisfy fits?
+  (got -> met (fits? got) "to satisfy the check" got)
+
+# The other way round: `expect x . not_to (equal 3)` passes when the matcher
+# does not.
+pub fn not_to none m
+  met (not true? (m none)) "not to match" none
+
+pub fn not_to v m
+  met (not true? (m v)) "not to match" v
+
+fn met false wanted none
+  unmet wanted none
+
+fn met true _ _
+  true
+
+fn met false wanted got
+  unmet wanted got
+
+# A matcher answers true or a record, and a test may answer anything, so
+# these ask by arm what `==` would ask of a boolean.
+fn true? true
+  true
+
+fn true? _
+  false
+
+fn false? false
+  true
+
+fn false? _
+  false
+
+fn holds? got:string part
+  length (text/split got part) > 1
+
+fn holds? got part
+  list/any? got (e -> e == part)
+
+fn shown s:string
+  "\"{s}\""
+
+fn shown v
+  "{v}"

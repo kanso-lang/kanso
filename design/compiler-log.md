@@ -20,162 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — senro's apps hold no SQL
-
-The two rulings of this morning are built. The work is in senro (senro#93
-to senro#98) and on the site (#2393, #2398 and the sessions guide with
-this entry); no compiler change was needed, and no cost row moved.
-
-**What an app writes now.** A model lives in a module named for one row of
-its table, `note.kso` for `notes`, as kanso names a module for its type.
-The models derivation declares the record there from the table's columns
-and writes the calls: `note/find db id`, `find_by`, `all`, `newest`,
-`ordered`, `where`, `paged`, `create`, `update`, `destroy`, `increment`.
-The `db` an action is handed knows who is signed in, so no call takes a
-viewer. A column written out in a call is checked against the table when
-the app is checked, and the refusal is at the call
-(`spec/errors/order_not_a_column`).
-
-**The app's own writes.** Some writes have no viewer behind them: a reset
-link sets a digest, a sign-in counts a wrong password. The committee chose
-`models/as_app db`, a session that asks no policy, over naming the
-account's holder as the asker. Its reason: under the alternative the
-holder's `update?` must admit writes to the count of wrong passwords and
-the lock, which are the columns a browser-reachable write must never
-touch.
-
-**The count.** `account/increment db id "failures"` adds in the statement
-that answers the record. `spec/db/counted` runs eight on eight connections
-at once and they see 1 2 3 4 5 6 7 8, on both engines. With the increment
-rewritten as a read and then a write, they saw 1 1 1 1 1 1 1 1 natively
-and 1 1 1 1 1 2 2 2 interpreted.
-
-**The examples.** The pantry, the guestbook and what both generators write
-hold no query; `spec.sh` fails when one does. The guestbook's `account.kso`
-became the model alone, with `registration.kso` and `password.kso` as its
-resources, and the scaffold writes `note.kso` beside `notes.kso`.
-kata walks a list with `each xs x ->` and refuses a `for` row at its line.
-
-**What I got wrong on the way.**
-- I regenerated goldens (`SPEC_WRITE=1`) while the tree did not check, and
-  two goldens took the compiler's error text. Restored from the index; the
-  rule is to regenerate only from a tree that passes without writing.
-- The first generated app did not check because the model's module was not
-  imported by the entry. A derivation reads only the modules the entry
-  names, so the generators add that import.
-
-**Open.**
-- senro's CI failed twice in ten runs in the guestbook's browser spec with
-  the server interpreted, at different steps in different browsers. Forty
-  local Chromium runs passed (#2397).
-- A lock that runs out by the clock has no spec; it needs a clock the spec
-  can set.
-- `where` takes one field and one value because a derivation cannot read a
-  map literal's keys. That is the first language change senro would ask
-  for, and it goes to the committee when a second condition is wanted.
-
-**The site deploy.** Two deploys after #2393 stalled inside GitHub Pages at
-"syncing files", one failing and one reaching the ten-minute timeout, so
-the pantry's recording was on main for an hour before it was served. The
-third, after #2398, went through. Nothing in the artifact explains it: the
-merge added three small files. A merged site change is checked on
-kanso-lang.dev, since main holding it does not mean the site does.
-
-## 2026-11-10 — a native program holds as many sockets as the system allows
-
-The native runtime kept open sockets in a table of 64, found by the
-remainder a handle leaves, and ended the process when a sixty-fifth was
-wanted: `too many sockets open at once`. The interpreter has no table. The
-limit came to light through senro, whose server kept a connection for
-every client that hung up without a request (fixed there in senro#102):
-about sixty such clients ended a natively built app. With that leak fixed
-the limit still stood in the way of any server with sixty clients
-connected at one moment. Tracked as #2402.
-
-**What changed, in `src/runtime/effects.c`.**
-- The table starts at 64 slots and doubles when every one is taken. Two
-  handles that leave different remainders by a size leave different ones
-  by twice it, so each open socket moves to the slot its handle now names
-  and no two meet. Handles are numbered as before, so a program that
-  prints one reads the same on both engines.
-- A slot remembers the handle that owns it. Before, `k_socket_of` asked
-  only whether the slot was in use, so closing a handle a second time
-  closed whatever connection had taken its slot since.
-- `listen` asks for the longest queue of unaccepted callers the system
-  allows, where it asked for 16.
-- Running children keep their own table of 64 (`K_KIDS`), which they had
-  shared a constant with.
-- The lookup, the taking of a slot and the growing are kept out of line,
-  so the function every effect passes through holds a call to them and
-  none of their code.
-
-When the system itself refuses a file, `dial` already answered an err, and
-`accept` already left its fiber waiting and trying again, so a server at
-the system's limit keeps the clients it has. Nothing there needed to
-change.
-
-**Three specs in the micro corpus, each red on the runtime before.**
-- `a_program_holds_more_sockets_than_its_first_table`: a hundred
-  connections held by both ends, then the first pair and the last speak.
-  Before: `too many sockets open at once`, at the thirty-second accept.
-- `a_handle_closed_twice_closes_nothing_else`: sixty-four sockets, one
-  closed, one opened in its place, the old handle closed again. Now the
-  second close is refused and the new connection takes a write. Before,
-  the second close succeeded and the write failed: `that is not a
-  connection`.
-- `a_listener_queues_a_hundred_callers`: a hundred callers connect before
-  any is accepted. Before, the program stopped partway and was ended by
-  the test's clock. With the table grown and the queue alone put back to
-  16 it stops the same way, so the queue is the cause.
-
-The interpreter passed all three before and after.
-
-**What I got wrong on the way.**
-- The runtime is also built for wasm, where the headers name no queue
-  length, and the first build of it failed. I had built and tested natively
-  only. The constant is defined when the headers leave it out.
-- The three specs open sockets, which the tab cannot, and I left them off
-  `native_route_gaps.txt`. Three wasm corpus tests went red on the first
-  push.
-- The first version made every benchmark's effects dearer. CI's hosts were
-  not the one the work rows were counted on, so the gate would not compare
-  and I read the differences it printed as the host's. They were mine.
-  Main built here reads each row a constant above its golden, 109 for
-  thirteen of the fifteen, and the branch read deepbench 1,308,377 higher than
-  that, runbench 303,062 and widebench 48,034. All of it was in `k_exec`,
-  the function every effect passes through. The table's lookup, with its
-  remainder by a size that is no longer a constant, had been folded into
-  it. With `k_sock` kept out of line deepbench reads main's number again.
-
-**Rows.**
-- `unpinned_diagnostics.txt` loses the message that no longer exists.
-- Work: eleven of the fifteen rows are main's. `work_runbench` rises 469
-  to 913,657,523 and `work_oneshot` 357 to 9,980,628; `work_encodebench`
-  falls 350 to 2,335,340,431 and `work_livebench` 189 to 938,655,512. No
-  benchmark opens a socket, so these four are layout. I set the rows from
-  a count here and each row's distance to main's on this machine, and CI
-  then counted on the golden's own silicon: fourteen agreed and
-  `work_livebench` read 28 lower, which is CI's row above.
-- clang's work on the runtime: `codegen_instructions_release` falls 80,668
-  to 371,945,188 and `codegen_instructions_dev` rises 2,539 to
-  116,857,586.
-- Machine code: each of the fourteen benchmarks carries 512 fewer bytes of
-  `.text` than on main, and `text` sums to 5,869,065 from 5,876,233. The
-  lookup is one function now where it was a copy at each use.
-- The tab runs its corpus in 55,987 fewer wasm instructions
-  (`browser_run_instructions` 78,370,192). That corpus opens no socket. I
-  did not isolate what clang did differently.
-- The three specs join `native_route_gaps.txt`, because the tab has no
-  sockets.
-
-**Welfare.** The sum rises by 0.000027 and is banked: the release tier
-and the tab cost less, against 469 instructions on runbench and 2,539 at
-the dev tier.
-
-**Open.** A fiber waiting on a socket is asked again every millisecond on
-both engines, so an idle server is never asleep for long and each query a
-request makes costs a millisecond of waiting (#2405).
-
 ## 2026-11-10 — a fiber waiting on a socket is waited for
 
 A read that found nothing arrived, or an accept that found nobody calling,
@@ -2669,3 +2513,79 @@ and the floor's history says so: 95.39230414088809 ->
 **Open.** Each test file beside an entry compiles the app again. One test
 file beside senro's `examples/notebook` took 1.9 s in this container from
 start to finish, and nothing here measures an app with many of them.
+
+## 2026-11-11 — directive: specs that nest, with hooks, first class in senro
+
+Clay, to cloud: "the framework needs to have something like what the rails
+helpers do where your tests set up a transaction in a before block or
+around block, so it gets reverted at the end, and nested specs work and so
+forth. i don't know how far you've gotten on our kanso alternative to
+rspec/ginkgo/gomega but it should be a first class citizen in senro."
+
+Recorded as #2464. kanso's testing was Go-test shaped by his ruling on
+#966, which ended "eventually we'll make something more like rspec". This
+is that.
+
+## 2026-11-11 — std/spec: a spec is a test whose value is an effect (#2464)
+
+**The search.** #966 and its entry (the Go-test shape), `std/expect`'s
+header (why a matcher answers a record), the two entries above on what
+`kanso test` performs and reads, and the lexer's rule for a list that
+spans lines.
+
+**The decision**, by the committee, recorded on #2464. A spec is a value
+and a test is still a constant. `describe name items` answers an effect
+that runs the examples under it, prints them as an outline and yields true
+when every one passed, and `kanso test` has performed a test whose value
+is an effect since #2458. So the verb gains nothing, and the compiler
+still carries no test vocabulary, which is what #966 took out of it.
+
+Hooks are functions around the rest. `around` is handed the value so far
+and the rest of the example as a function; `before` and `after` are
+written with it. A group's hooks wrap those of the groups inside it,
+every example gets its hooks run fresh, and an example is handed what
+they built as its one argument, so nothing plays the part of RSpec's
+`let`. A group inside a `describe` is `context`: a nested `describe`
+would be an effect sitting in a list, which the library could not look
+inside.
+
+No syntax was needed. A list that spans lines takes one element to a
+line, a line that is a call needs no parentheses, and a line that ends by
+opening a bracket spans in turn, so a nested spec is written as RSpec
+writes one with the grammar as it stood. The first prototype wrapped each
+item in parentheses and was refused at `])`, and the lexer's own comment
+on element lines is what showed the parentheses were the mistake.
+
+**Built.** `lib/spec/spec.kso`, shipped as `std/spec`. `std/expect` gains
+`contain`, `have_length`, `start_with`, `end_with`, `be_none`, `be_false`,
+`satisfy` and `not_to`, which answer an `unmet` record of what was wanted,
+in words, and what was got. `expect` and `to` take none, since `be_none`
+is a matcher.
+
+`tests/golden/test_verb/nested_spec` is a stack built by `before` hooks
+three groups deep, with an `around` that prints a line on each side of
+every example. Its golden holds the outline, the two examples made to
+fail named by their full descriptions with what they answered, and the
+count. One fault was found by it and is pinned by it: an example that
+ended in a failure skipped the closing half of its `around`. A failure is
+a box, and only an arm that asks for the box is handed one, so the arm
+that was meant to catch it inside the hooks never ran and the catch
+outside them did. Watched red: that example's `(closed)` line was missing.
+
+The book's modules chapter gains "specs that nest", with a panel the book
+check runs. Breaking the panel's expected output turned the check red.
+
+**Rows.** The compiler's table of shipped modules holds one more name, and
+the four rows that pass through it worsened: `compile_instructions`
+22,652,542 -> 22,652,874, `entry_instructions` 119,166,322 ->
+119,166,434, `library_instructions` 63,634,689 -> 63,634,765, and
+`browser_compile_instructions` 412,081,305 -> 412,081,336. The welfare
+floor is
+lowered by what that costs, 95.3923041102071 -> 95.39230375032061: the
+directive asked for the library, so the exception for a ruled part of the
+language applies.
+
+**Open.** One example cannot be run by name. The outline is printed by
+the library and `kanso test` adds its own line for the constant, so a
+file's count of tests is its count of specs, with the examples counted on
+the line above. senro's hooks, generated specs and guide are next.

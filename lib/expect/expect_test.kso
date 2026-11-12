@@ -30,3 +30,41 @@ fn wanted_and_got? (mismatch wanted got) w g
 
 fn wanted_and_got? _ _ _
   false
+
+# The matchers past `equal` answer `unmet`: what they wanted, in words, and
+# what they got.
+test_contain_finds_text = expect "milk and tea" . to (contain "tea")
+
+test_contain_finds_an_element = expect [1 2 3] . to (contain 2)
+
+test_have_length_counts = expect [1 2 3] . to (have_length 3)
+
+test_start_with_matches = expect "kanso" . to (start_with "kan")
+
+test_end_with_matches = expect "kanso" . to (end_with "so")
+
+test_be_none_takes_none = expect none . to be_none
+
+test_be_false_matches = expect (1 == 2) . to be_false
+
+test_satisfy_asks_the_check = expect 7 . to (satisfy (n -> n > 3))
+
+test_not_to_passes_a_miss = expect 7 . not_to (equal 3)
+
+test_contain_says_what_it_wanted =
+  said = expect "milk" . to (contain "tea")
+  unmet_with? said "to contain \"tea\"" "milk"
+
+test_have_length_says_what_it_wanted =
+  said = expect [1] . to (have_length 2)
+  unmet_with? said "to have length 2" [1]
+
+test_not_to_says_it_matched =
+  said = expect 3 . not_to (equal 3)
+  unmet_with? said "not to match" 3
+
+fn unmet_with? (unmet wanted got) w g
+  wanted == w and got == g
+
+fn unmet_with? _ _ _
+  false
