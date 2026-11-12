@@ -20,75 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-10 — senro's pages travel as bytes kata derives
-
-#2416, built in senro (senro#107 for the benchmark, senro#108 for the
-encoding). A page's data and a component's state leave the server in a
-binary encoding, and JSON stays where something outside senro reads the
-data.
-
-kata knows a page's shape from the fields its template reads, so it writes
-a record as those fields in a fixed order and a list of records as a count
-and the records, with no name and no tag between them. Only the leaves are
-tagged: one byte that says what follows, and that holds the whole of a
-small int or the length of a short string. The server gets a packer for
-each page. The browser module gets a record type and a reader for each
-record a template reads, and draws the page with the template's ordinary
-compile; the compile that read fields out of a map is deleted. The first
-four bytes are a hash of every page's shape in the module, and bytes from
-another build draw nothing.
-
-`bench/pages` is a board of fifty records in a layout with one component.
-Its rows are wasm instructions counted by `count_module`, taken from CI
-under JSON and again under the encoding:
-
-    row                                   JSON      binary
-    page as data, bytes                 15,191       9,636   -36.6%
-    component state, bytes                  43          36   -16.3%
-    server: records, component drawn   405,267     423,263    +4.4%
-    server: page answered as data    1,861,329   1,269,908   -31.8%
-    server: page answered as HTML    5,720,720   5,074,507   -11.3%
-    browser: module start               13,905      13,764    -1.0%
-    browser: page drawn from data    7,092,359   6,302,146   -11.1%
-    browser: one component action      172,445     230,189   +33.5%
-
-A page is a third smaller and a third cheaper to write. Drawing it in the
-browser falls by a ninth, because drawing the markup is most of a page
-update and the encoding does not reach it.
-
-A component action costs more than it did. Its state is held in the page
-as base64 and read into a map, both in kanso code, where JSON was read and
-written by the runtime. Measured apart on a 33-byte state: spelling it as
-base64 costs 26,200 instructions and reading it back 28,000, against 15,600
-and 30,700 for `json/encode` and `json/decode` of the same value, and
-reading the tagged bytes into a map costs 58,300. Two issues carry what
-that found. #2420 is base64 in the runtime. #2421 is what a decoder
-written in kanso pays for each value it reads: a returned record costs
-607 instructions a value when it is destructured in a parameter with its
-int first, 1,013 with its value first, and 1,673 when it is bound to a
-name and read by its fields, which is the only way a caller in another
-module can take it.
-
-The codec was fuzzed before it was trusted: `wire` and a second writing of
-the format in JavaScript each read what the other wrote for 2,000,000
-random values with no disagreement. Three breaks were watched red first.
-One of them, a 64-byte string written behind the tag for 63, passed 2,000
-values because no string was 64 bytes long, and the strings are now aimed
-at exact byte lengths. The long run stopped once, at a string beginning
-with U+FEFF that the reference's `TextDecoder` dropped, which was the
-reference's fault.
-
-Decided on the way, by the committee and recorded on #2416. Floats travel
-as their decimal text, since kanso cannot read a float's bits and no page
-in the examples sends one. Component state stays tagged: writing it
-positionally needs a component to declare its state's type, and that waits
-on what #2420 and #2421 leave to win. Only a program that names `rendered`
-gets the readers and row types, so a server still refuses a misspelled
-field at the template's line.
-
-Nothing in kanso changed, so no row here moves. The site's views guide
-describes the bytes, and its senro pin moves to 43a2ca5.
-
 ## 2026-11-10 — a session's trip through base64 joins the corpus
 
 The corpus half of #2420, ahead of its fix. senro's binary encoding (#2416)
@@ -2141,3 +2072,42 @@ taking out `std/list` or `browser`'s own type left start-up where it was, so
 what remains is building a record of five fields where the module built one
 of two and a map. No kanso row moved. The site's views guide quotes the new
 lists, and the pin is d247faa.
+
+## 2026-11-12 — gavel: the analysis, and no lint, carries a handed-out function's types (#2433)
+
+A function handed out as a value has its parameters sent to every type,
+because a value can be called with anything. A decoder whose position is
+then not known to be an int keeps its record on the heap for its direct
+callers too. Today the author's remedy is `p:int`, and nothing says it is
+missing. The issue offered two directions, and the committee took the first.
+
+**The lint is declined.** check.rs says kanso has no linter layer and refuses
+what a linter elsewhere would warn about. A program without the annotation is
+correct and only slower, so a refusal would refuse a program that runs.
+Knowing that an annotation would change the answer also needs inference to
+keep the direct callers' join apart from the value's, which is most of the
+fix.
+
+**Decision.** Inference keeps a handed-out group's types as its direct
+callers prove them, and the value's wrapper takes anything. Under the
+corpus-first gavel, the baseline lands first:
+`a_decoder_handed_out_without_an_annotation_boxes_every_read` is
+`a_decoder_handed_out_still_answers_its_callers_by_value` with `:int` taken
+off `at`. It pins `sh_rec=3200` and `allocs=57` against its twin's 512 and
+15, which is the issue's table. The fix scores as that fixture falling to its
+twin. No other golden moved, and welfare does not read the mem vein. The
+issue stays p3 because no benchmark pays this today (the measurement on
+#2433, 2026-11-11).
+
+**Copying the group does not reach it (measured the same day).** The
+cheapest form of the decision is a source pass beside `flat::flatten`. It
+copies a group that is both handed out and called from elsewhere, and sends
+every mention by value to the copy. Built that way, the pass chose `at` and
+the fixture still read `sh_rec=3200`. Inference joins a record type's fields
+over every place that builds one. The copy builds `read bs[p] (p + 1)` with a
+position of any type, so `read.next` widens, and `summed` hands that position
+back to the direct `at`. No other mem golden moved, so the copy would only add
+compile work, and it was not kept. What the fixture needs is for a function
+value's parameters to hold what is actually passed to it at the calls made
+through values, in place of every type. That is a flow analysis of function
+values.
