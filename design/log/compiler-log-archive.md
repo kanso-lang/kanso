@@ -116329,3 +116329,50 @@ record bound before it is handed on. Its benchmark page draws in
 3,845,447 wasm instructions where it took 4,254,682, and an action runs
 in 115,251 where it took 125,306. Those rows are senro's to pin from its
 own CI once it takes this compiler.
+
+## 2026-11-11 — a page's values through an escape join the corpus
+
+#2427, corpus first. kanso has no call that replaces one text with
+another. The idiom is `text/join (text/split s from) to`, a list of the
+pieces and then a string from the list, and the escape senro's templates
+lean on runs it once for each character it rewrites. No benchmark replaced
+text, so nothing priced the idiom or would have scored a call that did the
+work in one pass.
+
+`replaced` is that escape as senro writes it: three searches for the five
+characters, a value with none handed back as it came, and a split and a
+join for each search that found something. A row is the mix a listing page
+has, which is a title holding four of the five characters, an excerpt
+holding an apostrophe, and seven values with nothing to rewrite. The run
+program escapes 4,000 rows and the interpreter's corpus 80.
+
+The baseline. The phase is 47,129,776 instructions of the run program,
+4.41%, measured as the whole with it less the whole without in this
+container. It runs the split and the join 28,000 times, and 20,000 of
+those find something to rewrite. run_allocs 2,445,662 ->
+2,709,581, which is 66 allocations a row, run_alloc_bytes 262,696,163 ->
+274,019,555, run_beat_iters 582,812 -> 614,812, run_find2_calls 1,060,857
+-> 1,168,857, run_str_scans 36,202 -> 72,202 and run_sh_str 19,156,704 ->
+25,232,528. The rest of the run's rows the phase moves: run_perm_allocs
+136 -> 151, run_sh_buf 97,305,312 -> 98,585,312, run_sh_bytes 24,384 ->
+888,384 and run_str_scan_bytes 19,043,360 -> 21,093,397.
+
+The run program's work rises: work_runbench 1,020,737,307 ->
+1,067,867,083 and work_runbench_dev 2,997,794,416 -> 3,065,058,505, both
+this container's readings less 109. runbench's emitted code reads
+defines=992 calls=10401 branches=9373 lines=81321 and its machine code is
+911,345 bytes. Summed over every benchmark but the decoder,
+emitted_other_defines 2,410 -> 2,421, emitted_other_calls 22,223 -> 22,353,
+emitted_other_branches 19,778 -> 19,889 and emitted_other_lines 185,435 ->
+186,392, and the summed text 5,978,121 -> 5,983,449.
+
+The interpreter's corpus rises: interp_instructions 724,216,927 ->
+744,978,389, interp_allocs 1,038,038 -> 1,074,427 and interp_peak_bytes
+1,496,663 -> 1,527,692. The tab's rows rise with it:
+browser_compile_instructions 399,455,088 -> 417,017,327,
+browser_compile_peak_bytes 969,319 -> 985,620 and browser_run_instructions
+95,097,638 -> 100,630,653.
+
+The floor is re-based. The baselines of the seven rows that read the two
+programs are scaled by what each rose, and welfare stays where it was,
+95.32525328 before and 95.32525334 after.

@@ -20,53 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a page's values through an escape join the corpus
-
-#2427, corpus first. kanso has no call that replaces one text with
-another. The idiom is `text/join (text/split s from) to`, a list of the
-pieces and then a string from the list, and the escape senro's templates
-lean on runs it once for each character it rewrites. No benchmark replaced
-text, so nothing priced the idiom or would have scored a call that did the
-work in one pass.
-
-`replaced` is that escape as senro writes it: three searches for the five
-characters, a value with none handed back as it came, and a split and a
-join for each search that found something. A row is the mix a listing page
-has, which is a title holding four of the five characters, an excerpt
-holding an apostrophe, and seven values with nothing to rewrite. The run
-program escapes 4,000 rows and the interpreter's corpus 80.
-
-The baseline. The phase is 47,129,776 instructions of the run program,
-4.41%, measured as the whole with it less the whole without in this
-container. It runs the split and the join 28,000 times, and 20,000 of
-those find something to rewrite. run_allocs 2,445,662 ->
-2,709,581, which is 66 allocations a row, run_alloc_bytes 262,696,163 ->
-274,019,555, run_beat_iters 582,812 -> 614,812, run_find2_calls 1,060,857
--> 1,168,857, run_str_scans 36,202 -> 72,202 and run_sh_str 19,156,704 ->
-25,232,528. The rest of the run's rows the phase moves: run_perm_allocs
-136 -> 151, run_sh_buf 97,305,312 -> 98,585,312, run_sh_bytes 24,384 ->
-888,384 and run_str_scan_bytes 19,043,360 -> 21,093,397.
-
-The run program's work rises: work_runbench 1,020,737,307 ->
-1,067,867,083 and work_runbench_dev 2,997,794,416 -> 3,065,058,505, both
-this container's readings less 109. runbench's emitted code reads
-defines=992 calls=10401 branches=9373 lines=81321 and its machine code is
-911,345 bytes. Summed over every benchmark but the decoder,
-emitted_other_defines 2,410 -> 2,421, emitted_other_calls 22,223 -> 22,353,
-emitted_other_branches 19,778 -> 19,889 and emitted_other_lines 185,435 ->
-186,392, and the summed text 5,978,121 -> 5,983,449.
-
-The interpreter's corpus rises: interp_instructions 724,216,927 ->
-744,978,389, interp_allocs 1,038,038 -> 1,074,427 and interp_peak_bytes
-1,496,663 -> 1,527,692. The tab's rows rise with it:
-browser_compile_instructions 399,455,088 -> 417,017,327,
-browser_compile_peak_bytes 969,319 -> 985,620 and browser_run_instructions
-95,097,638 -> 100,630,653.
-
-The floor is re-based. The baselines of the seven rows that read the two
-programs are scaled by what each rose, and welfare stays where it was,
-95.32525328 before and 95.32525334 after.
-
 ## 2026-11-11 — one limit for every test and every ratchet gate
 
 #2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
@@ -1756,6 +1709,31 @@ The idea's origin is the #2186 ruling, 2026-10-28: Clay asked for "some
 language construct that can allow you to do compile time mapping" so that
 senro could place routes and tables by name and the compiler could check the
 result.
+
+## 2026-11-13 — senro 0.3.0: association readers take the session and are named for the key
+
+Clay asked on #2497 for `has_many`-style associations that read naturally,
+with `has_one` apart from `has_many` and room for legacy names (`owner_id`
+holding a user). The committee's first reading named the readers
+`user/posts` and `post/owner`. That puts a reader in the module that does
+not hold its rows, so each model module would import the other, and kanso
+refuses an import cycle. The decision, recorded on the issue, keeps each
+reader in the module whose rows it answers and names it for the key's
+column without `_id`.
+
+senro#145 builds it, and senro tagged v0.3.0 at its merge. A reader takes
+the session alone, which already names the viewer: `page/of_note db note`.
+`notes.author_id → writers` gives `note/of_author db writer` and
+`writer/author_of_note db note`; the parent's reader names the column
+whenever the column is not named for the parent, so two keys to one table
+read apart with nothing declared. A key column with a unique index answers
+one row or none, as Rails' `has_one`: `cover/of_note db note`. senro's
+`spec/db/associated` pins all of these on both engines against Postgres.
+
+The site pins senro 0.3.0. The models guide teaches the new names and quotes
+the extended spec, and the migrations guide quotes its migrations.
+Declarations for keys the schema cannot describe wait for an app that needs
+one.
 
 ## 2026-11-13 — a lambda's body may span lines
 
