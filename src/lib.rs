@@ -30,6 +30,7 @@ pub mod provenance;
 pub mod read_at;
 pub mod repl;
 pub mod replace;
+pub mod spec_form;
 pub mod trmc;
 pub mod wasm;
 pub mod wasm_encode;
@@ -554,6 +555,10 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
         None => module_beside(file),
     };
     let mut texts = from_entry(file, source);
+    // A spec written as blocks calls std/spec names its source never spells.
+    if lexer::lex(source).is_ok_and(|l| spec_form::is_spec(&l)) {
+        texts.push((spec_form::WORDS.to_string(), std::path::PathBuf::from(file)));
+    }
     if let Some(entry) = &around {
         texts.extend(from_entry(&entry.file, &entry.source));
         // the entry's directory is the project, as it is for `compile_entry`
@@ -662,7 +667,13 @@ fn compile_library_beside(
     around: Option<&Around>,
     whole: bool,
 ) -> Result<ast::Program, String> {
-    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let mut lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    // A spec written as blocks is lowered onto `std/spec` first (#2495).
+    if whole && is_test_file(std::path::Path::new(file)) && spec_form::is_spec(&lexed) {
+        let stem = std::path::Path::new(file).file_stem().unwrap_or_default().to_string_lossy();
+        let subject = stem.strip_suffix("_test").unwrap_or(&stem).to_string();
+        lexed = spec_form::lower(&lexed, &subject).map_err(|d| diag::render(&d, file, source))?;
+    }
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     finish_program(&mut program);
     stamp_file(&mut program, file);

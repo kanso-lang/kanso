@@ -188,39 +188,46 @@ test_double <span class="o">=</span> <span class="f">expect</span> (<span class=
 
 <h2>specs that nest</h2>
 
-<p>a suite of flat constants starts repeating itself once several tests need the same starting point. <code>std/spec</code> groups them. <code>describe</code> takes a name and a list with one item to a line: <code>it</code> names an example, <code>context</code> opens a group inside, and <code>before</code> says what the examples below it are handed.</p>
+<p>a suite of flat constants starts repeating itself once several tests need the same starting point. a test file whose top level holds <code>it</code> and <code>context</code> is a spec, and the file itself plays the part of rspec's <code>describe</code>: the outline is headed with the name of the module it tests, here <code>stack</code>. <code>it</code> names an example and holds its body, indented under it. every bare line of the body is a check, and the example passes when each one answers true, which is what a matcher from <code>std/expect</code> answers when it matches.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">stack_test.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/expect"</span>
-<span class="k">import</span> <span class="s">"std/spec"</span>
 
-test_a_stack <span class="o">=</span> describe <span class="s">"a stack"</span> [
-  before (_ <span class="o">-&gt;</span> [])
-  it <span class="s">"starts empty"</span> (s <span class="o">-&gt;</span> expect s . to (have_length 0))
-  context <span class="s">"after a push"</span> [
-    before (s <span class="o">-&gt;</span> push s 7)
-    it <span class="s">"holds one"</span> (s <span class="o">-&gt;</span> expect s . to (have_length 1))
-    it <span class="s">"holds what was pushed"</span> (s <span class="o">-&gt;</span> expect s . to (contain 7))
-  ]
-]</code></pre>
+stack <span class="o">=</span> []
+
+it <span class="s">"starts empty"</span>
+  expect stack . to (have_length <span class="n">0</span>)
+
+context <span class="s">"after a push"</span>
+  stack <span class="o">=</span> push stack <span class="n">7</span>
+
+  it <span class="s">"holds one"</span>
+    expect stack . to (have_length <span class="n">1</span>)
+
+  it <span class="s">"holds what was pushed"</span>
+    expect stack . to (contain <span class="n">7</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test stack_test.kso</div>
-    <pre><code>a stack
+    <pre><code>stack
   starts empty
   after a push
     holds one
     holds what was pushed
 
 3 examples, 0 failed
-test_a_stack ... ok
+test_stack ... ok
 1 passed, 0 failed</code></pre>
   </div>
 </div>
 
-<p><code>describe</code> answers an effect, and the runner performs a test whose value is one, so a spec is still a constant named <code>test_</code>. each example gets its hooks run fresh, the outer group's first: <code>starts empty</code> is handed <code>[]</code>, and the two under <code>after a push</code> are handed <code>[7]</code>. an example passes when it answers true, which is what a matcher from <code>std/expect</code> answers when it matches. one that fails is listed under the outline by its full name, such as <code>a stack after a push holds one</code>, with what it answered.</p>
+<p>a binding at the top of the file or of a context is a <em>given</em>, and givens take the place of rspec's <code>let</code>. an example evaluates the givens it reads, fresh, and no others. a context may restate a given, and everything evaluated for an example in that context sees the restated value, including any given at the top that reads it. a restatement may read the value it replaces, which is how <code>stack = push stack 7</code> builds on the empty stack. a given that no example reads is refused, as any unused binding is.</p>
 
-<p><code>around</code> is the hook the others are built from. it is handed the value so far and the rest of the example as a function, and it runs the rest between whatever it opens and closes. an example's failure is caught inside its hooks, so the closing half runs for a failing example too. that is what a test of a program with a database wants: open a transaction, run the example, roll it back.</p>
+<p>kanso otherwise refuses a name that means two things, so that a reader never has to work out which one is in view. a spec nests one level to keep that promise: a context holds givens, hooks and <code>it</code>, and a context inside a context is refused. a reader looking for a name has two places to look, the context and then the top of the file.</p>
+
+<p>hooks wrap the examples: <code>before</code>, <code>after</code> and <code>around</code>, at the top or in a context. <code>around</code> is the one the others are built from. it is handed the rest of the example as a function and runs it between whatever it opens and closes, and an example's failure is caught inside its hooks, so the closing half runs for a failing example too. that is what a test of a program with a database wants: open a transaction, run the example, roll it back. an <code>around</code> may name what it hands on, as in <code>around db = within connection</code>, and the name is then a given the hook supplies.</p>
+
+<p>the file is compiled into a call to <code>describe</code> from <code>std/spec</code>, with each example a function, and <code>kanso test</code> runs it like any constant named <code>test_</code>. a program that builds a spec as data can call <code>describe</code>, <code>it</code> and <code>context</code> itself.</p>
 
 <h2>importing another module</h2>
 

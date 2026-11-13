@@ -1,0 +1,7 @@
+import "std/expect"
+
+items = []
+spare = [1 2 3]
+
+it "starts empty"
+  expect items . to (equal [])

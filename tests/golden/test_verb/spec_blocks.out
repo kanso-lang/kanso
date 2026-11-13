@@ -1,0 +1,13 @@
+stack
+  starts empty
+  after a push
+    holds one
+    holds what was pushed (FAILED)
+  is empty again out here
+
+stack after a push holds what was pushed
+  expect/mismatch [8] [7]
+
+4 examples, 1 failed
+test_stack ... FAILED (returned spec/failed 1)
+0 passed, 1 failed
