@@ -555,6 +555,10 @@ pub fn compile_test_file(file: &str, source: &str) -> Result<ast::Program, Strin
         None => module_beside(file),
     };
     let mut texts = from_entry(file, source);
+    // A spec written as blocks calls std/spec names its source never spells.
+    if lexer::lex(source).is_ok_and(|l| spec_form::is_spec(&l)) {
+        texts.push((spec_form::WORDS.to_string(), std::path::PathBuf::from(file)));
+    }
     if let Some(entry) = &around {
         texts.extend(from_entry(&entry.file, &entry.source));
         // the entry's directory is the project, as it is for `compile_entry`

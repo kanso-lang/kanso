@@ -27,6 +27,11 @@ use crate::diag::{Diagnostic, Span};
 use crate::lexer::{Lexed, Line, StrPart, Tok};
 use crate::name::Name;
 
+/// The `std/spec` names a lowered spec calls without its author writing them.
+/// The shipped library is read only as far as the program's words reach, and
+/// these are words the source never holds.
+pub const WORDS: &str = "describe it context around before after every";
+
 /// What the generated names start with. An author's own name never needs to.
 const MINE: &str = "spec_";
 
