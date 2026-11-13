@@ -1812,5 +1812,18 @@ which answers the first check that is not true.
 Watched red: with a file given reading the file's own `stack` in place of
 the context's, the restatement went unread and was refused at its line.
 The book's `specs that nest` section and its replayed sample now teach
-the block form. senro's own specs, and its testing guide that quotes
+the block form.
+
+**Rows, from CI.** `lib/spec/spec.kso` is compiled into the binary, so the
+compile rows moved:
+- Three rose: `compile_instructions` to 22,781,295 (+558),
+  `entry_instructions` to 119,987,059 (+1,641) and
+  `library_instructions` to 64,033,359 (+1,534).
+- The rest fell: `codegen_instructions_dev` to 117,026,768 (-1,098),
+  `codegen_instructions_release` to 372,205,711 (-3,088), and every work
+  row in `bench/instructions_golden.txt` by exactly 130.
+
+A shift shared that evenly across fifteen benchmarks looks like start-up
+work or binary layout, and nothing here isolates which. The meta rose a
+hair and is banked. senro's own specs, and its testing guide that quotes
 them, move when senro's pin includes this.
