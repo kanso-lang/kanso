@@ -1800,8 +1800,14 @@ expression". It now drops a comment wherever an indented line is read. The
 micro golden `a_comment_among_block_lines` puts a comment in an `if` block and
 in a lambda's body; on main it fails at the first.
 
-The lexer and parser grew, so the compile rows and the browser rows move by
-what CI measures; the floor drops by that cost under the language exception,
-as a ruled part of the language. Open: #2498 is rewritten on this, with `it`
+The lexer and parser grew, and four rows rose with them, all read from CI:
+compile_instructions 22,780,737 -> 22,843,804, entry_instructions
+119,985,418 -> 120,154,980, library_instructions 64,031,825 -> 64,189,750,
+and browser_compile_instructions 412,766,768 -> 412,895,722. The front end
+now looks at the last token of every line and every list element for an
+arrow, which is where the extra work goes; no corpus file holds a block
+lambda yet. No runtime, emitted or codegen row moved. The welfare floor
+drops by that cost, 95.39101637 -> 95.39075120, under the language
+exception. Open: #2498 is rewritten on this, with `it`
 and `context` as ordinary calls taking block lambdas, once Clay says whether a
 context may restate a value that setup above it reads.
