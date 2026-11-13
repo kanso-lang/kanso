@@ -1817,7 +1817,9 @@ the block form.
 **Rows, from CI.** `lib/spec/spec.kso` is compiled into the binary, so
 three compile rows rose: `compile_instructions` to 22,781,295 (+558),
 `entry_instructions` to 119,987,059 (+1,641) and `library_instructions`
-to 64,033,359 (+1,534). Nothing fell.
+to 64,033,359 (+1,534). The tab compiles the library too, so
+`browser_compile_instructions` rose to 412,770,031 (+3,263). Nothing
+fell.
 
 The first CI run also read every work row 130 lower and both codegen rows
 lower, and I took those rows and banked a rise. The second run, on a
