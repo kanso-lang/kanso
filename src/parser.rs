@@ -2380,7 +2380,17 @@ impl<'a> P<'a> {
                         params.push((name, pspan));
                     }
                     self.pos = arrow_end + 1;
-                    let body = self.parse_expr()?;
+                    // `->` ended its line: the lines under it are the body, read
+                    // as a `fn` body is
+                    let body = match self.toks.get(self.pos) {
+                        Some((Tok::Body(lines), bspan, _)) => {
+                            let at = *bspan;
+                            let stmts = parse_body(lines)?;
+                            self.pos += 1;
+                            Expr::Block(stmts, at)
+                        }
+                        _ => self.parse_expr()?,
+                    };
                     self.expect_rparen()?;
                     return Ok(Expr::Lambda { params, body: Box::new(body), span });
                 }

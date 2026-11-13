@@ -197,6 +197,25 @@ cups <span class="o">=</span> {
 
 <p>a list that fits on one line is written on one line. the compiler refuses the spanning form for it, for the same reason it refuses a needless continuation (appendix c).</p>
 
+<p>a lambda can span lines too. end the line on its <code>-&gt;</code> and the lines indented under it are the body, read the way a function body is: bindings first, and the last line is the answer. a <code>)</code> alone, at the indent of the line that opened the lambda, closes it. any call can take a lambda written this way, so this is the same <code>list/map</code> as before with a longer body:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">long_lambda.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+leaves <span class="o">=</span> [<span class="n">3</span> <span class="n">5</span> <span class="n">8</span>]
+brews <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> leaves (grams <span class="o">-&gt;</span>
+  water <span class="o">=</span> grams <span class="o">*</span> <span class="n">60</span>
+  seconds <span class="o">=</span> <span class="n">20</span> <span class="o">+</span> grams <span class="o">*</span> <span class="n">5</span>
+  <span class="s">"<span class="i">{grams}</span>g: <span class="i">{water}</span>ml, <span class="i">{seconds}</span>s"</span>
+))
+<span class="f">print</span> <span class="s">"<span class="i">{brews}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run long_lambda.kso</div>
+    <pre><code>["3g: 180ml, 35s" "5g: 300ml, 45s" "8g: 480ml, 60s"]</code></pre>
+  </div>
+</div>
+
 <h2>records</h2>
 
 <p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in the order you choose, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>

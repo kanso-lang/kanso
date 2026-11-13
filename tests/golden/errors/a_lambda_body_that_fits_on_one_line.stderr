@@ -1,0 +1,4 @@
+error[formatting]: this lambda fits on one line (47 characters) — a lambda spans lines only when it does not
+  --> a_lambda_body_that_fits_on_one_line.kso:4:38
+   4 | xs = list/to_list (list/map [1 2] (x ->
+                                            ^
