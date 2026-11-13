@@ -1814,6 +1814,14 @@ the context's, the restatement went unread and was refused at its line.
 The book's `specs that nest` section and its replayed sample now teach
 the block form.
 
+**A reach the lowering has to feed.** The shipped library is read only as
+far as a program's words reach (#2451), and that reach is taken from the
+source. A lowered spec calls `describe` and `every`, which its source
+never spells. The pruned `std/spec` lacked them, so a release build fell
+back to the whole library and compiled each spec twice, and a debug build
+refused, which is how the macOS run found it. `compile_test_file` now
+hands the reach `std/spec`'s words whenever the file is a spec.
+
 **Rows, from CI.** `lib/spec/spec.kso` is compiled into the binary, so
 three compile rows rose: `compile_instructions` to 22,781,295 (+558),
 `entry_instructions` to 119,987,059 (+1,641) and `library_instructions`
