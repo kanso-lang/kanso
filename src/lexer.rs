@@ -739,6 +739,18 @@ fn gather_span(
         validate_spacing(&lexed, number, diags);
         let mut text = content.to_string();
         let mut element = lexed.tokens;
+        if nested.is_none() && matches!(element.last(), Some((Tok::Arrow, _, _))) {
+            let body = match gather_lambda_body(raws, at, inner, &element, diags) {
+                Ok(body) => body,
+                Err(next) => {
+                    let one_line = parts.join(" ");
+                    return Spanned { tokens, next, one_line, whole: false, commented };
+                }
+            };
+            at = body.next;
+            whole = false;
+            element.extend(body.tokens);
+        }
         if let Some(inner_open) = nested {
             let span = gather_span(raws, at, inner, inner_open, number, diags);
             at = span.next;
@@ -795,6 +807,125 @@ fn gather_span(
         Span::at(open_line, indent + 1),
     ));
     Spanned { tokens, next: at, one_line: parts.join(" "), whole: false, commented }
+}
+
+/// A lambda body held by an element of a list that spans lines: the lines
+/// under the element's `->` and the `)` that closes them at the element's
+/// indent. The lines are lexed as a file of their own, moved left to the
+/// margin, so a body may hold anything a body at the top level holds, and
+/// their spans are moved back.
+struct LambdaBody {
+    /// The body as one token, then the closing line's tokens.
+    tokens: Vec<(Tok, Span, u32)>,
+    next: usize,
+}
+
+fn gather_lambda_body(
+    raws: &[&str],
+    from: usize,
+    indent: usize,
+    head: &[(Tok, Span, u32)],
+    diags: &mut Vec<Diagnostic>,
+) -> Result<LambdaBody, usize> {
+    let arrow = head.last().map(|t| t.1).unwrap_or(Span::at(from, indent + 1));
+    let margin = indent + 2;
+    let depth = |raw: &str| raw.len() - raw.trim_start().len();
+    let mut end = from;
+    while end < raws.len() && (raws[end].trim().is_empty() || depth(raws[end]) > indent) {
+        end += 1;
+    }
+    if end == from {
+        diags.push(Diagnostic::new(
+            "syntax",
+            "a lambda whose `->` ends the line takes the lines indented under it as its body, \
+             and there are none"
+                .to_string(),
+            arrow,
+        ));
+        return Err(from);
+    }
+    let close = raws.get(end).map(|raw| raw.trim_end());
+    let Some(close) = close.filter(|c| depth(c) == indent && c[indent..].starts_with(')')) else {
+        diags.push(Diagnostic::new(
+            "syntax",
+            format!(
+                "a lambda that spans lines closes with `)` at column {}, under the line that \
+                 opened it",
+                indent + 1
+            ),
+            Span::at(end + 1, indent + 1),
+        ));
+        return Err(end);
+    };
+    let mut source = String::new();
+    for (k, raw) in raws[from..end].iter().enumerate() {
+        if !raw.trim().is_empty() && depth(raw) < margin {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!("a lambda's body sits {margin} spaces in, two deeper than its `->` line"),
+                Span::at(from + k + 1, depth(raw) + 1),
+            ));
+            return Err(end);
+        }
+        source.push_str(raw.get(margin..).unwrap_or(""));
+        source.push('\n');
+    }
+    let body = match lex(&source) {
+        Ok(lexed) => lexed.lines,
+        Err(found) => {
+            diags.extend(found.into_iter().map(|mut d| {
+                d.span = moved(d.span, from, margin);
+                d
+            }));
+            return Err(end);
+        }
+    };
+    let mut body: Vec<Line> = body.into_iter().map(|l| moved_line(l, from, margin)).collect();
+    let closing = match lex_line(&close[indent..], end + 1, indent + 1) {
+        Ok(l) => l.tokens,
+        Err(d) => {
+            diags.push(d);
+            return Err(end);
+        }
+    };
+    let head_line = Line { number: from, indent, tokens: head.to_vec() };
+    let close_line = Line { number: end + 1, indent, tokens: closing.clone() };
+    if let Some(fits) = lambda_fits(&head_line, &body, &close_line) {
+        diags.push(Diagnostic::new(
+            "formatting",
+            format!(
+                "this lambda fits on one line ({fits} characters) — a lambda spans lines only \
+                 when it does not"
+            ),
+            arrow,
+        ));
+    }
+    let mut tokens = vec![(Tok::Body(std::mem::take(&mut body)), arrow, arrow.col)];
+    tokens.extend(closing);
+    Ok(LambdaBody { tokens, next: end + 1 })
+}
+
+/// A span lexed from lines moved `cols` left and starting `lines` down, put
+/// back where the source has it.
+fn moved(span: Span, lines: usize, cols: usize) -> Span {
+    Span::at(span.line as usize + lines, span.col as usize + cols)
+}
+
+fn moved_line(line: Line, lines: usize, cols: usize) -> Line {
+    let tokens = line
+        .tokens
+        .into_iter()
+        .map(|(tok, span, end)| {
+            let tok = match tok {
+                Tok::Body(inner) => {
+                    Tok::Body(inner.into_iter().map(|l| moved_line(l, lines, cols)).collect())
+                }
+                tok => tok,
+            };
+            (tok, moved(span, lines, cols), end + cols as u32)
+        })
+        .collect();
+    Line { number: line.number + lines, indent: line.indent + cols, tokens }
 }
 
 /// One meaning, one rendering: a statement split across `.` continuation

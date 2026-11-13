@@ -1,0 +1,9 @@
+# The body of a lambda in a list element sits two spaces deeper than the
+# element, here four; three is refused.
+xs = [
+  (x ->
+   y = x + 1
+   y * 2
+  )
+]
+print "{length xs}"

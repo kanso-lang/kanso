@@ -1,0 +1,18 @@
+import "std/list"
+
+# A lambda body may sit inside an element of a list that spans lines, and
+# holds what any body holds: a comment, bindings, a nested block lambda.
+steps = [
+  (x ->
+    # tens, then one more, doubled
+    y = x * 10
+    zs = list/map [y y] (z ->
+      w = z + 1
+      w * 2
+    )
+    list/sum zs
+  )
+  (x -> x + 1)
+]
+
+pub play = print "{list/to_list (list/map steps (f -> f 2))}"

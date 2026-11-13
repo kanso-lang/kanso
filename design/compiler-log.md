@@ -1775,6 +1775,15 @@ bindings, then the answer. A `)` that starts a line at the opening line's
 indent closes the lambda, and the rest of that line continues the statement,
 so `))` and `) .> …` both work. Bodies nest.
 
+A block lambda may also be an element of a list that spans lines, which is
+how a spec file writes `it "…" (s ->` among the items of a `describe`. The
+list gatherer reads raw lines before there are any `Line`s to fold, so it
+lexes the body lines as a file of their own, moved left to the margin, and
+moves their spans back. A body there holds anything a body at the top level
+holds; `a_lambda_body_in_a_list` nests one block lambda inside another and
+puts a comment in the outer one. A body line shallower than two spaces under
+its element is refused with its own error golden.
+
 Three refusals, each with an error golden. An arrow that ends its line with
 nothing indented under it, and a body that is not closed by a `)` at the
 opening indent, are syntax errors. A body of one line that would fit on one
