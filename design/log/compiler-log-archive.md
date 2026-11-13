@@ -116251,3 +116251,81 @@ browser_run_instructions 93,283,820 -> 95,675,366.
 The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.29096728 before and 95.29096738 after.
+
+## 2026-11-11 — a decoder handed out keeps its callers in registers
+
+#2421, the piece senro's `wire` was waiting on. A group that answers a
+record in registers could not be handed out as a value. A function value
+is called through a wrapper that takes and answers boxed words, and the
+wrapper knew one return shape, so the analysis refused the type outright
+when any group answering it was named as a value anywhere in the program.
+One reader handed the decoder, and every caller it had went back to
+building a record.
+
+The wrapper now calls the group the way a direct caller does and builds
+the record from the three words, with `k_parsed_box` or its second-field
+twin, and a failure riding in the words comes back as itself. Whoever
+calls the value reads one boxed word as before. The analysis no longer
+asks whether a group is handed out, and the walk that collected every
+name used as a value is gone.
+
+The ratchet row for this, `a function value returned in registers`, broke
+the check the analysis no longer makes, so its mutation would not apply.
+It now breaks the wrapper: called as though every group answered a boxed
+word, `micro/a_decoder_handed_out_answers_like_one_called` prints nothing
+natively and the row reads red.
+
+What a handed-out decoder still needs is its position said: `at bs p:int`.
+A function handed out can be called with anything, so inference gives its
+parameters every type, the position worked out from one may be a float as
+far as it can tell, and a record goes by value only when its position is
+an int. The corpus and both fixtures write the annotation.
+
+Tried and taken back: letting a record be passed whole to a slot that
+binds it, boxed at the call. `wire` does that in two places and the rule
+that refuses it is syntactic, since binding the record to a name first is
+allowed. It was written, and `mem/a_carried_list_frees_its_buffer` went
+from 22 allocations to 1,218 and from sh_rec 512 to 77,056. Its `bag` is
+rebuilt in place by a loop that passes it whole, the relaxation let `bag`
+go by value, and every lap then built a fresh record at the call where
+none had been built at all. A type passed whole on its hot path is better
+left on the heap, and the old rule keeps it there. senro binds its record
+first in those two places.
+
+Measured on the corpus. `mem/a_decoder_handed_out_still_answers_its_callers_by_value`
+reads sh_rec 512, the eight reads that go through the value, where it
+reads 3,200 with the refusal put back. The run program's direct reads
+come off the heap again: run_sh_rec 23,155,168 -> 10,867,168, which
+leaves the 64 reads a pass that go through the value, run_allocs
+2,637,662 -> 2,445,662, run_alloc_bytes 274,984,163 -> 262,696,163,
+run_evac_allocs 5,617 -> 2,617 and run_evac_bytes 4,721,408 -> 4,625,408.
+work_runbench falls 1,035,809,998 -> 1,020,737,307 and work_runbench_dev
+3,028,058,391 -> 2,997,794,416, both this container's readings less 109.
+The tab runs its corpus in 95,097,638 instructions where it took
+95,675,366.
+
+What else moves. The emitter does less with the walk gone:
+emit_instructions 5,651,651 -> 5,632,306. The tab's compile rises, since
+it now emits the by-value paths the refusal used to skip:
+browser_compile_instructions 398,181,377 -> 399,455,088 and
+browser_compile_peak_bytes 968,782 -> 969,319. interp_instructions reads
+724,216,927, six more. runbench's emitted code reads defines=981
+calls=10271 branches=9262 lines=80364, the summed rows
+emitted_other_defines 2,410, emitted_other_calls 22,223,
+emitted_other_branches 19,778 and emitted_other_lines 185,435, and its
+machine code is 906,017 bytes, so the summed text is 5,978,121. Welfare
+rises 95.29096738 -> 95.32525328, and the floor is banked there.
+
+Checked against the interpreter. `micro/a_decoder_handed_out_answers_like_one_called`
+reaches a decoder by name, through a parameter, through a partial, out of
+a list and from a function that answers one of three, with a short read,
+a position too wide for a word and a failure where the record was
+expected. With the wrapper's boxing taken out it stops at a field read of
+a number.
+
+senro, in a container with this compiler and `wire` written for it: a
+record of two ints for a count, `:int` where a position comes in, and the
+record bound before it is handed on. Its benchmark page draws in
+3,845,447 wasm instructions where it took 4,254,682, and an action runs
+in 115,251 where it took 125,306. Those rows are senro's to pin from its
+own CI once it takes this compiler.

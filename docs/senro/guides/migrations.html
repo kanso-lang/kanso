@@ -194,19 +194,44 @@ pub add_color_to_tags = [
   <div class="code-panel-title">spec/db/associated/migrations.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
 
-<span class="k">pub</span> all <span class="o">=</span> [notes pages pages_to_notes]
+<span class="k">pub</span> all <span class="o">=</span> [
+  writers
+  notes
+  pages
+  covers
+  pages_to_notes
+  notes_to_writers
+  covers_to_notes
+  one_cover
+]
 
-notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [title]
+writers <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"writers"</span> [name]
+
+notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [title author_id]
 
 pages <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"pages"</span> [note_id body]
 
+covers <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"covers"</span> [note_id image]
+
 pages_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"pages"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
+
+notes_to_writers <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"notes"</span> <span class="s">"author_id"</span> <span class="s">"writers"</span>
+
+covers_to_notes <span class="o">=</span> <span class="f">models/add_foreign_key</span> <span class="s">"covers"</span> <span class="s">"note_id"</span> <span class="s">"notes"</span>
+
+one_cover <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"covers"</span> <span class="s">"note_id"</span>
+
+name <span class="o">=</span> <span class="f">models/column</span> <span class="s">"name"</span> <span class="s">"text not null"</span>
 
 title <span class="o">=</span> <span class="f">models/column</span> <span class="s">"title"</span> <span class="s">"text not null"</span>
 
+author_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"author_id"</span> <span class="s">"integer not null"</span>
+
 note_id <span class="o">=</span> <span class="f">models/column</span> <span class="s">"note_id"</span> <span class="s">"integer not null"</span>
 
-body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text not null"</span></code></pre>
+body <span class="o">=</span> <span class="f">models/column</span> <span class="s">"body"</span> <span class="s">"text not null"</span>
+
+image <span class="o">=</span> <span class="f">models/column</span> <span class="s">"image"</span> <span class="s">"text not null"</span></code></pre>
 </div>
 
 <h2>what is not here</h2>

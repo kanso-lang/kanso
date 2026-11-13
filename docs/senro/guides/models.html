@@ -255,26 +255,53 @@ pub type signature
 
 <h2>a foreign key reads both ways</h2>
 
-<p>a foreign key the migrations add writes that <code>models/where</code> for the app, once in each direction, as Rails' <code>has_many</code> and <code>belongs_to</code> do. when <code>pages.note_id</code> holds a row of <code>notes</code>, the <code>page</code> module gets <code>of_note viewer db note</code>, the pages of a note that the viewer may see, and the <code>note</code> module gets <code>of_page viewer db page</code>, the note a page belongs to. each reads the other record's field by name, <code>note.id</code> or <code>page.note_id</code>, so neither module imports the other, and an app can import either one into the other without a cycle. a module that already declares a function of that name keeps its own. so does one that declares a pub function or record named as the parameter. an app that keeps a <code>schema.sql</code> gets its keys from the dump's <code>FOREIGN KEY ... REFERENCES</code> constraints instead.</p>
+<p>a foreign key the migrations add writes a reader for the app in each direction, as Rails' <code>has_many</code> and <code>belongs_to</code> do. each reader takes the session, which already names the viewer, and is named for the key's column without its <code>_id</code>. when <code>pages.note_id</code> holds a row of <code>notes</code>, the <code>page</code> module gets <code>of_note db note</code>, the pages of a note that the viewer may see, and the <code>note</code> module gets <code>of_page db page</code>, the note a page belongs to.</p>
 
-<p>the modules in <code>spec/db/associated</code> hold one helper each and nothing about the other table. the derivation writes the rest:</p>
+<p>a column named for something other than its table keeps its own name. <code>notes.author_id</code> holding a row of <code>writers</code> gives <code>note/of_author db writer</code>, the notes a writer wrote, and <code>writer/author_of_note db note</code>, the writer of a note. the parent's reader names the column whenever the column is not named for the parent, so two keys to one table, <code>author_id</code> and <code>editor_id</code>, read apart with nothing declared. a key column with a unique index holds at most one row for each parent, as Rails' <code>has_one</code>, and its reader answers that row or none: <code>covers.note_id</code> unique gives <code>cover/of_note db note</code>.</p>
+
+<p>each reader lives in the module whose rows it answers and reads the other record's field by name, <code>note.id</code> or <code>page.note_id</code>, so neither module imports the other, and an app can import either one into the other without a cycle. a module that already declares a function of that name keeps its own. so does one that declares a pub function or record named as the parameter. an app that keeps a <code>schema.sql</code> gets its keys from the dump's <code>FOREIGN KEY ... REFERENCES</code> constraints instead.</p>
+
+<p>the modules in <code>spec/db/associated</code> hold one helper each and nothing about the other tables. the derivation writes the rest:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/associated/reading.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"../../../models"</span>
+<span class="k">import</span> <span class="s">"./cover"</span>
 <span class="k">import</span> <span class="s">"./note"</span>
 <span class="k">import</span> <span class="s">"./page"</span>
+<span class="k">import</span> <span class="s">"./writer"</span>
 <span class="k">import</span> <span class="s">"std/list"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">pages_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db <span class="f">note/note_model</span> id
-    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">page/of_note</span> <span class="s">""</span> db n)
+  <span class="f">models/find</span> db <span class="f">note/note_model</span> id
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">page/of_note</span> db n)
     <span class="o">.&gt;</span> (ps <span class="o">-&gt;</span> said db <span class="s">"note {id}: {list/to_list (list/map ps page/bodied)}"</span>)
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">note_of</span> db id
-  <span class="f">models/found</span> <span class="s">""</span> db <span class="f">page/page_model</span> id
-    <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">note/of_page</span> <span class="s">""</span> db p)
+  <span class="f">models/find</span> db <span class="f">page/page_model</span> id
+    <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">note/of_page</span> db p)
     <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> said db <span class="s">"page {id}: {note/titled n}"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">notes_by</span> db id
+  <span class="f">models/find</span> db <span class="f">writer/writer_model</span> id
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> <span class="f">note/of_author</span> db w)
+    <span class="o">.&gt;</span> (ns <span class="o">-&gt;</span> said db <span class="s">"writer {id}: {list/to_list (list/map ns note/titled)}"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">author_of</span> db id
+  <span class="f">models/find</span> db <span class="f">note/note_model</span> id
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">writer/author_of_note</span> db n)
+    <span class="o">.&gt;</span> (w <span class="o">-&gt;</span> said db <span class="s">"note {id}: {writer/named w}"</span>)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">cover_of</span> db id
+  <span class="f">models/find</span> db <span class="f">note/note_model</span> id
+    <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">cover/of_note</span> db n)
+    <span class="o">.&gt;</span> (c <span class="o">-&gt;</span> said db <span class="s">"note {id}: {shown c}"</span>)
+
+<span class="k">fn</span> <span class="f">shown</span> none
+  <span class="s">"no cover"</span>
+
+<span class="k">fn</span> <span class="f">shown</span> c
+  <span class="f">cover/shown</span> c
 
 <span class="k">fn</span> <span class="f">said</span> db line
   print line <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect db)</code></pre>
@@ -284,7 +311,12 @@ pub type signature
   <div class="code-panel-title">kanso run spec/db/associated</div>
   <pre><code>note 1: ["a" "b"]
 note 2: ["c"]
-page 2: note: second</code></pre>
+page 2: note: second
+writer 1: ["note: first" "note: third"]
+note 2: writer: bo
+note 2: cover: kettle.png
+note 1: no cover
+cover 1: note: second</code></pre>
 </div>
 
 <h2>a page at a time</h2>
