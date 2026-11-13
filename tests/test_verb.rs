@@ -282,6 +282,58 @@ fn a_spec_nests_and_its_hooks_close_around_a_failure() {
     assert_eq!(output.status.code(), Some(1));
 }
 
+/// A spec written as blocks (#2495): the file is the describe, `it` takes a
+/// body, and a context restates a given. The golden holds the outline headed
+/// by the file's subject, `stack`. `size` is a given at the top that reads
+/// `stack`, and inside the context it is built from the restated stack, which
+/// read the value it replaced. The failing example is reported by its second
+/// check, the first that did not hold.
+#[test]
+fn a_spec_written_as_blocks_restates_a_given_for_its_context() {
+    let output = in_fixtures(&["test", "spec_blocks"]);
+    let out = std::fs::read_to_string(fixture_dir().join("spec_blocks.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(1));
+}
+
+/// An `around` that names what it hands on (#2495): the name is a given the
+/// hook supplies, read by another given at the top and by a context's
+/// restatement. The hook's lines bracket each example.
+#[test]
+fn an_around_hook_names_what_it_hands_on() {
+    let output = in_fixtures(&["test", "spec_hooks"]);
+    let out = std::fs::read_to_string(fixture_dir().join("spec_hooks.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// One level of `context` (#2495): a context inside a context is refused at
+/// the inner one.
+#[test]
+fn a_context_inside_a_context_is_refused() {
+    let output = in_fixtures(&["test", "spec_too_deep"]);
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("spec_too_deep.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_ne!(output.status.code(), Some(0));
+}
+
+/// A given no example reads is refused, as any unused binding is (#2495).
+#[test]
+fn a_given_no_example_reads_is_refused() {
+    let output = in_fixtures(&["test", "spec_unread_given"]);
+    let expected =
+        std::fs::read_to_string(fixture_dir().join("spec_unread_given.stderr")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), expected);
+    assert_ne!(output.status.code(), Some(0));
+}
+
 /// A test file beside an entry reads the entry's bindings as names (#2463).
 /// The entry binds `front` and `told` and performs `told`. The first test
 /// reads `front`. The second performs `told`, an effect, so `post 1` is

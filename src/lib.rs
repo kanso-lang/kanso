@@ -30,6 +30,7 @@ pub mod provenance;
 pub mod read_at;
 pub mod repl;
 pub mod replace;
+pub mod spec_form;
 pub mod trmc;
 pub mod wasm;
 pub mod wasm_encode;
@@ -662,7 +663,13 @@ fn compile_library_beside(
     around: Option<&Around>,
     whole: bool,
 ) -> Result<ast::Program, String> {
-    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let mut lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    // A spec written as blocks is lowered onto `std/spec` first (#2495).
+    if whole && is_test_file(std::path::Path::new(file)) && spec_form::is_spec(&lexed) {
+        let stem = std::path::Path::new(file).file_stem().unwrap_or_default().to_string_lossy();
+        let subject = stem.strip_suffix("_test").unwrap_or(&stem).to_string();
+        lexed = spec_form::lower(&lexed, &subject).map_err(|d| diag::render(&d, file, source))?;
+    }
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     finish_program(&mut program);
     stamp_file(&mut program, file);

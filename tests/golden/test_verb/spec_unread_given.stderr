@@ -1,0 +1,4 @@
+error[unused]: unused given `spare`: no example reads it
+  --> spec_unread_given/list_test.kso:4:1
+   4 | spare = [1 2 3]
+       ^

@@ -1,0 +1,4 @@
+error[syntax]: a spec nests one level: a context holds givens, hooks and `it`, and this context belongs at the top of the file as one of its own
+  --> spec_too_deep/list_test.kso:8:3
+   8 |   context "and another"
+         ^

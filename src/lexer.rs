@@ -285,6 +285,13 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                 )
                 || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _, _)] if head == "else")
                 || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _, _)] if head == "build")
+                // a spec written as blocks (#2495): `it "…"` and `context "…"`
+                // hold their lines, which spec_form lowers
+                || matches!(
+                    p.tokens.as_slice(),
+                    [(Tok::Ident(head), _, _), (Tok::Str(_), _, _)]
+                        if head == "it" || head == "context"
+                )
                 || matches!(
                     p.tokens.as_slice(),
                     [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(head), _, _)]

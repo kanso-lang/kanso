@@ -1,0 +1,24 @@
+import "std/expect"
+
+# A spec written as blocks (#2495). The file is the describe, so the outline
+# is headed `stack`. `size` is a given at the top that reads `stack`, and the
+# context restates `stack` from the value it replaces, so `size` there is
+# built from the pushed stack. The last example fails on its second check.
+stack = []
+size = length stack
+
+it "starts empty"
+  expect size . to (equal 0)
+
+context "after a push"
+  stack = push stack 7
+
+  it "holds one"
+    expect size . to (equal 1)
+
+  it "holds what was pushed"
+    expect stack . to (contain 7)
+    expect stack . to (equal [8])
+
+it "is empty again out here"
+  expect stack . to (equal [])

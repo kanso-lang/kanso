@@ -1,0 +1,12 @@
+import "std/expect"
+
+items = []
+
+context "with one item"
+  items = push items 1
+
+  context "and another"
+    items = push items 2
+
+    it "holds two"
+      expect items . to (have_length 2)

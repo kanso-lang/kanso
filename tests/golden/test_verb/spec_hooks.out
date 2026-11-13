@@ -1,0 +1,12 @@
+greeting
+    (opened)
+    (closed)
+  greets whoever the hook handed on
+  for a guest
+    (opened)
+    (closed)
+    is warmer
+
+2 examples, 0 failed
+test_greeting ... ok
+1 passed, 0 failed

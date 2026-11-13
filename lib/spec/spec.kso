@@ -64,6 +64,18 @@ pub fn context name items
 pub fn it name body
   example name body
 
+# The checks of an example written as a block (#2495), in order: true when
+# every one holds, or the first answer that is not true. A check may be an
+# effect, and the ones after a failing check are not performed.
+pub fn every checks
+  list/fold checks (effect true) (acc c -> acc .> (got -> next got c))
+
+fn next true c
+  settled c
+
+fn next got _
+  effect got
+
 pub fn around wrap
   hook wrap
 

@@ -1,0 +1,25 @@
+import "std/expect"
+import "std/io"
+
+# An `around` that names what it hands on (#2495): `visitor` is a given whose
+# value the hook supplies, read here by another given. The hook prints a line
+# on each side of every example.
+around visitor = opened
+
+greeting = "hello, {visitor}"
+
+it "greets whoever the hook handed on"
+  expect greeting . to (equal "hello, ada")
+
+context "for a guest"
+  greeting = "welcome, {visitor}"
+
+  it "is warmer"
+    expect greeting . to (start_with "welcome")
+
+# Hands each example "ada", and says so on the way in and out.
+fn opened _ rest
+  io/write "    (opened)\n" .> (_ -> rest "ada") .> closed
+
+fn closed got
+  io/write "    (closed)\n" .> (_ -> effect got)
