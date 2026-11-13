@@ -1,0 +1,4 @@
+error[syntax]: a lambda that spans lines closes with `)` at column 1, under the line that opened it
+  --> a_lambda_body_left_unclosed.kso:5:1
+   5 | print "{list/to_list tens}"
+       ^

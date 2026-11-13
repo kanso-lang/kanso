@@ -1,0 +1,4 @@
+error[formatting]: a lambda's body sits 4 spaces in, two deeper than its `->` line
+  --> a_lambda_body_in_a_list_sits_too_shallow.kso:5:4
+   5 |    y = x + 1
+          ^

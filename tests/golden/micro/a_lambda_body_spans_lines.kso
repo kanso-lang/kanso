@@ -1,0 +1,19 @@
+import "std/list"
+
+# A lambda whose `->` ends its line takes the lines indented under it as its
+# body, read as a `fn` body is, and a `)` alone under the line closes it. The
+# second holds a lambda of the same shape, which reads the outer parameter.
+tens = list/map [1 2] (x ->
+  y = x * 10
+  y + 1
+)
+
+sums = list/map [1 2] (x ->
+  ys = list/map [x x] (y ->
+    z = y * 2
+    z + x
+  )
+  list/sum ys
+)
+
+pub play = print "{list/to_list tens} {list/to_list sums}"

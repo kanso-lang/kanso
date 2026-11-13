@@ -35,6 +35,10 @@ pub enum Tok {
     /// parts are destructured. It hugs both sides, so it can never be
     /// mistaken for anything else.
     At,
+    /// The lines of a lambda whose `->` ended its line: its body, indented
+    /// under the line that opened it and closed by a `)` alone. They are a
+    /// `fn` body's lines, and the parser reads them as one.
+    Body(Vec<Line>),
     KwFn,
     KwReturn,
     KwType,
@@ -48,7 +52,7 @@ pub enum StrPart {
     Interp(Vec<(Tok, Span, u32)>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Line {
     pub number: usize,
     pub indent: usize,
@@ -285,6 +289,8 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                 )
                 || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _, _)] if head == "else")
                 || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _, _)] if head == "build")
+                // a lambda whose `->` ends the line holds the lines under it
+                || matches!(p.tokens.last(), Some((Tok::Arrow, _, _)))
                 || matches!(
                     p.tokens.as_slice(),
                     [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(head), _, _)]
@@ -296,6 +302,13 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         let sibling_or_dedent = lines
             .last()
             .is_some_and(|p: &Line| indent > 2 && indent.is_multiple_of(2) && indent <= p.indent);
+        // A comment among a block's lines, or under a statement taking its
+        // arguments a line at a time, is dropped here as it is at the top
+        // level; lexed, it was an empty line the parser read as a missing
+        // expression.
+        if content.starts_with('#') && (block_child || sibling_or_dedent || cont_indent_ok) {
+            continue;
+        }
         if block_child || sibling_or_dedent {
             match lex_line(content, number, indent + 1) {
                 Ok(lexed_line) => {
@@ -364,6 +377,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     for line in &lines {
         check_needless_continuation(line, &mut pieces, &mut diags);
     }
+    let lines = fold_lambda_bodies(lines, &mut diags);
     if diags.is_empty() {
         Ok(Lexed { lines, blank_lines, header, pruned: false })
     } else {
@@ -725,6 +739,18 @@ fn gather_span(
         validate_spacing(&lexed, number, diags);
         let mut text = content.to_string();
         let mut element = lexed.tokens;
+        if nested.is_none() && matches!(element.last(), Some((Tok::Arrow, _, _))) {
+            let body = match gather_lambda_body(raws, at, inner, &element, diags) {
+                Ok(body) => body,
+                Err(next) => {
+                    let one_line = parts.join(" ");
+                    return Spanned { tokens, next, one_line, whole: false, commented };
+                }
+            };
+            at = body.next;
+            whole = false;
+            element.extend(body.tokens);
+        }
         if let Some(inner_open) = nested {
             let span = gather_span(raws, at, inner, inner_open, number, diags);
             at = span.next;
@@ -781,6 +807,125 @@ fn gather_span(
         Span::at(open_line, indent + 1),
     ));
     Spanned { tokens, next: at, one_line: parts.join(" "), whole: false, commented }
+}
+
+/// A lambda body held by an element of a list that spans lines: the lines
+/// under the element's `->` and the `)` that closes them at the element's
+/// indent. The lines are lexed as a file of their own, moved left to the
+/// margin, so a body may hold anything a body at the top level holds, and
+/// their spans are moved back.
+struct LambdaBody {
+    /// The body as one token, then the closing line's tokens.
+    tokens: Vec<(Tok, Span, u32)>,
+    next: usize,
+}
+
+fn gather_lambda_body(
+    raws: &[&str],
+    from: usize,
+    indent: usize,
+    head: &[(Tok, Span, u32)],
+    diags: &mut Vec<Diagnostic>,
+) -> Result<LambdaBody, usize> {
+    let arrow = head.last().map(|t| t.1).unwrap_or(Span::at(from, indent + 1));
+    let margin = indent + 2;
+    let depth = |raw: &str| raw.len() - raw.trim_start().len();
+    let mut end = from;
+    while end < raws.len() && (raws[end].trim().is_empty() || depth(raws[end]) > indent) {
+        end += 1;
+    }
+    if end == from {
+        diags.push(Diagnostic::new(
+            "syntax",
+            "a lambda whose `->` ends the line takes the lines indented under it as its body, \
+             and there are none"
+                .to_string(),
+            arrow,
+        ));
+        return Err(from);
+    }
+    let close = raws.get(end).map(|raw| raw.trim_end());
+    let Some(close) = close.filter(|c| depth(c) == indent && c[indent..].starts_with(')')) else {
+        diags.push(Diagnostic::new(
+            "syntax",
+            format!(
+                "a lambda that spans lines closes with `)` at column {}, under the line that \
+                 opened it",
+                indent + 1
+            ),
+            Span::at(end + 1, indent + 1),
+        ));
+        return Err(end);
+    };
+    let mut source = String::new();
+    for (k, raw) in raws[from..end].iter().enumerate() {
+        if !raw.trim().is_empty() && depth(raw) < margin {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!("a lambda's body sits {margin} spaces in, two deeper than its `->` line"),
+                Span::at(from + k + 1, depth(raw) + 1),
+            ));
+            return Err(end);
+        }
+        source.push_str(raw.get(margin..).unwrap_or(""));
+        source.push('\n');
+    }
+    let body = match lex(&source) {
+        Ok(lexed) => lexed.lines,
+        Err(found) => {
+            diags.extend(found.into_iter().map(|mut d| {
+                d.span = moved(d.span, from, margin);
+                d
+            }));
+            return Err(end);
+        }
+    };
+    let mut body: Vec<Line> = body.into_iter().map(|l| moved_line(l, from, margin)).collect();
+    let closing = match lex_line(&close[indent..], end + 1, indent + 1) {
+        Ok(l) => l.tokens,
+        Err(d) => {
+            diags.push(d);
+            return Err(end);
+        }
+    };
+    let head_line = Line { number: from, indent, tokens: head.to_vec() };
+    let close_line = Line { number: end + 1, indent, tokens: closing.clone() };
+    if let Some(fits) = lambda_fits(&head_line, &body, &close_line) {
+        diags.push(Diagnostic::new(
+            "formatting",
+            format!(
+                "this lambda fits on one line ({fits} characters) — a lambda spans lines only \
+                 when it does not"
+            ),
+            arrow,
+        ));
+    }
+    let mut tokens = vec![(Tok::Body(std::mem::take(&mut body)), arrow, arrow.col)];
+    tokens.extend(closing);
+    Ok(LambdaBody { tokens, next: end + 1 })
+}
+
+/// A span lexed from lines moved `cols` left and starting `lines` down, put
+/// back where the source has it.
+fn moved(span: Span, lines: usize, cols: usize) -> Span {
+    Span::at(span.line as usize + lines, span.col as usize + cols)
+}
+
+fn moved_line(line: Line, lines: usize, cols: usize) -> Line {
+    let tokens = line
+        .tokens
+        .into_iter()
+        .map(|(tok, span, end)| {
+            let tok = match tok {
+                Tok::Body(inner) => {
+                    Tok::Body(inner.into_iter().map(|l| moved_line(l, lines, cols)).collect())
+                }
+                tok => tok,
+            };
+            (tok, moved(span, lines, cols), end + cols as u32)
+        })
+        .collect();
+    Line { number: line.number + lines, indent: line.indent + cols, tokens }
 }
 
 /// One meaning, one rendering: a statement split across `.` continuation
@@ -1682,4 +1827,92 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             ));
         }
     }
+}
+
+/// Folds each lambda whose `->` ends its line into that line: the lines
+/// indented under it become one `Body` token, and the `)` that closes it,
+/// alone at the opening line's indent, follows. The last opener is folded
+/// first, so a lambda inside another's body is already one token by the time
+/// the outer one gathers its lines.
+/// The width of a spanning lambda written on one line, when it fits: a body of
+/// one line with nothing between it and the lines around it, so a comment or a
+/// blank line under the arrow keeps the spanning form. The list rule above
+/// measures its one-line form the same way.
+fn lambda_fits(head: &Line, body: &[Line], closing: &Line) -> Option<usize> {
+    let [line] = body else { return None };
+    let on_its_own = line.number == head.number + 1
+        && closing.number == line.number + 1
+        && line
+            .tokens
+            .iter()
+            .all(|t| t.1.line as usize == line.number && !matches!(t.0, Tok::Body(_)))
+        && closing.tokens.iter().all(|t| t.1.line as usize == closing.number);
+    if !on_its_own {
+        return None;
+    }
+    let width = |l: &Line| match (l.tokens.first(), l.tokens.last()) {
+        (Some(a), Some(z)) => z.2 as usize - a.1.col as usize,
+        _ => 0,
+    };
+    let head_end = head.tokens.last().map(|t| t.2 as usize - 1)?;
+    let fits = head_end + 1 + width(line) + width(closing);
+    (fits <= MAX_WIDTH).then_some(fits)
+}
+
+fn fold_lambda_bodies(mut lines: Vec<Line>, diags: &mut Vec<Diagnostic>) -> Vec<Line> {
+    let mut i = lines.len();
+    while i > 0 {
+        i -= 1;
+        if !matches!(lines[i].tokens.last(), Some((Tok::Arrow, _, _))) {
+            continue;
+        }
+        let indent = lines[i].indent;
+        let mut end = i + 1;
+        while end < lines.len() && lines[end].indent > indent {
+            end += 1;
+        }
+        let arrow = lines[i].tokens.last().map(|t| t.1).unwrap_or(Span::at(lines[i].number, 1));
+        if end == i + 1 {
+            diags.push(Diagnostic::new(
+                "syntax",
+                "a lambda whose `->` ends the line takes the lines indented under it as \
+                 its body, and there are none"
+                    .to_string(),
+                arrow,
+            ));
+            continue;
+        }
+        let closes = end < lines.len()
+            && lines[end].indent == indent
+            && matches!(lines[end].tokens.first(), Some((Tok::RParen, _, _)));
+        if !closes {
+            let at = lines.get(end).map(|l| Span::at(l.number, l.indent + 1)).unwrap_or(arrow);
+            diags.push(Diagnostic::new(
+                "syntax",
+                format!(
+                    "a lambda that spans lines closes with `)` at column {}, under the line \
+                     that opened it",
+                    indent + 1
+                ),
+                at,
+            ));
+            continue;
+        }
+        if let Some(fits) = lambda_fits(&lines[i], &lines[i + 1..end], &lines[end]) {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!(
+                    "this lambda fits on one line ({fits} characters) — a lambda spans lines \
+                     only when it does not"
+                ),
+                arrow,
+            ));
+        }
+        let closing = lines.remove(end);
+        let body: Vec<Line> = lines.drain(i + 1..end).collect();
+        let head = &mut lines[i];
+        head.tokens.push((Tok::Body(body), arrow, arrow.col));
+        head.tokens.extend(closing.tokens);
+    }
+    lines
 }

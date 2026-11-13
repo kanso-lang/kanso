@@ -20,53 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a page's values through an escape join the corpus
-
-#2427, corpus first. kanso has no call that replaces one text with
-another. The idiom is `text/join (text/split s from) to`, a list of the
-pieces and then a string from the list, and the escape senro's templates
-lean on runs it once for each character it rewrites. No benchmark replaced
-text, so nothing priced the idiom or would have scored a call that did the
-work in one pass.
-
-`replaced` is that escape as senro writes it: three searches for the five
-characters, a value with none handed back as it came, and a split and a
-join for each search that found something. A row is the mix a listing page
-has, which is a title holding four of the five characters, an excerpt
-holding an apostrophe, and seven values with nothing to rewrite. The run
-program escapes 4,000 rows and the interpreter's corpus 80.
-
-The baseline. The phase is 47,129,776 instructions of the run program,
-4.41%, measured as the whole with it less the whole without in this
-container. It runs the split and the join 28,000 times, and 20,000 of
-those find something to rewrite. run_allocs 2,445,662 ->
-2,709,581, which is 66 allocations a row, run_alloc_bytes 262,696,163 ->
-274,019,555, run_beat_iters 582,812 -> 614,812, run_find2_calls 1,060,857
--> 1,168,857, run_str_scans 36,202 -> 72,202 and run_sh_str 19,156,704 ->
-25,232,528. The rest of the run's rows the phase moves: run_perm_allocs
-136 -> 151, run_sh_buf 97,305,312 -> 98,585,312, run_sh_bytes 24,384 ->
-888,384 and run_str_scan_bytes 19,043,360 -> 21,093,397.
-
-The run program's work rises: work_runbench 1,020,737,307 ->
-1,067,867,083 and work_runbench_dev 2,997,794,416 -> 3,065,058,505, both
-this container's readings less 109. runbench's emitted code reads
-defines=992 calls=10401 branches=9373 lines=81321 and its machine code is
-911,345 bytes. Summed over every benchmark but the decoder,
-emitted_other_defines 2,410 -> 2,421, emitted_other_calls 22,223 -> 22,353,
-emitted_other_branches 19,778 -> 19,889 and emitted_other_lines 185,435 ->
-186,392, and the summed text 5,978,121 -> 5,983,449.
-
-The interpreter's corpus rises: interp_instructions 724,216,927 ->
-744,978,389, interp_allocs 1,038,038 -> 1,074,427 and interp_peak_bytes
-1,496,663 -> 1,527,692. The tab's rows rise with it:
-browser_compile_instructions 399,455,088 -> 417,017,327,
-browser_compile_peak_bytes 969,319 -> 985,620 and browser_run_instructions
-95,097,638 -> 100,630,653.
-
-The floor is re-based. The baselines of the seven rows that read the two
-programs are scaled by what each rose, and welfare stays where it was,
-95.32525328 before and 95.32525334 after.
-
 ## 2026-11-11 — one limit for every test and every ratchet gate
 
 #2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
@@ -1781,3 +1734,58 @@ The site pins senro 0.3.0. The models guide teaches the new names and quotes
 the extended spec, and the migrations guide quotes its migrations.
 Declarations for keys the schema cannot describe wait for an app that needs
 one.
+
+## 2026-11-13 — a lambda's body may span lines
+
+Clay, on #2498: "taking an indented body shouldn't be a special function for
+it/context/etc. it's just a standard thing ... and the body would have to be a
+lambda." Until now a lambda's body was one expression, and lines indented
+under `(x ->` were read as continuation lines of that expression, so a binding
+among them was refused as a needless continuation. #2498 had made `it "…"` and
+`context "…"` block headers to get round that. The committee's decision on
+#2495 was to make the body general instead, and this entry builds it.
+
+A lambda whose `->` ends its line takes the lines indented under it as its
+body. The lexer folds them into one `Tok::Body` token on the opening line, and
+the parser reads that token as an `Expr::Block`, the node an `if` block already
+uses, so every pass and both engines run it the way they run a `fn` body:
+bindings, then the answer. A `)` that starts a line at the opening line's
+indent closes the lambda, and the rest of that line continues the statement,
+so `))` and `) .> …` both work. Bodies nest.
+
+A block lambda may also be an element of a list that spans lines, which is
+how a spec file writes `it "…" (s ->` among the items of a `describe`. The
+list gatherer reads raw lines before there are any `Line`s to fold, so it
+lexes the body lines as a file of their own, moved left to the margin, and
+moves their spans back. A body there holds anything a body at the top level
+holds; `a_lambda_body_in_a_list` nests one block lambda inside another and
+puts a comment in the outer one. A body line shallower than two spaces under
+its element is refused with its own error golden.
+
+Three refusals, each with an error golden. An arrow that ends its line with
+nothing indented under it, and a body that is not closed by a `)` at the
+opening indent, are syntax errors. A body of one line that would fit on one
+line with its head and close is refused as formatting, for the same reason a
+short list may not span lines; a comment or blank line inside the body keeps
+the spanning form. The micro golden `a_lambda_body_spans_lines` runs a block
+lambda and a nested one on every engine, and the values chapter teaches the
+form with `long_lambda.kso`.
+
+Building it turned up an older bug. The lexer dropped a comment line only on
+the path for top-level lines, so a comment among the lines of an `if` block
+reached the parser as an empty line and was refused as "expected an
+expression". It now drops a comment wherever an indented line is read. The
+micro golden `a_comment_among_block_lines` puts a comment in an `if` block and
+in a lambda's body; on main it fails at the first.
+
+The lexer and parser grew, and four rows rose with them, all read from CI:
+compile_instructions 22,780,737 -> 22,843,804, entry_instructions
+119,985,418 -> 120,154,980, library_instructions 64,031,825 -> 64,189,750,
+and browser_compile_instructions 412,766,768 -> 412,895,722. The front end
+now looks at the last token of every line and every list element for an
+arrow, which is where the extra work goes; no corpus file holds a block
+lambda yet. No runtime, emitted or codegen row moved. The welfare floor
+drops by that cost, 95.39101637 -> 95.39075120, under the language
+exception. Open: #2498 is rewritten on this, with `it`
+and `context` as ordinary calls taking block lambdas, once Clay says whether a
+context may restate a value that setup above it reads.

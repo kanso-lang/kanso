@@ -1,0 +1,5 @@
+import "std/list"
+
+tens = list/map [1 2] (x ->
+  x + 1
+print "{list/to_list tens}"

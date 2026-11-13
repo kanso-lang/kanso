@@ -1,0 +1,9 @@
+import "std/list"
+
+leaves = [3 5 8]
+brews = list/to_list (list/map leaves (grams ->
+  water = grams * 60
+  seconds = 20 + grams * 5
+  "{grams}g: {water}ml, {seconds}s"
+))
+print "{brews}"

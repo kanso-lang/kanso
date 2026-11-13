@@ -1,0 +1,7 @@
+# A body of one short line is written on the lambda's own line.
+import "std/list"
+
+xs = list/to_list (list/map [1 2] (x ->
+  x + 1
+))
+print "{xs}"

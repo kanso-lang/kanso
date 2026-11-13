@@ -1,0 +1,20 @@
+import "std/list"
+
+# A comment among the lines of an `if` block or a lambda's body is dropped,
+# as one at the top level is.
+big? = 3 > 2
+
+label = if big?
+  # three or more
+  word = "big"
+  word
+else
+  "small"
+
+totals = list/map [1 2] (x ->
+  # a step that reads the parameter
+  y = x * 10
+  y + 1
+)
+
+pub play = print "{label} {list/to_list totals}"

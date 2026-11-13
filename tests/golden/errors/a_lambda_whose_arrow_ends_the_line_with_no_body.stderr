@@ -1,0 +1,4 @@
+error[syntax]: a lambda whose `->` ends the line takes the lines indented under it as its body, and there are none
+  --> a_lambda_whose_arrow_ends_the_line_with_no_body.kso:3:26
+   3 | tens = list/map [1 2] (x ->
+                                ^
