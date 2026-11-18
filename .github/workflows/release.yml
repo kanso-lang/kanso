@@ -23,7 +23,7 @@ jobs:
   # loses a build's artifact whenever the create lands second.
   create-release:
     name: open the release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - env:
@@ -41,7 +41,7 @@ jobs:
         include:
           - os: macos-14
             target: macos-arm64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: linux-x86_64
     runs-on: ${{ matrix.os }}
     steps:
