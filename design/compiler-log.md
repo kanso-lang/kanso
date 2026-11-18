@@ -20,35 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a step in CI starts under the limit too
-
-#2441, the loose end of the entry "one limit for every test and every
-ratchet gate". Cargo's runner bounds a test binary and the ratchet bounds
-a gate it starts, but a `run:` step in a workflow goes through neither:
-the cost-goldens job runs its gate scripts directly, and so do the
-browser, site and book jobs.
-
-`ci.yml` and `ratchet.yml` now name a default shell. It sources
-`scripts/bounded.sh` when the checkout has put it there and then runs the
-step's script as `bash -e`, which is what a step that names no shell
-gets, so no step changes what it does. The steps before a job's checkout
-start as they did.
-
-Two things hold it. In CI, the specs job reads `ulimit -S -d` from inside
-a step and compares it with the number `bounded.sh` sets. In the tree,
-`tests/every_ci_step_starts_under_the_limit.rs` reads both workflows for
-the default and refuses a step that names a shell of its own, which
-would start without the limit. The ratchet row is `step_unbounded`: with
-the default taken out of `ci.yml` the spec fails and names the workflow.
-
-Whether everything a step starts fits under 6 GiB is CI's to say, as it
-was for the tests: the release build with fat LTO, the wasm build and
-clang at `-O3 -flto` had only been run under the limit by the ratchet.
-`pages.yml` and `release.yml` are left as they are. They run on main and
-on a tag, after CI has built the same tree under the limit.
-
-No counter moved.
-
 ## 2026-11-11 — one text written as another, in one pass
 
 #2427's first lead, on the corpus the entry before this one added.
@@ -1754,3 +1725,38 @@ release matrix included, and `tests/the_runner_image_is_pinned.rs` refuses a
 move. The goldens were measured on 24.04, and the patch updates that image
 still takes are re-sat as on 2026-11-12. Moving to 26.04 is a pull request of
 its own that moves every `runs-on` and re-sits every row on the new image.
+
+## 2026-11-18 — the work and codegen rows count from libc's entry
+
+With the image pinned, the cost goldens still refused on two pull requests
+that changed no compiler code, on work, dev codegen and release codegen. One
+re-run drew the same chip and the same three rows. Main's last green run was
+on Intel model 0xcf and image build 20261111.370.1; the red runs were on
+Intel model 0xad and build 20261111.127.1. Every work row read exactly 130
+lower, codegen dev 1,098 lower and release 3,092 lower. The work tables of
+the two runs differ in two functions and no others: `_dl_cache_libcmp` (146
+fewer) and `_dl_load_cache_lookup` (16 more). That is the dynamic loader
+searching `/etc/ld.so.cache` before `main`. The compile rows, anchored at
+`kanso::main`, read the same on both.
+
+The silicon and the image build changed together, so this does not say which
+of them moved the search. Either way the loader's search is the runner's, so
+`instructions.sh` and `codegen_instructions.sh` now pass
+`--toggle-collect='__libc_start_main*'` and count each process from libc's
+entry. `scripts/gates/past_the_loader.sh` runs in the cost-goldens job. It
+counts a three-line C program with and without `LD_LIBRARY_PATH` set: counted
+whole, the program reads 114,160 and 114,600 in CI, and from libc's entry it
+reads 1,680 both times. The gate also checks that both gates pass the flag on
+every callgrind they run. It goes red when the flag is dropped from either
+gate, and red when the flag is weakened so that the loader's work is counted
+again.
+
+Every row moved down, taken from CI on AMD family 0x19 model 0x1. All fifteen
+work rows fell by 149,051, the loader's start-up for one process.
+`codegen_instructions_dev` fell 117,027,866 -> 85,822,279 and
+`codegen_instructions_release` 372,208,799 -> 319,811,536. Those also lose
+the relocation of libLLVM and LLVM's static constructors in every clang
+process, which run before `main` and do not depend on what kanso emits. No row
+rose. The welfare floor is re-based 95.39 -> 95.46 as a measurement that
+stopped reading outside state (#2017). kq's instructions vein had the same
+-130 on kq#246 and gets the same flag in kq#248.

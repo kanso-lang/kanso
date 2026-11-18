@@ -463,6 +463,10 @@ jobs:
       # benchmarks, a few seconds.
       - name: the rows do not move with the tree
         run: sh scripts/gates/path_independence.sh
+      # And not with the runner image's library cache: the work and codegen
+      # rows count from libc's entry, past the loader. A few seconds.
+      - name: the rows do not count the loader
+        run: sh scripts/gates/past_the_loader.sh
       # Each vein reports even when a sibling is red. They measure independent
       # dimensions, so stopping at the first disagreement hides the rest: a
       # stale machine-code golden kept the instruction counts from being
