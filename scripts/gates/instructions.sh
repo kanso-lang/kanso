@@ -107,8 +107,10 @@ for b in $benches; do
   cp "./$b" "$run_dir/$b"
 done
 for b in $benches; do
+  # Counted from libc's entry, past the loader: scripts/gates/past_the_loader.sh.
   ( cd "$run_dir" && env -i PATH=/usr/bin:/bin \
-      valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
+      valgrind --tool=callgrind --toggle-collect='__libc_start_main*' \
+      --callgrind-out-file=/tmp/cg.$b ./$b \
       >/dev/null 2>/tmp/ir.$b )
   printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
 done > work.txt
