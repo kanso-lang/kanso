@@ -339,11 +339,14 @@ if [ "$gate_clang" != "$(clang --version | head -1)" ]; then
 fi
 
 
+# Each process is counted from libc's entry, past the loader:
+# scripts/gates/past_the_loader.sh.
 rm -f /tmp/cg.codegen.$tier.*
 clear_output
 (
   cd "$box"
   env -i PATH=/usr/local/bin:/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
+    --toggle-collect='__libc_start_main*' \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.$tier.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
@@ -418,6 +421,7 @@ clear_output
 (
   cd "$box"
   env -i PATH=/usr/local/bin:/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 KANSO_LINK_DIR="$box/link" valgrind --tool=callgrind \
+    --toggle-collect='__libc_start_main*' \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.${tier}b.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
