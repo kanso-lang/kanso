@@ -116376,3 +116376,57 @@ browser_compile_peak_bytes 969,319 -> 985,620 and browser_run_instructions
 The floor is re-based. The baselines of the seven rows that read the two
 programs are scaled by what each rose, and welfare stays where it was,
 95.32525328 before and 95.32525334 after.
+
+## 2026-11-11 — one limit for every test and every ratchet gate
+
+#2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
+may map, after one ratchet row ended CI's runner twice. Every other test
+that starts kanso, and every ratchet gate that is a script, still ran with
+no limit.
+
+The issue asked for a helper in `tests/support/` that the tests starting
+kanso would call. The committee's reading is on the issue: 153 files start
+kanso, a helper covers the ones that remember to call it, and it leaves the
+ratchet's script gates out. A limit is inherited by a child process, so it
+is set once on the way in. `scripts/bounded.sh` sets it. Cargo runs every
+test binary through that script on Linux (`runner` in `.cargo/config.toml`),
+and the ratchet sources it before each command it runs in a worktree.
+`tests/golden.rs` loses its own.
+
+Two measurements changed what #2431 chose.
+
+The kind of limit. #2431 limited address space. Headless Chromium does not
+start under that at 8 GiB: Playwright's launch fails. Two ratchet gates run
+a browser, so the same limit in the ratchet would have turned them red
+before any mutation. Under a limit on data, `ulimit -d`, Chromium starts and
+makes a wasm memory, and callgrind runs under either. The limit is on data.
+
+The number. With the mutation that ended the runner applied,
+`micro/a_greedy_run_of_one_character_backs_off_in_order` says `out of
+memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
+seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
+nearly all of its limit by the time it is refused, so the limit is what one
+such program costs the machine, and it should be no larger than the tests
+need. A release build of the compiler, Chromium, callgrind, the compile
+sweep, the counter sweep and the golden suite were each run under 4 GiB, and
+the first push set the limit there. CI then failed one test:
+`an_answer_above_two_gibibytes_reads_back` in `tests/wasm_engine.rs` grows a
+wasm memory past two gibibytes inside the test process, and the engine
+could not grow it. Run alone it fails under 4 GiB and passes under 5, 6 and
+8. The limit is 6 GiB. The runaway fixture was not run again at 6. A second
+program, one that pushes onto a list without end, was run under 1 GiB on
+both engines: the native binary says `out of memory` and exits 1, and the
+interpreter panics and exits 101.
+
+It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
+limit from a shell a program starts, on both engines, and reads `unlimited`
+with the `runner` line removed. `tests/the_ratchet_bounds_what_it_starts.rs`
+stages one row whose gate is green only under the limit and runs the real
+`prove` over it, started with the limit lifted. With the ratchet's line
+removed the baseline reads `ALREADY RED`, and the gate's own words are
+`limit unlimited`. Neither spec has a ratchet row: the ratchet bounds the
+gate that would read the first, and the second runs `prove`.
+
+No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
+script directly, the cost-goldens job among them, go through neither cargo
+nor the ratchet and have no limit.
