@@ -39,6 +39,14 @@ on:
 env:
   RUST_TOOLCHAIN: "1.98.1"
 
+# THE RUNNER IMAGE IS PINNED for the same reason. `ubuntu-latest` moved from
+# ubuntu-24.04 to ubuntu-26.04 by 2026-11-18, bringing glibc 2.43 and clang
+# 19.1.7 where the rows were measured on glibc 2.39 and clang 19.1.1, and
+# every gate that names either refused on a pull request that changed one
+# page of prose. Every Linux job names `ubuntu-24.04`, and a new image arrives
+# in a pull request that moves every `runs-on` and re-sits the rows.
+# tests/the_runner_image_is_pinned.rs holds every workflow to it.
+
 # Every step starts under scripts/bounded.sh, the limit on what a program may
 # allocate (kanso#2441). Cargo's runner and the ratchet put tests and gates
 # under it; this puts the steps that run a script directly under it as well.
@@ -55,7 +63,7 @@ jobs:
 
   format:
     name: format (rustfmt, checked not applied)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -69,14 +77,14 @@ jobs:
 
   python-free:
     name: python-free (the harnesses stay kanso)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: sh scripts/gates/python_free.sh
 
   lint:
     name: lint (clippy, all targets)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -89,7 +97,7 @@ jobs:
 
   specs:
     name: specs (unit, golden, differential)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # the workflow's default shell sources scripts/bounded.sh; this reads
@@ -198,7 +206,7 @@ jobs:
 
   playground:
     name: playground examples (every engine)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -208,7 +216,7 @@ jobs:
 
   decoder:
     name: json decoder end-to-end (native, 150 decodes)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -219,7 +227,7 @@ jobs:
 
   utf8:
     name: utf-8 validator (differential vs an independent reference)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -235,7 +243,7 @@ jobs:
   # runtime has already given back, which changes neither.
   sanitizer:
     name: sanitizer sweep (the corpus under AddressSanitizer)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # fetch-depth: 0 for origin/main. The sweep runs scripts/ratchet like
       # any other program, and its cover applies a mutation that resets the
@@ -268,7 +276,7 @@ jobs:
 
   fingerprints:
     name: asset digests (every reference rewritten, site still runs)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -306,7 +314,7 @@ jobs:
 
   welfare:
     name: welfare (one number over runtime and compile cost, ratcheted)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Welfare's run-speed terms are read out of bench/instructions_golden.txt,
     # and nothing in this job re-measures them. cost-goldens is what proves that
     # file describes this commit, so the score waits for it: a number computed
@@ -343,7 +351,7 @@ jobs:
 
   grammar:
     name: editor grammar (types, strings, comments, operators)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # the check is a kanso program, so the job compiles the toolchain it runs
@@ -355,7 +363,7 @@ jobs:
 
   book:
     name: book samples (every panel executed, outputs verified)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -367,7 +375,7 @@ jobs:
 
   cost-goldens:
     name: cost goldens (deterministic ratchet, no clocks)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # the page-drift check below counts log entries since docs/compiler.html
       # last moved, which a shallow clone cannot see: one commit holds every
@@ -455,6 +463,10 @@ jobs:
       # benchmarks, a few seconds.
       - name: the rows do not move with the tree
         run: sh scripts/gates/path_independence.sh
+      # And not with the runner image's library cache: the work and codegen
+      # rows count from libc's entry, past the loader. A few seconds.
+      - name: the rows do not count the loader
+        run: sh scripts/gates/past_the_loader.sh
       # Each vein reports even when a sibling is red. They measure independent
       # dimensions, so stopping at the first disagreement hides the rest: a
       # stale machine-code golden kept the instruction counts from being
@@ -956,7 +968,7 @@ jobs:
 
   downstream:
     name: kq specs (a real program, gating)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -1029,7 +1041,7 @@ jobs:
 
   diagnostics:
     name: diagnostics differential (both engines say the same thing)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -1077,7 +1089,7 @@ jobs:
 
   site:
     name: site (landing sample and playground run in a browser)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A browser that never reaches the page leaves the server waiting on a
     # report that is not coming, and the default job timeout is six hours.
     timeout-minutes: 20
@@ -1121,7 +1133,7 @@ jobs:
 
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -1175,7 +1187,7 @@ jobs:
     # turns this job red, rather than skipping it, which reads as green.
     needs: ratchet-shard
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # fetch-depth: 0 for origin/main, which one mutation resets the goldens
       # from before it applies. Without it the cover reads that mutation as
@@ -1224,7 +1236,7 @@ jobs:
   # depth — it lands on a detached head.
   ratchet-shard:
     name: the ratchet's rows for this branch, one shard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -1255,7 +1267,7 @@ jobs:
 
   perf-history:
     name: perf history (appended to the history branch)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

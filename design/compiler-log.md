@@ -20,89 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — one limit for every test and every ratchet gate
-
-#2436, a cleanup. #2431 bounded what a program started by `tests/golden.rs`
-may map, after one ratchet row ended CI's runner twice. Every other test
-that starts kanso, and every ratchet gate that is a script, still ran with
-no limit.
-
-The issue asked for a helper in `tests/support/` that the tests starting
-kanso would call. The committee's reading is on the issue: 153 files start
-kanso, a helper covers the ones that remember to call it, and it leaves the
-ratchet's script gates out. A limit is inherited by a child process, so it
-is set once on the way in. `scripts/bounded.sh` sets it. Cargo runs every
-test binary through that script on Linux (`runner` in `.cargo/config.toml`),
-and the ratchet sources it before each command it runs in a worktree.
-`tests/golden.rs` loses its own.
-
-Two measurements changed what #2431 chose.
-
-The kind of limit. #2431 limited address space. Headless Chromium does not
-start under that at 8 GiB: Playwright's launch fails. Two ratchet gates run
-a browser, so the same limit in the ratchet would have turned them red
-before any mutation. Under a limit on data, `ulimit -d`, Chromium starts and
-makes a wasm memory, and callgrind runs under either. The limit is on data.
-
-The number. With the mutation that ended the runner applied,
-`micro/a_greedy_run_of_one_character_backs_off_in_order` says `out of
-memory` after 9.8 seconds and 8,140 MiB resident under 8 GiB, and after 4.4
-seconds and 3,461 MiB under 4 GiB. A program that runs away has written to
-nearly all of its limit by the time it is refused, so the limit is what one
-such program costs the machine, and it should be no larger than the tests
-need. A release build of the compiler, Chromium, callgrind, the compile
-sweep, the counter sweep and the golden suite were each run under 4 GiB, and
-the first push set the limit there. CI then failed one test:
-`an_answer_above_two_gibibytes_reads_back` in `tests/wasm_engine.rs` grows a
-wasm memory past two gibibytes inside the test process, and the engine
-could not grow it. Run alone it fails under 4 GiB and passes under 5, 6 and
-8. The limit is 6 GiB. The runaway fixture was not run again at 6. A second
-program, one that pushes onto a list without end, was run under 1 GiB on
-both engines: the native binary says `out of memory` and exits 1, and the
-interpreter panics and exits 101.
-
-It is the soft limit, so a spec can lift it. `tests/golden.rs` reads the
-limit from a shell a program starts, on both engines, and reads `unlimited`
-with the `runner` line removed. `tests/the_ratchet_bounds_what_it_starts.rs`
-stages one row whose gate is green only under the limit and runs the real
-`prove` over it, started with the limit lifted. With the ratchet's line
-removed the baseline reads `ALREADY RED`, and the gate's own words are
-`limit unlimited`. Neither spec has a ratchet row: the ratchet bounds the
-gate that would read the first, and the second runs `prove`.
-
-No golden moves. Left open as #2441: the steps in `ci.yml` that run a gate
-script directly, the cost-goldens job among them, go through neither cargo
-nor the ratchet and have no limit.
-
-## 2026-11-11 — a step in CI starts under the limit too
-
-#2441, the loose end of the entry "one limit for every test and every
-ratchet gate". Cargo's runner bounds a test binary and the ratchet bounds
-a gate it starts, but a `run:` step in a workflow goes through neither:
-the cost-goldens job runs its gate scripts directly, and so do the
-browser, site and book jobs.
-
-`ci.yml` and `ratchet.yml` now name a default shell. It sources
-`scripts/bounded.sh` when the checkout has put it there and then runs the
-step's script as `bash -e`, which is what a step that names no shell
-gets, so no step changes what it does. The steps before a job's checkout
-start as they did.
-
-Two things hold it. In CI, the specs job reads `ulimit -S -d` from inside
-a step and compares it with the number `bounded.sh` sets. In the tree,
-`tests/every_ci_step_starts_under_the_limit.rs` reads both workflows for
-the default and refuses a step that names a shell of its own, which
-would start without the limit. The ratchet row is `step_unbounded`: with
-the default taken out of `ci.yml` the spec fails and names the workflow.
-
-Whether everything a step starts fits under 6 GiB is CI's to say, as it
-was for the tests: the release build with fat LTO, the wasm build and
-clang at `-O3 -flto` had only been run under the limit by the ratchet.
-`pages.yml` and `release.yml` are left as they are. They run on main and
-on a tag, after CI has built the same tree under the limit.
-
-No counter moved.
-
 ## 2026-11-11 — one text written as another, in one pass
 
 #2427's first lead, on the corpus the entry before this one added.
@@ -1789,3 +1706,57 @@ drops by that cost, 95.39101637 -> 95.39075120, under the language
 exception. Open: #2498 is rewritten on this, with `it`
 and `context` as ordinary calls taking block lambdas, once Clay says whether a
 context may restate a value that setup above it reads.
+
+## 2026-11-18 — the runner image is pinned to ubuntu-24.04
+
+The cost-goldens job on kanso#2503, two sentences of page prose, refused every
+row: `ubuntu-latest` now resolves to ubuntu-26.04 (image 20261111.196.1),
+with glibc 2.43-2ubuntu2.7 and clang 19.1.7 where every measured-on line names
+glibc 2.39-0ubuntu8.12 and clang 19.1.1. Every Linux job on that run and on
+kanso#2504 landed on 26.04. A new release of the OS moves the dynamic loader,
+libc's string routines and the C compiler together, so taking its rows would
+credit the compiler with the image's work.
+
+The image is outside state, and it is now fixed the way rustc was on
+2026-10-04: every Linux job in every workflow names `ubuntu-24.04`, the
+release matrix included, and `tests/the_runner_image_is_pinned.rs` refuses a
+`runs-on:` or matrix `os:` that names another Ubuntu label. The spec fails on
+`ubuntu-latest` in either place. No row is re-measured and the floor does not
+move. The goldens were measured on 24.04, and the patch updates that image
+still takes are re-sat as on 2026-11-12. Moving to 26.04 is a pull request of
+its own that moves every `runs-on` and re-sits every row on the new image.
+
+## 2026-11-18 — the work and codegen rows count from libc's entry
+
+With the image pinned, the cost goldens still refused on two pull requests
+that changed no compiler code, on work, dev codegen and release codegen. One
+re-run drew the same chip and the same three rows. Main's last green run was
+on Intel model 0xcf and image build 20261111.370.1; the red runs were on
+Intel model 0xad and build 20261111.127.1. Every work row read exactly 130
+lower, codegen dev 1,098 lower and release 3,092 lower. The work tables of
+the two runs differ in two functions and no others: `_dl_cache_libcmp` (146
+fewer) and `_dl_load_cache_lookup` (16 more). That is the dynamic loader
+searching `/etc/ld.so.cache` before `main`. The compile rows, anchored at
+`kanso::main`, read the same on both.
+
+The silicon and the image build changed together, so this does not say which
+of them moved the search. Either way the loader's search is the runner's, so
+`instructions.sh` and `codegen_instructions.sh` now pass
+`--toggle-collect='__libc_start_main*'` and count each process from libc's
+entry. `scripts/gates/past_the_loader.sh` runs in the cost-goldens job. It
+counts a three-line C program with and without `LD_LIBRARY_PATH` set: counted
+whole, the program reads 114,160 and 114,600 in CI, and from libc's entry it
+reads 1,680 both times. The gate also checks that both gates pass the flag on
+every callgrind they run. It goes red when the flag is dropped from either
+gate, and red when the flag is weakened so that the loader's work is counted
+again.
+
+Every row moved down, taken from CI on AMD family 0x19 model 0x1. All fifteen
+work rows fell by 149,051, the loader's start-up for one process.
+`codegen_instructions_dev` fell 117,027,866 -> 85,822,279 and
+`codegen_instructions_release` 372,208,799 -> 319,811,536. Those also lose
+the relocation of libLLVM and LLVM's static constructors in every clang
+process, which run before `main` and do not depend on what kanso emits. No row
+rose. The welfare floor is re-based 95.39 -> 95.46 as a measurement that
+stopped reading outside state (#2017). kq's instructions vein had the same
+-130 on kq#246 and gets the same flag in kq#248.
