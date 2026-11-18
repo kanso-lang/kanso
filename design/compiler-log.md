@@ -20,35 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a step in CI starts under the limit too
-
-#2441, the loose end of the entry "one limit for every test and every
-ratchet gate". Cargo's runner bounds a test binary and the ratchet bounds
-a gate it starts, but a `run:` step in a workflow goes through neither:
-the cost-goldens job runs its gate scripts directly, and so do the
-browser, site and book jobs.
-
-`ci.yml` and `ratchet.yml` now name a default shell. It sources
-`scripts/bounded.sh` when the checkout has put it there and then runs the
-step's script as `bash -e`, which is what a step that names no shell
-gets, so no step changes what it does. The steps before a job's checkout
-start as they did.
-
-Two things hold it. In CI, the specs job reads `ulimit -S -d` from inside
-a step and compares it with the number `bounded.sh` sets. In the tree,
-`tests/every_ci_step_starts_under_the_limit.rs` reads both workflows for
-the default and refuses a step that names a shell of its own, which
-would start without the limit. The ratchet row is `step_unbounded`: with
-the default taken out of `ci.yml` the spec fails and names the workflow.
-
-Whether everything a step starts fits under 6 GiB is CI's to say, as it
-was for the tests: the release build with fat LTO, the wasm build and
-clang at `-O3 -flto` had only been run under the limit by the ratchet.
-`pages.yml` and `release.yml` are left as they are. They run on main and
-on a tag, after CI has built the same tree under the limit.
-
-No counter moved.
-
 ## 2026-11-11 — one text written as another, in one pass
 
 #2427's first lead, on the corpus the entry before this one added.
@@ -1755,3 +1726,22 @@ location. The hot unit's recipe digest, `HOT_RECIPE`, now digests
 `main.rs` and every file under `src/main/` through `tests/support/driver.rs`.
 Each scanning spec went red on a line planted in `execute.rs`. Ten ratchet
 mutations point at the file that now holds their line.
+
+## 2026-11-18 — the runner image is pinned to ubuntu-24.04
+
+The cost-goldens job on kanso#2503, two sentences of page prose, refused every
+row: `ubuntu-latest` now resolves to ubuntu-26.04 (image 20261111.196.1),
+with glibc 2.43-2ubuntu2.7 and clang 19.1.7 where every measured-on line names
+glibc 2.39-0ubuntu8.12 and clang 19.1.1. Every Linux job on that run and on
+kanso#2504 landed on 26.04. A new release of the OS moves the dynamic loader,
+libc's string routines and the C compiler together, so taking its rows would
+credit the compiler with the image's work.
+
+The image is outside state, and it is now fixed the way rustc was on
+2026-10-04: every Linux job in every workflow names `ubuntu-24.04`, the
+release matrix included, and `tests/the_runner_image_is_pinned.rs` refuses a
+`runs-on:` or matrix `os:` that names another Ubuntu label. The spec fails on
+`ubuntu-latest` in either place. No row is re-measured and the floor does not
+move. The goldens were measured on 24.04, and the patch updates that image
+still takes are re-sat as on 2026-11-12. Moving to 26.04 is a pull request of
+its own that moves every `runs-on` and re-sits every row on the new image.
