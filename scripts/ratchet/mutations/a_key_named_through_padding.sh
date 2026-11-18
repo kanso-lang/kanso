@@ -6,8 +6,8 @@
 # names hash tools' modification times, so the start-up row read 52 apart on
 # two runner images for one binary.
 set -e
-f=src/main.rs
-grep -q 'fn hex16' src/main.rs
+f=src/main/toolchain.rs
+grep -q 'fn hex16' src/main/toolchain.rs
 grep -qxF '    String::from_utf8(digits).expect("hex digits are ascii")' "$f" || {
   echo "hex16 moved; this mutation needs rewriting" >&2
   exit 1

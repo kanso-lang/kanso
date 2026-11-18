@@ -27,6 +27,9 @@
 use std::path::Path;
 use std::process::Command;
 
+#[path = "support/driver.rs"]
+mod driver;
+
 fn build(dir: &Path, link: &Path, release: bool) -> std::process::Output {
     let _ = std::fs::remove_file(dir.join("main"));
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_kanso"));
@@ -90,11 +93,10 @@ fn the_link_finds_its_libraries_in_the_named_directory_only() {
 /// asks the code, the way the `-save-temps=obj` spec does.
 #[test]
 fn the_swap_tells_the_linker_to_search_nothing_else() {
-    let main = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs"))
-        .expect("src/main.rs reads");
+    let (_, main) = driver::defining("searching_only");
     let body = main
         .split_once("fn searching_only")
-        .expect("main.rs defines searching_only")
+        .expect("the file that defines searching_only holds it")
         .1
         .split_once("\nfn ")
         .expect("searching_only is followed by another item")

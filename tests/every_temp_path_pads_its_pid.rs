@@ -12,25 +12,23 @@
 //! this one pins that every site goes through it, so a path added later cannot
 //! quietly put the variance back.
 
-use std::path::Path;
-
-const SOURCE: &str = "src/main.rs";
+#[path = "support/driver.rs"]
+mod driver;
 
 #[test]
 fn no_format_string_interpolates_a_bare_process_id() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(SOURCE);
-    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
-
     let mut bare = Vec::new();
-    for (n, line) in text.lines().enumerate() {
-        if !line.contains("std::process::id()") {
-            continue;
+    for (path, text) in driver::driver_sources() {
+        for (n, line) in text.lines().enumerate() {
+            if !line.contains("std::process::id()") {
+                continue;
+            }
+            // The one legitimate use is inside `pid_tag`, which is what pads it.
+            if line.contains("pid_tag_of(std::process::id())") {
+                continue;
+            }
+            bare.push(format!("{}:{}: {}", path, n + 1, line.trim()));
         }
-        // The one legitimate use is inside `pid_tag`, which is what pads it.
-        if line.contains("pid_tag_of(std::process::id())") {
-            continue;
-        }
-        bare.push(format!("{}:{}: {}", SOURCE, n + 1, line.trim()));
     }
     assert!(
         bare.is_empty(),
@@ -43,9 +41,8 @@ fn no_format_string_interpolates_a_bare_process_id() {
 /// And the padding is actually reached: every temp path names `pid_tag`.
 #[test]
 fn every_temp_path_that_wants_uniqueness_asks_pid_tag() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(SOURCE);
-    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
-    let uses = text.matches("pid_tag()").count();
+    let uses: usize =
+        driver::driver_sources().iter().map(|(_, text)| text.matches("pid_tag()").count()).sum();
     assert!(
         uses >= 5,
         "only {uses} temp paths ask pid_tag(); there were five when this spec \
@@ -63,17 +60,17 @@ fn every_temp_path_that_wants_uniqueness_asks_pid_tag() {
 /// write every digit the same way whatever the value.
 #[test]
 fn no_name_pads_a_number_through_format() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(SOURCE);
-    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
-
-    let padded: Vec<String> = text
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| !line.trim_start().starts_with("//"))
-        .filter(|(_, line)| line.contains(":016x}") || line.contains(":07}"))
-        // the unit spec compares hex16 with the format it replaced
-        .filter(|(_, line)| !line.contains("super::hex16"))
-        .map(|(n, line)| format!("{}:{}: {}", SOURCE, n + 1, line.trim()))
+    let padded: Vec<String> = driver::driver_sources()
+        .iter()
+        .flat_map(|(path, text)| {
+            text.lines()
+                .enumerate()
+                .filter(|(_, line)| !line.trim_start().starts_with("//"))
+                .filter(|(_, line)| line.contains(":016x}") || line.contains(":07}"))
+                // the unit spec compares hex16 with the format it replaced
+                .filter(|(_, line)| !line.contains("super::hex16"))
+                .map(move |(n, line)| format!("{}:{}: {}", path, n + 1, line.trim()))
+        })
         .collect();
     assert!(
         padded.is_empty(),

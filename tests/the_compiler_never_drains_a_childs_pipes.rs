@@ -21,18 +21,20 @@
 //! not on this path — the compile and codegen rows never run a kanso program's
 //! `os/run`.
 
-use std::path::Path;
+#[path = "support/driver.rs"]
+mod driver;
 
 #[test]
 fn main_rs_launches_every_child_with_status() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs");
-    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
-
-    let hits: Vec<String> = text
-        .lines()
-        .enumerate()
-        .filter(|(_, l)| l.contains(".output()"))
-        .map(|(n, l)| format!("src/main.rs:{}: {}", n + 1, l.trim()))
+    let sources = driver::driver_sources();
+    let hits: Vec<String> = sources
+        .iter()
+        .flat_map(|(path, text)| {
+            text.lines()
+                .enumerate()
+                .filter(|(_, l)| l.contains(".output()"))
+                .map(move |(n, l)| format!("{}:{}: {}", path, n + 1, l.trim()))
+        })
         .collect();
     assert!(
         hits.is_empty(),
@@ -42,8 +44,8 @@ fn main_rs_launches_every_child_with_status() {
     );
 
     assert!(
-        text.contains("fn preserve_none_probe"),
-        "this spec is pointed at the file that holds the probe, and the probe \
+        sources.iter().any(|(_, text)| text.contains("fn preserve_none_probe")),
+        "this spec is pointed at the files that hold the probe, and the probe \
          has moved"
     );
 }
@@ -52,14 +54,13 @@ fn main_rs_launches_every_child_with_status() {
 /// the child's noise onto the compiler's stderr.
 #[test]
 fn the_probe_sends_its_childs_streams_to_null() {
-    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/main.rs");
-    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
+    let (_, text) = driver::defining("preserve_none_probe");
     let body = text
         .split_once("fn preserve_none_probe")
         .expect("the probe is in this file")
         .1
-        .split_once("\nfn ")
-        .expect("the probe ends where the next function begins")
+        .split_once("\n}\n")
+        .expect("the probe's body closes at the start of a line")
         .0;
     for want in ["Stdio::null()", ".status()"] {
         assert!(

@@ -12,10 +12,10 @@
 # golden anywhere: it goes unnoticed the moment the arm is removed, or the
 # moment its corpus is widened until anything matches.
 set -e
-grep -qF 'error: main is not an io' src/main.rs || {
+grep -qF 'error: main is not an io' src/main/execute.rs || {
   echo "the driver's plan refusal moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i.bak 's|            eprintln!("error: main is not an io|            eprintln!("error: this driver refusal has no golden anywhere");\n            eprintln!("error: main is not an io|' src/main.rs
-rm -f src/main.rs.bak
-grep -qF 'this driver refusal has no golden anywhere' src/main.rs
+sed -i.bak 's|            eprintln!("error: main is not an io|            eprintln!("error: this driver refusal has no golden anywhere");\n            eprintln!("error: main is not an io|' src/main/execute.rs
+rm -f src/main/execute.rs.bak
+grep -qF 'this driver refusal has no golden anywhere' src/main/execute.rs

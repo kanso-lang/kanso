@@ -401,7 +401,7 @@ jobs:
           # runner, so a symlink there wins without touching the dpkg file.
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
           # lld takes a build's link where it can (`lld_links_lto` in
-          # src/main.rs), and the build looks for `ld.lld` on PATH. An lld from
+          # src/main/toolchain.rs), and the build looks for `ld.lld` on PATH. An lld from
           # another release cannot read clang's bitcode, so each clang needs
           # its own. The benchmarks build with clang 19 from /usr/local/bin;
           # the codegen gate runs under `env -i PATH=/usr/bin:/bin`, where

@@ -101,7 +101,7 @@ fi
 # THE RUNTIME IS BUILT ON THE CONVENTION THE PROGRAM WAS EMITTED FOR. On a
 # clang that takes `preserve_none` the compiler emits closures on that
 # convention and builds its own runtime with -DKANSO_PRESERVE_NONE
-# (`runtime_object` in src/main.rs). A runtime built here without the flag
+# (`cached_object` in src/main/clang.rs). A runtime built here without the flag
 # links, and then reads every closure's arguments from the wrong registers:
 # the program fails with a run-time error of its own long before it reaches
 # the memory this sweep is about. So the flag is read off each program's IR,

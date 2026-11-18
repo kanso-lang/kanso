@@ -7,9 +7,9 @@
 # "second".
 set -e
 line='    part(source.as_bytes());'
-grep -qxF "$line" src/main.rs || {
+grep -qxF "$line" src/main/execute.rs || {
   echo "the play key's text line changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^    part(source.as_bytes());$|    let _ = source;|' src/main.rs
-grep -qxF '    let _ = source;' src/main.rs
+sed -i 's|^    part(source.as_bytes());$|    let _ = source;|' src/main/execute.rs
+grep -qxF '    let _ = source;' src/main/execute.rs

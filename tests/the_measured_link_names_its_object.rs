@@ -28,6 +28,9 @@
 
 use std::path::Path;
 
+#[path = "support/driver.rs"]
+mod driver;
+
 fn read(rel: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
     std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{rel} is on disk at {path:?}"))
@@ -39,10 +42,10 @@ fn uncommented(text: &str) -> Vec<&str> {
 
 #[test]
 fn the_release_link_passes_save_temps_only_when_the_variable_is_set() {
-    let main = read("src/main.rs");
+    let (_, main) = driver::defining("release_clang");
     let body = main
         .split_once("fn release_clang")
-        .expect("main.rs defines release_clang")
+        .expect("the file that defines release_clang holds it")
         .1
         .split_once("\nfn ")
         .expect("release_clang is followed by another item")

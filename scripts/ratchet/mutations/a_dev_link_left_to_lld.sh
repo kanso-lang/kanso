@@ -5,11 +5,11 @@
 # the dynamic loader's work on libLLVM and by the SHA-1 of the output.
 set -e
 line='        return vec!["-fuse-ld=gold".to_string(), "-Wl,--build-id=none".to_string()];'
-test "$(grep -cxF "$line" src/main.rs)" = 1 || {
+test "$(grep -cxF "$line" src/main/toolchain.rs)" = 1 || {
   echo "the dev link's choice of gold changed shape; rewrite this" >&2
   exit 1
 }
 awk -v line="$line" '$0 == line { print "        return lld_args();"; next } { print }' \
-  src/main.rs > src/main.rs.new
-mv src/main.rs.new src/main.rs
-test "$(grep -cxF "$line" src/main.rs)" = 0
+  src/main/toolchain.rs > src/main/toolchain.rs.new
+mv src/main/toolchain.rs.new src/main/toolchain.rs
+test "$(grep -cxF "$line" src/main/toolchain.rs)" = 0

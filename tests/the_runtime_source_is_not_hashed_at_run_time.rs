@@ -16,25 +16,27 @@
 //! halves of that: the cost (nothing walks the source at run time) and the
 //! correctness (the constant is the digest of the bytes it claims).
 
+#[path = "support/driver.rs"]
+mod driver;
+
 /// The cost half. Reading the source is how this one is written because the
 /// property is about what the binary DOES NOT DO, and a run-time assertion
 /// that something did not happen has nothing to observe.
 #[test]
 fn neither_cache_key_feeds_the_runtime_source_to_a_hasher() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let text = std::fs::read_to_string(root.join("src/main.rs")).expect("src/main.rs reads");
-
     let mut offenders = Vec::new();
-    for (n, line) in text.lines().enumerate() {
-        let code = line.split("//").next().unwrap_or("");
-        if !code.contains(".hash(&mut hasher)") {
-            continue;
-        }
-        if code.contains("include_str!")
-            || code.contains("RUNTIME_C")
-            || code.contains("source.hash")
-        {
-            offenders.push(format!("  src/main.rs:{}: {}", n + 1, line.trim()));
+    for (path, text) in driver::driver_sources() {
+        for (n, line) in text.lines().enumerate() {
+            let code = line.split("//").next().unwrap_or("");
+            if !code.contains(".hash(&mut hasher)") {
+                continue;
+            }
+            if code.contains("include_str!")
+                || code.contains("RUNTIME_C")
+                || code.contains("source.hash")
+            {
+                offenders.push(format!("  {}:{}: {}", path, n + 1, line.trim()));
+            }
         }
     }
 
