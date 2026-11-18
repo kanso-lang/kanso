@@ -4,7 +4,7 @@
 # a_subtype_beside_std_regexp_builds_in_release then fails to link, and
 # micro_corpus_survives_a_release_build reports it.
 set -e
-grep -q '^        \.args(lto_pipeline_args())$' src/main.rs
-sed -i.bak '/^        \.args(lto_pipeline_args())$/d' src/main.rs
-rm -f src/main.rs.bak
-! grep -q '^        \.args(lto_pipeline_args())$' src/main.rs
+grep -q '^        \.args(lto_pipeline_args())$' src/main/clang.rs
+sed -i.bak '/^        \.args(lto_pipeline_args())$/d' src/main/clang.rs
+rm -f src/main/clang.rs.bak
+! grep -q '^        \.args(lto_pipeline_args())$' src/main/clang.rs

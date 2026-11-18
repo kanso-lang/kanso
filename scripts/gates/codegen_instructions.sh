@@ -260,7 +260,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # which is what ruled out the output path and the pid before it. Only the
 # thread count explains a delta that changes size between pairs.
 #
-# The variable is read by `release_clang` in src/main.rs and is UNSET for every
+# The variable is read by `release_clang` in src/main/clang.rs and is UNSET for every
 # build but this measurement, so a user's release build keeps its cores.
 
 # AND THE WARM-UP RUNS UNDER THE MEASUREMENT'S OWN ENVIRONMENT. Re-staging the

@@ -22,6 +22,9 @@
 
 use std::path::PathBuf;
 
+#[path = "support/driver.rs"]
+mod driver;
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -55,8 +58,7 @@ fn the_codegen_gate_asks_for_one_thread_on_every_invocation() {
 /// The ask is worth nothing if the compiler drops it on the floor.
 #[test]
 fn release_clang_passes_the_ask_to_the_linker() {
-    let p = root().join("src/main.rs");
-    let src = std::fs::read_to_string(&p).expect("src/main.rs reads");
+    let (_, src) = driver::defining("release_clang");
 
     let release = src.split_once("fn release_clang").expect("release_clang is there").1;
     let dev_at = release.find("fn dev_clang").unwrap_or(release.len());

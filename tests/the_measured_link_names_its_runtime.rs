@@ -2,7 +2,7 @@
 //! decides.
 //!
 //! A cached runtime object's name carries a digest: of the runtime's text,
-//! and for the hot unit of `src/main.rs`'s own bytes as well. The linker
+//! and for the hot unit of `src/main/clang.rs`'s own bytes as well. The linker
 //! keeps its inputs' names in a string map, and how far a probe walks
 //! depends on the string, which `the_measured_link_names_its_object.rs`
 //! found for the LTO object. On 2026-11-11 a change that added two lines to

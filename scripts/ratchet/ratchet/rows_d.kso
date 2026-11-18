@@ -1801,7 +1801,7 @@ looked_up_once = row
 rows_dq66 = list/concat rows_dq65 [looked_up_once]
 
 # A measured build links its cached runtime objects under plain names. The
-# cache names them by a digest of src/main.rs, and the linker's work moves
+# cache names them by a digest of src/main/clang.rs, and the linker's work moves
 # with the characters of its inputs' names (2026-11-11).
 plain_link = row
   "a measured link handed a runtime object named by a digest"
