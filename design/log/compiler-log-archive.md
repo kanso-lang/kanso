@@ -116750,3 +116750,111 @@ helpers, and `lib/text/span.kso` spells the word nine times. Reach is by
 bare word over one set for the whole load. Letting a shipped module's
 words keep another module's declarations only when they are written
 qualified is #2442.
+
+## 2026-11-11 — a shipped module's words keep its own declarations
+
+#2442. Reach is by bare word, and the words were one set for a whole
+load, so a word spelled inside `std/text` could keep a declaration of
+`std/list`. Each import of a shipped module found more words than the
+last, asked for a larger pruning, and compiled the module again.
+
+**Whose words keep what.** Each shipped module has a set of words of its
+own: the ones its kept declarations spell. A declaration is kept when its
+name is among the program's words, the module's own, or the words of a
+shipped module that imports it. A module can call only what it imports,
+so a word needs to reach no further. The program's words keep what they
+kept before, since a program may use an imported name bare.
+
+The issue proposed that a shipped module's word keep another module's
+declaration only when it is written qualified. Lending along the import
+does that work without a second kind of word: `text/trim` spelled in
+`std/json` is the words `text` and `trim`, and `std/text` is lent json's
+words because json imports it.
+
+**One pass, importers first.** Words now travel only down imports, and
+the shipped modules' imports hold no cycle. The survey prunes every
+shipped module the load will reach before the first of them compiles,
+each after the shipped modules that import it. By the time a module is
+pruned every word that can reach it has been read, so its first pruning
+is its last, and the compile takes the module as the survey left it. If
+the program has spelled more words since, which happens when a
+derivation's text arrives as a source file, the surveyed pruning is
+dropped and the module is pruned where it is loaded.
+
+**Found on the way.** The survey read `import "path"` and missed
+`import { join:joined } "std/text"`, which is how `std/path` and
+`std/regexp` import. With one set of words nothing depended on the miss.
+With a set for each module it left `std/text` without two importers'
+words, the pruned compile refused (`std/text` exports no `join` to
+rename) and the load fell back to the whole library: the entry corpus
+read twice what it had. The scan takes the first quoted text after
+`import `.
+
+The survey also named a module's files `span.kso` at first, where the
+loader names them `std/text/span.kso`. The checker knows a library file
+by that name, so it refused `builtin_slice_in` as internal and the load
+fell back again: 41.0 million instructions to check the module corpus
+against 24.0. A release build takes that fallback without a word and a
+debug build fails an assertion on it, so the loader's specs and the
+golden corpus were run in a debug build after each change.
+
+**The version before this one** kept the lending incremental: a module
+was pruned where it was loaded, against the importers seen so far.
+Whole-process counts under callgrind: the entry corpus 121,365,118 with
+24 loads and the library corpus 72,984,999 with 17. One pass reads
+122,174,697 with 19 and 65,076,973 with 11. The entry corpus reads a
+little more over fewer loads because every importer now takes the module
+as all of its importers need it, where the early ones took a smaller
+one. The two corpora together read 7.1 million less with one pass.
+
+**Two costs taken out after measuring.** The pruning loop asked the
+program's words and each importer's for every declaration on every pass.
+Those sets do not change while a module is walked, so each declaration
+asks them once and the passes ask the module's own words alone: 78,426
+instructions off a check of the module corpus and 147,189 off the
+library corpus. The word sets also outlived the compile, which the
+interpreter's corpus read as 18,377 bytes of peak. They belong to one
+compile now, as the roots do.
+
+**Spec.** `tests/golden/compile/lent` is three modules: two use
+`std/list` and the one between them slices a text. `text/slice` has an
+arm for a span, and `span` is also a private helper of the list
+library's sort. The sample reads `loads=6`. With the loader as it was it
+reads 7, `std/list` twice.
+
+**Rows**, against the survey's. `compile_instructions` 23,782,898 ->
+22,652,638, `entry_instructions` 125,827,812 -> 119,661,348 and
+`library_instructions` 71,987,077 -> 63,632,847, falls of 4.8%, 4.9% and
+11.6%. `compile_allocs` 13,767 -> 13,503, `compile_peak_bytes` 606,357
+-> 546,568 and `front_end_visits` 7,388 -> 6,870. In the tab,
+`browser_compile_instructions` 413,249,135 -> 412,080,126 and
+`browser_compile_peak_bytes` 985,156 -> 984,870. `interp_allocs`
+1,068,177 -> 1,067,948 and `interp_peak_bytes` 1,512,615 -> 1,509,557.
+
+Four programs emit one line less: the decoder 14,240 -> 14,239, and
+`oneshot`, `livebench` and `runbench`, so that summed over every
+benchmark but the decoder emitted_other_lines reads 186,408 -> 186,405.
+The table of call sites no longer
+names the one inside `os/start`, which none of them calls. Another
+module's `start` had kept it. Three of the four run a different count
+with the shorter table, which this container could not read and CI did:
+work_oneshot up 238 to 9,978,975, work_livebench down 679 to 938,654,576
+and work_runbench down 133 to 1,059,837,846. The code they run is the
+same. The likely cause is where the shorter table leaves the data after
+it, and that was not isolated.
+
+Two rows rise. `emit_instructions` 5,632,066 -> 5,632,125. Two builds of
+this branch that hand the emitter the same program read 5,632,618 and
+5,632,125, so the row is moving with the binary's layout.
+`interp_instructions` 744,801,747 -> 744,907,234. Compared function by
+function with the loader as it was, the compile half of that row falls
+and `Interp::callee_missed` rises 214,571: the interpreter's table of
+recent callees takes its slots from where each name's text was
+allocated, and pruning the library differently moved the names. The
+same table moved the row for `text/replace`. It is #2444.
+
+**Welfare.** Over this entry and the two before it welfare rises
+95.34294930 -> 95.39064215, and the floor is banked there.
+
+**Not done.** `std/derive` is still compiled twice on the entry corpus,
+and that was not looked into.

@@ -25,6 +25,28 @@ import "std/text"
 # how it likes, so it can open something first and close it after:
 #
 #     (around (_ rest -> db/within connection rest))
+#
+# A given is a named value an example reads, as RSpec's `let` is. `given
+# name f` hands `f` the givens so far, as a map, and the example's map gains
+# `name` with what `f` answered. An effect is opened first, so a later given
+# and the example read its value. `around name wrap` puts what the hook hands
+# on into the map the same way. A context that restates a name replaces its
+# parent's given in place, as a subclass overrides a method, so a given
+# below it that reads the name reads the context's value:
+#
+#     test_dashboard = describe "the dashboard" [
+#       around "visit" (visit/within routes connected)
+#       given "user" (g -> accounts/create g.visit.db "ada")
+#       given "session" (g -> visit/signed_in g.visit g.user)
+#       it "greets the user" (g -> greets g.session "ada")
+#       context "when the user is an admin" [
+#         given "user" (g -> accounts/create g.visit.db "root" admin:true)
+#         it "greets the admin" (g -> greets g.session "root")
+#       ]
+#     ]
+#
+# Givens run in the order the file declares them, each for every example in
+# its scope, so one reads only the givens declared above it.
 type group
   name
   items
@@ -34,6 +56,7 @@ type example
   body
 
 type hook
+  name
   wrap
 
 # What an example that ended in a failure answered: the failure's reason.
@@ -43,6 +66,11 @@ pub type raised
 # What `describe` yields when an example did not pass: how many.
 pub type failed
   examples
+
+# The givens so far. An example and a given read one by its name through
+# `reader`, a function, so what it reads is handed on as a value.
+type givens
+  values
 
 type tally
   count
@@ -65,19 +93,48 @@ pub fn it name body
   example name body
 
 pub fn around wrap
-  hook wrap
+  hook "" wrap
+
+pub fn around name wrap
+  hook name (v rest -> wrap v (x -> rest (with (givens_of v) name x)))
+
+pub fn given name supply
+  hook name (v rest -> supplied (givens_of v) name supply rest)
+
+fn supplied g name supply rest
+  settled (supply (reader g)) .> (x -> rest (with g name x))
+
+fn givens_of none
+  givens {}
+
+fn givens_of g:givens
+  g
+
+fn with g name x
+  givens (put g.values name x)
+
+fn reader g
+  (name -> g.values[name])
 
 pub fn before step
-  hook (v rest -> settled (step v) .> rest)
+  hook "" (v rest -> settled (step v) .> rest)
 
 # What `step` leaves once the example is done, whatever the example answered.
 pub fn after step
-  hook (v rest -> rest v .> (got -> settled (step v) .> (_ -> effect got)))
+  hook "" (v rest -> rest v .> (got -> settled (step v) .> (_ -> effect got)))
 
 fn each_of items outer path depth t
-  mine = list/concat outer (list/to_list (list/select items hook?))
+  own = list/to_list (list/select items hook?)
+  mine = list/fold own outer (acc h -> overridden acc h)
   run = (acc item -> acc .> (now -> one item mine path depth now))
   list/fold items (effect t) run
+
+# A group's hook joins the ones around it, after them, unless it names a
+# given one of them named: then it takes that one's place.
+fn overridden hooks h
+  restates = h.name != "" and list/any? hooks (o -> o.name == h.name)
+  return push hooks h if not restates
+  list/to_list (list/map hooks (o -> if (o.name == h.name) h o))
 
 fn one _:hook _ _ _ t
   effect t
@@ -99,6 +156,9 @@ fn inside h rest
 # every hook, so that a hook around the example is answered and goes on to
 # close what it opened. A failure is a box, and only an arm that asks for
 # the box is handed one.
+fn judged body g:givens
+  guarded (body (reader g))
+
 fn judged body v
   guarded (body v)
 

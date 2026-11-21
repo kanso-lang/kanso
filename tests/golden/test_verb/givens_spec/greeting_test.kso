@@ -1,0 +1,5 @@
+import "../givens_run/greeting"
+
+# The spec in givens_run/greeting, which givens_run/main.kso also performs
+# natively.
+test_a_greeting = greeting/suite

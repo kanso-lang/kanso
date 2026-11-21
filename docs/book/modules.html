@@ -222,6 +222,43 @@ test_a_stack ... ok
 
 <p><code>around</code> is the hook the others are built from. it is handed the value so far and the rest of the example as a function, and it runs the rest between whatever it opens and closes. an example's failure is caught inside its hooks, so the closing half runs for a failing example too. that is what a test of a program with a database wants: open a transaction, run the example, roll it back.</p>
 
+<p>a given names a value the examples read, as rspec's <code>let</code> does. <code>given "guest" f</code> hands <code>f</code> a function that reads the givens declared above it, and an example is handed the same function. a context can restate a given. the restated one takes its parent's place in the order, so a given declared below it, such as <code>card</code>, reads the context's guest:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">seating_test.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/expect"</span>
+<span class="k">import</span> <span class="s">"std/spec"</span>
+
+<span class="k">type</span> guest
+  <span class="f">name</span>
+  <span class="f">table</span>
+
+test_a_seating <span class="o">=</span> <span class="f">describe</span> <span class="s">"a seating"</span> [
+  <span class="f">given</span> <span class="s">"guest"</span> (_ <span class="o">-&gt;</span> <span class="f">guest</span> <span class="s">"ada"</span> <span class="n">4</span>)
+  <span class="f">given</span> <span class="s">"card"</span> (g <span class="o">-&gt;</span> <span class="s">"<span class="i">{(g </span>"</span>guest<span class="s">").name}, table <span class="i">{(g </span>"</span>guest<span class="s">").table}"</span>)
+  <span class="f">it</span> <span class="s">"names the guest"</span> (g <span class="o">-&gt;</span> <span class="f">expect</span> (<span class="f">g</span> <span class="s">"card"</span>) <span class="o">.</span> <span class="f">to</span> (<span class="f">equal</span> <span class="s">"ada, table 4"</span>))
+  <span class="f">context</span> <span class="s">"for a late guest"</span> [
+    <span class="f">given</span> <span class="s">"guest"</span> (_ <span class="o">-&gt;</span> <span class="f">guest</span> <span class="s">"grace"</span> <span class="n">9</span>)
+    <span class="f">it</span> <span class="s">"names the late guest"</span> (g <span class="o">-&gt;</span>
+      <span class="f">expect</span> (<span class="f">g</span> <span class="s">"card"</span>) <span class="o">.</span> <span class="f">to</span> (<span class="f">equal</span> <span class="s">"grace, table 9"</span>)
+    )
+  ]
+]</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test seating_test.kso</div>
+    <pre><code>a seating
+  names the guest
+  for a late guest
+    names the late guest
+
+2 examples, 0 failed
+test_a_seating ... ok
+1 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>a given that answers an effect, such as one that writes a row, is opened before the next given reads it, so everything below it reads the row. every given in scope runs once for each example. <code>around "visit" wrap</code> puts what its hook hands on among the givens the same way, which is how senro's <code>visit/within</code> gives every example a visit. a given reads another through a function rather than a map, because a map read answers <code>none</code> when the key is missing, and an ordinary function would then have to take one.</p>
+
 <h2>importing another module</h2>
 
 <p>one directory is one module; a program grows by putting modules side by side. an <code>import</code> names a sibling directory, and every <code>pub</code> name inside arrives under the module's own name as a qualifier—<code>teahouse/price</code>, spelled where it is used, so a reader never wonders where a name came from:</p>
