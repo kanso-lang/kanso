@@ -1,0 +1,138 @@
+---
+layout: default
+title: "JavaScript in senro"
+description: "an app's own JavaScript reads the data attributes its views render and drives a library; senro vendors the packages with jspm, keeps a library's element through the morph, and turns the library's events into actions."
+---
+<style>
+.senro-crumbs { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+<p class="senro-crumbs"><a href="../index.html">senro</a> &rsaquo; <a href="index.html">guides</a></p>
+<span class="eyebrow">senro guides</span>
+<h1>JavaScript</h1>
+
+<p>most of a senro app's pages need no JavaScript of its own. the page script morphs each answer into the live page, and a component's actions run in the browser as wasm. a chart, a map or a date picker is different: it is a JavaScript library, and something has to call it. in senro that something is a small module the app writes. the app's views render the data as attributes on an element, the module reads them and drives the library, and when the library has something to report it dispatches an event that a component's action answers. kanso has no call into JavaScript, so a component stays a function from its state to HTML and runs on every engine (kanso#2284).</p>
+
+<p>this guide covers where an app's modules live, how senro installs and vendors packages, how a library keeps its element when the page changes, and how a library's event reaches an action. the pantry's chart is the running example.</p>
+
+<h2>the app's modules</h2>
+
+<p>an app's JavaScript lives in <code>javascript/</code>, and <code>javascript/application.js</code> is the entry. a module imports a package by its name and another of the app's modules by its path without <code>.js</code>, with a directory's name standing for its <code>index.js</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/javascript/application.js</div>
+  <pre><code>// The pantry's JavaScript: the adapter that draws the shelf's chart.
+import "chart";</code></pre>
+</div>
+
+<p>the layout needs nothing new. senro's page script, which every layout already loads from <code>/senro.js</code>, carries the app's import map, asks for each module the page needs at once, and imports <code>application</code>.</p>
+
+<h2>installing packages</h2>
+
+<p>senro manages packages the way jspm-rails does for a Rails app, with jspm's generator. install the generator beside the app once, as a development dependency, so the app pins its version like any other:</p>
+
+<pre><code>npm install --save-dev @jspm/generator
+senro js install</code></pre>
+
+<pre><code>      traced  javascript/application.js
+    vendored  2 modules from ga.jspm.io
+       wrote  importmap.json</code></pre>
+
+<p>the install traces the entry and every other module in <code>javascript/</code>, finds every module they reach across whole dependency trees, and downloads each from jspm.io, with its source map, into <code>vendor/javascript/</code>. it writes the import map, and the list of modules a page loads at once, to <code>importmap.json</code>. commit both. a deployed app serves the vendored files itself, so it needs neither Node nor jspm.io. the pantry's map names its two modules and the one package they reach:</p>
+
+<pre><code>{
+  "imports": {
+    "application": "/javascript/application.js",
+    "chart": "/javascript/chart.js"
+  },
+  "scopes": {
+    "/": {
+      "chartist": "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.js"
+    }
+  },
+  "preload": [
+    "/javascript/application.js",
+    "/javascript/chart.js",
+    "https://ga.jspm.io/npm:chartist@2.2.1/_/BUd082zi.js",
+    "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.js"
+  ]
+}</code></pre>
+
+<p>the map keeps jspm.io's URLs, which is what makes it jspm's lockfile. senro rewrites them to <code>/vendor/javascript/ga.jspm.io/npm/…</code> as it serves the page script. a vendored module's path names its package's version, so the server tells the browser to keep it for a year. one of the app's own modules is checked against its ETag on each page load, so an edit reaches the next page.</p>
+
+<h2>versions</h2>
+
+<p>an install keeps every version the previous <code>importmap.json</code> holds. to move a package installed only through jspm, delete its entries from the map and install again. a package npm installed takes the version <code>package-lock.json</code> holds at its top level instead, so a Dependabot bump reaches the map at the next install, and the package's stylesheets and fonts are in <code>node_modules</code> at the same version as its JavaScript.</p>
+
+<p>npm installs a second version of a package when its dependents' ranges do not meet. an import map holds one version of each package, so the install uses the top-level version everywhere and prints a <code>warn</code> line naming the package and both versions.</p>
+
+<p>a module of the app's that has a package's name is refused, since an import of that name could mean either:</p>
+
+<pre><code>senro js: javascript/chartist.js has the name of the package chartist; rename one of them</code></pre>
+
+<h2>checking in CI</h2>
+
+<p><code>senro js check</code> traces and downloads again and writes nothing. it fails when an install would change <code>importmap.json</code>, and when a file under <code>vendor/javascript/</code> is missing, differs from what jspm.io serves, or is one the trace no longer reaches. run it in CI and a hand edit to vendored code cannot land:</p>
+
+<pre><code>     changed  vendor/javascript/ga.jspm.io/npm/chartist@2.2.1/dist/index.js
+         run  senro js install</code></pre>
+
+<h2>a library's element</h2>
+
+<p>the page script morphs each new page into the live one, matching elements and copying the server's attributes and children onto them. a chart draws its own children, so the morph would erase it. an element marked <code>data-owned-by</code> keeps its children through the morph, and its attributes are still kept current, which is how the library hears of new data. the pantry's shelf writes the names and counts it charts onto such an element:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/views/shelf.kata</div>
+  <pre><code>.chart data-owned-by="chart" data-names=names data-counts=counts</code></pre>
+</div>
+
+<p>the chart's module draws into each such element when it appears and draws again when <code>data-counts</code> changes. a <code>MutationObserver</code> watches for both, so the module needs no word from senro:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/javascript/chart.js</div>
+  <pre><code>import { BarChart } from "chartist";
+
+const charts = new WeakMap();
+
+const data = (el) => ({
+  labels: el.dataset.names ? el.dataset.names.split("\n") : [],
+  series: [el.dataset.counts ? el.dataset.counts.split(" ").map(Number) : []],
+});
+
+const options = { axisY: { onlyInteger: true, low: 0 }, height: "10rem" };
+
+const drawn = (el) => {
+  const chart = charts.get(el);
+  if (chart) chart.update(data(el));
+  else charts.set(el, new BarChart(el, data(el), options));
+};</code></pre>
+</div>
+
+<p>the rest of the file finds the elements and watches them. <code>spec/browser/pantry.mjs</code> reads the chart's bars at every step of its run and waits until they show the counts the list shows. with the morph's rule taken out, it times out at the first change that leaves the counts alone, because the morph erased the chart and nothing redrew it.</p>
+
+<h2>a library's events</h2>
+
+<p>the way back from the library is an event. a template binds any event as it binds a click: <code>on-click=more</code> writes <code>data-on-click</code>, and <code>on-change=typed</code> writes <code>data-on-change</code>. the page script listens for every event name a binding on the page names. an action that names a parameter <code>value</code> is handed the event's value as text, before its state: a field's value for an event the browser fires, the <code>detail</code> of a <code>CustomEvent</code>, and <code>""</code> for a click. so a library's module reaches a component by dispatching an event on an element inside it:</p>
+
+<pre><code>el.dispatchEvent(new CustomEvent("change", { bubbles: true, detail: 2 }));</code></pre>
+
+<p>the pantry's planner binds its number field this way:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/planner/view.kata</div>
+  <pre><code>  input.meals type="number" min="0" aria-label="meals" on-change=typed</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
+  <pre><code>pub fn typed value _
+  planned (counted (text/to_int value))</code></pre>
+</div>
+
+<p><code>typed</code> takes no <code>req</code>, <code>db</code> or <code>viewer</code>, so it runs in the browser. the pantry's browser spec sets the field by typing 6 and then by dispatching the event above, and the planner shows 6 and then 2 with no request to the server. an action that also names <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server, and the page posts the value beside the state. a value with a line break in it arrives whole, since it travels as a JSON string.</p>
+
+<h2>what is not here</h2>
+
+<p>there is no bundler and no build step: the browser loads the modules their authors wrote, and caches each on its own. there is no call from kanso into JavaScript. kanso#2284 weighed one and chose the boundary in this guide. each action runs in a fresh instance of the app's module, so nothing in kanso outlives an event to hold a chart, and a component that called JavaScript could no longer run its specs on the interpreter.</p>
+</article>

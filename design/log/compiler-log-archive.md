@@ -116858,3 +116858,45 @@ same table moved the row for `text/replace`. It is #2444.
 
 **Not done.** `std/derive` is still compiled twice on the entry corpus,
 and that was not looked into.
+
+## 2026-11-11 — a derive line is an import the survey counts
+
+The last repeat #2442 left: the entry corpus loaded `std/derive` twice.
+The entry above says that was not looked into, and this is the look.
+
+An entry with a `derive` line imports `std/derive` without writing the
+import; `compile_entry_program` adds it. The module that declares the
+derivation imports `std/derive` too. The survey counts imports by reading
+the program's text, and a module two imports name is kept from its first
+compile. It read one import where there were two, so the first compile
+was not kept and the entry's own import compiled the module again.
+
+`from_entry` now hands the survey the line the entry did not write, when
+the entry's source has a line that starts with `derive `. Nothing else
+changes: the import was already made, and the survey only counts it.
+
+**Spec.** `tests/an_entry_that_derives_compiles_derive_once.rs` checks the
+smallest program in the derive corpus with `KANSO_PHASES=1` and counts the
+loader's lines: `std/derive` once, and 2 with the line withheld. A second
+test counts `std/list`, so the first cannot pass on a loader that prints
+nothing. The ratchet row is `derive_counted`.
+
+**Rows.** `entry_instructions` 119,661,348 -> 119,206,191, and the entry
+corpus loads 18 modules where it loaded 19. Two rows move with the
+binary's layout and nothing they count: `compile_instructions` 22,652,638
+-> 22,652,656 and `library_instructions` 63,632,847 -> 63,634,723.
+Neither corpus has a derive line. The first version cloned the entry's
+directory path whether or not it was needed, which the interpreter's
+corpus read as one allocation more; the clone is made for an entry that
+derives and for no other.
+
+The browser's compile of its corpus reads the check:
+`browser_compile_instructions` 412,080,126 -> 412,081,307, which is 1,181
+instructions over the corpus for the search of each entry's text. With
+the check withheld the row read 412,080,126 again. A version that read
+only the entry's header, as the parser does, was measured and dropped.
+No program's output differed between the two, and it read 412,081,343
+there, 119,205,544 on `entry_instructions` and 63,641,726 on
+`library_instructions`, each higher than the search of the whole text.
+
+**Welfare.** 95.39064215 -> 95.39098937, banked.

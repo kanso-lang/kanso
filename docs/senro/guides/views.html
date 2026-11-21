@@ -96,6 +96,7 @@ div.planner
   button.minus on-click<span class="o">=</span>fewer aria-label<span class="o">=</span><span class="s">"one fewer"</span> −
   span.count <span class="o">=</span> plan[<span class="s">"meals"</span>]
   button.plus on-click<span class="o">=</span>more aria-label<span class="o">=</span><span class="s">"one more"</span> <span class="o">+</span>
+  input.meals type<span class="o">=</span><span class="s">"number"</span> min<span class="o">=</span><span class="s">"0"</span> aria-label<span class="o">=</span><span class="s">"meals"</span> on-change<span class="o">=</span>typed
   button.check on-click<span class="o">=</span>checked Check the staples
   case plan[<span class="s">"note"</span>]
     when none
@@ -106,9 +107,10 @@ div.planner
   <div class="code-panel-title">examples/pantry/planner/planner.kso</div>
   <pre><code><span class="c"># The week's meal plan, counted in the browser, and the staples it would run</span>
 <span class="c"># short of. These are the component's actions: each takes the plan and</span>
-<span class="c"># answers the next one, and the planner's template binds them to its buttons.</span>
-<span class="c"># `more` and `fewer` count in the browser alone and clear the last check;</span>
-<span class="c"># `checked` asks the server.</span>
+<span class="c"># answers the next one, and the planner's template binds them to its buttons</span>
+<span class="c"># and its field. `more` and `fewer` count in the browser alone and clear the</span>
+<span class="c"># last check, and so does `typed`, which takes the count the field reports as</span>
+<span class="c"># its `value`; `checked` asks the server.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">more</span> plan
   planned (meals_of plan <span class="o">+</span> 1)
 
@@ -116,6 +118,8 @@ div.planner
   n <span class="o">=</span> meals_of plan
   planned (<span class="k">if</span> (n <span class="o">&gt;</span> 0) (n - 1) 0)</code></pre>
 </div>
+
+<p>any event binds the way a click does, and an action that names a parameter <code>value</code> is handed the event's value as text, before its state. the planner's number field is bound <code>on-change=typed</code> this way. the <a href="javascript.html">JavaScript guide</a> covers it, with the events a library's module dispatches.</p>
 
 <p>where an action runs depends on what it asks for. an action that takes only the state runs in the browser, in the app's browser module, without asking the server. <code>derive kata/views</code> writes a <code>component</code> record into the module of every component, and the browser module lists the ones it runs: the pantry's ends with <code>browser/answer_pages [planner/component] views/rendered</code>. one that also asks for <code>req</code>, <code>db</code> or <code>viewer</code> runs on the server: the click posts the state to <code>/senro/act/&lt;component&gt;</code>, and the page morphs the component's next rendering into place. the guestbook's remove button is that kind:</p>
 

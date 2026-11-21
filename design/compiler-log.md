@@ -20,48 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a derive line is an import the survey counts
-
-The last repeat #2442 left: the entry corpus loaded `std/derive` twice.
-The entry above says that was not looked into, and this is the look.
-
-An entry with a `derive` line imports `std/derive` without writing the
-import; `compile_entry_program` adds it. The module that declares the
-derivation imports `std/derive` too. The survey counts imports by reading
-the program's text, and a module two imports name is kept from its first
-compile. It read one import where there were two, so the first compile
-was not kept and the entry's own import compiled the module again.
-
-`from_entry` now hands the survey the line the entry did not write, when
-the entry's source has a line that starts with `derive `. Nothing else
-changes: the import was already made, and the survey only counts it.
-
-**Spec.** `tests/an_entry_that_derives_compiles_derive_once.rs` checks the
-smallest program in the derive corpus with `KANSO_PHASES=1` and counts the
-loader's lines: `std/derive` once, and 2 with the line withheld. A second
-test counts `std/list`, so the first cannot pass on a loader that prints
-nothing. The ratchet row is `derive_counted`.
-
-**Rows.** `entry_instructions` 119,661,348 -> 119,206,191, and the entry
-corpus loads 18 modules where it loaded 19. Two rows move with the
-binary's layout and nothing they count: `compile_instructions` 22,652,638
--> 22,652,656 and `library_instructions` 63,632,847 -> 63,634,723.
-Neither corpus has a derive line. The first version cloned the entry's
-directory path whether or not it was needed, which the interpreter's
-corpus read as one allocation more; the clone is made for an entry that
-derives and for no other.
-
-The browser's compile of its corpus reads the check:
-`browser_compile_instructions` 412,080,126 -> 412,081,307, which is 1,181
-instructions over the corpus for the search of each entry's text. With
-the check withheld the row read 412,080,126 again. A version that read
-only the entry's header, as the parser does, was measured and dropped.
-No program's output differed between the two, and it read 412,081,343
-there, 119,205,544 on `entry_instructions` and 63,641,726 on
-`library_instructions`, each higher than the search of the whole text.
-
-**Welfare.** 95.39064215 -> 95.39098937, banked.
-
 ## 2026-11-11 — a called name's place in the table comes from the program
 
 #2444. The interpreter keeps what a function reference calls in a table,
@@ -1456,3 +1414,29 @@ and interpreted, to one golden. Watched red with a restated given appended
 instead of put in its parent's place: the admin was greeted as "hello, ada".
 The book's modules chapter gains `seating_test.kso`. Laziness, `super` and
 injection by parameter name are declined on the issue, with reasons.
+
+## 2026-11-21 — senro 0.4.0 and 0.5.0: JavaScript through the page
+
+The committee's reading on #2284 chose the boundary Clay proposed: an app's
+own JavaScript reads the data attributes its views render and drives the
+library, and the language gains nothing. senro built it in three pull
+requests, and the site gains a guide, `docs/senro/guides/javascript.html`.
+
+- senro#146 (0.4.0) manages packages as Clay's jspm-rails does. `senro js
+  install` traces `javascript/application.js` with jspm's generator, which
+  the app pins in its own `package.json`, vendors what the trace reaches into
+  `vendor/javascript/`, and writes `importmap.json`. `senro js check` traces
+  and downloads again and fails on any drift. `/senro.js` carries the map,
+  so a layout needs no tag. The morph keeps the children of an element
+  marked `data-owned-by`. The pantry draws its counts with Chartist, and its
+  browser spec went red at "counted" with the morph's rule taken out.
+- senro#147 pinned senro's runner to ubuntu-24.04. `ubuntu-latest` had moved
+  to 26.04, where Playwright 1.56.1 will not install browsers, so every job
+  failed before a spec ran.
+- senro#148 (0.5.0) is the way back. The page script listens for every event
+  a `data-on-*` binding names, and an action that names `value` is handed the
+  event's value as text. It is pinned on native, the interpreter and wasm,
+  for a server action, and in the browser, where the spec went red at the
+  CustomEvent step with the detail dropped. The browser module pays for the
+  value line: senro's `bench/pages` reads `browser_act_instructions` 119,357
+  -> 119,782 and `browser_page_instructions` 3,670,780 -> 3,670,822, from CI.
