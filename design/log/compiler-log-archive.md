@@ -116556,3 +116556,49 @@ left of the phase is the templates that build each row's values:
 4,228,000 in `k_b_replace` and 2,436,774 in `memchr`. A kernel that knew
 HTML could take the second pair and some of the escape's own searches, at
 the price of HTML in the runtime.
+
+## 2026-11-11 — a file that cannot say its size is read to its end
+
+#2435. `os/read_file` and `os/read_bytes` disagreed between the engines on
+any file that is not a regular file on disk. The interpreter reads until
+the file ends. The native runtime sought to the end, asked where it was,
+and read that many bytes. procfs answers 0 for a file that has bytes, so
+`/proc/self/comm` read as the empty string. A pipe cannot seek, `ftell`
+answers -1, and that went to `fread` as a count beside a buffer of no
+bytes; it read nothing here. The spec for #2431's harness bound found it,
+because its first draft read `/proc/self/limits`.
+
+The size is now a first answer and no more. `k_told_size` reports what
+the seek says, or -1 when the file cannot seek. A file that reports more
+than nothing is read as before: one buffer of that size and one read, and
+for `read_bytes` straight into the arena. Anything else goes to
+`k_read_unsized`, which reads until the file ends and doubles its room
+when it runs out. `read_bytes` copies that into the arena once the length
+is known.
+
+Two programs join the stdin corpus, which pipes each program its input.
+`a_piped_file_is_read_to_its_end` reads `/dev/stdin` as text, 7,800
+characters, so the reader's first 4,096 bytes are not enough.
+`a_pipe_s_bytes_are_read_to_the_end` reads 5,000 bytes whose last is not
+text. With the unsized branch taken out the native build prints
+`0 bytes, last <none>` where the interpreter prints `5000 bytes, last
+255`.
+
+What moves. Every program links the reader, 320 bytes of machine code,
+and summed over the fourteen text 6,010,505 -> 6,014,985.
+The four benchmarks that read a file pay 16 instructions for the
+question: work_jsonbench 549,338,015, work_widebench 28,701,603,
+work_digestbench 3,107,795 and work_readbench 4,583,700. Five move with
+the layout of the grown runtime: work_encodebench down 425 to
+2,335,340,622, work_oneshot down 768 to 9,978,737, work_livebench up 324
+to 938,655,255, work_runbench down 502 to 1,059,837,979 and
+work_runbench_dev down 32 to 3,057,251,699. Clang compiles the longer
+runtime: CI read codegen_instructions_dev at 117,031,054, up 17,215, and
+codegen_instructions_release at 372,173,775, up 38,890. The work rows are
+this container's readings less the 109 CI has read under it, and CI
+agreed with every one. No allocation counter, compile
+row, interpreter row or browser row moved here.
+
+Welfare reads 95.34294930, under the 95.34299175 the kernel banked. The
+objective's header leaves a fix that makes the engines agree outside the
+sum, so the floor moves to what the fix costs and its history says so.

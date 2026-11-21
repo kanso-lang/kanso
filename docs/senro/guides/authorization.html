@@ -158,8 +158,10 @@ HTTP/1.1 200 OK: &lt;div data-component="tally" data-runs="server" data-state="i
 
 <div class="code-panel">
   <div class="code-panel-title">spec/serve/admitted/tally/tally.kso</div>
-  <pre><code><span class="c"># A note of who last raised the tally. The action asks for the viewer, so it</span>
-<span class="c"># runs on the server, and the server answers it as the page that asks.</span>
+  <pre><code><span class="c"># A note of who last raised the tally. The actions ask for the viewer, so</span>
+<span class="c"># they run on the server, and the server answers each as the page that</span>
+<span class="c"># asks. `noted` also takes the event's value, which the page posts beside</span>
+<span class="c"># the state.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">raised</span> viewer _
   effect <span class="s">"raised by {viewer}"</span></code></pre>
 </div>
