@@ -116602,3 +116602,301 @@ row, interpreter row or browser row moved here.
 Welfare reads 95.34294930, under the 95.34299175 the kernel banked. The
 objective's header leaves a fix that makes the engines agree outside the
 sum, so the floor moves to what the fix costs and its history says so.
+
+## 2026-11-11 — the reach reads code, and a pruning is compiled once
+
+#2434, from its loose end. The issue measured 1.67M instructions for a
+library group no program called and guessed that a word in a comment had
+kept it. The reach that prunes the shipped library read every word a file
+spells: code, comments and the text of strings alike. Three things came
+of following that.
+
+**A comment keeps nothing.** `reach_words` stops at a `#`, where the
+lexer stops reading. Text holding a `"""` block keeps its comments'
+words, because a block's lines are text whatever they open with.
+
+**A string's text keeps nothing.** The issue's cost was one word. The
+arm it added to `text/replace` answered `err "replace needs something to
+find"`, and `find` kept every group of that name. Measured on the
+interpreter's corpus: the arm costs 1,306,636 instructions to check with
+that message and 153,551 with `something to look for`. So the reach
+walks a string for its interpolations alone. The braces nest as the
+lexer counts them and a backslash takes the byte after it. Derived code
+is unaffected, because a derivation's text reaches the compiler as a
+source file and is read as code there: senro's suite, whose views are
+generated from strings, builds the same programs to the same rows.
+
+**The key.** Leaving comments out made `entry_instructions` rise by
+432,052, and that led to the largest of the three. A compile of a
+shipped module was kept under the number of words the program had
+reached so far (kanso#2373), because a module pruned against as many
+roots was pruned against the same ones. That number grows with every
+module a load reads. Two imports of `std/text` a few modules apart never
+shared a compile, though nothing that arrived between them named
+anything in it, and the entry corpus compiled `std/text` and `std/list`
+ten times each. With fewer words reached up front the count changed at
+one more import, which is where the 432,052 came from.
+
+The key is now which of the module's prunings this is. The module is
+pruned first, and the declarations it kept are what its compile depends
+on: they name everything it reaches in the modules it imports, and the
+roots only grow, so a compile kept under the same declarations holds
+what a later import needs. Each distinct set is held once for a module
+and the key carries its place in that list. An import that finds as many
+roots as an earlier import of the module found asks the cache under that
+pruning before it reads any source. The entry corpus compiles the two
+modules six times each.
+
+**Two versions taken back.** The first comment scan tracked the string
+state on every byte and gave back half of what it saved: 288,000
+instructions of bookkeeping against 577,000 of library no longer read.
+The first key held the kept declarations themselves, a vector hashed and
+copied at every lookup, and the module corpus read 11,140 instructions
+more with it than with the place in a list that replaced it. Splitting
+the scan into functions cost that corpus 65,929 until the one a word
+goes through was inlined.
+
+**Specs.** `an_import_reads_what_the_program_names` gains five programs:
+a comment that says `pad_start`, above the code and beside it; a string
+that says it; a `#` inside a string with the only `trim` after it; a
+`trim` inside a string inside an interpolation; and a `lowercase` after
+an escaped brace. With comments read the first held `text/pad_start`,
+`text/padding` and `text/filled`, and with strings read as code the
+second held `text/pad_start`. `tests/golden/compile/apart` is three modules that each trim
+a text and bring words of their own: `loads=6`, and 7 under the old key.
+Every corpus and module test passes in a debug build, where a pruned
+compile the whole library would have accepted is refused out loud.
+
+**Rows.** `entry_instructions` 156,165,133 -> 138,221,281, a fall of
+11.5%. `library_instructions` 73,647,363 -> 71,598,427. The tab's
+compile 416,189,723 -> 413,661,765. `interp_instructions` 745,491,463 ->
+744,801,948, `interp_allocs` 1,069,565 -> 1,068,402 and
+`interp_peak_bytes` 1,524,780 -> 1,512,615, from library the corpus's
+comments and strings used to keep. `compile_instructions` 24,168,284 ->
+24,164,654 and `emit_instructions` 5,633,371 -> 5,632,066.
+
+Three rows rise. The cache keeps a module once a second import asks for
+it under the same key, and a second import now shares a key where the
+count used to separate it. On the module corpus that keeps copies no
+third import comes for: `compile_allocs` 13,956 -> 14,016,
+`compile_peak_bytes` 599,057 -> 612,423, and in the tab
+`browser_compile_peak_bytes` 984,597 -> 985,156. Welfare weighs the falls
+and the rises together and rises. The floor is banked once for this
+entry and the two after it, and the last of them says where.
+
+**Not done.** A module is still compiled once for each pruning the load
+happens to pass through. Gathering every word the program's own modules
+spell before the first shipped module is read would prune each against
+the final roots and compile it once. That needs the import graph before
+any compile, which the loader does not have. The reach itself measured
+3.8% of a check of the module corpus, most of it hashing the words of
+declarations it has kept.
+
+## 2026-11-11 — a program's words are read before its first shipped module
+
+#2434's open lead, built. A shipped module is pruned against the words
+read so far, and a compile read them as it went. `std/text` imported from
+three of a program's files was pruned three ways, each a little larger
+than the last, and compiled three times.
+
+A root compile now reads the program's own modules first. It follows
+their `import` lines as text, which it can because imports open a file,
+adds each module's words to the roots, and counts how many imports name
+each module, shipped ones included. Two things follow. The imports of one
+shipped module from the program's files ask for one pruning. And a module
+two imports name is kept from its first compile: the cache kept a module
+only once a second import asked for it, so the second import compiled it
+again before anything was shared.
+
+The survey passes over what it cannot read, and the compile still adds
+words as it goes, so a module the survey misses costs the compile it would
+have saved and nothing else. What the compiler emits is unchanged:
+`emitted_code` and `machine_code` agree with their goldens.
+
+**Rows.** The entry corpus loads 25 modules where it loaded 31, and
+`entry_instructions` 138,221,281 -> 125,827,812, a fall of 9.0%.
+`compile_instructions` 24,164,654 -> 23,782,898. `compile_allocs` 14,016
+-> 13,767 and `compile_peak_bytes` 612,423 -> 606,357, the two rows the
+entry before this one raised. In the tab `browser_compile_instructions`
+413,661,765 -> 413,249,135. `interp_instructions` 744,801,948 ->
+744,801,747 and `interp_allocs` 1,068,402 -> 1,068,177. In
+`bench/compile_golden_modules.txt` the `shared` sample reads rounds=6
+visits=1676 loads=6 where it read rounds=8 visits=2190 loads=11, and
+`apart` loads=5 where it read 6. With the survey skipped that golden goes
+red on `shared` at loads=11.
+
+One row rises: `library_instructions` 71,598,427 -> 71,987,077, 0.5%.
+Counting the imports shipped modules make of each other is what costs it.
+Whole-process counts under callgrind, survey off, counting only the
+program's own imports, and counting both: the library corpus reads
+72,990,673, 73,020,598 and 73,309,958, and the compile corpus 25,395,776,
+25,405,957 and 24,964,355. Counting both costs the library corpus 289,360
+and saves the compile corpus 441,602, and it is what is kept.
+
+**Tried and dropped.** Pruning every shipped module the program names to
+a fixed point inside the survey, so each has one pruning and one compile.
+The entry corpus fell to 19 loads. The pass itself cost 3.4 million
+instructions on the compile corpus, 28,771,479 against 25,395,776, and the
+entry corpus read 132,716,479 with it against 127,955,878 without.
+
+**Not done.** `std/text` and `std/list` are still compiled more than once
+in a load: on the entry corpus, list four times and text three. Every word
+of the program's own is in hand before the first of those, so the words
+that change the pruning come from declarations other shipped modules
+kept. A trace of what each pruning kept shows it. `std/list` goes from 26
+declarations to 33 by gaining the seven private helpers of its merge
+sort, with neither `sort` nor `sort_by` kept: `span` is one of the
+helpers, and `lib/text/span.kso` spells the word nine times. Reach is by
+bare word over one set for the whole load. Letting a shipped module's
+words keep another module's declarations only when they are written
+qualified is #2442.
+
+## 2026-11-11 — a shipped module's words keep its own declarations
+
+#2442. Reach is by bare word, and the words were one set for a whole
+load, so a word spelled inside `std/text` could keep a declaration of
+`std/list`. Each import of a shipped module found more words than the
+last, asked for a larger pruning, and compiled the module again.
+
+**Whose words keep what.** Each shipped module has a set of words of its
+own: the ones its kept declarations spell. A declaration is kept when its
+name is among the program's words, the module's own, or the words of a
+shipped module that imports it. A module can call only what it imports,
+so a word needs to reach no further. The program's words keep what they
+kept before, since a program may use an imported name bare.
+
+The issue proposed that a shipped module's word keep another module's
+declaration only when it is written qualified. Lending along the import
+does that work without a second kind of word: `text/trim` spelled in
+`std/json` is the words `text` and `trim`, and `std/text` is lent json's
+words because json imports it.
+
+**One pass, importers first.** Words now travel only down imports, and
+the shipped modules' imports hold no cycle. The survey prunes every
+shipped module the load will reach before the first of them compiles,
+each after the shipped modules that import it. By the time a module is
+pruned every word that can reach it has been read, so its first pruning
+is its last, and the compile takes the module as the survey left it. If
+the program has spelled more words since, which happens when a
+derivation's text arrives as a source file, the surveyed pruning is
+dropped and the module is pruned where it is loaded.
+
+**Found on the way.** The survey read `import "path"` and missed
+`import { join:joined } "std/text"`, which is how `std/path` and
+`std/regexp` import. With one set of words nothing depended on the miss.
+With a set for each module it left `std/text` without two importers'
+words, the pruned compile refused (`std/text` exports no `join` to
+rename) and the load fell back to the whole library: the entry corpus
+read twice what it had. The scan takes the first quoted text after
+`import `.
+
+The survey also named a module's files `span.kso` at first, where the
+loader names them `std/text/span.kso`. The checker knows a library file
+by that name, so it refused `builtin_slice_in` as internal and the load
+fell back again: 41.0 million instructions to check the module corpus
+against 24.0. A release build takes that fallback without a word and a
+debug build fails an assertion on it, so the loader's specs and the
+golden corpus were run in a debug build after each change.
+
+**The version before this one** kept the lending incremental: a module
+was pruned where it was loaded, against the importers seen so far.
+Whole-process counts under callgrind: the entry corpus 121,365,118 with
+24 loads and the library corpus 72,984,999 with 17. One pass reads
+122,174,697 with 19 and 65,076,973 with 11. The entry corpus reads a
+little more over fewer loads because every importer now takes the module
+as all of its importers need it, where the early ones took a smaller
+one. The two corpora together read 7.1 million less with one pass.
+
+**Two costs taken out after measuring.** The pruning loop asked the
+program's words and each importer's for every declaration on every pass.
+Those sets do not change while a module is walked, so each declaration
+asks them once and the passes ask the module's own words alone: 78,426
+instructions off a check of the module corpus and 147,189 off the
+library corpus. The word sets also outlived the compile, which the
+interpreter's corpus read as 18,377 bytes of peak. They belong to one
+compile now, as the roots do.
+
+**Spec.** `tests/golden/compile/lent` is three modules: two use
+`std/list` and the one between them slices a text. `text/slice` has an
+arm for a span, and `span` is also a private helper of the list
+library's sort. The sample reads `loads=6`. With the loader as it was it
+reads 7, `std/list` twice.
+
+**Rows**, against the survey's. `compile_instructions` 23,782,898 ->
+22,652,638, `entry_instructions` 125,827,812 -> 119,661,348 and
+`library_instructions` 71,987,077 -> 63,632,847, falls of 4.8%, 4.9% and
+11.6%. `compile_allocs` 13,767 -> 13,503, `compile_peak_bytes` 606,357
+-> 546,568 and `front_end_visits` 7,388 -> 6,870. In the tab,
+`browser_compile_instructions` 413,249,135 -> 412,080,126 and
+`browser_compile_peak_bytes` 985,156 -> 984,870. `interp_allocs`
+1,068,177 -> 1,067,948 and `interp_peak_bytes` 1,512,615 -> 1,509,557.
+
+Four programs emit one line less: the decoder 14,240 -> 14,239, and
+`oneshot`, `livebench` and `runbench`, so that summed over every
+benchmark but the decoder emitted_other_lines reads 186,408 -> 186,405.
+The table of call sites no longer
+names the one inside `os/start`, which none of them calls. Another
+module's `start` had kept it. Three of the four run a different count
+with the shorter table, which this container could not read and CI did:
+work_oneshot up 238 to 9,978,975, work_livebench down 679 to 938,654,576
+and work_runbench down 133 to 1,059,837,846. The code they run is the
+same. The likely cause is where the shorter table leaves the data after
+it, and that was not isolated.
+
+Two rows rise. `emit_instructions` 5,632,066 -> 5,632,125. Two builds of
+this branch that hand the emitter the same program read 5,632,618 and
+5,632,125, so the row is moving with the binary's layout.
+`interp_instructions` 744,801,747 -> 744,907,234. Compared function by
+function with the loader as it was, the compile half of that row falls
+and `Interp::callee_missed` rises 214,571: the interpreter's table of
+recent callees takes its slots from where each name's text was
+allocated, and pruning the library differently moved the names. The
+same table moved the row for `text/replace`. It is #2444.
+
+**Welfare.** Over this entry and the two before it welfare rises
+95.34294930 -> 95.39064215, and the floor is banked there.
+
+**Not done.** `std/derive` is still compiled twice on the entry corpus,
+and that was not looked into.
+
+## 2026-11-11 — a derive line is an import the survey counts
+
+The last repeat #2442 left: the entry corpus loaded `std/derive` twice.
+The entry above says that was not looked into, and this is the look.
+
+An entry with a `derive` line imports `std/derive` without writing the
+import; `compile_entry_program` adds it. The module that declares the
+derivation imports `std/derive` too. The survey counts imports by reading
+the program's text, and a module two imports name is kept from its first
+compile. It read one import where there were two, so the first compile
+was not kept and the entry's own import compiled the module again.
+
+`from_entry` now hands the survey the line the entry did not write, when
+the entry's source has a line that starts with `derive `. Nothing else
+changes: the import was already made, and the survey only counts it.
+
+**Spec.** `tests/an_entry_that_derives_compiles_derive_once.rs` checks the
+smallest program in the derive corpus with `KANSO_PHASES=1` and counts the
+loader's lines: `std/derive` once, and 2 with the line withheld. A second
+test counts `std/list`, so the first cannot pass on a loader that prints
+nothing. The ratchet row is `derive_counted`.
+
+**Rows.** `entry_instructions` 119,661,348 -> 119,206,191, and the entry
+corpus loads 18 modules where it loaded 19. Two rows move with the
+binary's layout and nothing they count: `compile_instructions` 22,652,638
+-> 22,652,656 and `library_instructions` 63,632,847 -> 63,634,723.
+Neither corpus has a derive line. The first version cloned the entry's
+directory path whether or not it was needed, which the interpreter's
+corpus read as one allocation more; the clone is made for an entry that
+derives and for no other.
+
+The browser's compile of its corpus reads the check:
+`browser_compile_instructions` 412,080,126 -> 412,081,307, which is 1,181
+instructions over the corpus for the search of each entry's text. With
+the check withheld the row read 412,080,126 again. A version that read
+only the entry's header, as the parser does, was measured and dropped.
+No program's output differed between the two, and it read 412,081,343
+there, 119,205,544 on `entry_instructions` and 63,641,726 on
+`library_instructions`, each higher than the search of the whole text.
+
+**Welfare.** 95.39064215 -> 95.39098937, banked.

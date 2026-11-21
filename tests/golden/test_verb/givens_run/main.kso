@@ -1,0 +1,5 @@
+import "./greeting"
+
+# The givens spec, performed as an entry, so it runs natively as well as on
+# the interpreter that `kanso test` runs it on.
+greeting/suite

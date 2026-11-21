@@ -1,0 +1,51 @@
+import "std/expect"
+import "std/io"
+import "std/spec"
+
+type person
+  name
+  door
+
+# Givens, as RSpec's `let` is used. `around "door"` puts what its hook hands
+# on into the givens. `user` is made by an effect, which the runner opens, so
+# `greeting` reads the user and not the box. The admin context restates
+# `user`, and its examples' `greeting` reads the admin, since a restated
+# given takes its parent's place. The guest context adds a given that reads
+# the ones above it. Out of the contexts, `user` is the file's again.
+pub suite = describe "a greeting" [
+  around "door" opened
+  given "user" (g -> made "ada" (g "door"))
+  given "greeting" (g -> "hello, {(g "user").name}")
+  it "greets the user" (g -> expect (g "greeting") . to (equal "hello, ada"))
+  context "when the user is an admin" [
+    given "user" (g -> made "root" (g "door"))
+    it "greets the admin" (g ->
+      expect (g "greeting") . to (equal "hello, root")
+    )
+    it "is made at the door the hook opened" (g ->
+      door = (g "user").door
+      expect door . to (equal "front")
+    )
+  ]
+  context "with a guest" [
+    given "guest" (g -> "{g "greeting"} and a guest")
+    it "reads every given above it" (g ->
+      expect (g "guest") . to (equal "hello, ada and a guest")
+    )
+  ]
+  it "greets the user again out here" (g ->
+    expect (g "greeting") . to (equal "hello, ada")
+  )
+]
+
+# Says so on the way in and on the way out of every example, and hands on
+# the door it opened.
+fn opened _ rest
+  io/write "    (opened)\n" .> (_ -> rest "front") .> closed
+
+fn closed got
+  io/write "    (closed)\n" .> (_ -> effect got)
+
+# An effect whose value is the user: it says whom it made.
+fn made name door
+  io/write "    (made {name})\n" .> (_ -> effect (person name door))

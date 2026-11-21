@@ -20,304 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — the reach reads code, and a pruning is compiled once
-
-#2434, from its loose end. The issue measured 1.67M instructions for a
-library group no program called and guessed that a word in a comment had
-kept it. The reach that prunes the shipped library read every word a file
-spells: code, comments and the text of strings alike. Three things came
-of following that.
-
-**A comment keeps nothing.** `reach_words` stops at a `#`, where the
-lexer stops reading. Text holding a `"""` block keeps its comments'
-words, because a block's lines are text whatever they open with.
-
-**A string's text keeps nothing.** The issue's cost was one word. The
-arm it added to `text/replace` answered `err "replace needs something to
-find"`, and `find` kept every group of that name. Measured on the
-interpreter's corpus: the arm costs 1,306,636 instructions to check with
-that message and 153,551 with `something to look for`. So the reach
-walks a string for its interpolations alone. The braces nest as the
-lexer counts them and a backslash takes the byte after it. Derived code
-is unaffected, because a derivation's text reaches the compiler as a
-source file and is read as code there: senro's suite, whose views are
-generated from strings, builds the same programs to the same rows.
-
-**The key.** Leaving comments out made `entry_instructions` rise by
-432,052, and that led to the largest of the three. A compile of a
-shipped module was kept under the number of words the program had
-reached so far (kanso#2373), because a module pruned against as many
-roots was pruned against the same ones. That number grows with every
-module a load reads. Two imports of `std/text` a few modules apart never
-shared a compile, though nothing that arrived between them named
-anything in it, and the entry corpus compiled `std/text` and `std/list`
-ten times each. With fewer words reached up front the count changed at
-one more import, which is where the 432,052 came from.
-
-The key is now which of the module's prunings this is. The module is
-pruned first, and the declarations it kept are what its compile depends
-on: they name everything it reaches in the modules it imports, and the
-roots only grow, so a compile kept under the same declarations holds
-what a later import needs. Each distinct set is held once for a module
-and the key carries its place in that list. An import that finds as many
-roots as an earlier import of the module found asks the cache under that
-pruning before it reads any source. The entry corpus compiles the two
-modules six times each.
-
-**Two versions taken back.** The first comment scan tracked the string
-state on every byte and gave back half of what it saved: 288,000
-instructions of bookkeeping against 577,000 of library no longer read.
-The first key held the kept declarations themselves, a vector hashed and
-copied at every lookup, and the module corpus read 11,140 instructions
-more with it than with the place in a list that replaced it. Splitting
-the scan into functions cost that corpus 65,929 until the one a word
-goes through was inlined.
-
-**Specs.** `an_import_reads_what_the_program_names` gains five programs:
-a comment that says `pad_start`, above the code and beside it; a string
-that says it; a `#` inside a string with the only `trim` after it; a
-`trim` inside a string inside an interpolation; and a `lowercase` after
-an escaped brace. With comments read the first held `text/pad_start`,
-`text/padding` and `text/filled`, and with strings read as code the
-second held `text/pad_start`. `tests/golden/compile/apart` is three modules that each trim
-a text and bring words of their own: `loads=6`, and 7 under the old key.
-Every corpus and module test passes in a debug build, where a pruned
-compile the whole library would have accepted is refused out loud.
-
-**Rows.** `entry_instructions` 156,165,133 -> 138,221,281, a fall of
-11.5%. `library_instructions` 73,647,363 -> 71,598,427. The tab's
-compile 416,189,723 -> 413,661,765. `interp_instructions` 745,491,463 ->
-744,801,948, `interp_allocs` 1,069,565 -> 1,068,402 and
-`interp_peak_bytes` 1,524,780 -> 1,512,615, from library the corpus's
-comments and strings used to keep. `compile_instructions` 24,168,284 ->
-24,164,654 and `emit_instructions` 5,633,371 -> 5,632,066.
-
-Three rows rise. The cache keeps a module once a second import asks for
-it under the same key, and a second import now shares a key where the
-count used to separate it. On the module corpus that keeps copies no
-third import comes for: `compile_allocs` 13,956 -> 14,016,
-`compile_peak_bytes` 599,057 -> 612,423, and in the tab
-`browser_compile_peak_bytes` 984,597 -> 985,156. Welfare weighs the falls
-and the rises together and rises. The floor is banked once for this
-entry and the two after it, and the last of them says where.
-
-**Not done.** A module is still compiled once for each pruning the load
-happens to pass through. Gathering every word the program's own modules
-spell before the first shipped module is read would prune each against
-the final roots and compile it once. That needs the import graph before
-any compile, which the loader does not have. The reach itself measured
-3.8% of a check of the module corpus, most of it hashing the words of
-declarations it has kept.
-
-## 2026-11-11 — a program's words are read before its first shipped module
-
-#2434's open lead, built. A shipped module is pruned against the words
-read so far, and a compile read them as it went. `std/text` imported from
-three of a program's files was pruned three ways, each a little larger
-than the last, and compiled three times.
-
-A root compile now reads the program's own modules first. It follows
-their `import` lines as text, which it can because imports open a file,
-adds each module's words to the roots, and counts how many imports name
-each module, shipped ones included. Two things follow. The imports of one
-shipped module from the program's files ask for one pruning. And a module
-two imports name is kept from its first compile: the cache kept a module
-only once a second import asked for it, so the second import compiled it
-again before anything was shared.
-
-The survey passes over what it cannot read, and the compile still adds
-words as it goes, so a module the survey misses costs the compile it would
-have saved and nothing else. What the compiler emits is unchanged:
-`emitted_code` and `machine_code` agree with their goldens.
-
-**Rows.** The entry corpus loads 25 modules where it loaded 31, and
-`entry_instructions` 138,221,281 -> 125,827,812, a fall of 9.0%.
-`compile_instructions` 24,164,654 -> 23,782,898. `compile_allocs` 14,016
--> 13,767 and `compile_peak_bytes` 612,423 -> 606,357, the two rows the
-entry before this one raised. In the tab `browser_compile_instructions`
-413,661,765 -> 413,249,135. `interp_instructions` 744,801,948 ->
-744,801,747 and `interp_allocs` 1,068,402 -> 1,068,177. In
-`bench/compile_golden_modules.txt` the `shared` sample reads rounds=6
-visits=1676 loads=6 where it read rounds=8 visits=2190 loads=11, and
-`apart` loads=5 where it read 6. With the survey skipped that golden goes
-red on `shared` at loads=11.
-
-One row rises: `library_instructions` 71,598,427 -> 71,987,077, 0.5%.
-Counting the imports shipped modules make of each other is what costs it.
-Whole-process counts under callgrind, survey off, counting only the
-program's own imports, and counting both: the library corpus reads
-72,990,673, 73,020,598 and 73,309,958, and the compile corpus 25,395,776,
-25,405,957 and 24,964,355. Counting both costs the library corpus 289,360
-and saves the compile corpus 441,602, and it is what is kept.
-
-**Tried and dropped.** Pruning every shipped module the program names to
-a fixed point inside the survey, so each has one pruning and one compile.
-The entry corpus fell to 19 loads. The pass itself cost 3.4 million
-instructions on the compile corpus, 28,771,479 against 25,395,776, and the
-entry corpus read 132,716,479 with it against 127,955,878 without.
-
-**Not done.** `std/text` and `std/list` are still compiled more than once
-in a load: on the entry corpus, list four times and text three. Every word
-of the program's own is in hand before the first of those, so the words
-that change the pruning come from declarations other shipped modules
-kept. A trace of what each pruning kept shows it. `std/list` goes from 26
-declarations to 33 by gaining the seven private helpers of its merge
-sort, with neither `sort` nor `sort_by` kept: `span` is one of the
-helpers, and `lib/text/span.kso` spells the word nine times. Reach is by
-bare word over one set for the whole load. Letting a shipped module's
-words keep another module's declarations only when they are written
-qualified is #2442.
-
-## 2026-11-11 — a shipped module's words keep its own declarations
-
-#2442. Reach is by bare word, and the words were one set for a whole
-load, so a word spelled inside `std/text` could keep a declaration of
-`std/list`. Each import of a shipped module found more words than the
-last, asked for a larger pruning, and compiled the module again.
-
-**Whose words keep what.** Each shipped module has a set of words of its
-own: the ones its kept declarations spell. A declaration is kept when its
-name is among the program's words, the module's own, or the words of a
-shipped module that imports it. A module can call only what it imports,
-so a word needs to reach no further. The program's words keep what they
-kept before, since a program may use an imported name bare.
-
-The issue proposed that a shipped module's word keep another module's
-declaration only when it is written qualified. Lending along the import
-does that work without a second kind of word: `text/trim` spelled in
-`std/json` is the words `text` and `trim`, and `std/text` is lent json's
-words because json imports it.
-
-**One pass, importers first.** Words now travel only down imports, and
-the shipped modules' imports hold no cycle. The survey prunes every
-shipped module the load will reach before the first of them compiles,
-each after the shipped modules that import it. By the time a module is
-pruned every word that can reach it has been read, so its first pruning
-is its last, and the compile takes the module as the survey left it. If
-the program has spelled more words since, which happens when a
-derivation's text arrives as a source file, the surveyed pruning is
-dropped and the module is pruned where it is loaded.
-
-**Found on the way.** The survey read `import "path"` and missed
-`import { join:joined } "std/text"`, which is how `std/path` and
-`std/regexp` import. With one set of words nothing depended on the miss.
-With a set for each module it left `std/text` without two importers'
-words, the pruned compile refused (`std/text` exports no `join` to
-rename) and the load fell back to the whole library: the entry corpus
-read twice what it had. The scan takes the first quoted text after
-`import `.
-
-The survey also named a module's files `span.kso` at first, where the
-loader names them `std/text/span.kso`. The checker knows a library file
-by that name, so it refused `builtin_slice_in` as internal and the load
-fell back again: 41.0 million instructions to check the module corpus
-against 24.0. A release build takes that fallback without a word and a
-debug build fails an assertion on it, so the loader's specs and the
-golden corpus were run in a debug build after each change.
-
-**The version before this one** kept the lending incremental: a module
-was pruned where it was loaded, against the importers seen so far.
-Whole-process counts under callgrind: the entry corpus 121,365,118 with
-24 loads and the library corpus 72,984,999 with 17. One pass reads
-122,174,697 with 19 and 65,076,973 with 11. The entry corpus reads a
-little more over fewer loads because every importer now takes the module
-as all of its importers need it, where the early ones took a smaller
-one. The two corpora together read 7.1 million less with one pass.
-
-**Two costs taken out after measuring.** The pruning loop asked the
-program's words and each importer's for every declaration on every pass.
-Those sets do not change while a module is walked, so each declaration
-asks them once and the passes ask the module's own words alone: 78,426
-instructions off a check of the module corpus and 147,189 off the
-library corpus. The word sets also outlived the compile, which the
-interpreter's corpus read as 18,377 bytes of peak. They belong to one
-compile now, as the roots do.
-
-**Spec.** `tests/golden/compile/lent` is three modules: two use
-`std/list` and the one between them slices a text. `text/slice` has an
-arm for a span, and `span` is also a private helper of the list
-library's sort. The sample reads `loads=6`. With the loader as it was it
-reads 7, `std/list` twice.
-
-**Rows**, against the survey's. `compile_instructions` 23,782,898 ->
-22,652,638, `entry_instructions` 125,827,812 -> 119,661,348 and
-`library_instructions` 71,987,077 -> 63,632,847, falls of 4.8%, 4.9% and
-11.6%. `compile_allocs` 13,767 -> 13,503, `compile_peak_bytes` 606,357
--> 546,568 and `front_end_visits` 7,388 -> 6,870. In the tab,
-`browser_compile_instructions` 413,249,135 -> 412,080,126 and
-`browser_compile_peak_bytes` 985,156 -> 984,870. `interp_allocs`
-1,068,177 -> 1,067,948 and `interp_peak_bytes` 1,512,615 -> 1,509,557.
-
-Four programs emit one line less: the decoder 14,240 -> 14,239, and
-`oneshot`, `livebench` and `runbench`, so that summed over every
-benchmark but the decoder emitted_other_lines reads 186,408 -> 186,405.
-The table of call sites no longer
-names the one inside `os/start`, which none of them calls. Another
-module's `start` had kept it. Three of the four run a different count
-with the shorter table, which this container could not read and CI did:
-work_oneshot up 238 to 9,978,975, work_livebench down 679 to 938,654,576
-and work_runbench down 133 to 1,059,837,846. The code they run is the
-same. The likely cause is where the shorter table leaves the data after
-it, and that was not isolated.
-
-Two rows rise. `emit_instructions` 5,632,066 -> 5,632,125. Two builds of
-this branch that hand the emitter the same program read 5,632,618 and
-5,632,125, so the row is moving with the binary's layout.
-`interp_instructions` 744,801,747 -> 744,907,234. Compared function by
-function with the loader as it was, the compile half of that row falls
-and `Interp::callee_missed` rises 214,571: the interpreter's table of
-recent callees takes its slots from where each name's text was
-allocated, and pruning the library differently moved the names. The
-same table moved the row for `text/replace`. It is #2444.
-
-**Welfare.** Over this entry and the two before it welfare rises
-95.34294930 -> 95.39064215, and the floor is banked there.
-
-**Not done.** `std/derive` is still compiled twice on the entry corpus,
-and that was not looked into.
-
-## 2026-11-11 — a derive line is an import the survey counts
-
-The last repeat #2442 left: the entry corpus loaded `std/derive` twice.
-The entry above says that was not looked into, and this is the look.
-
-An entry with a `derive` line imports `std/derive` without writing the
-import; `compile_entry_program` adds it. The module that declares the
-derivation imports `std/derive` too. The survey counts imports by reading
-the program's text, and a module two imports name is kept from its first
-compile. It read one import where there were two, so the first compile
-was not kept and the entry's own import compiled the module again.
-
-`from_entry` now hands the survey the line the entry did not write, when
-the entry's source has a line that starts with `derive `. Nothing else
-changes: the import was already made, and the survey only counts it.
-
-**Spec.** `tests/an_entry_that_derives_compiles_derive_once.rs` checks the
-smallest program in the derive corpus with `KANSO_PHASES=1` and counts the
-loader's lines: `std/derive` once, and 2 with the line withheld. A second
-test counts `std/list`, so the first cannot pass on a loader that prints
-nothing. The ratchet row is `derive_counted`.
-
-**Rows.** `entry_instructions` 119,661,348 -> 119,206,191, and the entry
-corpus loads 18 modules where it loaded 19. Two rows move with the
-binary's layout and nothing they count: `compile_instructions` 22,652,638
--> 22,652,656 and `library_instructions` 63,632,847 -> 63,634,723.
-Neither corpus has a derive line. The first version cloned the entry's
-directory path whether or not it was needed, which the interpreter's
-corpus read as one allocation more; the clone is made for an entry that
-derives and for no other.
-
-The browser's compile of its corpus reads the check:
-`browser_compile_instructions` 412,080,126 -> 412,081,307, which is 1,181
-instructions over the corpus for the search of each entry's text. With
-the check withheld the row read 412,080,126 again. A version that read
-only the entry's header, as the parser does, was measured and dropped.
-No program's output differed between the two, and it read 412,081,343
-there, 119,205,544 on `entry_instructions` and 63,641,726 on
-`library_instructions`, each higher than the search of the whole text.
-
-**Welfare.** 95.39064215 -> 95.39098937, banked.
-
 ## 2026-11-11 — a called name's place in the table comes from the program
 
 #2444. The interpreter keeps what a function reference calls in a table,
@@ -1637,6 +1339,81 @@ process, which run before `main` and do not depend on what kanso emits. No row
 rose. The welfare floor is re-based 95.39 -> 95.46 as a measurement that
 stopped reading outside state (#2017). kq's instructions vein had the same
 -130 on kq#246 and gets the same flag in kq#248.
+
+## 2026-11-21 — gavel: a spec binds as every program binds
+
+#2496 asked whether `x = e` in a spec should name what an effect yields, so
+that setup reading a database could be written without `.>`. Clay ruled no:
+"there is certainly no reason to treat things differently in specs ... if
+you think there's a better way to deal with our monadic properties certainly
+suggest it but there's nothing magical about tests that means we should just
+throw out our principles."
+
+The 2026-08-29 gavel, "effects are types, and the words are the only doors",
+holds in spec files as everywhere else. `x = e` binds what `e` is, and only
+`.>` and its kin take a value out of an effect. If binding an effect's value
+reads badly in a spec, it reads badly in every program, and an improvement
+goes to the language through the committee.
+
+## 2026-11-21 — gavel: the committee designs `let` for specs
+
+#2495 builds specs as blocks, and a spec needs RSpec's `let`: a value named
+once for an example, which a nested context may restate. Clay left the design
+to the committee, with two conditions. It uses no spec-only syntax or
+binding, which the ruling above already requires. And it should be as plain
+as derivations made convention over configuration. His lead: a context
+answers a map of its givens, merged over its parent's, since a nested example
+is the parent's context with some names restated. The committee weighs that
+lead first and records its design on #2495 before anything is built through
+`std/spec`.
+
+## 2026-11-21 — gavel: JavaScript is solved now, and senro manages its packages
+
+#2284 had been parked until an app needed a JavaScript library. Clay
+unparked it: senro will need charts, maps and the like, so it is solved now.
+He named a fourth option beside the three on the issue: kanso renders data
+attributes, and the app's own JavaScript initializes the library at that
+boundary. He called it "certainly a defensible argument" and possibly the
+more elegant one. Separately, he asked for JavaScript dependency management
+modelled on his jspm-rails, which traces an app's modules with jspm's
+generator and vendors them under an import map instead of hand-written pins.
+
+The committee chose the fourth option and wrote its reading on #2284. A
+senro component's browser code already never touches the DOM: it answers
+HTML, and the page script morphs it in. Each action also runs in a fresh
+instance of the module, so kanso holds nothing between events that could
+name a chart. senro#146 builds the dependency management (`senro js install`
+and `senro js check`) and a morph that leaves a library's element to the
+library. The way back, a library's event becoming a component's action, is
+designed next under the same issue.
+
+## 2026-11-21 — std/spec gains givens, and a context overrides them by name
+
+Under the ruling above, the committee designed `let` on #2495 and it is built
+in `std/spec`, with nothing added to the compiler. `given name f` is a hook
+that hands `f` a reader for the givens so far and adds `name` with what `f`
+answered. An effect is opened first, so a later given reads its value.
+`around name wrap` puts what its hook hands on among the givens. When a
+group's hooks join the ones around it, a hook naming a given that an outer
+one named takes that one's place in the list. So a given declared below it
+reads the context's value, as a subclass's method reads an override. An
+example under givens is handed the reader.
+
+Two shapes were tried and refused by the language before the reader. A map
+read by field, `g.user`, is refused at check ("no record type has a field
+`user`") or at run time ("`.` reads a field of a record"). A map read by key,
+`g["user"]`, answers a value or `none`, and a function with no `none` arm
+refuses it. A lambda's answer carries no such mark, so `g "user"` reaches
+ordinary functions as a value. The design comment on #2495 said `g.user` at
+first and is corrected there.
+
+`tests/golden/test_verb/givens_spec` pins the override, an effect given made
+once per example, a named `around`, and a context that adds a given reading
+the ones above it. `givens_run` performs the same spec as an entry, natively
+and interpreted, to one golden. Watched red with a restated given appended
+instead of put in its parent's place: the admin was greeted as "hello, ada".
+The book's modules chapter gains `seating_test.kso`. Laziness, `super` and
+injection by parameter name are declined on the issue, with reasons.
 
 ## 2026-11-21 — senro 0.4.0 and 0.5.0: JavaScript through the page
 

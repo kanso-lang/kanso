@@ -282,6 +282,37 @@ fn a_spec_nests_and_its_hooks_close_around_a_failure() {
     assert_eq!(output.status.code(), Some(1));
 }
 
+/// Givens, as RSpec's `let` (#2495). A context that restates `user`
+/// replaces the file's given in place, so `greeting`, declared below it,
+/// reads the admin; a given made by an effect is opened before the next one
+/// reads it, once for each example; `around "door"` puts what its hook hands
+/// on among the givens; and out of the contexts `user` is the file's again.
+/// Watched red with a restated given appended rather than put in its
+/// parent's place: the admin was greeted as "hello, ada".
+#[test]
+fn a_context_restates_a_given_that_the_givens_below_it_read() {
+    let output = in_fixtures(&["test", "givens_spec"]);
+    let out = std::fs::read_to_string(fixture_dir().join("givens_spec.out")).expect("golden");
+
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), out);
+    assert_eq!(output.status.code(), Some(0));
+}
+
+/// The same spec performed by an entry prints the same outline natively and
+/// on the interpreter.
+#[test]
+fn givens_run_the_same_on_both_engines() {
+    let out = std::fs::read_to_string(fixture_dir().join("givens_run.out")).expect("golden");
+    for engine in [&["run", "givens_run"][..], &["run", "givens_run", "--interp"][..]] {
+        let output = in_fixtures(engine);
+
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "", "{engine:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), out, "{engine:?}");
+        assert_eq!(output.status.code(), Some(0), "{engine:?}");
+    }
+}
+
 /// A test file beside an entry reads the entry's bindings as names (#2463).
 /// The entry binds `front` and `told` and performs `told`. The first test
 /// reads `front`. The second performs `told`, an effect, so `post 1` is

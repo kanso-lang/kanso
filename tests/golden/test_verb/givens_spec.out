@@ -1,0 +1,27 @@
+a greeting
+    (opened)
+    (made ada)
+    (closed)
+  greets the user
+  when the user is an admin
+    (opened)
+    (made root)
+    (closed)
+    greets the admin
+    (opened)
+    (made root)
+    (closed)
+    is made at the door the hook opened
+  with a guest
+    (opened)
+    (made ada)
+    (closed)
+    reads every given above it
+    (opened)
+    (made ada)
+    (closed)
+  greets the user again out here
+
+5 examples, 0 failed
+test_a_greeting ... ok
+1 passed, 0 failed
