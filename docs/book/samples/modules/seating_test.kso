@@ -1,0 +1,18 @@
+import "std/expect"
+import "std/spec"
+
+type guest
+  name
+  table
+
+test_a_seating = describe "a seating" [
+  given "guest" (_ -> guest "ada" 4)
+  given "card" (g -> "{(g "guest").name}, table {(g "guest").table}")
+  it "names the guest" (g -> expect (g "card") . to (equal "ada, table 4"))
+  context "for a late guest" [
+    given "guest" (_ -> guest "grace" 9)
+    it "names the late guest" (g ->
+      expect (g "card") . to (equal "grace, table 9")
+    )
+  ]
+]
