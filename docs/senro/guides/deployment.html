@@ -99,6 +99,7 @@ built ./notebook (llvm ir at notebook.ll)</code></pre>
 
 <ul>
   <li><code>public/</code> holds the files the server hands out as they are: stylesheets, images, and the browser modules of an app that has components.</li>
+  <li>an app with JavaScript of its own keeps it in <code>javascript/</code>, the packages <code>senro js install</code> vendored in <code>vendor/javascript/</code>, and the import map in <code>importmap.json</code>. all three are committed and copied with the binary. the server hands them out itself, so the machine needs no Node and nothing from jspm.io. <a href="javascript.html">JavaScript</a> covers the install.</li>
   <li><code>storage/</code> holds uploaded files, unless <code>SENRO_STORAGE</code> names another directory.</li>
   <li>the environment, as above.</li>
 </ul>
@@ -114,6 +115,8 @@ migrated
 $ ./notebook
 senro on port 3000</code></pre>
 </div>
+
+<p>a page that is open during a deploy learns of it from the next answer it gets, which names the new version, and loads itself again, once. the version changes when the app's browser module, the runtime it runs on, or <code>importmap.json</code> does.</p>
 
 <p>a migration that was edited after it ran stops the app at that step, before it serves anything, and says which one. <a href="migrations.html">migrations</a> covers why.</p>
 
