@@ -59,6 +59,8 @@ senro js install</code></pre>
   ]
 }</code></pre>
 
+<p>a page holds the import map it opened with. when a deploy changes <code>importmap.json</code>, the next answer an open page gets names a new version, and the page loads itself again, once, as it does for a new browser module.</p>
+
 <p>the map keeps jspm.io's URLs, which is what makes it jspm's lockfile. senro rewrites them to <code>/vendor/javascript/ga.jspm.io/npm/…</code> as it serves the page script. a vendored module's path names its package's version, so the server tells the browser to keep it for a year. one of the app's own modules is checked against its ETag on each page load, so an edit reaches the next page.</p>
 
 <h2>versions</h2>
