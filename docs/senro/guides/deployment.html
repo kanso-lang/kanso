@@ -118,7 +118,7 @@ senro on port 3000</code></pre>
 
 <p>a page that is open during a deploy learns of it from the next answer it gets, which names the new version, and loads itself again, once. the version changes when the app's browser module, the runtime it runs on, or <code>importmap.json</code> does.</p>
 
-<p>a migration that was edited after it ran stops the app at that step, before it serves anything, and says which one. <a href="migrations.html">migrations</a> covers why.</p>
+<p>a migration that was edited after it ran is not run again. the app warns, naming it, and serves only if the live tables still match the schema the migrations describe. <a href="migrations.html">migrations</a> covers why.</p>
 
 <p>the server speaks HTTP. in production it sits behind a proxy that holds the certificate and forwards requests to its port, as a Rails app sits behind nginx or a load balancer.</p>
 
