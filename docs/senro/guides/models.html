@@ -58,11 +58,28 @@ failures <span class="o">=</span> <span class="f">models/column</span> <span cla
   <pre><code>notes <span class="o">=</span> <span class="f">models/create_table</span> <span class="s">"notes"</span> [body]</code></pre>
 </div>
 
-<p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint over one column in <code>schema.sql</code>, and the model names the column. the model's <code>create</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. its <code>update</code> asks before it writes.</p>
+<p><code>models/add_unique_index table column</code> gives a column a unique index, as Rails' <code>add_index</code> with <code>unique: true</code> does, and <code>generate authentication</code> gives <code>users.email</code> one. the derivation reads the index from the migrations, or from a unique index or constraint in <code>schema.sql</code>, and the model names the column. the model's <code>create</code> then inserts with <code>on conflict do nothing</code>, so when two requests race for one address, the one that loses answers <code>models/invalid</code> with "That is taken." on the field rather than an error. its <code>update</code> asks before it writes.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">spec/db/unique/migrations.kso</div>
   <pre><code>accounts_handle <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"accounts"</span> <span class="s">"handle"</span></code></pre>
+</div>
+
+<p>given a list of columns, the index lets a combination of values appear once, as Rails' <code>add_index [:user_id, :track_id], unique: true</code> does. a like is held once for each handle and track, while two handles may like one track and one handle may like two. a write that would repeat a pair answers <code>models/invalid</code> with the problem on the last column, where Rails' <code>uniqueness: { scope: }</code> puts it. an update is checked against every index the change touches, with the index's other columns read from the row as the change leaves it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spec/db/unique/migrations.kso</div>
+  <pre><code>likes_pair <span class="o">=</span> <span class="f">models/add_unique_index</span> <span class="s">"likes"</span> [<span class="s">"handle"</span> <span class="s">"track"</span>]</code></pre>
+</div>
+<div class="code-output">
+  <div class="code-panel-title">spec/db/unique.out</div>
+  <pre><code>ada likes rain: ada likes rain
+ada likes rain again: { "track":"That is taken." }
+ada likes snow: ada likes snow
+bob likes rain: bob likes rain
+bob's rain to ada: { "track":"That is taken." }
+bob likes hail: bob likes hail
+bob's hail to ada: ada likes hail</code></pre>
 </div>
 
 <p>a schema that needs SQL the fold cannot read, a trigger for instance, is checked in as <code>pg_dump --schema-only</code> output, in <code>schema.sql</code> beside the entry. the schema is then read from its <code>CREATE TABLE</code> blocks instead of the migrations.</p>
@@ -120,6 +137,8 @@ pub type signature
 <tr><td><code>note/update db id changes</code></td><td>the record as changed, or <code>models/invalid</code></td></tr>
 <tr><td><code>note/destroy db id</code></td><td>the record as it was</td></tr>
 <tr><td><code>note/increment db id "views"</code></td><td>the record after one is added to the column</td></tr>
+<tr><td><code>note/count_of db "author" a</code></td><td>how many records hold the value in the field</td></tr>
+<tr><td><code>note/counts_by db "author"</code></td><td>a map from each value the field holds to its number of records</td></tr>
 </tbody>
 </table>
 
@@ -185,6 +204,21 @@ pub type signature
 <p>a write no viewer is behind is made as the app. <code>account/update (models/as_app db) id { "failures":"0" }</code> asks no policy. the guestbook writes this way when a sign-in counts a wrong password and when a reset link sets a digest, and the <a href="sessions.html">sessions guide</a> gives the rule for it. <code>increment</code> asks <code>update?</code> as <code>update</code> does. it adds one in the statement that answers the record, so requests that count at once each see a count of their own.</p>
 
 <p>reads default open. a module may declare <code>visible?</code>, and each read then answers only the records it says the viewer may see; without it every row shows. a missing read policy can show a row but never change one.</p>
+
+<p>a count counts what a read would show. when the model declares no <code>visible?</code>, or the app is asking, Postgres counts the rows with <code>count(*)</code>, and <code>counts_by</code> asks with <code>group by</code>. when the model has a <code>visible?</code>, senro reads the rows and counts the ones the policy shows, which costs a read of every row the count covers. an album's page calls <code>like/counts_by db "track_id"</code> once and looks each track up as <code>likes[track.id]</code>. the map's keys keep the column's type, and a value no row holds, or a null, is not in the map. in senro's spec plays have no policy, and likes hide eve's from everyone but eve:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/db/tallied.out</div>
+  <pre><code>rain's plays: 3
+plays by track: { 1:3 2:1 }
+rain's likes, to a visitor: 2
+rain's likes, to eve: 3
+rain's likes, to the app: 3
+likes by track, to a visitor: { 1:2 2:1 }
+likes by track, to eve: { 1:3 2:2 }
+hail's likes: 0
+`name; drop table likes` is not a column of `likes`</code></pre>
+</div>
 
 <h2>rules</h2>
 
