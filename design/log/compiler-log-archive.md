@@ -117048,3 +117048,25 @@ file now, so there is nothing for a second build to truncate, and
 release row's 35,028 and the browser row's 1,181 from the derive check,
 which the bank before this one had not read, less the dev row's 3,186.
 Main's floor is 95.39064215, so the pull request as a whole is a rise.
+
+## 2026-11-11 — directive: senro is to be a full alternative to Rails
+
+Clay, to cloud: "there should be a [senro] binary that acts like rails
+and has generators and can make a migration. the migrations need to have
+a date time stamp thing in the file name so they can run in order and
+create the actual schema deterministically." He asked for the generators
+Rails has, "a resource that's restful making just a controller or
+whatever", and "a facility to add other generators through plugins"; for
+documentation that reads as "a fully formed alternative to rails or at
+least as much functionality as you would have encountered in the early
+days around rails three"; for auth in the framework, since "everyone
+needs auth"; and for authorization that is "about getting to that page",
+so that "once you checked [auth] for that page you don't need to recheck
+for every data provider that it uses".
+
+Recorded on #2455 with where senro stood and a checklist. The design is
+cloud's (#2280) and is on the issue: a `senro` command; migrations as
+files named by a stamp, still folded into the schema by the build;
+generators for the parts and from outside senro; confirmation, lockout
+and tracking moved from the guestbook into the framework; and one check
+at the page that covers the providers the page calls.

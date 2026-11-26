@@ -36,10 +36,10 @@ import "chart";</code></pre>
 senro js install</code></pre>
 
 <pre><code>      traced  javascript/application.js
-    vendored  2 modules from ga.jspm.io
+    vendored  2 modules and 1 stylesheet from ga.jspm.io
        wrote  importmap.json</code></pre>
 
-<p>the install traces the entry and every other module in <code>javascript/</code>, finds every module they reach across whole dependency trees, and downloads each from jspm.io, with its source map, into <code>vendor/javascript/</code>. it writes the import map, and the list of modules a page loads at once, to <code>importmap.json</code>. commit both. a deployed app serves the vendored files itself, so it needs neither Node nor jspm.io. the pantry's map names its two modules and the one package they reach:</p>
+<p>the install traces the entry and every other module in <code>javascript/</code>, finds every module they reach across whole dependency trees, and downloads each from jspm.io, with its source map, into <code>vendor/javascript/</code>. it writes the import map, and the list of modules a page loads at once, to <code>importmap.json</code>. commit both. a deployed app serves the vendored files itself, so it needs neither Node nor jspm.io. the pantry's map names its two modules, the one package they reach, and chartist's stylesheet:</p>
 
 <pre><code>{
   "imports": {
@@ -56,7 +56,10 @@ senro js install</code></pre>
     "/javascript/chart.js",
     "https://ga.jspm.io/npm:chartist@2.2.1/_/BUd082zi.js",
     "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.js"
-  ]
+  ],
+  "stylesheets": {
+    "chartist/dist/index.css": "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.css"
+  }
 }</code></pre>
 
 <p>a page holds the import map it opened with. when a deploy changes <code>importmap.json</code>, the next answer an open page gets names a new version, and the page loads itself again, once, as it does for a new browser module.</p>
@@ -72,6 +75,28 @@ senro js install</code></pre>
 <p>a module of the app's that has a package's name is refused, since an import of that name could mean either:</p>
 
 <pre><code>senro js: javascript/chartist.js has the name of the package chartist; rename one of them</code></pre>
+
+<h2>a package's stylesheet</h2>
+
+<p>a package's stylesheet is imported by name from one of the app's own. those live in <code>stylesheets/</code> and are served at <code>/stylesheets/</code>, so the layout links <code>/stylesheets/application.css</code> as it links any stylesheet. the pantry takes chartist's rules for its chart this way, and its <code>site.css</code>, linked after, sets the colors:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/pantry/stylesheets/application.css</div>
+  <pre><code>/* The pantry's stylesheet: chartist's own rules for the shelf's chart, at
+   the version of chartist the import map holds. public/site.css follows it
+   and sets the pantry's colors. */
+@import "chartist/dist/index.css";</code></pre>
+</div>
+
+<p>the install downloads each stylesheet imported by name, with its source map and the fonts and images its <code>url()</code>s name, into <code>vendor/javascript/</code>, and records where it came from under the map's <code>stylesheets</code>:</p>
+
+<pre><code>  "stylesheets": {
+    "chartist/dist/index.css": "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.css"
+  }</code></pre>
+
+<p>a browser reads only a URL in an <code>@import</code>, so senro rewrites the name to the vendored copy as it serves the app's stylesheet. the stylesheet takes the version npm installed, or else the version the package's JavaScript has in the map, so chartist's stylesheet and its module match. Bootstrap installed with <code>npm install bootstrap</code> is imported as <code>@import "bootstrap/dist/css/bootstrap.min.css";</code>. a package neither names is refused with the command to run:</p>
+
+<pre><code>senro js: stylesheets/application.css imports nopackage/dist/x.css, and neither package-lock.json nor the import map has nopackage. Run: npm install nopackage</code></pre>
 
 <h2>checking in CI</h2>
 

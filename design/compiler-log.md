@@ -20,28 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — directive: senro is to be a full alternative to Rails
-
-Clay, to cloud: "there should be a [senro] binary that acts like rails
-and has generators and can make a migration. the migrations need to have
-a date time stamp thing in the file name so they can run in order and
-create the actual schema deterministically." He asked for the generators
-Rails has, "a resource that's restful making just a controller or
-whatever", and "a facility to add other generators through plugins"; for
-documentation that reads as "a fully formed alternative to rails or at
-least as much functionality as you would have encountered in the early
-days around rails three"; for auth in the framework, since "everyone
-needs auth"; and for authorization that is "about getting to that page",
-so that "once you checked [auth] for that page you don't need to recheck
-for every data provider that it uses".
-
-Recorded on #2455 with where senro stood and a checklist. The design is
-cloud's (#2280) and is on the issue: a `senro` command; migrations as
-files named by a stamp, still folded into the schema by the build;
-generators for the parts and from outside senro; confirmation, lockout
-and tracking moved from the guestbook into the framework; and one check
-at the page that covers the providers the page calls.
-
 ## 2026-11-11 — a derivation is told which file declares a name
 
 The first thing #2455 needs from the language. senro's migrations are to
@@ -1351,3 +1329,22 @@ and the site's guides moved to 0.5.5.
   has no `visible?`, and otherwise senro counts the rows the policy shows.
   With the policy check broken in the spec, a visitor's count of likes rose
   from 2 to 3, eve's hidden one leaking. The models guide covers both.
+
+## 2026-11-26 — senro 0.5.7: package stylesheets, and files in a bucket
+
+Two more gaps a music app would meet, and the site's guides moved to 0.5.7.
+
+- senro#156 (0.5.6). An app's stylesheets live in `stylesheets/` and may
+  import a package's by name, `@import "bootstrap/dist/css/bootstrap.min.css";`.
+  `senro js install` vendors the file with its source map, fonts and images,
+  and the map's `stylesheets` holds where it came from; senro rewrites the
+  import to the vendored copy as it serves the stylesheet. The pantry's
+  chart takes chartist's stylesheet this way. The JavaScript guide covers it.
+- senro#157 (0.5.7). `SENRO_STORAGE=s3://<bucket>` keeps uploads in an
+  S3-compatible store such as Cloudflare R2: an upload is a presigned PUT,
+  and a download a redirect to a presigned GET, so the store sends the bytes
+  and answers a `Range`. senro's new `objects` module signs with AWS's
+  Signature Version 4. It reproduces AWS's published example and agreed
+  with botocore on 220,000 random cases; `spec/buckets/kept` runs against
+  moto's S3 server, which senro's CI now installs. The uploads guide covers
+  it.
