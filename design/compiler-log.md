@@ -1405,8 +1405,8 @@ The phrases were 24 arms of `reason_of`, and two more arms raised
 compile_instructions by 314 and entry and library by 120 each, by layout,
 since neither corpus imports `std/net/http` and `lib/` is compiled into the
 binary. As one map, `reasons`, read by a single `reason_of`,
-compile_instructions is back where main has it and entry and library rise
-126 each. Those were measured here, where the arms version read what CI
-read to the instruction. The
+compile_instructions is back where main has it, and the other two rise by
+layout: entry_instructions 120,154,854 -> 120,154,980 and
+library_instructions 64,189,624 -> 64,189,750, as CI measured. The
 floor is lowered by that cost under #2280, as it was for `os/random_bytes`
 and `net/peer`, senro's earlier prerequisites.
