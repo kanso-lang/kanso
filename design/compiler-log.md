@@ -20,64 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a measured link names its runtime plainly
-
-`codegen_instructions_release` read 372,173,792 in CI on this branch,
-twice, against 372,173,775 on main. Nothing on the branch reaches
-codegen, and the IR the corpus compiles to is byte for byte what main
-writes. Split by process, clang counted the same on both trees and the
-linker counted 17 more.
-
-The 17 came from a file name. A build compiles the runtime once and
-keeps the objects in the temp directory, each named by a digest of the
-recipe that made it, and the recipe for the hot unit includes the text
-of `src/main.rs`. This branch edits `main.rs` to print two counters, so
-the hot unit's object had a new name. The two links' command lines
-differed in that name and in nothing else. lld keeps its inputs' names
-in a hash table, and the work the table does depends on the characters
-in them.
-
-Under `KANSO_FIXED_TEMPS`, which the gate sets for a measured build, the
-link is now handed copies of the cached objects under plain names:
-`kanso_linked_runtime_release.o`, `kanso_linked_runtime_release_hot.o`
-and `kanso_linked_runtime_dev.o`. A build without the variable links the
-cached files as it did.
-
-Plain names alone were not enough. With them, a comment added to
-`main.rs` still moved the release row, by 64. An object records the name
-of the file it was compiled from, and the cache wrote the runtime's
-source to a file named by the same digest. So the cache now compiles
-each object from standard input, and no object holds a name the digest
-decides. With both changes, the gate's build read the same on both tiers
-before and after a comment was added to `main.rs`. That was read in this
-container, whose codegen numbers are not CI's.
-
-**Rows.** In CI `codegen_instructions_release` 372,173,775 ->
-372,208,803 and `codegen_instructions_dev` 117,031,054 -> 117,027,868.
-The release row rose by 35,028 and the dev row fell by 3,186. In this
-container both fell, by 114,443 and 3,535, so the size and the direction
-of the move belong to the host's clang and linker. The change swaps a
-source file clang opens for text it reads from a pipe, and changes the
-names the link reads; which of the two the 35,028 is was not separated.
-Both rows are re-based on CI's reading, as #2017 rules for a row that
-stops reading outside state. No other compile row moved, and neither did
-the interpreter's or the browser's.
-
-**Spec.** `tests/the_measured_link_names_its_runtime.rs` reads the link's
-line from a measured build of each tier and from an unmeasured one, and
-searches every cached object for a name that holds a digest. The ratchet
-row is `plain_link`: with `linked_as` answering the cached path, the
-measured release link names `kanso_runtime_release_hot_8d55bbc03f0775ad.o`.
-The row `runtime_source` is retired with its mutation, which wrote the
-runtime's source onto the shared path in place. No build writes that
-file now, so there is nothing for a second build to truncate, and
-`tests/concurrent_build.rs` still races eight cold builds.
-
-**Welfare.** 95.39229249 -> 95.39228290, a re-base. The fall is the
-release row's 35,028 and the browser row's 1,181 from the derive check,
-which the bank before this one had not read, less the dev row's 3,186.
-Main's floor is 95.39064215, so the pull request as a whole is a rise.
-
 ## 2026-11-11 — directive: senro is to be a full alternative to Rails
 
 Clay, to cloud: "there should be a [senro] binary that acts like rails
