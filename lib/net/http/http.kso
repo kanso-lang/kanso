@@ -69,6 +69,9 @@ fn reason_of 202
 fn reason_of 204
   "No Content"
 
+fn reason_of 206
+  "Partial Content"
+
 fn reason_of 301
   "Moved Permanently"
 
@@ -110,6 +113,9 @@ fn reason_of 410
 
 fn reason_of 415
   "Unsupported Media Type"
+
+fn reason_of 416
+  "Range Not Satisfiable"
 
 fn reason_of 422
   "Unprocessable Content"

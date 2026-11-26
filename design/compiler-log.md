@@ -20,36 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a job's install reads a mirror that resolves
-
-Not a compiler change. From 13:52 UTC the first mirror in a hosted
-runner's apt list, `azure.archive.ubuntu.com`, stopped resolving on the
-runners, and it was still not resolving two hours later. Every job that
-installs a package died in the install with exit 100, before any test
-ran: in kanso on two pull requests, and in senro and kq. The name
-resolved from this container throughout, and GitHub's status page showed
-no incident.
-
-`scripts/apt_ready.sh` runs before each install in `ci.yml`, in
-`pages.yml` and in the ratchet's `toolchain.sh`. When the first mirror
-resolves it changes nothing. When it does not, it rewrites the runner's
-list to every other mirror it knows whose name does resolve, and tells
-apt to try a fetch again before giving up. apt checks what it downloads
-against the archive's signature, so the mirror that served the bytes
-does not change what is installed.
-
-The first version took one other mirror. On the runners
-`archive.ubuntu.com` did not resolve either, and `mirrors.kernel.org`
-did. Every install step in that run passed but one: the specs job
-installed clang from the one mirror and then failed to connect to it for
-the next package. So the list now holds all that resolve, five known to
-the script.
-
-`tests/apt_reads_a_mirror_that_resolves.rs` runs the script against a
-list and a resolver of its own, four ways: the first mirror answering,
-the first away, both of Ubuntu's names away, and none answering. Watched
-fail with the check for the first mirror forced to pass.
-
 ## 2026-11-11 — a measured link names its runtime plainly
 
 `codegen_instructions_release` read 372,173,792 in CI on this branch,
@@ -1405,3 +1375,14 @@ The site's senro pin moves to v0.5.1. The deployment guide now says to ship
 that a deploy reloads open pages once; the JavaScript guide says the same of
 a new map; the testing guide gains givens, with an example that was run as a
 spec in the generated notebook before it went on the page.
+
+## 2026-11-26 — std/net/http names 206 and 416
+
+senro#153 answers Range requests for stored files, so a player can seek in a
+sound, and its golden showed `HTTP/1.1 206 ` and `HTTP/1.1 416 ` with no
+reason, because `reason_of` in `lib/net/http` had no arm for either code.
+HTTP allows an empty reason, so browsers read those lines; they now say
+"Partial Content" and "Range Not Satisfiable".
+`tests/golden/micro/a_partial_answer_names_its_status` pins 200, 206 and 416
+on both engines; before the arms it read `"206 "` and `"416 "`. The compile
+rows move with the library text and are taken from CI.
