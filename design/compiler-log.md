@@ -1376,6 +1376,21 @@ that a deploy reloads open pages once; the JavaScript guide says the same of
 a new map; the testing guide gains givens, with an example that was run as a
 spec in the generated notebook before it went on the page.
 
+## 2026-11-26 — gavel: an edited migration warns, and the schema check decides
+
+senro refused to start when a migration's SQL had changed since it ran.
+Clay: "i don't know that you need to prevent the app from starting. it's
+just that if you were to try to run the migrations again, you might end up
+with a new schema. i mean, be smart about it but i think that's the better
+path." A migration that has run is never run again, so an edit cannot change
+the live database; the harm is a database built afresh from the edited files.
+senro#152 (0.5.2) makes the edit a warning that names the migration, with
+what ran and what the file says now, and leaves the comparison `app/run`
+makes against the live tables as the gate. `spec/db/migrated` pins both
+cases on both engines: a respelled type warns and serves, a changed type
+warns and is refused at the comparison. The migrations, models and
+deployment guides say so. Recorded on #2509.
+
 ## 2026-11-26 — std/net/http names 206 and 416
 
 senro#153 answers Range requests for stored files, so a player can seek in a
@@ -1384,5 +1399,14 @@ reason, because `reason_of` in `lib/net/http` had no arm for either code.
 HTTP allows an empty reason, so browsers read those lines; they now say
 "Partial Content" and "Range Not Satisfiable".
 `tests/golden/micro/a_partial_answer_names_its_status` pins 200, 206 and 416
-on both engines; before the arms it read `"206 "` and `"416 "`. The compile
-rows move with the library text and are taken from CI.
+on both engines; before the change it read `"206 "` and `"416 "`.
+
+The phrases were 24 arms of `reason_of`, and two more arms raised
+compile_instructions by 314 and entry and library by 120 each, by layout,
+since neither corpus imports `std/net/http` and `lib/` is compiled into the
+binary. As one map, `reasons`, read by a single `reason_of`,
+compile_instructions is back where main has it and entry and library rise
+126 each. Those were measured here, where the arms version read what CI
+read to the instruction. The
+floor is lowered by that cost under #2280, as it was for `os/random_bytes`
+and `net/peer`, senro's earlier prerequisites.

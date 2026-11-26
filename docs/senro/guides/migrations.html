@@ -144,16 +144,20 @@ migrated</code></pre>
 
 <p>each migration runs in a transaction of its own and is recorded in a <code>senro_migrations</code> table when it has run: the app's name, the migration's stamp, and the SQL it ran. a later start runs only the ones the table does not list. because they are found by stamp, a migration that arrives late, from a branch merged after newer ones were written, is still run.</p>
 
-<p>a migration that has run is history. if its file is edited afterwards, the SQL it would run no longer matches what was recorded, and the app refuses to start and says which one. a new change is a new migration.</p>
+<p>a migration that has run is history. if its file is edited afterwards, the SQL it would run no longer matches what was recorded. senro does not run it again, since what it did is already in the database. it writes a warning naming the migration, with what ran and what the file now says, and goes on to compare the live tables with the schema the migrations now describe. an edit that left the schema as it was, such as a type respelled, passes and the app serves. an edit that changed it is refused there, naming the column, so the app does not serve tables that disagree with its code. either way, a new change is a new migration.</p>
+
+<p>senro's <code>spec/db/migrated</code> runs both cases against Postgres. its last start edits a migration so that it changes a column's type, and the comparison it runs next refuses:</p>
 
 <div class="code-output">
-  <div class="code-panel-title">a start after a migration was edited</div>
-  <pre><code>notebook's migration 2 has changed since it ran:
+  <div class="code-panel-title">spec/db/migrated, its last start</div>
+  <pre><code>senro: notebook's migration 2 has changed since it ran, and is not run again:
   ran: alter table notes add column if not exists body text
-  now: alter table notes add column if not exists body varchar(80)</code></pre>
+  now: alter table notes add column if not exists body varchar(80)
+refused: the database differs from the schema this app was compiled with:
+  `notes.body` is text in the database and character varying(80) in the migrations</code></pre>
 </div>
 
-<p>that message is from an app that keeps its migrations in one file, where each is known by its place in the list. an app with a file to a migration is told the stamp.</p>
+<p>that spec keeps its migrations in one list, where each is known by its place. an app with a file to a migration is told the stamp.</p>
 
 <h2>writing one</h2>
 
