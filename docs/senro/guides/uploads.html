@@ -125,11 +125,11 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
 <span class="k">import</span> <span class="s">"std/net/http"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="c"># What a form with two files and a title reads as: the title as typed, and</span>
+<span class="c"># What a form with three files and a title reads as: the title as typed, and</span>
 <span class="c"># each file as the key it was stored under.</span>
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">create</span> req _
   f <span class="o">=</span> <span class="f">web/input</span> req
-  said <span class="o">=</span> <span class="f">list/map</span> [<span class="s">"title"</span> <span class="s">"photo"</span> <span class="s">"notes"</span>] (n <span class="o">-&gt;</span> <span class="f">web/value</span> f n)
+  said <span class="o">=</span> <span class="f">list/map</span> [<span class="s">"title"</span> <span class="s">"photo"</span> <span class="s">"notes"</span> <span class="s">"song"</span>] (n <span class="o">-&gt;</span> <span class="f">web/value</span> f n)
   effect (<span class="f">http/text_page</span> (<span class="f">text/join</span> (<span class="f">list/to_list</span> said) <span class="s">"\n"</span>))</code></pre>
 </div>
 
@@ -139,7 +139,7 @@ storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="
 
 <h2>serving a file</h2>
 
-<p>a view links a stored file with <code>web/blob_path key</code>, which names <code>/senro/blobs/&lt;key&gt;</code>. a key that is not 32 hex digits is answered 404 without looking for a file. an image or a PDF is sent as its own type and shown in the page. anything else is sent as <code>application/octet-stream</code> and as a download, so an HTML file someone uploaded never runs as a page of the app. every answer carries <code>x-content-type-options: nosniff</code>.</p>
+<p>a view links a stored file with <code>web/blob_path key</code>, which names <code>/senro/blobs/&lt;key&gt;</code>. a key that is not 32 hex digits is answered 404 without looking for a file. an image, a sound, a video or a PDF is sent as its own type and shown in the page, so an <code>&lt;img&gt;</code>, <code>&lt;audio&gt;</code> or <code>&lt;video&gt;</code> element can point at the link. anything else is sent as <code>application/octet-stream</code> and as a download, so an HTML file someone uploaded never runs as a page of the app. every answer carries <code>x-content-type-options: nosniff</code>.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">web/uploads.kso</div>
@@ -158,6 +158,16 @@ inline_kinds <span class="o">=</span> [
   <span class="s">"image/gif"</span>
   <span class="s">"image/webp"</span>
   <span class="s">"image/avif"</span>
+  <span class="s">"audio/mpeg"</span>
+  <span class="s">"audio/mp4"</span>
+  <span class="s">"audio/aac"</span>
+  <span class="s">"audio/ogg"</span>
+  <span class="s">"audio/opus"</span>
+  <span class="s">"audio/flac"</span>
+  <span class="s">"audio/wav"</span>
+  <span class="s">"audio/webm"</span>
+  <span class="s">"video/mp4"</span>
+  <span class="s">"video/webm"</span>
   <span class="s">"application/pdf"</span>
 ]
 
@@ -175,25 +185,33 @@ inline_kinds <span class="o">=</span> [
   <span class="s">"attachment; filename=\"{bare}\""</span></code></pre>
 </div>
 
+<p>every answer says <code>accept-ranges: bytes</code>, and a request with a <code>Range</code> header gets the bytes it asks for, which is how a player seeks into a sound without downloading what comes before. <code>bytes=0-3</code>, <code>bytes=8-</code> and <code>bytes=-2</code> (the last two bytes) each answer 206 with a <code>content-range</code> naming the span and the file's size. a span that starts past the end answers 416 with <code>content-range: bytes */12</code>. a header that asks for several spans, or is not in bytes, gets the whole file, as HTTP allows.</p>
+
 <p>a key is unguessable, so a file is as private as its link. an app that must keep a file from someone who has the link should serve it from an action that checks the viewer instead.</p>
 
 <h2>what the spec checks</h2>
 
-<p>senro's spec serves a small app and posts to it the way a browser does, the head first and the multipart body a moment later. the form holds a title, a PNG whose bytes include a NUL, a 255, a line break and the boundary's own dashes, and an HTML page. it then asks for each file by its key, sends a body that promises 20,000,000 bytes, asks for two paths that are not keys, and repeats the upload with <code>Expect: 100-continue</code>:</p>
+<p>senro's spec serves a small app and posts to it the way a browser does, the head first and the multipart body a moment later. the form holds a title, a PNG whose bytes include a NUL, a 255, a line break and the boundary's own dashes, an HTML page, and a 12-byte MP3. it then asks for each file by its key, asks for five ranges of the MP3, sends a body that promises 20,000,000 bytes, asks for two paths that are not keys, and repeats the upload with <code>Expect: 100-continue</code>:</p>
 
 <div class="code-output">
   <div class="code-panel-title">spec/serve/uploaded.out</div>
   <pre><code>title: a cat &amp; a hat
 keys are 32 hex digits: true
-photo: HTTP/1.1 200 OK, content-type: image/png, content-disposition: inline, x-content-type-options: nosniff, same bytes: true
-notes: HTTP/1.1 200 OK, content-type: application/octet-stream, content-disposition: attachment; filename="x.html", x-content-type-options: nosniff, same bytes: true
+photo: HTTP/1.1 200 OK, content-type: image/png, content-disposition: inline, x-content-type-options: nosniff, accept-ranges: bytes, same bytes: true
+notes: HTTP/1.1 200 OK, content-type: application/octet-stream, content-disposition: attachment; filename="x.html", x-content-type-options: nosniff, accept-ranges: bytes, same bytes: true
+song: HTTP/1.1 200 OK, content-type: audio/mpeg, content-disposition: inline, x-content-type-options: nosniff, accept-ranges: bytes, same bytes: true
+bytes=0-3: HTTP/1.1 206 , content-range: bytes 0-3/12, bytes [73 68 51 3]
+bytes=8-: HTTP/1.1 206 , content-range: bytes 8-11/12, bytes [0 10 255 251]
+bytes=-2: HTTP/1.1 206 , content-range: bytes 10-11/12, bytes [255 251]
+bytes=12-: HTTP/1.1 416 , content-range: bytes */12, bytes []
+bytes=0-1,4-5: HTTP/1.1 200 OK, no content-range, bytes [73 68 51 3 0 0 0 0 0 10 255 251]
 HTTP/1.1 413 Content Too Large
 HTTP/1.1 404 Not Found
 HTTP/1.1 404 Not Found
 asked to continue: HTTP/1.1 100 Continue, then HTTP/1.1 200 OK</code></pre>
 </div>
 
-<p>both engines print the same lines. the photo comes back byte for byte and inline, and the HTML page comes back as a download under its own name.</p>
+<p>both engines print the same lines. the photo and the song come back byte for byte and inline, and the HTML page comes back as a download under its own name. the 206 and 416 lines have no reason phrase after the code, which HTTP allows; kanso's HTTP library names both codes from kanso#2511 on.</p>
 
 <h2>limits</h2>
 

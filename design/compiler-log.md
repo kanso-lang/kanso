@@ -20,28 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — directive: senro is to be a full alternative to Rails
-
-Clay, to cloud: "there should be a [senro] binary that acts like rails
-and has generators and can make a migration. the migrations need to have
-a date time stamp thing in the file name so they can run in order and
-create the actual schema deterministically." He asked for the generators
-Rails has, "a resource that's restful making just a controller or
-whatever", and "a facility to add other generators through plugins"; for
-documentation that reads as "a fully formed alternative to rails or at
-least as much functionality as you would have encountered in the early
-days around rails three"; for auth in the framework, since "everyone
-needs auth"; and for authorization that is "about getting to that page",
-so that "once you checked [auth] for that page you don't need to recheck
-for every data provider that it uses".
-
-Recorded on #2455 with where senro stood and a checklist. The design is
-cloud's (#2280) and is on the issue: a `senro` command; migrations as
-files named by a stamp, still folded into the schema by the build;
-generators for the parts and from outside senro; confirmation, lockout
-and tracking moved from the guestbook into the framework; and one check
-at the page that covers the providers the page calls.
-
 ## 2026-11-11 — a derivation is told which file declares a name
 
 The first thing #2455 needs from the language. senro's migrations are to
@@ -1332,6 +1310,25 @@ makes against the live tables as the gate. `spec/db/migrated` pins both
 cases on both engines: a respelled type warns and serves, a changed type
 warns and is refused at the comparison. The migrations, models and
 deployment guides say so. Recorded on #2509.
+
+## 2026-11-26 — senro 0.5.5: sound that seeks, likes held once, counts
+
+Three gaps a music app would meet, shipped as senro 0.5.3, 0.5.4 and 0.5.5,
+and the site's guides moved to 0.5.5.
+
+- senro#153 (0.5.3). A stored file answers `Range` with 206 and the span, a
+  span past the end with 416, and several spans with the whole file. Sound
+  and video are served inline, where an MP3 went out as a download that an
+  `<audio>` element would not play. The uploads guide quotes the new golden.
+- senro#154 (0.5.4). `models/add_unique_index` takes a list of columns, so a
+  like is held once per handle and track. A refused write puts the problem
+  on the last column, as Rails' `scope` does, and a `schema.sql` dump's
+  index over several columns now counts.
+- senro#155 (0.5.5). `like/count_of db "track_id" id` and `like/counts_by db
+  "track_id"` count what a read would show: Postgres counts when the model
+  has no `visible?`, and otherwise senro counts the rows the policy shows.
+  With the policy check broken in the spec, a visitor's count of likes rose
+  from 2 to 3, eve's hidden one leaking. The models guide covers both.
 
 ## 2026-11-26 — std/net/http names 206 and 416
 
