@@ -1,0 +1,9 @@
+import "std/list"
+import "std/net/http"
+
+# A server that answers part of a file, as a player seeking in a sound asks,
+# names the status on its status line: 206 for the part, 416 for a part that
+# starts past the end. Each code a response is built with takes its reason
+# from the table in std/net/http.
+said = list/map [200 206 416] (c -> http/respond c [] "")
+print (list/to_list (list/map said (r -> "{r.status} {r.reason}")))

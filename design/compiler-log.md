@@ -20,28 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — directive: senro is to be a full alternative to Rails
-
-Clay, to cloud: "there should be a [senro] binary that acts like rails
-and has generators and can make a migration. the migrations need to have
-a date time stamp thing in the file name so they can run in order and
-create the actual schema deterministically." He asked for the generators
-Rails has, "a resource that's restful making just a controller or
-whatever", and "a facility to add other generators through plugins"; for
-documentation that reads as "a fully formed alternative to rails or at
-least as much functionality as you would have encountered in the early
-days around rails three"; for auth in the framework, since "everyone
-needs auth"; and for authorization that is "about getting to that page",
-so that "once you checked [auth] for that page you don't need to recheck
-for every data provider that it uses".
-
-Recorded on #2455 with where senro stood and a checklist. The design is
-cloud's (#2280) and is on the issue: a `senro` command; migrations as
-files named by a stamp, still folded into the schema by the build;
-generators for the parts and from outside senro; confirmation, lockout
-and tracking moved from the guestbook into the framework; and one check
-at the page that covers the providers the page calls.
-
 ## 2026-11-11 — a derivation is told which file declares a name
 
 The first thing #2455 needs from the language. senro's migrations are to
@@ -1351,3 +1329,23 @@ and the site's guides moved to 0.5.5.
   has no `visible?`, and otherwise senro counts the rows the policy shows.
   With the policy check broken in the spec, a visitor's count of likes rose
   from 2 to 3, eve's hidden one leaking. The models guide covers both.
+
+## 2026-11-26 — std/net/http names 206 and 416
+
+senro#153 answers Range requests for stored files, so a player can seek in a
+sound, and its golden showed `HTTP/1.1 206 ` and `HTTP/1.1 416 ` with no
+reason, because `reason_of` in `lib/net/http` had no arm for either code.
+HTTP allows an empty reason, so browsers read those lines; they now say
+"Partial Content" and "Range Not Satisfiable".
+`tests/golden/micro/a_partial_answer_names_its_status` pins 200, 206 and 416
+on both engines; before the change it read `"206 "` and `"416 "`.
+
+The phrases were 24 arms of `reason_of`, and two more arms raised
+compile_instructions by 314 and entry and library by 120 each, by layout,
+since neither corpus imports `std/net/http` and `lib/` is compiled into the
+binary. As one map, `reasons`, read by a single `reason_of`,
+compile_instructions is back where main has it, and the other two rise by
+layout: entry_instructions 120,154,854 -> 120,154,980 and
+library_instructions 64,189,624 -> 64,189,750, as CI measured. The
+floor is lowered by that cost under #2280, as it was for `os/random_bytes`
+and `net/peer`, senro's earlier prerequisites.
