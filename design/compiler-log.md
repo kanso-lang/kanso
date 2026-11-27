@@ -20,39 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — a derivation is told which file declares a name
-
-The first thing #2455 needs from the language. senro's migrations are to
-be files that run in the order of their names. A derivation folds them
-into the schema while the app compiles, and a derivation could not see a
-file's name: a module's kanso files share one namespace, the description
-handed over a module's constants with no file, and it left the module's
-kanso files out of `files`.
-
-The committee's reading: a convention that places code by its file's
-name is the same kind of convention as one that places it by its
-function's name, and the description already carries the second. So a
-module's description gains `sources`, a map from each pub function's and
-pub constant's name to the name of the file that declares it. The first
-arm's file answers for a function of several. Nothing else changes, and
-a derivation still only computes: the map is read off declarations the
-compiler has already loaded.
-
-**Spec.** `tests/golden/derive/a_derivation_reads_the_file_a_declaration_is_in`
-keeps two constants in two files whose names sort the other way from the
-constants' names, and a convention answers the names in the order of
-their files: `["zebra" "apple"]`, on both engines. The ratchet row is
-`declared_in`. Watched fail with every file's name left blank: the
-convention falls back on the names and answers `["apple" "zebra"]`.
-
-**Rows.** Three compile rows move with the binary's layout, each down:
-`compile_instructions` 22,652,656 -> 22,652,542, `entry_instructions`
-119,194,010 -> 119,166,280 and `library_instructions` 63,634,723 ->
-63,634,563. None of the three corpora has a `derive` that reads the new
-field. The interpreter's and the browser's rows did not move.
-
-**Welfare.** 95.39228290 -> 95.39230414, banked.
-
 ## 2026-11-11 — the sanitizer sweep is a job
 
 #2449, from the weekly sweep: `scripts/asan/sweep.sh` was named by no job,
@@ -1329,6 +1296,26 @@ and the site's guides moved to 0.5.5.
   has no `visible?`, and otherwise senro counts the rows the policy shows.
   With the policy check broken in the spec, a visitor's count of likes rose
   from 2 to 3, eve's hidden one leaking. The models guide covers both.
+
+## 2026-11-26 — std/net/http names 206 and 416
+
+senro#153 answers Range requests for stored files, so a player can seek in a
+sound, and its golden showed `HTTP/1.1 206 ` and `HTTP/1.1 416 ` with no
+reason, because `reason_of` in `lib/net/http` had no arm for either code.
+HTTP allows an empty reason, so browsers read those lines; they now say
+"Partial Content" and "Range Not Satisfiable".
+`tests/golden/micro/a_partial_answer_names_its_status` pins 200, 206 and 416
+on both engines; before the change it read `"206 "` and `"416 "`.
+
+The phrases were 24 arms of `reason_of`, and two more arms raised
+compile_instructions by 314 and entry and library by 120 each, by layout,
+since neither corpus imports `std/net/http` and `lib/` is compiled into the
+binary. As one map, `reasons`, read by a single `reason_of`,
+compile_instructions is back where main has it, and the other two rise by
+layout: entry_instructions 120,154,854 -> 120,154,980 and
+library_instructions 64,189,624 -> 64,189,750, as CI measured. The
+floor is lowered by that cost under #2280, as it was for `os/random_bytes`
+and `net/peer`, senro's earlier prerequisites.
 
 ## 2026-11-26 — senro 0.5.7: package stylesheets, and files in a bucket
 
