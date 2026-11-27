@@ -205,16 +205,14 @@ per_page <span class="o">=</span> 25
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_index.kata</div>
-  <pre><code>takes rows number more
-header
-  h1 Notes
-  p.lede
-    a href<span class="o">=</span>(path_to <span class="s">"notes/new"</span>) New note
-ul.notes
-  each rows r <span class="o">-&gt;</span>
-    li
-      a href<span class="o">=</span>(path_to <span class="s">"notes/show"</span> r.id) <span class="o">=</span> r.title
-nav.pages
+  <pre><code><span class="k">takes</span> rows number more
+div.d-flex.align-items-end.justify-content-between.mb-4
+  h1.mb-0 Notes
+  a.btn.btn-primary href<span class="o">=</span>(path_to <span class="s">"notes/new"</span>) New note
+div.list-group
+  <span class="k">each</span> rows r <span class="o">-&gt;</span>
+    a.list-group-item.list-group-item-action.py-3 href<span class="o">=</span>(path_to <span class="s">"notes/show"</span> r.id) <span class="o">=</span> r.title
+nav.pages.mt-4.d-flex.gap-3
   <span class="k">if</span> number <span class="o">&gt;</span> 1
     a href<span class="o">=</span><span class="s">"?page={number - 1}"</span> Previous page
   <span class="k">if</span> more
@@ -304,29 +302,30 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_form.kata</div>
-  <pre><code>takes path method fields problems
-header
-  h1 Note
-  p.lede
-    a href<span class="o">=</span>(path_to <span class="s">"notes/index"</span>) All notes
-form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
-  input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
-  label
-    | title
-    input name<span class="o">=</span><span class="s">"title"</span> value<span class="o">=</span>fields[<span class="s">"title"</span>]
-  <span class="k">if</span> problems[<span class="s">"title"</span>] <span class="o">!=</span> none
-    p.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
-  label
-    | pages
-    input name<span class="o">=</span><span class="s">"pages"</span> value<span class="o">=</span>fields[<span class="s">"pages"</span>]
-  <span class="k">if</span> problems[<span class="s">"pages"</span>] <span class="o">!=</span> none
-    p.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
-  label
-    | cover
-    input <span class="k">type</span><span class="o">=</span><span class="s">"file"</span> <span class="f">name</span><span class="o">=</span><span class="s">"cover"</span>
-  <span class="k">if</span> fields[<span class="s">"cover"</span>] <span class="o">!=</span> <span class="s">""</span>
-    p.kept Leave it empty to keep the file it has.
-  button Save</code></pre>
+  <pre><code><span class="k">takes</span> path method fields problems
+div.row
+  div.col-lg-7
+    p.mb-2
+      a.text-secondary href<span class="o">=</span>(path_to <span class="s">"notes/index"</span>) All notes
+    h1.mb-4 Note
+    form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
+      input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> name<span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"title"</span> title
+        input.form-control id<span class="o">=</span><span class="s">"title"</span> name<span class="o">=</span><span class="s">"title"</span> value<span class="o">=</span>fields[<span class="s">"title"</span>]
+        <span class="k">if</span> problems[<span class="s">"title"</span>] <span class="o">!=</span> <span class="k">none</span>
+          p.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"pages"</span> pages
+        input.form-control id<span class="o">=</span><span class="s">"pages"</span> name<span class="o">=</span><span class="s">"pages"</span> value<span class="o">=</span>fields[<span class="s">"pages"</span>]
+        <span class="k">if</span> problems[<span class="s">"pages"</span>] <span class="o">!=</span> <span class="k">none</span>
+          p.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"cover"</span> cover
+        input.form-control id<span class="o">=</span><span class="s">"cover"</span> <span class="k">type</span><span class="o">=</span><span class="s">"file"</span> name<span class="o">=</span><span class="s">"cover"</span>
+        <span class="k">if</span> fields[<span class="s">"cover"</span>] <span class="o">!=</span> <span class="s">""</span>
+          p.form-text Leave it empty to keep the file it has.
+      button.btn.btn-primary Save</code></pre>
 </div>
 
 <h2>a resource under another</h2>

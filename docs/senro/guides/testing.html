@@ -156,8 +156,10 @@ test_signing_in ... ok
 <span class="c"># meets the door a visitor meets. A visit keeps the cookies the app sets:</span>
 <span class="c"># the examples under "with an account" begin signed in, since `joined` makes</span>
 <span class="c"># the account, follows the link mailed to confirm its address, and signs in.</span>
+<span class="c"># The app chooses each password and shows it once, so an example reads it</span>
+<span class="c"># from the page that made the account.</span>
 test_signing_in <span class="o">=</span> describe <span class="s">"signing in"</span> [
-  around (<span class="f">visit/within</span> signed connected)
+  around (visit<span class="o">/</span>within signed connected)
   it <span class="s">"is asked of a stranger"</span> turned_back
   it <span class="s">"waits for the address to be confirmed"</span> held_back
   context <span class="s">"with an account"</span> [
@@ -228,7 +230,7 @@ edited <span class="o">=</span> put <span class="f">given/note</span> <span clas
 
 <h2>signing in</h2>
 
-<p>this is the spec <code>senro generate authentication</code> writes. it uses <code>signed</code>, and a group inside the spec with a hook of its own: every example under "with an account" starts with an account made, its address confirmed, and its visitor signed in. the hook reads the confirmation letter the way the visitor would. <code>visit/mailed v</code> answers the letters the visit's requests have queued, newest first, and <code>visit/link_in letter</code> the path of the first link a letter carries. an example outside the group checks that an account whose address is not confirmed yet is refused.</p>
+<p>this is the spec <code>senro generate authentication</code> writes. it uses <code>signed</code>, and a group inside the spec with a hook of its own: every example under "with an account" starts with an account made, its address confirmed, and its visitor signed in. nobody types a password into the app: it chooses one and shows it once, so the hook reads it from the page that made the account, as the visitor would copy it, and keeps it beside the visit in a <code>made</code>. the hook reads the confirmation letter the way the visitor would. <code>visit/mailed v</code> answers the letters the visit's requests have queued, newest first, and <code>visit/link_in letter</code> the path of the first link a letter carries. an example outside the group checks that an account whose address is not confirmed yet is refused.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/session_test.kso</div>
@@ -238,49 +240,86 @@ edited <span class="o">=</span> put <span class="f">given/note</span> <span clas
 <span class="k">import</span> <span class="s">"std/spec"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">turned_back</span> v
-  <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
+<span class="c"># A visit just after making an account: the address, and the password the</span>
+<span class="c"># page showed.</span>
+<span class="k">type</span> made
+  visit
+  email
+  password
 
-<span class="k">fn</span> <span class="f">held_back</span> v
-  <span class="f">visit/post</span> v <span class="s">"/registration"</span> account
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
+<span class="k">fn</span> turned_back v
+  visit<span class="o">/</span>get v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (visit<span class="o">/</span>location v) . to (equal door)))
+
+<span class="k">fn</span> held_back v
+  signed_up v address
+    <span class="o">.&gt;</span> (m <span class="o">-&gt;</span> visit<span class="o">/</span>post m.visit <span class="s">"/session"</span> (account_of m))
     <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 403)))
 
-<span class="k">fn</span> <span class="f">joined</span> v
-  <span class="f">visit/post</span> v <span class="s">"/registration"</span> account
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/mailed</span> v <span class="o">.&gt;</span> (letters <span class="o">-&gt;</span> confirmed v (<span class="f">list/first</span> letters)))
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
+<span class="k">fn</span> joined v
+  signed_up v address <span class="o">.&gt;</span> signed_in
+
+<span class="k">fn</span> signed_up v email
+  visit<span class="o">/</span>post v <span class="s">"/registration"</span> { <span class="s">"email"</span>:email }
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (made v email (shown_password v.body)))
+
+<span class="k">fn</span> signed_in m
+  visit<span class="o">/</span>mailed m.visit
+    <span class="o">.&gt;</span> (letters <span class="o">-&gt;</span> confirmed m.visit (list<span class="o">/</span>find letters (l <span class="o">-&gt;</span> l.to <span class="o">==</span> m.email)))
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> visit<span class="o">/</span>post v <span class="s">"/session"</span> (account_of m))
+
+<span class="k">fn</span> account_of m
+  { <span class="s">"email"</span>:m.email <span class="s">"password"</span>:m.password }
+
+<span class="k">fn</span> shown_password body
+  after <span class="o">=</span> text<span class="o">/</span>split body <span class="s">"&lt;code class=\"password\"&gt;"</span>
+  <span class="k">return</span> <span class="s">""</span> <span class="k">if</span> length after <span class="o">&lt;</span> 2
+  blank (list<span class="o">/</span>first (text<span class="o">/</span>split after[2] <span class="s">"&lt;/code&gt;"</span>))
+
+<span class="k">fn</span> blank <span class="k">none</span>
+  <span class="s">""</span>
+
+<span class="k">fn</span> blank s
+  s
 
 <span class="c"># The link opens a page with a button, and the button's form sends a PATCH</span>
 <span class="c"># to the same path without `/edit`.</span>
-<span class="k">fn</span> <span class="f">confirmed</span> _ none
+<span class="k">fn</span> confirmed _ <span class="k">none</span>
   err <span class="s">"making the account mailed no link"</span>
 
-<span class="k">fn</span> <span class="f">confirmed</span> v letter
-  <span class="f">visit/patch</span> v (<span class="f">text/replace</span> (<span class="f">visit/link_in</span> letter) <span class="s">"/edit"</span> <span class="s">""</span>) {}
+<span class="k">fn</span> confirmed v letter
+  visit<span class="o">/</span>patch v (text<span class="o">/</span>replace (visit<span class="o">/</span>link_in letter) <span class="s">"/edit"</span> <span class="s">""</span>) {}
 
-<span class="k">fn</span> <span class="f">opened</span> v
-  <span class="f">visit/get</span> v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
+<span class="k">fn</span> opened v
+  visit<span class="o">/</span>get v <span class="s">"/"</span> <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
 
-<span class="k">fn</span> <span class="f">over</span> v
-  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/get</span> v <span class="s">"/"</span>)
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (<span class="f">visit/location</span> v) . to (equal door)))
+<span class="k">fn</span> over v
+  visit<span class="o">/</span>remove v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> visit<span class="o">/</span>get v <span class="s">"/"</span>)
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect (visit<span class="o">/</span>location v) . to (equal door)))
 
-<span class="k">fn</span> <span class="f">returned</span> v
-  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> account)
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/get</span> v <span class="s">"/"</span>)
+<span class="c"># A second account, made, confirmed and signed in, then signed out and in</span>
+<span class="c"># again with the password its page showed.</span>
+<span class="k">fn</span> returned v
+  visit<span class="o">/</span>remove v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> signed_up v other)
+    <span class="o">.&gt;</span> (m <span class="o">-&gt;</span> signed_in m <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> out_and_in v m))
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> visit<span class="o">/</span>get v <span class="s">"/"</span>)
     <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 200)))
 
-<span class="k">fn</span> <span class="f">refused</span> v
-  <span class="f">visit/remove</span> v <span class="s">"/session"</span>
-    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> <span class="f">visit/post</span> v <span class="s">"/session"</span> mistaken)
+<span class="k">fn</span> out_and_in v m
+  visit<span class="o">/</span>remove v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> visit<span class="o">/</span>post v <span class="s">"/session"</span> (account_of (made v m.email m.password)))
+
+<span class="k">fn</span> refused v
+  visit<span class="o">/</span>remove v <span class="s">"/session"</span>
+    <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> visit<span class="o">/</span>post v <span class="s">"/session"</span> mistaken)
     <span class="o">.&gt;</span> (v <span class="o">-&gt;</span> effect (expect v.status . to (equal 422)))
 
-account <span class="o">=</span> { <span class="s">"email"</span>:<span class="s">"ada@example.test"</span> <span class="s">"password"</span>:<span class="s">"a long password"</span> }
+address <span class="o">=</span> <span class="s">"ada@example.test"</span>
 
-mistaken <span class="o">=</span> put account <span class="s">"password"</span> <span class="s">"another password"</span>
+other <span class="o">=</span> <span class="s">"grace@example.test"</span>
+
+mistaken <span class="o">=</span> { <span class="s">"email"</span>:address <span class="s">"password"</span>:<span class="s">"another password"</span> }
 
 door <span class="o">=</span> <span class="s">"/session/new"</span></code></pre>
 </div>
