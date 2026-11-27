@@ -21,7 +21,7 @@ description: "how senro's generators write an app and a resource, and what each 
 
 <h2>running them</h2>
 
-<p>the generators are run with <code>senro</code>, senro's command, which sits in the <code>bin</code> directory of senro's repository. with that directory on your PATH, <code>senro new</code> writes an app where you are, and every other command runs from inside the app. the files it writes import senro by the path from the app to senro's own directory, so an app beside a copy of senro imports <code>../senro/models</code>; the notebook, two directories down in senro's own repository, imports <code>../../models</code>. the <a href="command-line.html">command line guide</a> covers the rest of the command.</p>
+<p>the generators are run with <code>senro</code>, senro's command, which sits in the <code>bin</code> directory of senro's repository. with that directory on your PATH, <code>senro new</code> writes an app where you are, and every other command runs from inside the app. an app made anywhere but inside senro's own repository imports senro by its name, <code>kanso-lang/senro/models</code>, and <code>kanso install</code> fetches the release it pins; the notebook, two directories down in senro's repository, imports <code>../../models</code>. the <a href="command-line.html">command line guide</a> covers the rest of the command.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -32,6 +32,13 @@ description: "how senro's generators write an app and a resource, and what each 
   create notebook/migrations/.keep
   create notebook/views/layout.kata
   create notebook/views/home.kata
+  create notebook/.gitignore
+  create notebook/package.json
+  create notebook/javascript/application.js
+  create notebook/stylesheets/application.css
+  create notebook/stylesheets/theme.css
+  run  kanso install notebook
+  run  cd notebook &amp;&amp; npm install &amp;&amp; senro js install
 $ cd notebook
 $ senro generate scaffold note title:text pages:int cover:attachment
   create ./note.kso
@@ -54,6 +61,8 @@ $ senro generate scaffold page body:text note:references
   create ./migrations/20261111180513_create_pages.kso
   change ./main.kso</code></pre>
 </div>
+
+<p>a new app is styled before anyone styles it. its layout and every view a generator writes use Bootstrap 5.3's markup: a navbar with the app's name and a container, a list group for an index, <code>form-control</code> and <code>btn</code> on a form. <code>stylesheets/application.css</code> imports Bootstrap and two typefaces, Inter and Space Grotesk, from the packages <code>package.json</code> names, and <code>stylesheets/theme.css</code> sets Bootstrap's variables to the palette of this site, with a dark half that follows the system. <code>npm install</code> and <code>senro js install</code> vendor the packages, the fonts among them, as the <a href="javascript.html">JavaScript guide</a> describes. the theme is the app's own file to change.</p>
 
 <p>each line names a file and what happened to it. <code>scaffold</code> writes its migration as a file of its own, a spec of the resource beside its module, and the resource's map in <code>given.kso</code>, which the specs make rows from; the <a href="testing.html">testing guide</a> covers both. it changes one file that <code>new</code> wrote, the entry, which gains the resource's import. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
 
@@ -205,16 +214,14 @@ per_page <span class="o">=</span> 25
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_index.kata</div>
-  <pre><code>takes rows number more
-header
-  h1 Notes
-  p.lede
-    a href<span class="o">=</span>(path_to <span class="s">"notes/new"</span>) New note
-ul.notes
-  each rows r <span class="o">-&gt;</span>
-    li
-      a href<span class="o">=</span>(path_to <span class="s">"notes/show"</span> r.id) <span class="o">=</span> r.title
-nav.pages
+  <pre><code><span class="k">takes</span> rows number more
+div.d-flex.align-items-end.justify-content-between.mb-4
+  h1.mb-0 Notes
+  a.btn.btn-primary href<span class="o">=</span>(path_to <span class="s">"notes/new"</span>) New note
+div.list-group
+  <span class="k">each</span> rows r <span class="o">-&gt;</span>
+    a.list-group-item.list-group-item-action.py-3 href<span class="o">=</span>(path_to <span class="s">"notes/show"</span> r.id) <span class="o">=</span> r.title
+nav.pages.mt-4.d-flex.gap-3
   <span class="k">if</span> number <span class="o">&gt;</span> 1
     a href<span class="o">=</span><span class="s">"?page={number - 1}"</span> Previous page
   <span class="k">if</span> more
@@ -304,29 +311,30 @@ the list as json: [{"cover":"","created_at":"T","id":N,"pages":13,"title":"Renam
 
 <div class="code-panel">
   <div class="code-panel-title">examples/notebook/views/notes_form.kata</div>
-  <pre><code>takes path method fields problems
-header
-  h1 Note
-  p.lede
-    a href<span class="o">=</span>(path_to <span class="s">"notes/index"</span>) All notes
-form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
-  input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> <span class="f">name</span><span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
-  label
-    | title
-    input name<span class="o">=</span><span class="s">"title"</span> value<span class="o">=</span>fields[<span class="s">"title"</span>]
-  <span class="k">if</span> problems[<span class="s">"title"</span>] <span class="o">!=</span> none
-    p.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
-  label
-    | pages
-    input name<span class="o">=</span><span class="s">"pages"</span> value<span class="o">=</span>fields[<span class="s">"pages"</span>]
-  <span class="k">if</span> problems[<span class="s">"pages"</span>] <span class="o">!=</span> none
-    p.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
-  label
-    | cover
-    input <span class="k">type</span><span class="o">=</span><span class="s">"file"</span> <span class="f">name</span><span class="o">=</span><span class="s">"cover"</span>
-  <span class="k">if</span> fields[<span class="s">"cover"</span>] <span class="o">!=</span> <span class="s">""</span>
-    p.kept Leave it empty to keep the file it has.
-  button Save</code></pre>
+  <pre><code><span class="k">takes</span> path method fields problems
+div.row
+  div.col-lg-7
+    p.mb-2
+      a.text-secondary href<span class="o">=</span>(path_to <span class="s">"notes/index"</span>) All notes
+    h1.mb-4 Note
+    form method<span class="o">=</span><span class="s">"post"</span> action<span class="o">=</span>path enctype<span class="o">=</span><span class="s">"multipart/form-data"</span>
+      input <span class="k">type</span><span class="o">=</span><span class="s">"hidden"</span> name<span class="o">=</span><span class="s">"_method"</span> value<span class="o">=</span>method
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"title"</span> title
+        input.form-control id<span class="o">=</span><span class="s">"title"</span> name<span class="o">=</span><span class="s">"title"</span> value<span class="o">=</span>fields[<span class="s">"title"</span>]
+        <span class="k">if</span> problems[<span class="s">"title"</span>] <span class="o">!=</span> <span class="k">none</span>
+          p.problem <span class="o">=</span> problems[<span class="s">"title"</span>]
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"pages"</span> pages
+        input.form-control id<span class="o">=</span><span class="s">"pages"</span> name<span class="o">=</span><span class="s">"pages"</span> value<span class="o">=</span>fields[<span class="s">"pages"</span>]
+        <span class="k">if</span> problems[<span class="s">"pages"</span>] <span class="o">!=</span> <span class="k">none</span>
+          p.problem <span class="o">=</span> problems[<span class="s">"pages"</span>]
+      div.mb-3
+        label.form-label for<span class="o">=</span><span class="s">"cover"</span> cover
+        input.form-control id<span class="o">=</span><span class="s">"cover"</span> <span class="k">type</span><span class="o">=</span><span class="s">"file"</span> name<span class="o">=</span><span class="s">"cover"</span>
+        <span class="k">if</span> fields[<span class="s">"cover"</span>] <span class="o">!=</span> <span class="s">""</span>
+          p.form-text Leave it empty to keep the file it has.
+      button.btn.btn-primary Save</code></pre>
 </div>
 
 <h2>a resource under another</h2>

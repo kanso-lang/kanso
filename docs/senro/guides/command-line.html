@@ -35,21 +35,27 @@ senro: usage: senro new &lt;app&gt;
 
 <h2>a new app</h2>
 
-<p><code>senro new</code> writes an app in a directory named for it: an entry, a home page, a layout and an empty <code>migrations</code> directory. it refuses a directory that is there already.</p>
+<p><code>senro new</code> writes an app in a directory named for it: an entry, a home page, a layout, an empty <code>migrations</code> directory, and the stylesheets and <code>package.json</code> that style it with Bootstrap, as the <a href="generators.html">generators guide</a> describes. it refuses a directory that is there already, and ends by saying what to run.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
   <pre><code>$ senro new notebook
   create notebook/main.kso
   create notebook/home.kso
+  create notebook/home_test.kso
   create notebook/migrations/.keep
   create notebook/views/layout.kata
-  create notebook/views/home.kata</code></pre>
+  create notebook/views/home.kata
+  create notebook/.gitignore
+  create notebook/package.json
+  create notebook/javascript/application.js
+  create notebook/stylesheets/application.css
+  create notebook/stylesheets/theme.css
+  run  kanso install notebook
+  run  cd notebook &amp;&amp; npm install &amp;&amp; senro js install</code></pre>
 </div>
 
-<p>the entry imports senro by the path from the new app to senro's own directory, so the app compiles where it stands. every other command is run from inside the app.</p>
-
-<p>an app can also name senro's modules by repository, as kanso reads any hako from GitHub, and then it needs no checkout of senro beside it:</p>
+<p>the entry names senro's modules by repository, as kanso reads any hako from GitHub, so the app needs no checkout of senro beside it; <code>kanso install</code> fetches the release it pins. every other command is run from inside the app.</p>
 
 <div class="code-output">
   <div class="code-panel-title">main.kso</div>
