@@ -20,27 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — the third sweep reads its gates, and the browser gate joins it
-
-#2447, its fourth item. `all_interp.sh` listed its four gates by hand, and
-`tests/every_golden_is_swept_by_something.rs` existed partly to keep that
-list honest against what CI runs. The sweep now reads its gates from
-`scripts/gates` the way `all_compile.sh` does: a script that names a
-golden under `bench/` and that neither other sweep runs is its own.
-`--list` prints them, and the test asks the sweep.
-
-Deriving the list found a fifth. CI runs `browser_cost.sh` against
-`bench/browser_golden.txt`, and no sweep ran it. The test should have
-said so. It decides whether a gate reads a golden by scanning the script
-for a file name, and the only place that script names its golden is a
-comment that ends the sentence there, so the scan read
-`browser_golden.txt.` and took the full stop for part of the name. With
-the stop trimmed the test fails and names `browser_cost`; with the
-derived list it passes.
-
-The interpreter sweep is slower by a wasm build and the browser test. No
-counter moved.
-
 ## 2026-11-11 — two limits live where they are enforced
 
 #2448, from the weekly sweep. Not a compiler change.
@@ -1311,3 +1290,22 @@ The new branch moves two rows, as CI measured: entry_instructions
 the new code; the compile and library rows stand. A senro app
 installed as a hako could not compile without this, so the floor is lowered
 by that cost under #2280, as it was for kanso#2511.
+
+## 2026-11-27 — a job's install does not read Microsoft's archive
+
+A hosted runner lists Microsoft's package archive among its apt sources,
+for tools the image ships. On 2026-11-27 that archive answered 403 to the
+runners, `apt-get update` exited 100 because a source it reads was no
+longer signed, and the cost-goldens job never installed clang 19. Every
+gate after it then refused to compare, measured on clang 18 against rows
+taken on 19. Two runs of kanso#2517 failed the same way, and nothing in
+that change touches the install.
+
+No job here installs anything from Microsoft's archive: clang, lld,
+wasi-libc, valgrind and jq all come from Ubuntu's. `scripts/apt_ready.sh`,
+which every install already runs first, now removes any source file that
+names packages.microsoft.com. `tests/apt_reads_a_mirror_that_resolves.rs`
+gains `microsofts_archive_is_not_read`, which gives the script a sources
+directory holding the runner's `microsoft-prod.list` line and an Ubuntu
+source and checks that only the Ubuntu one is left. With the removal taken
+out of the script it fails, listing both files.

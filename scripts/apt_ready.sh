@@ -18,12 +18,19 @@
 # signature, so which mirror served the bytes does not change what is
 # installed.
 #
+# A hosted runner also reads Microsoft's package archive, for its own
+# tools. No job here installs anything from it. On 2026-11-27 it answered
+# 403, `apt-get update` exits non-zero on a source it cannot read, and
+# the install of clang 19 from Ubuntu's archive never ran. So any source
+# file that names it is removed first.
+#
 # The KANSO_APT_* variables are for
 # tests/apt_reads_a_mirror_that_resolves.rs, which runs this against a list
 # and a resolver of its own.
 set -u
 list=${KANSO_APT_MIRRORS:-/etc/apt/apt-mirrors.txt}
 again=${KANSO_APT_RETRIES:-/etc/apt/apt.conf.d/80-fetch-again}
+sources=${KANSO_APT_SOURCES:-/etc/apt/sources.list.d}
 lookup=${KANSO_APT_LOOKUP:-getent hosts}
 as_root=${KANSO_APT_SUDO-sudo}
 first=azure.archive.ubuntu.com
@@ -39,6 +46,13 @@ resolves() {
   sleep "${KANSO_APT_PAUSE:-2}"
   $lookup "$1" >/dev/null 2>&1
 }
+
+for source in "$sources"/*; do
+  [ -f "$source" ] || continue
+  grep -q packages.microsoft.com "$source" || continue
+  $as_root rm -f "$source"
+  echo "apt: not reading $source"
+done
 
 [ -f "$list" ] || exit 0
 grep -q "$first" "$list" || exit 0
