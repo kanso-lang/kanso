@@ -36,10 +36,11 @@ import "chart";</code></pre>
 senro js install</code></pre>
 
 <pre><code>      traced  javascript/application.js
-    vendored  2 modules and 1 stylesheet from ga.jspm.io
+    vendored  2 modules and 2 stylesheets from ga.jspm.io
+      copied  3 files jspm.io lacks from node_modules
        wrote  importmap.json</code></pre>
 
-<p>the install traces the entry and every other module in <code>javascript/</code>, finds every module they reach across whole dependency trees, and downloads each from jspm.io, with its source map, into <code>vendor/javascript/</code>. it writes the import map, and the list of modules a page loads at once, to <code>importmap.json</code>. commit both. a deployed app serves the vendored files itself, so it needs neither Node nor jspm.io. the pantry's map names its two modules, the one package they reach, and chartist's stylesheet:</p>
+<p>the install traces the entry and every other module in <code>javascript/</code>, finds every module they reach across whole dependency trees, and downloads each from jspm.io, with its source map, into <code>vendor/javascript/</code>. it writes the import map, and the list of modules a page loads at once, to <code>importmap.json</code>. commit both. a deployed app serves the vendored files itself, so it needs neither Node nor jspm.io. the pantry's map names its two modules, the one package they reach, and the two stylesheets it imports:</p>
 
 <pre><code>{
   "imports": {
@@ -58,6 +59,7 @@ senro js install</code></pre>
     "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.js"
   ],
   "stylesheets": {
+    "@fontsource-variable/space-grotesk/index.css": "https://ga.jspm.io/npm:@fontsource-variable/space-grotesk@5.1.1/index.css",
     "chartist/dist/index.css": "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.css"
   }
 }</code></pre>
@@ -83,14 +85,16 @@ senro js install</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">examples/pantry/stylesheets/application.css</div>
   <pre><code>/* The pantry's stylesheet: chartist's own rules for the shelf's chart, at
-   the version of chartist the import map holds. public/site.css follows it
-   and sets the pantry's colors. */
-@import "chartist/dist/index.css";</code></pre>
+   the version of chartist the import map holds, and Space Grotesk for the
+   heading. public/site.css follows it and sets the pantry's colors. */
+@import "chartist/dist/index.css";
+@import "@fontsource-variable/space-grotesk/index.css";</code></pre>
 </div>
 
-<p>the install downloads each stylesheet imported by name, with its source map and the fonts and images its <code>url()</code>s name, into <code>vendor/javascript/</code>, and records where it came from under the map's <code>stylesheets</code>:</p>
+<p>the install downloads each stylesheet imported by name, with its source map and the fonts and images its <code>url()</code>s name, into <code>vendor/javascript/</code>, and records where it came from under the map's <code>stylesheets</code>. jspm.io serves a package's stylesheets but not the font files beside them, so a font it lacks is copied from the package npm installed, at the version the map names; a webfont from fontsource needs only <code>npm install</code> and an <code>@import</code> of its <code>index.css</code>.</p>
 
 <pre><code>  "stylesheets": {
+    "@fontsource-variable/space-grotesk/index.css": "https://ga.jspm.io/npm:@fontsource-variable/space-grotesk@5.1.1/index.css",
     "chartist/dist/index.css": "https://ga.jspm.io/npm:chartist@2.2.1/dist/index.css"
   }</code></pre>
 

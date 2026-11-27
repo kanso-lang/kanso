@@ -21,7 +21,7 @@ description: "how senro's generators write an app and a resource, and what each 
 
 <h2>running them</h2>
 
-<p>the generators are run with <code>senro</code>, senro's command, which sits in the <code>bin</code> directory of senro's repository. with that directory on your PATH, <code>senro new</code> writes an app where you are, and every other command runs from inside the app. the files it writes import senro by the path from the app to senro's own directory, so an app beside a copy of senro imports <code>../senro/models</code>; the notebook, two directories down in senro's own repository, imports <code>../../models</code>. the <a href="command-line.html">command line guide</a> covers the rest of the command.</p>
+<p>the generators are run with <code>senro</code>, senro's command, which sits in the <code>bin</code> directory of senro's repository. with that directory on your PATH, <code>senro new</code> writes an app where you are, and every other command runs from inside the app. an app made anywhere but inside senro's own repository imports senro by its name, <code>kanso-lang/senro/models</code>, and <code>kanso install</code> fetches the release it pins; the notebook, two directories down in senro's repository, imports <code>../../models</code>. the <a href="command-line.html">command line guide</a> covers the rest of the command.</p>
 
 <div class="code-output">
   <div class="code-panel-title">shell</div>
@@ -32,6 +32,13 @@ description: "how senro's generators write an app and a resource, and what each 
   create notebook/migrations/.keep
   create notebook/views/layout.kata
   create notebook/views/home.kata
+  create notebook/.gitignore
+  create notebook/package.json
+  create notebook/javascript/application.js
+  create notebook/stylesheets/application.css
+  create notebook/stylesheets/theme.css
+  run  kanso install notebook
+  run  cd notebook &amp;&amp; npm install &amp;&amp; senro js install
 $ cd notebook
 $ senro generate scaffold note title:text pages:int cover:attachment
   create ./note.kso
@@ -54,6 +61,8 @@ $ senro generate scaffold page body:text note:references
   create ./migrations/20261111180513_create_pages.kso
   change ./main.kso</code></pre>
 </div>
+
+<p>a new app is styled before anyone styles it. its layout and every view a generator writes use Bootstrap 5.3's markup: a navbar with the app's name and a container, a list group for an index, <code>form-control</code> and <code>btn</code> on a form. <code>stylesheets/application.css</code> imports Bootstrap and two typefaces, Inter and Space Grotesk, from the packages <code>package.json</code> names, and <code>stylesheets/theme.css</code> sets Bootstrap's variables to the palette of this site, with a dark half that follows the system. <code>npm install</code> and <code>senro js install</code> vendor the packages, the fonts among them, as the <a href="javascript.html">JavaScript guide</a> describes. the theme is the app's own file to change.</p>
 
 <p>each line names a file and what happened to it. <code>scaffold</code> writes its migration as a file of its own, a spec of the resource beside its module, and the resource's map in <code>given.kso</code>, which the specs make rows from; the <a href="testing.html">testing guide</a> covers both. it changes one file that <code>new</code> wrote, the entry, which gains the resource's import. it writes nothing over a file that is there already, and it stops before writing anything at all when a field is not one it can read.</p>
 
