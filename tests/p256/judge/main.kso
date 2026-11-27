@@ -1,0 +1,8 @@
+import "./cases"
+import "std/os"
+import "std/text"
+
+# Prints a verdict for each case in the file os/args names (cases.kso).
+os/args
+  .> (a -> os/read_file (cases/first_arg a))
+  .> (t -> cases/judged (text/split t "\n") 1)

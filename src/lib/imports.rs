@@ -50,6 +50,7 @@ fn embedded_module(path: &str) -> Option<Embedded> {
         "std/sha256" => {
             Some(("sha256", &[("sha256.kso", include_str!("../../lib/sha256/sha256.kso"))]))
         }
+        "std/p256" => Some(("p256", &[("p256.kso", include_str!("../../lib/p256/p256.kso"))])),
         "std/base64" => {
             Some(("base64", &[("base64.kso", include_str!("../../lib/base64/base64.kso"))]))
         }

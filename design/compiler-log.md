@@ -20,27 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — the third sweep reads its gates, and the browser gate joins it
-
-#2447, its fourth item. `all_interp.sh` listed its four gates by hand, and
-`tests/every_golden_is_swept_by_something.rs` existed partly to keep that
-list honest against what CI runs. The sweep now reads its gates from
-`scripts/gates` the way `all_compile.sh` does: a script that names a
-golden under `bench/` and that neither other sweep runs is its own.
-`--list` prints them, and the test asks the sweep.
-
-Deriving the list found a fifth. CI runs `browser_cost.sh` against
-`bench/browser_golden.txt`, and no sweep ran it. The test should have
-said so. It decides whether a gate reads a golden by scanning the script
-for a file name, and the only place that script names its golden is a
-comment that ends the sentence there, so the scan read
-`browser_golden.txt.` and took the full stop for part of the name. With
-the stop trimmed the test fails and names `browser_cost`; with the
-derived list it passes.
-
-The interpreter sweep is slower by a wasm build and the browser test. No
-counter moved.
-
 ## 2026-11-11 — two limits live where they are enforced
 
 #2448, from the weekly sweep. Not a compiler change.
@@ -1311,3 +1290,35 @@ The new branch moves two rows, as CI measured: entry_instructions
 the new code; the compile and library rows stand. A senro app
 installed as a hako could not compile without this, so the floor is lowered
 by that cost under #2280, as it was for kanso#2511.
+
+## 2026-11-27 — std/p256 verifies ES256 signatures
+
+kanso#2515 rules passkeys in, with the password as the fallback, and a
+server that accepts a passkey checks an ECDSA signature over P-256 with
+SHA-256 (ES256). kanso had SHA-256 and nothing for elliptic curves.
+`std/p256` adds `verified? x y message signature`: the key's two
+32-byte coordinates, the message and a DER signature, all byte lists.
+
+The module is kanso over `std/bits`: ten 26-bit limbs per number,
+Montgomery multiplication modulo p and modulo n with constants computed
+from the curve's published values, Jacobian points, Shamir's trick for
+u1 G + u2 Q, and an x comparison against r Z^2 that needs no inversion.
+It refuses a key off the curve, a coordinate of 32 bytes that is not
+below p, non-strict DER, and r or s outside 1..n-1.
+
+Harness first, as the verification rules ask. tests/p256/cases.py draws
+keys, messages and tamperings and has OpenSSL (Python's `cryptography`)
+judge each. 52,000 cases, seeds 2, 11 and 12, agreed in every verdict:
+22,228 accepted, 29,772 refused. The first 200, at seed 1, disagreed on
+13, all a coordinate written as x + p: OpenSSL reduces it and accepts the
+key, SEC 1 2.3.4 says a coordinate is a field element below p, so the
+script now refuses those as the library does. tests/p256_agrees_with_openssl.rs
+runs a committed 240-case corpus with OpenSSL's verdicts natively and its
+first twelve on the interpreter. Watched red by comparing the point's y
+with r: every case read 0. lib/p256/p256_test.kso holds RFC 6979 A.2.5's
+two signatures, each checked against OpenSSL before it was written, and
+watched red the same way (three of ten failed).
+
+Measured in this container, not CI: about 13 ms a verification at the
+release tier, 34 ms at the development tier, 1.4 s on the interpreter.
+

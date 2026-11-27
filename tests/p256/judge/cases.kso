@@ -1,0 +1,33 @@
+import "std/io"
+import "std/list"
+import "std/p256"
+import "std/text"
+
+# One case to a line: the key's x and y, the message and the DER signature,
+# each in hex, space-separated. Each is answered 1 when p256 accepts the
+# signature and 0 when it refuses it.
+pub fn first_arg a
+  return "" if length a < 1
+  a[1]
+
+pub fn judged lines at
+  return effect "" if at < 1 or at > length lines
+  line = lines[at]
+  return judged lines (at + 1) if line == ""
+  io/write "{verdict (text/split line " ")}\n" .> (_ -> judged lines (at + 1))
+
+fn verdict fields
+  return 0 if length fields != 4
+  b = list/to_list (list/map fields bytes_of)
+  return 0 if length b != 4
+  if (p256/verified? b[1] b[2] b[3] b[4]) 1 0
+
+fn bytes_of h
+  hex_from (text/bytes h) 1 []
+
+fn hex_from cs at acc
+  return acc if at < 1 or at + 1 > length cs
+  hex_from cs (at + 2) (push acc (hexit cs[at] * 16 + hexit cs[at + 1]))
+
+fn hexit c
+  if (c < 58) (c - 48) (c - 87)
