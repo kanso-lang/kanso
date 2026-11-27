@@ -90,7 +90,7 @@ body_limit <span class="o">=</span> 10485760
 
 <h2>the form an action sees</h2>
 
-<p>a body that is not multipart is decoded as UTF-8, and one that is not UTF-8 is answered 400. a multipart body is cut along its boundary into parts. a part with no filename is a text field, and its value is its text. a part with a filename is a file: senro writes it to disk and the field's value becomes the key it was written under. a file input left empty sends a part with an empty filename, and its value is "".</p>
+<p>a body that is not multipart is decoded as UTF-8, and one that is not UTF-8 is answered 400. a multipart body is cut along its boundary into parts. a part with no filename is a text field, and its value is its text. a part with a filename is a file: senro writes it to disk, or to a bucket as described below, and the field's value becomes the key it was written under. a file input left empty sends a part with an empty filename, and its value is "".</p>
 
 <div class="code-panel">
   <div class="code-panel-title">web/uploads.kso</div>
@@ -106,14 +106,13 @@ body_limit <span class="o">=</span> 10485760
     <span class="o">.&gt;</span> (key <span class="o">-&gt;</span> effect [(field_name p.name) key])
 
 <span class="k">fn</span> <span class="f">written</span> key p filename
-  storage_dir
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/make_dir</span> dir <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect dir))
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}"</span> p.content <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect dir))
-    <span class="o">.&gt;</span> (dir <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}.meta"</span> <span class="s">"{p.kind}\n{filename}"</span>)
-    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect key)
+  storage <span class="o">.&gt;</span> (place <span class="o">-&gt;</span> written_in place key p filename)
 
-<span class="c"># Where files are kept: SENRO_STORAGE, or storage/ beside the app.</span>
-storage_dir <span class="o">=</span> <span class="f">os/env</span> <span class="s">"SENRO_STORAGE"</span> <span class="o">.&gt;</span> (d <span class="o">-&gt;</span> effect (dir_or d))</code></pre>
+<span class="k">fn</span> <span class="f">written_in</span> dir:string key p filename
+  <span class="f">os/make_dir</span> dir
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}"</span> p.content)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/write_file</span> <span class="s">"{dir}/{key}.meta"</span> <span class="s">"{p.kind}\n{filename}"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> effect key)</code></pre>
 </div>
 
 <p>the fields are then written out the way a browser writes an ordinary form, <code>title=a%20cat&amp;photo=4f1c…</code>, so an action reads them with <code>web/form</code> and <code>web/value</code> as it reads any other. it stores the key in a column the way it stores a title.</p>
@@ -213,7 +212,28 @@ asked to continue: HTTP/1.1 100 Continue, then HTTP/1.1 200 OK</code></pre>
 
 <p>both engines print the same lines. the photo and the song come back byte for byte and inline, and the HTML page comes back as a download under its own name. the 206 and 416 lines have no reason phrase after the code, which HTTP allows; kanso's HTTP library names both codes from kanso#2511 on.</p>
 
+<h2>keeping files in a bucket</h2>
+
+<p>an app on more than one machine, or one that serves a lot of audio, keeps its files in an S3-compatible store instead of on the disk. Cloudflare R2 charges nothing for what it sends, which suits files that are played over and over. <code>SENRO_STORAGE</code> names the bucket, and four more variables say where it is and the key to ask with:</p>
+
+<pre><code>SENRO_STORAGE=s3://tunes
+SENRO_S3_ENDPOINT=https://&lt;account&gt;.r2.cloudflarestorage.com
+SENRO_S3_REGION=auto
+AWS_ACCESS_KEY_ID=…
+AWS_SECRET_ACCESS_KEY=…</code></pre>
+
+<p><code>SENRO_S3_REGION</code> may be left out, and is then <code>auto</code>, as R2 takes it. an upload is a PUT to a presigned URL, a URL that lets its holder make one request on one object until it expires. the PUT carries the content type and the disposition chosen above, and the store answers every download with them, so a song still plays in the page and an HTML file is still a download. <code>/senro/blobs/&lt;key&gt;</code> answers with a redirect to a URL that reads the file for five minutes. the store sends the bytes and answers a <code>Range</code> itself, so the app's server never carries the sound.</p>
+
+<p>the URLs are signed by senro's <code>objects</code> module with AWS's Signature Version 4. <code>spec/runs/presigned</code> pins the example AWS publishes, whose signature begins <code>aeeed9bb</code>, and the module agreed with botocore, AWS's own signer, on 220,000 random keys and times. <code>spec/buckets/kept</code> runs the upload and the download against moto's S3 server on both engines:</p>
+
+<div class="code-output">
+  <div class="code-panel-title">spec/buckets/kept.out</div>
+  <pre><code>notes: redirected to the store: true; HTTP/1.1 200 OK, content-type: application/octet-stream, content-disposition: attachment; filename="x.html", bytes: true
+song: redirected to the store: true; HTTP/1.1 200 OK, content-type: audio/mpeg, content-disposition: inline, bytes: true
+song, bytes=0-3: redirected to the store: true; HTTP/1.1 206 PARTIAL CONTENT, content-type: audio/mpeg, content-disposition: inline, content-range: bytes 0-3/12, bytes: true</code></pre>
+</div>
+
 <h2>limits</h2>
 
-<p>files are kept on the server's disk only, and an app on more than one machine needs them somewhere shared. the boundary search is written in kanso: about 0.1 seconds a megabyte natively and about a second interpreted, which the 10 MiB limit keeps bounded.</p>
+<p>the boundary search is written in kanso: about 0.1 seconds a megabyte natively and about a second interpreted, which the 10 MiB limit keeps bounded.</p>
 </article>

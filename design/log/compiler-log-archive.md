@@ -117070,3 +117070,36 @@ files named by a stamp, still folded into the schema by the build;
 generators for the parts and from outside senro; confirmation, lockout
 and tracking moved from the guestbook into the framework; and one check
 at the page that covers the providers the page calls.
+
+## 2026-11-11 — a derivation is told which file declares a name
+
+The first thing #2455 needs from the language. senro's migrations are to
+be files that run in the order of their names. A derivation folds them
+into the schema while the app compiles, and a derivation could not see a
+file's name: a module's kanso files share one namespace, the description
+handed over a module's constants with no file, and it left the module's
+kanso files out of `files`.
+
+The committee's reading: a convention that places code by its file's
+name is the same kind of convention as one that places it by its
+function's name, and the description already carries the second. So a
+module's description gains `sources`, a map from each pub function's and
+pub constant's name to the name of the file that declares it. The first
+arm's file answers for a function of several. Nothing else changes, and
+a derivation still only computes: the map is read off declarations the
+compiler has already loaded.
+
+**Spec.** `tests/golden/derive/a_derivation_reads_the_file_a_declaration_is_in`
+keeps two constants in two files whose names sort the other way from the
+constants' names, and a convention answers the names in the order of
+their files: `["zebra" "apple"]`, on both engines. The ratchet row is
+`declared_in`. Watched fail with every file's name left blank: the
+convention falls back on the names and answers `["apple" "zebra"]`.
+
+**Rows.** Three compile rows move with the binary's layout, each down:
+`compile_instructions` 22,652,656 -> 22,652,542, `entry_instructions`
+119,194,010 -> 119,166,280 and `library_instructions` 63,634,723 ->
+63,634,563. None of the three corpora has a `derive` that reads the new
+field. The interpreter's and the browser's rows did not move.
+
+**Welfare.** 95.39228290 -> 95.39230414, banked.
