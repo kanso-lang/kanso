@@ -117103,3 +117103,54 @@ convention falls back on the names and answers `["apple" "zebra"]`.
 field. The interpreter's and the browser's rows did not move.
 
 **Welfare.** 95.39228290 -> 95.39230414, banked.
+
+## 2026-11-11 — the sanitizer sweep is a job
+
+#2449, from the weekly sweep: `scripts/asan/sweep.sh` was named by no job,
+script or test. It builds every program in the memory corpus and every
+benchmark against a runtime compiled with AddressSanitizer and runs them.
+The entry that added it (2026-09-22, in the archive) left it to be run by
+hand.
+
+Run by hand today, on clang 19, its own `--prove` failed: a read after
+free put there on purpose went unreported. The compiler emits closures on
+`preserve_none` when clang takes the convention, and builds its runtime
+with `-DKANSO_PRESERVE_NONE` to match. The sweep built its runtime without
+the flag, so a closure read its arguments from the wrong registers and the
+fixture stopped with a run-time error of its own before it freed anything.
+The sweep looked only for a sanitizer report, so a program that stops
+that way read CLEAN.
+
+Four changes to the script:
+
+- The runtime is built on the convention the program's IR uses, read off
+  the IR. Clang will not compile a `preserve_none` function with the
+  sanitizer's fake stack, so that build turns use-after-return detection
+  off and keeps the heap checks.
+- A program has to finish. A fixture's output is compared with its
+  `.stdout` golden, under the seed `tests/golden.rs` pins, and a benchmark
+  has to exit zero. Either failing is `DIED` and fails the sweep.
+- Benchmark directories are copied with their links followed. `runbench`
+  links to the other benchmarks' files and was skipped as unbuildable.
+- It lifts the 6 GiB data limit for itself. A sanitized binary reserves
+  its shadow as private mappings, which that limit counts, and under it
+  no sanitized program starts.
+
+It is a job in `ci.yml` now, on clang 19 with `libclang-rt-19-dev`. The
+ratchet row is `freed_read`: one byte read from a tenure block after
+`k_ten_release` frees it. No golden sees that. The sweep reports it in
+eight fixtures. The row replaces `--prove`, which made the same patch on a
+copy of the runtime.
+
+On this tree the sweep reads 163 programs clean and none reported. Ten are
+skipped by name: the `work_ahead_*` fixtures hold definitions beside bare
+statements, which `kanso play` runs and `kanso build` refuses, and the
+sweep links what `build` emits. The guarded sixteen-byte tail read in
+`k_b_find2_raw`, which `runbench` and `scanbench` reported in September,
+was reported by no program. Why is not established.
+
+The sweep cannot see a read that strays from one value into its neighbour
+inside an arena block, because the whole block is live memory to the
+sanitizer.
+
+No counter moved.

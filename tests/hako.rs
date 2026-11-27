@@ -689,3 +689,56 @@ fn a_module_an_installed_hako_lacks_is_named() {
     );
     assert_eq!(run.status.code(), Some(2));
 }
+
+/// A derivation in a hako writes its arm's imports from its own module, and
+/// the arm joins a module of the app. An import that reaches back into the
+/// hako is written in the arm as the app would write it, by the hako's name,
+/// rather than as a path from the app into the cache: that path runs past
+/// eighty columns once the cache is anywhere but next door, and the arm is
+/// then refused for a line kanso wrote itself.
+#[test]
+fn a_derived_import_into_a_hako_names_the_hako() {
+    let root = std::env::temp_dir().join("kanso-a-derived-import-names-its-hako");
+    let _ = std::fs::remove_dir_all(&root);
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let cache = root.join("a-cache-far-enough-from-the-app-that-a-path-into-it-is-long");
+    let kits = cache.join(format!("acme/kits@{sha}"));
+    let app = root.join("app");
+    for dir in [kits.join("conv"), kits.join("words"), app.clone()] {
+        std::fs::create_dir_all(&dir).expect("a directory of the fixture");
+    }
+    let write = |path: PathBuf, text: &str| std::fs::write(path, text).expect("a fixture file");
+    write(
+        kits.join("conv/conv.kso"),
+        "import \"../words\"\nimport \"std/derive\"\n\n\
+         # Writes an arm into `m` that reads `words`, by a path from here.\n\
+         pub fn written _\n  \
+         arm = \"pub fn hi x\\n  \\\"\\{words/word} \\{x}\\\"\\n\"\n  \
+         [(derive/define \"m\" \"import \\\"../words\\\"\\n\\n{arm}\")]\n\n\
+         pub fn unused _\n  words/word\n",
+    );
+    write(kits.join("words/words.kso"), "pub word = \"hello\"\n");
+    write(app.join("hako.lock"), &format!("acme/kits v0.1.0 {sha} git\n"));
+    write(app.join("m.kso"), "pub fn named x\n  \"{x}\"\n");
+    write(
+        app.join("main.kso"),
+        "import \"./m\"\nimport \"acme/kits/conv\"\n\nderive conv/written\n\n\
+         print (m/hi \"there\")\nprint (m/named 1)\n",
+    );
+    let kanso = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .args(args)
+            .env("KANSO_HAKO", &cache)
+            .current_dir(&app)
+            .output()
+            .expect("kanso runs")
+    };
+
+    let run = kanso(&["run", "."]);
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout),
+        "hello there\n1\n",
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+}
