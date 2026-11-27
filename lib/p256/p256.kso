@@ -1,0 +1,385 @@
+import "std/bits"
+import "std/sha256"
+import "std/text"
+
+# ECDSA signatures on the NIST curve P-256 with SHA-256, which WebAuthn
+# calls ES256: whether a public key signed a message. Verifying is all a
+# server does with a passkey, so nothing here signs or makes keys.
+#
+# A number is ten limbs of twenty-six bits, least significant first, so a
+# limb's product with another and a sum of those stay inside the sixty-four
+# bits a kanso integer holds, which does not wrap. Arithmetic modulo the
+# field's prime and modulo the curve's order is Montgomery's, with R = 2^260;
+# each modulus carries what that needs, computed once from the curve's
+# published constants (SEC 2, section 2.4.2). Points are Jacobian, (X, Y, Z)
+# for the affine (X/Z^2, Y/Z^3), with Z zero at infinity.
+type modulus
+  m
+  inv
+  r2
+
+type point
+  x
+  y
+  z
+
+type pair
+  r
+  s
+
+radix = 26
+
+mask = 67108863
+
+size = 10
+
+zero = [0 0 0 0 0 0 0 0 0 0]
+
+unit = [1 0 0 0 0 0 0 0 0 0]
+
+prime_hex = "ffffffff00000001000000000000000000000000ffffffffffffffffffffffff"
+
+order_hex = "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+
+b_hex = "5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b"
+
+gx_hex = "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296"
+
+gy_hex = "4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5"
+
+p = modulus_of (limbs_of (hex_bytes prime_hex))
+
+n = modulus_of (limbs_of (hex_bytes order_hex))
+
+curve_b = into p (limbs_of (hex_bytes b_hex))
+
+three = into p [3 0 0 0 0 0 0 0 0 0]
+
+generator = affine (limbs_of (hex_bytes gx_hex)) (limbs_of (hex_bytes gy_hex))
+
+infinity = point zero zero zero
+
+# Whether `signature`, DER-encoded as WebAuthn and X.509 carry it, is the
+# signature of the public key (`x`, `y`) over `message`. The key's two
+# coordinates are thirty-two bytes each, as a COSE key holds them, and
+# every argument is a list of bytes. A key that is not on the curve, a
+# signature that is not strict DER, and r or s outside 1 to n - 1 are all
+# answered false.
+pub fn verified? x y message signature
+  verified_parts? x y message (parts_of signature)
+
+fn verified_parts? _ _ _ none
+  false
+
+fn verified_parts? x y message sig
+  return false if length x != 32 or length y != 32
+  qx = limbs_of x
+  qy = limbs_of y
+  return false if not (below? qx p.m and below? qy p.m)
+  q = affine qx qy
+  return false if not on_curve? q
+  e = limbs_of (sha256/digest message)
+  checked? q e (limbs_of sig.r) (limbs_of sig.s)
+
+# FIPS 186-5, 6.4.2: w = s^-1 mod n, u1 = e w, u2 = r w, and the signature
+# holds when the x of u1 G + u2 Q, taken mod n, is r.
+fn checked? q e r s
+  return false if not (in_range? r and in_range? s)
+  w = power n (into n s) (minus n.m [2 0 0 0 0 0 0 0 0 0])
+  u1 = out_of n (mul n (into n (reduced n e)) w)
+  u2 = out_of n (mul n (into n r) w)
+  sum = twice_sum generator q u1 u2
+  return false if zero? sum.z
+  matches_x? sum r
+
+fn in_range? v
+  not zero? v and below? v n.m
+
+# The x of a Jacobian point is X/Z^2, so it is r, or r + n when that is
+# still below p, exactly when X is that times Z^2. Checking it that way
+# needs no inversion.
+fn matches_x? pt r
+  zz = mul p pt.z pt.z
+  return true if mul p (into p r) zz == pt.x
+  wrapped = plus r n.m
+  below? wrapped p.m and mul p (into p wrapped) zz == pt.x
+
+fn on_curve? q
+  xx = mul p q.x q.x
+  right = add p (sub p (mul p xx q.x) (mul p three q.x)) curve_b
+  mul p q.y q.y == right
+
+fn affine x y
+  point (into p x) (into p y) (into p unit)
+
+# u1 G + u2 Q in one pass over the bits, Shamir's trick: double, then add G,
+# Q or their sum as the two bits at this place say.
+fn twice_sum g q u1 u2
+  both = added g q
+  laddered g q both u1 u2 (size * radix - 1) infinity
+
+fn laddered g q both u1 u2 at acc
+  return acc if at < 0
+  doubled_acc = doubled acc
+  a = bit u1 at
+  b = bit u2 at
+  next = stepped_by g q both a b doubled_acc
+  laddered g q both u1 u2 (at - 1) next
+
+fn stepped_by _ _ _ 0 0 acc
+  acc
+
+fn stepped_by g _ _ 1 0 acc
+  added acc g
+
+fn stepped_by _ q _ 0 1 acc
+  added acc q
+
+fn stepped_by _ _ both _ _ acc
+  added acc both
+
+fn bit v at
+  i = at / radix + 1
+  return 0 if i < 1 or i > length v
+  bits/shr v[i] (at - at / radix * radix) & 1
+
+# dbl-2001-b from the Explicit-Formulas Database, for a = -3.
+fn doubled pt
+  return pt if zero? pt.z
+  delta = mul p pt.z pt.z
+  gamma = mul p pt.y pt.y
+  beta = mul p pt.x gamma
+  alpha = mul p three (mul p (sub p pt.x delta) (add p pt.x delta))
+  four_beta = add p (add p beta beta) (add p beta beta)
+  x3 = sub p (mul p alpha alpha) (add p four_beta four_beta)
+  yz = add p pt.y pt.z
+  z3 = sub p (sub p (mul p yz yz) gamma) delta
+  gg = mul p gamma gamma
+  eight_gg = doubled_value (doubled_value (doubled_value gg))
+  y3 = sub p (mul p alpha (sub p four_beta x3)) eight_gg
+  point x3 y3 z3
+
+fn doubled_value v
+  add p v v
+
+# add-2007-bl, with the cases it leaves out: either point at infinity, the
+# two the same (a doubling) and the two each other's negation (infinity).
+fn added a b
+  return b if zero? a.z
+  return a if zero? b.z
+  z1z1 = mul p a.z a.z
+  z2z2 = mul p b.z b.z
+  u1 = mul p a.x z2z2
+  u2 = mul p b.x z1z1
+  s1 = mul p (mul p a.y b.z) z2z2
+  s2 = mul p (mul p b.y a.z) z1z1
+  h = sub p u2 u1
+  r = doubled_value (sub p s2 s1)
+  return joined a b z1z1 z2z2 u1 s1 h r if not zero? h
+  return doubled a if zero? r
+  infinity
+
+fn joined a b z1z1 z2z2 u1 s1 h r
+  twice_h = doubled_value h
+  i = mul p twice_h twice_h
+  j = mul p h i
+  v = mul p u1 i
+  x3 = sub p (sub p (mul p r r) j) (doubled_value v)
+  y3 = sub p (mul p r (sub p v x3)) (doubled_value (mul p s1 j))
+  zs = add p a.z b.z
+  z3 = mul p (sub p (sub p (mul p zs zs) z1z1) z2z2) h
+  point x3 y3 z3
+
+# A modulus with what Montgomery multiplication needs: -m^-1 mod 2^26 by
+# Newton's iteration, each step doubling the bits that are right, and
+# R^2 mod m by doubling 1 five hundred and twenty times.
+fn modulus_of m
+  modulus m (negated_inverse (lowest_limb m)) (doubled_times m unit 520)
+
+fn lowest_limb m
+  return 0 if length m < 1
+  m[1]
+
+fn negated_inverse m0
+  inv = newton m0 1 5
+  67108864 - inv & mask
+
+fn newton _ inv 0
+  inv
+
+fn newton m0 inv steps
+  t = m0 * inv & mask
+  newton m0 (inv * (67108866 - t & mask) & mask) (steps - 1)
+
+fn doubled_times _ v 0
+  v
+
+fn doubled_times m v times
+  doubled_times m (reduced_by m (plus v v)) (times - 1)
+
+fn into f v
+  mul f v f.r2
+
+fn out_of f v
+  mul f v unit
+
+# x^e in Montgomery form, by squaring and multiplying from the top bit.
+fn power f x e
+  powered f x e (size * radix - 1) (into f unit)
+
+fn powered f x e at acc
+  return acc if at < 0
+  squared = mul f acc acc
+  next = if (bit e at == 1) (mul f squared x) squared
+  powered f x e (at - 1) next
+
+fn add f a b
+  reduced f (plus a b)
+
+fn sub f a b
+  return minus a b if not below? a b
+  minus (plus a f.m) b
+
+fn reduced f v
+  reduced_by f.m v
+
+fn reduced_by m v
+  return v if below? v m
+  minus v m
+
+# Montgomery multiplication, CIOS: ten rounds, each adding a limb of `a`
+# times `b` and the multiple of m that clears the lowest limb, then
+# shifting a limb down. The result is below 2m, so one subtraction ends it.
+fn mul f a b
+  reduced f (rounds f a b 1 [0 0 0 0 0 0 0 0 0 0 0])
+
+fn rounds f a b i t
+  return lowest t if i < 1 or i > length a or length b < 1 or length t < 1
+  ai = a[i]
+  u = (t[1] + ai * b[1] & mask) * f.inv & mask
+  rounds f a b (i + 1) (round f.m ai b u t 1 0 [])
+
+fn round m ai b u t j carry acc
+  return topped t carry acc if j > size
+  return acc if j < 1 or j > length t or j > length b or j > length m
+  s = t[j] + ai * b[j] + u * m[j] + carry
+  kept = if (j == 1) acc (push acc (s & mask))
+  round m ai b u t (j + 1) (bits/shr s radix) kept
+
+fn topped t carry acc
+  return acc if length t < 1
+  s = t[length t] + carry
+  push (push acc (s & mask)) (bits/shr s radix)
+
+fn lowest t
+  limbs_upto t 1 []
+
+fn limbs_upto t at acc
+  return acc if at > size or at < 1 or at > length t
+  limbs_upto t (at + 1) (push acc t[at])
+
+fn plus a b
+  summed a b 1 0 []
+
+fn summed a b at carry acc
+  return acc if at < 1 or at > length a or at > length b
+  v = a[at] + b[at] + carry
+  summed a b (at + 1) (bits/shr v radix) (push acc (v & mask))
+
+# a - b, for a no smaller than b.
+fn minus a b
+  subtracted a b 1 0 []
+
+fn subtracted a b at borrow acc
+  return acc if at < 1 or at > length a or at > length b
+  v = a[at] - b[at] - borrow
+  return subtracted a b (at + 1) 1 (push acc (v + 67108864)) if v < 0
+  subtracted a b (at + 1) 0 (push acc v)
+
+fn below? a b
+  under? a b size
+
+fn under? a b at
+  return false if at < 1 or at > length a or at > length b
+  return true if a[at] < b[at]
+  return false if a[at] > b[at]
+  under? a b (at - 1)
+
+fn zero? v
+  v == zero
+
+# Big-endian bytes, at most thirty-two of them, as limbs.
+fn limbs_of bytes
+  limbs_from bytes 1 zero
+
+fn limbs_from bytes at acc
+  return acc if at < 1 or at > length bytes
+  limbs_from bytes (at + 1) (shifted_in acc bytes[at] 1 [])
+
+fn shifted_in v carry at acc
+  return acc if at < 1 or at > length v
+  s = v[at] * 256 + carry
+  shifted_in v (bits/shr s radix) (at + 1) (push acc (s & mask))
+
+# The curve's constants are written as their standard spells them, in hex.
+fn hex_bytes h
+  hex_from (text/bytes h) 1 []
+
+fn hex_from cs at acc
+  return acc if at < 1 or at + 1 > length cs
+  hex_from cs (at + 2) (push acc (hexit cs[at] * 16 + hexit cs[at + 1]))
+
+fn hexit c
+  if (c < 58) (c - 48) (c - 87)
+
+# r and s from a DER signature, SEQUENCE { INTEGER r, INTEGER s }, each as
+# big-endian bytes, or none when the encoding is not strict DER: a length
+# that is not the one the bytes have, an integer that is negative or not in
+# its shortest form, or anything after the sequence. A signature of P-256
+# is at most seventy-two bytes, so every length takes one byte.
+fn parts_of sig
+  return none if byte_at sig 1 != 48 or byte_at sig 2 != length sig - 2
+  with_r sig (integer_at sig 3)
+
+fn with_r _ none
+  none
+
+fn with_r sig r
+  with_s sig r (integer_at sig (5 + length r))
+
+fn with_s _ _ none
+  none
+
+fn with_s sig r s
+  return none if 6 + length r + length s != length sig
+  read = pair (unpadded r) (unpadded s)
+  return none if length read.r > 32 or length read.s > 32
+  read
+
+# The INTEGER whose tag is at `at`, its content bytes as they stand.
+fn integer_at sig at
+  return none if byte_at sig at != 2
+  count = byte_at sig (at + 1)
+  return none if count < 1 or count > 33 or at + 1 + count > length sig
+  content = taken sig (at + 2) count []
+  lead = byte_at content 1
+  return none if lead > 127
+  return none if count > 1 and lead == 0 and byte_at content 2 < 128
+  content
+
+# An integer's bytes without the zero DER puts before a high bit. One that
+# still has thirty-three is above the order, and `parts_of` refuses it
+# before it could overflow the limbs.
+fn unpadded bytes
+  return bytes if byte_at bytes 1 != 0 or length bytes == 1
+  taken bytes 2 (length bytes - 1) []
+
+# The byte at `at`, or -1 past either end, which no test above takes for a
+# byte.
+fn byte_at xs at
+  return -1 if at < 1 or at > length xs
+  xs[at]
+
+fn taken xs at count acc
+  return acc if count == 0 or at < 1 or at > length xs
+  taken xs (at + 1) (count - 1) (push acc xs[at])

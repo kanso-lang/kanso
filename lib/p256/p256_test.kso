@@ -1,0 +1,84 @@
+# RFC 6979's two P-256 signatures with SHA-256 (appendix A.2.5), over
+# "sample" and "test" with the key it gives, and the ways a signature or a
+# key may be refused. Each vector was checked against OpenSSL before it was
+# written here; scripts/p256_differential runs the module against OpenSSL
+# on random keys, messages and tamperings.
+import "std/text"
+
+ux = "60fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb6"
+
+uy = "7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299"
+
+sample_r = "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716"
+
+sample_s = "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8"
+
+# n - sample_s, the other s that signs the same message: ECDSA accepts both.
+sample_high = "0834e36ad29a83bf2bc9385e491d6099c8fdf9d1ed67aa7ea5f51f93782857a9"
+
+second_r = "f1abb023518351cd71d881567b1ea663ed3efcf6c5132b354f28d3b0b7d38367"
+
+second_s = "019f4113742a2b14bd25926b49c649155f267e60d3814b4c0cc84250e46f0083"
+
+order = "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+
+fn bytes_of h
+  hex_from (text/bytes h) 1 []
+
+fn hex_from cs at acc
+  return acc if at < 1 or at + 1 > length cs
+  hex_from cs (at + 2) (push acc (hexit cs[at] * 16 + hexit cs[at + 1]))
+
+fn hexit c
+  if (c < 58) (c - 48) (c - 87)
+
+# A DER INTEGER for a positive number written in hex, with the zero byte a
+# high bit asks for.
+fn integer h
+  b = bytes_of h
+  padded = if (b[1] > 127) (list_concat [0] b) b
+  list_concat [2 (length padded)] padded
+
+fn list_concat a b
+  return a if length b == 0
+  joined a b 1
+
+fn joined a b at
+  return a if at < 1 or at > length b
+  joined (push a b[at]) b (at + 1)
+
+fn der r s
+  body = list_concat (integer r) (integer s)
+  list_concat [48 (length body)] body
+
+fn signed? message r s
+  under? uy message (der r s)
+
+fn under? y message sig
+  verified? (bytes_of ux) (bytes_of y) (text/bytes message) sig
+
+test_sample = signed? "sample" sample_r sample_s
+
+test_test = signed? "test" second_r second_s
+
+test_the_other_s = signed? "sample" sample_r sample_high
+
+test_another_message = not signed? "sample" second_r second_s
+
+test_swapped = not signed? "sample" sample_s sample_r
+
+test_r_zero = not signed? "sample" "00" sample_s
+
+test_s_the_order = not signed? "sample" sample_r order
+
+# A key whose y is one more is not on the curve.
+off_curve = "7903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d446229a"
+
+test_off_the_curve = not under? off_curve "sample" (der sample_r sample_s)
+
+# Strict DER: a byte after the sequence, and a zero no high bit asked for.
+trailing = push (der sample_r sample_s) 0
+
+test_trailing_byte = not under? uy "sample" trailing
+
+test_needless_zero = not signed? "test" second_r "00{second_s}"

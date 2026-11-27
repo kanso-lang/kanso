@@ -117175,3 +117175,43 @@ derived list it passes.
 
 The interpreter sweep is slower by a wasm build and the browser test. No
 counter moved.
+
+## 2026-11-11 — two limits live where they are enforced
+
+#2448, from the weekly sweep. Not a compiler change.
+
+The live log's limit was written in `scripts/archive_log.sh`, three
+times in its test, in the test's file name and in CLAUDE.md. It is now
+the script's `keep=` line and nowhere else:
+`tests/the_live_log_holds_what_the_script_keeps.rs` reads the number
+from the script, builds its scratch log two entries past it, and
+CLAUDE.md names the script. Watched fail with `keep=41`: the test says
+the log holds 40 and the script keeps 41. The page-drift budget is
+`budget` in `scripts/page_drift/page_drift.kso`; CLAUDE.md and the
+compiler page name it without the number.
+
+Three stories were told twice, in a sweep's header and again in its
+test's doc comment: the span that cost a round on kanso#1328, the
+interpreted row no sweep read on 2026-09-18, and the library change of
+2026-09-05. Each stays in the script, and the test points at it. The
+trend gate's excuse for the one golden without counters is said in the
+gate, and its test no longer repeats it.
+
+The link's staged directory was said to hold "five libraries" in two
+scripts, a test and the page. The list is the loop in
+`scripts/gates/codegen_box.sh`, and the other three now say "the
+libraries the link resolves". One copy is left as it is: the compiler
+page gives the two greps that count rulings as part of a dated story,
+with the counts they returned that day, and CLAUDE.md holds them as the
+rule.
+
+The chart's palette had a second copy too (#2447, its first item):
+`tests/the_chart_palette_is_the_one_that_was_measured.rs` held all the
+colours of `docs/numbers.html` and asserted the page equalled them. The
+chart draws one panel to a counter, so colour tells no two lines apart.
+The copy is gone, and `tests/a_chart_line_wears_a_token_both_modes_declare.rs`
+checks the page against itself: both modes declare the same tokens, and
+every line wears a declared token and no hex. Watched fail with a token
+taken out of the dark block and with one line given a hex.
+
+No counter moved.

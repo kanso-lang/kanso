@@ -46,7 +46,7 @@ fn suites() -> Vec<String> {
 #[test]
 fn every_standard_module_with_tests_passes_them() {
     let suites = suites();
-    assert_eq!(suites.len(), 7, "the library's suites moved: {suites:?}");
+    assert_eq!(suites.len(), 8, "the library's suites moved: {suites:?}");
     let mut refused = Vec::new();
     for name in &suites {
         let output = tested(name);

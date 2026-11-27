@@ -1,0 +1,323 @@
+import "std/list"
+import "std/os"
+import "std/text"
+
+# Cases for std/p256, judged by OpenSSL. Sixteen keys come from `openssl
+# ecparam`, and each case signs a random message with one of them through
+# `openssl dgst -sign`. Most cases then have one thing made wrong: a bit of
+# the message or the signature, another key, a coordinate moved off the
+# curve or to p or past it, r or s set to 0, n, n + 1 or n - 1, the other
+# s (n - s, which ECDSA accepts), r + n, a needless zero in the DER, a byte
+# after it, or a random r and s. `openssl pkeyutl -verify` gives the
+# verdict. `openssl dgst -verify` would not do: it reads no more of the
+# signature file than the longest signature the key makes, seventy-two
+# bytes, so a byte after the DER never reaches the check. A coordinate of
+# p or more is refused here first: SEC 1 makes a coordinate a field element
+# below p, and OpenSSL reduces one and accepts the key. Nothing here knows
+# the curve's arithmetic: the script moves bytes and asks OpenSSL.
+#
+# Each case is a line of <out>.cases, the key's x and y, the message and the
+# DER signature in hex, and a line of <out>.want, 1 or 0.
+type key
+  pem
+  x
+  y
+
+type case
+  x
+  y
+  message
+  signature
+
+type pair
+  r
+  s
+
+type made
+  lines
+  wants
+
+prime = hex_bytes p_hex
+
+p_hex = "ffffffff00000001000000000000000000000000ffffffffffffffffffffffff"
+
+order = hex_bytes n_hex
+
+n_hex = "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+
+# What a P-256 public key's DER holds before the point: the SPKI header for
+# an EC key on prime256v1, then 04 for an uncompressed point.
+spki_head = hex_bytes "3059301306072a8648ce3d020106082a8648ce3d03010703420004"
+
+lengths = [0 1 5 32 55 56 64 100 300]
+
+pub fn written args
+  count = count_of (text/to_int (arg args 1))
+  out = arg args 2
+  d = "{out}.work"
+  os/run "mkdir" ["-p" d]
+    .> (_ -> keys_made d 1 [])
+    .> (ks -> cases_made d ks count [] [])
+    .> (m -> saved out m)
+
+fn arg xs at
+  return "" if at < 1 or at > length xs
+  xs[at]
+
+fn count_of none
+  0
+
+fn count_of n
+  n
+
+fn keys_made d at acc
+  return effect acc if at > 16
+  pem = "{d}/k{at}.pem"
+  public_file = "{d}/k{at}.der"
+  generated = ["ecparam" "-name" "prime256v1" "-genkey" "-noout" "-out" pem]
+  public = ["ec" "-in" pem "-pubout" "-outform" "DER" "-out" public_file]
+  os/run "openssl" generated
+    .> (_ -> os/run "openssl" public)
+    .> (_ -> os/read_bytes public_file)
+    .> (b -> keys_made d (at + 1) (push acc (key_of pem (list/to_list b))))
+
+fn key_of pem b
+  key pem (taken b 28 32) (taken b 60 32)
+
+fn cases_made _ _ 0 lines wants
+  effect (made lines wants)
+
+fn cases_made d ks count lines wants
+  os/random_bytes 16
+    .> (r -> one d ks (list/to_list r))
+    .> (c -> judged d c .> (v -> next d ks count lines wants c v))
+
+fn next d ks count lines wants c v
+  fields = [c.x c.y c.message c.signature]
+  line = text/join (list/to_list (list/map fields hexed)) " "
+  cases_made d ks (count - 1) (push lines line) (push wants "{v}")
+
+fn saved out m
+  os/write_file "{out}.cases" "{text/join m.lines "\n"}\n"
+    .> (_ -> os/write_file "{out}.want" "{text/join m.wants "\n"}\n")
+
+# One case: a key, a message of one of the lengths, its signature, and the
+# change the case's kind makes. `r` is sixteen random bytes that choose.
+fn one d ks r
+  k = pick ks (byte r 1)
+  size = pick lengths (byte r 2)
+  os/random_bytes size
+    .> (m -> signed d k (list/to_list m))
+    .> (c -> changed ks r c)
+
+fn signed d k message
+  file = "{d}/message"
+  sig = "{d}/signature"
+  os/write_file file (text/to_bytes message)
+    .> (_ -> os/run "openssl" ["dgst" "-sha256" "-sign" k.pem "-out" sig file])
+    .> (_ -> os/read_bytes sig)
+    .> (s -> effect (case k.x k.y message (list/to_list s)))
+
+fn changed ks r c
+  kind = byte r 3 % 20
+  return effect c if kind < 7
+  effect (made_wrong kind ks r c)
+
+fn made_wrong 7 _ r c
+  longer = push c.message 33
+  case c.x c.y (flipped longer (byte r 4) (byte r 5)) c.signature
+
+fn made_wrong 8 _ r c
+  case c.x c.y c.message (flipped c.signature (byte r 4) (byte r 5))
+
+fn made_wrong 9 _ _ c
+  rs = parts c.signature
+  case c.x c.y c.message (der rs.r (minus order rs.s))
+
+fn made_wrong 10 ks r c
+  other = pick ks (byte r 4)
+  case other.x other.y c.message c.signature
+
+fn made_wrong 11 _ _ c
+  case c.x (plus c.y [1]) c.message c.signature
+
+fn made_wrong 12 _ _ c
+  case prime c.y c.message c.signature
+
+fn made_wrong 13 _ r c
+  rs = parts c.signature
+  one_r = pick [[0] order (plus order [1]) rs.r] (byte r 4)
+  one_s = pick [[0] order (minus order [1]) rs.s] (byte r 5)
+  case c.x c.y c.message (der one_r one_s)
+
+fn made_wrong 14 _ _ c
+  rs = parts c.signature
+  case c.x c.y c.message (der_padded rs.r rs.s)
+
+fn made_wrong 15 _ _ c
+  case c.x c.y c.message (push c.signature 0)
+
+fn made_wrong 16 _ _ c
+  rs = parts c.signature
+  case c.x c.y c.message (der (plus rs.r order) rs.s)
+
+fn made_wrong 17 _ _ c
+  case (minus prime c.x) c.y c.message c.signature
+
+fn made_wrong 18 _ _ c
+  case c.x (minus prime c.y) c.message c.signature
+
+fn made_wrong _ _ r c
+  case c.x c.y c.message (der (taken r 1 8) (taken r 9 8))
+
+# OpenSSL's verdict, 1 or 0, after refusing a coordinate that is not
+# thirty-two bytes below p.
+fn judged d c
+  return effect 0 if not below_p? c.x or not below_p? c.y
+  key_file = "{d}/public.der"
+  sig_file = "{d}/checked"
+  file = "{d}/message"
+  asked = [
+    "pkeyutl"
+    "-verify"
+    "-pubin"
+    "-inkey"
+    key_file
+    "-keyform"
+    "DER"
+    "-rawin"
+    "-digest"
+    "sha256"
+    "-in"
+    file
+    "-sigfile"
+    sig_file
+  ]
+  point = list/to_list (list/concat spki_head (list/concat c.x c.y))
+  os/write_file key_file (text/to_bytes point)
+    .> (_ -> os/write_file sig_file (text/to_bytes c.signature))
+    .> (_ -> os/write_file file (text/to_bytes c.message))
+    .> (_ -> os/run "openssl" asked)
+    .> (p -> effect (if (p.status == 0) 1 0))
+
+fn below_p? v
+  length v == 32 and compared v prime < 0
+
+# r and s from a DER signature as OpenSSL writes it, without the zero that
+# keeps a high bit positive.
+fn parts sig
+  rl = byte sig 4
+  r = taken sig 5 rl
+  sl = byte sig (6 + rl)
+  s = taken sig (7 + rl) sl
+  pair (trimmed r) (trimmed s)
+
+fn der r s
+  body = list/to_list (list/concat (integer r) (integer s))
+  list/to_list (list/concat [48 (length body)] body)
+
+fn der_padded r s
+  padded = list/to_list (list/concat [0] (trimmed r))
+  body = list/to_list (list/concat (raw_integer padded) (integer s))
+  list/to_list (list/concat [48 (length body)] body)
+
+fn integer v
+  t = trimmed v
+  content = if (byte t 1 > 127) (list/to_list (list/concat [0] t)) t
+  raw_integer content
+
+fn raw_integer content
+  list/to_list (list/concat [2 (length content)] content)
+
+fn trimmed v
+  return v if length v < 2 or byte v 1 != 0
+  trimmed (taken v 2 (length v - 1))
+
+# Big-endian byte arithmetic, as long as it needs to be.
+fn plus a b
+  width = if (length a > length b) (length a) (length b)
+  added (padded_to a width) (padded_to b width) width 0 []
+
+fn added a b at carry acc
+  return finished carry acc if at < 1
+  s = byte a at + byte b at + carry
+  added a b (at - 1) (s / 256) (list/to_list (list/concat [(s % 256)] acc))
+
+fn finished 0 acc
+  acc
+
+fn finished carry acc
+  list/to_list (list/concat [carry] acc)
+
+# a - b for a no smaller than b, as long as a.
+fn minus a b
+  subtracted a (padded_to b (length a)) (length a) 0 []
+
+fn subtracted a b at borrow acc
+  return acc if at < 1
+  d = byte a at - byte b at - borrow
+  wrapped = if (d < 0) (d + 256) d
+  more = if (d < 0) 1 0
+  subtracted a b (at - 1) more (list/to_list (list/concat [wrapped] acc))
+
+fn padded_to v width
+  return v if length v >= width
+  padded_to (list/to_list (list/concat [0] v)) width
+
+fn compared a b
+  comparing a b 1
+
+fn comparing a b at
+  return 0 if at > length a or at > length b
+  return -1 if byte a at < byte b at
+  return 1 if byte a at > byte b at
+  comparing a b (at + 1)
+
+fn flipped bs at bit
+  return bs if length bs == 0
+  where = at % length bs + 1
+  mask = pick [1 2 4 8 16 32 64 128] bit
+  flipping bs where mask 1 []
+
+fn flipping bs where mask at acc
+  return acc if at < 1 or at > length bs
+  b = bs[at]
+  next = if (at == where) (toggled b mask) b
+  flipping bs where mask (at + 1) (push acc next)
+
+fn toggled b mask
+  if (b / mask % 2 == 1) (b - mask) (b + mask)
+
+fn pick xs n
+  xs[n % length xs + 1]
+
+fn byte xs at
+  return 0 if at < 1 or at > length xs
+  xs[at]
+
+fn taken xs at count
+  taking xs at count []
+
+fn taking xs at count acc
+  return acc if count == 0 or at < 1 or at > length xs
+  taking xs (at + 1) (count - 1) (push acc xs[at])
+
+fn hexed bs
+  text/join (list/to_list (list/map bs two)) ""
+
+digits = "0123456789abcdef"
+
+fn two b
+  hi = b / 16
+  lo = b % 16
+  "{text/slice digits (hi + 1) (hi + 1)}{text/slice digits (lo + 1) (lo + 1)}"
+
+fn hex_bytes h
+  hex_from (text/bytes h) 1 []
+
+fn hex_from cs at acc
+  return acc if at < 1 or at + 1 > length cs
+  hex_from cs (at + 2) (push acc (hexit cs[at] * 16 + hexit cs[at + 1]))
+
+fn hexit c
+  if (c < 58) (c - 48) (c - 87)

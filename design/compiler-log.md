@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-11-11 — two limits live where they are enforced
-
-#2448, from the weekly sweep. Not a compiler change.
-
-The live log's limit was written in `scripts/archive_log.sh`, three
-times in its test, in the test's file name and in CLAUDE.md. It is now
-the script's `keep=` line and nowhere else:
-`tests/the_live_log_holds_what_the_script_keeps.rs` reads the number
-from the script, builds its scratch log two entries past it, and
-CLAUDE.md names the script. Watched fail with `keep=41`: the test says
-the log holds 40 and the script keeps 41. The page-drift budget is
-`budget` in `scripts/page_drift/page_drift.kso`; CLAUDE.md and the
-compiler page name it without the number.
-
-Three stories were told twice, in a sweep's header and again in its
-test's doc comment: the span that cost a round on kanso#1328, the
-interpreted row no sweep read on 2026-09-18, and the library change of
-2026-09-05. Each stays in the script, and the test points at it. The
-trend gate's excuse for the one golden without counters is said in the
-gate, and its test no longer repeats it.
-
-The link's staged directory was said to hold "five libraries" in two
-scripts, a test and the page. The list is the loop in
-`scripts/gates/codegen_box.sh`, and the other three now say "the
-libraries the link resolves". One copy is left as it is: the compiler
-page gives the two greps that count rulings as part of a dated story,
-with the counts they returned that day, and CLAUDE.md holds them as the
-rule.
-
-The chart's palette had a second copy too (#2447, its first item):
-`tests/the_chart_palette_is_the_one_that_was_measured.rs` held all the
-colours of `docs/numbers.html` and asserted the page equalled them. The
-chart draws one panel to a counter, so colour tells no two lines apart.
-The copy is gone, and `tests/a_chart_line_wears_a_token_both_modes_declare.rs`
-checks the page against itself: both modes declare the same tokens, and
-every line wears a declared token and no hex. Watched fail with a token
-taken out of the dark block and with one line given a hex.
-
-No counter moved.
-
 ## 2026-11-11 — senro gets its command, its migration files and a page's check (#2455)
 
 The first four items of the 2026-11-11 directive are built in senro, and
@@ -1290,6 +1250,56 @@ The new branch moves two rows, as CI measured: entry_instructions
 the new code; the compile and library rows stand. A senro app
 installed as a hako could not compile without this, so the floor is lowered
 by that cost under #2280, as it was for kanso#2511.
+
+## 2026-11-27 — std/p256 verifies ES256 signatures
+
+kanso#2515 rules passkeys in, with the password as the fallback, and a
+server that accepts a passkey checks an ECDSA signature over P-256 with
+SHA-256 (ES256). kanso had SHA-256 and nothing for elliptic curves.
+`std/p256` adds `verified? x y message signature`: the key's two
+32-byte coordinates, the message and a DER signature, all byte lists.
+
+The module is kanso over `std/bits`: ten 26-bit limbs per number,
+Montgomery multiplication modulo p and modulo n with constants computed
+from the curve's published values, Jacobian points, Shamir's trick for
+u1 G + u2 Q, and an x comparison against r Z^2 that needs no inversion.
+It refuses a key off the curve, a coordinate of 32 bytes that is not
+below p, non-strict DER, and r or s outside 1..n-1.
+
+Harness first, as the verification rules ask. The first harness was a
+Python script over Python's `cryptography`; CI's python-free gate refused
+it, so scripts/p256_cases does the same in kanso, driving OpenSSL's command
+line: sixteen keys from `openssl ecparam`, signatures from `openssl dgst
+-sign`, tamperings made by moving bytes, and the verdict from `openssl
+pkeyutl -verify`. 51,000 of its cases agreed with the library in every
+verdict, 22,358 accepted and 28,642 refused; the Python
+harness had agreed on 52,000 more before it went.
+
+Both harnesses found disagreements, and each was the reference's. A
+coordinate written as x + p: OpenSSL reduces it and accepts the key, SEC 1
+2.3.4 makes a coordinate a field element below p, so the scripts refuse it
+as the library does. And a signature with a byte after its DER: `openssl
+dgst -verify` reads no more of the signature file than the key's longest
+signature, 72 bytes, so it judged the signature without the byte and
+accepted; `pkeyutl` reads the whole file and refuses it.
+
+tests/p256_agrees_with_openssl.rs runs a committed 240-case corpus with
+OpenSSL's verdicts natively and its first twelve on the interpreter.
+Watched red by comparing the point's y with r: every case read 0.
+lib/p256/p256_test.kso holds RFC 6979 A.2.5's two signatures, each checked
+against OpenSSL before it was written, and watched red the same way
+(three of ten failed).
+
+CI moved four rows. Three are compile rows, by layout, for a module more
+in the binary's table: compile_instructions 22,843,804 -> 22,843,810,
+entry_instructions 120,155,020 -> 120,155,062, library_instructions
+64,189,750 -> 64,189,756. The fourth is browser_compile_instructions
+412,896,104 -> 412,896,154, since the compiler built for the tab carries
+the module's text too. Passkeys are ruled in kanso#2515, so the floor is
+lowered by what these cost, as it was for kanso#2514.
+
+Measured in this container, not CI: about 13 ms a verification at the
+release tier, 34 ms at the development tier, 1.4 s on the interpreter.
 
 ## 2026-11-27 — a job's install does not read Microsoft's archive
 

@@ -1,0 +1,6 @@
+import "./cases"
+import "std/os"
+
+# Writes <out>.cases and <out>.want: `kanso run scripts/p256_cases --
+# <count> <out>`. cases.kso says what a case is.
+os/args .> (a -> cases/written a)
