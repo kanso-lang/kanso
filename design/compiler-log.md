@@ -1330,9 +1330,13 @@ lib/p256/p256_test.kso holds RFC 6979 A.2.5's two signatures, each checked
 against OpenSSL before it was written, and watched red the same way
 (three of ten failed).
 
-CI moved three compile rows by layout, for a module more in the binary's
-table: compile_instructions 22,843,804 -> 22,843,810, entry_instructions
-120,155,020 -> 120,155,062, library_instructions 64,189,750 -> 64,189,756.
+CI moved four rows. Three are compile rows, by layout, for a module more
+in the binary's table: compile_instructions 22,843,804 -> 22,843,810,
+entry_instructions 120,155,020 -> 120,155,062, library_instructions
+64,189,750 -> 64,189,756. The fourth is browser_compile_instructions
+412,896,104 -> 412,896,154, since the compiler built for the tab carries
+the module's text too. Passkeys are ruled in kanso#2515, so the floor is
+lowered by what these cost, as it was for kanso#2514.
 
 Measured in this container, not CI: about 13 ms a verification at the
 release tier, 34 ms at the development tier, 1.4 s on the interpreter.
