@@ -2038,13 +2038,24 @@ fn qualify(
         .collect();
     dep.types.retain(|t| !beaten_twins.contains_key(&t.name));
     let type_names: crate::hash::Set<&str> = dep.types.iter().map(|t| t.name.as_str()).collect();
+    // A name only an import's twin carries goes to the bare space as a mixed
+    // one does, and the qualified spelling stays this module's to declare.
+    // The twin there claimed it as private, so `comment/where` read as
+    // refused before the derivation that writes comment's own `where` had
+    // run (#2522). A name that is also a type keeps its spelling, as a
+    // record's constructor does.
+    let twin_only: crate::hash::Set<String> = twin_bare
+        .iter()
+        .filter(|n| !own_bare.contains(*n) && !type_names.contains(*n))
+        .map(|n| n.to_string())
+        .collect();
     let owned: crate::hash::Map<Name, Owned> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
         .filter(|n| !ast::has_slash(n))
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
         .map(|n| {
-            let spelling = match mixed.contains(n) {
+            let spelling = match mixed.contains(n) || twin_only.contains(n) {
                 true => ast::bare_space(qual, n),
                 false => ast::qualified(qual, n),
             };
@@ -2120,7 +2131,8 @@ fn qualify(
             // GAVEL 51: an already-qualified name enrolls under the spelling
             // it already has. Composing `{qual}/` onto it would register the
             // route rather than the identity.
-            if in_mixed && is_twin(f) {
+            let alone = !ast::has_slash(&f.name) && twin_only.contains(f.name.as_str());
+            if (in_mixed || alone) && is_twin(f) {
                 // The import's twin: into the bare overload space, and never
                 // exported. It holds no claim on the qualified spelling.
                 f.name = ast::bare_space(qual, &f.name);
