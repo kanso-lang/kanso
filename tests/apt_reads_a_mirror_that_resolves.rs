@@ -16,12 +16,28 @@ const LIST: &str = "http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n\
                     https://archive.ubuntu.com/ubuntu/\tpriority:2\n\
                     https://security.ubuntu.com/ubuntu/\tpriority:3\n";
 
-/// Runs the script with a resolver that answers only for `known`, and
-/// returns the list it left and what it printed.
+/// Runs the script with a resolver that answers only for `known` and an
+/// empty directory of sources, and returns the list it left and what it
+/// printed.
 fn after(case: &str, known: &[&str]) -> (String, String) {
+    let (list, said, _) = after_sources(case, known, &[]);
+    (list, said)
+}
+
+/// As `after`, with these files in the script's sources directory, and
+/// also returns the names of the files it left there, sorted.
+fn after_sources(
+    case: &str,
+    known: &[&str],
+    sources: &[(&str, &str)],
+) -> (String, String, Vec<String>) {
     let stage: PathBuf = std::env::temp_dir().join(format!("kanso-apt-ready-{case}"));
     let _ = std::fs::remove_dir_all(&stage);
-    std::fs::create_dir_all(&stage).expect("a temp directory");
+    let sources_dir = stage.join("sources.list.d");
+    std::fs::create_dir_all(&sources_dir).expect("a temp directory");
+    for (name, body) in sources {
+        std::fs::write(sources_dir.join(name), body).expect("a source is written");
+    }
     let list = stage.join("apt-mirrors.txt");
     std::fs::write(&list, LIST).expect("the list is written");
     let lookup = stage.join("lookup.sh");
@@ -32,16 +48,39 @@ fn after(case: &str, known: &[&str]) -> (String, String) {
         .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/apt_ready.sh"))
         .env("KANSO_APT_MIRRORS", &list)
         .env("KANSO_APT_RETRIES", stage.join("fetch-again"))
+        .env("KANSO_APT_SOURCES", &sources_dir)
         .env("KANSO_APT_LOOKUP", format!("sh {}", lookup.display()))
         .env("KANSO_APT_SUDO", "")
         .env("KANSO_APT_PAUSE", "0")
         .output()
         .expect("the script runs");
     assert!(out.status.success(), "the script failed: {out:?}");
+    let mut left: Vec<String> = std::fs::read_dir(&sources_dir)
+        .expect("the sources read")
+        .map(|e| e.expect("an entry").file_name().to_string_lossy().to_string())
+        .collect();
+    left.sort();
     (
         std::fs::read_to_string(&list).expect("the list reads"),
         String::from_utf8_lossy(&out.stdout).to_string(),
+        left,
     )
+}
+
+/// What the runners answered on 2026-11-27: Microsoft's archive refused
+/// with 403, and `apt-get update` failed the install of Ubuntu's clang 19.
+/// The runner's source for it goes, and every other source stays.
+#[test]
+fn microsofts_archive_is_not_read() {
+    let microsoft = "deb [arch=amd64,armhf,arm64] https://packages.microsoft.com/ubuntu/24.04/prod noble main\n";
+    let ubuntu = "Types: deb\nURIs: http://archive.ubuntu.com/ubuntu/\nSuites: noble\n";
+    let sources = [("microsoft-prod.list", microsoft), ("ubuntu.sources", ubuntu)];
+    let known = ["azure.archive.ubuntu.com"];
+    let (list, said, left) = after_sources("microsoft", &known, &sources);
+    assert_eq!(left, vec!["ubuntu.sources".to_string()]);
+    assert!(said.ends_with("microsoft-prod.list\n"), "{said}");
+    assert!(said.starts_with("apt: not reading "), "{said}");
+    assert_eq!(list, LIST);
 }
 
 #[test]
