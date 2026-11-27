@@ -677,8 +677,11 @@ fn declares_type(text: &str) -> bool {
 /// A definition's import line as the module it joins reads it. A relative
 /// path is written from the derivation's own module, as that module's own
 /// imports are, so a convention names its library however the app reached
-/// it; the path is rewritten from the module the definition joins. Any other
-/// import, `std/list` say, reads the same from anywhere.
+/// it; the path is rewritten from the module the definition joins. A path
+/// that lands in a fetched hako is written by the hako's name, as the app
+/// imports it, since a path from the app into the cache runs as long as the
+/// cache is far. Any other import, `std/list` say, reads the same from
+/// anywhere.
 fn reread(line: &str, writer: Option<&std::path::Path>, joins: &std::path::Path) -> String {
     let Some(path) = line.strip_prefix("import \"").and_then(|r| r.strip_suffix('"')) else {
         return line.to_string();
@@ -706,6 +709,9 @@ fn reread(line: &str, writer: Option<&std::path::Path>, joins: &std::path::Path)
             _ => {}
         }
     }
+    if let Some(name) = hako_import(&named) {
+        return format!("import \"{name}\"");
+    }
     let shared = named.components().zip(to.components()).take_while(|(a, b)| a == b).count();
     let ups = to.components().count() - shared;
     let down: Vec<String> = named
@@ -715,6 +721,19 @@ fn reread(line: &str, writer: Option<&std::path::Path>, joins: &std::path::Path)
         .collect();
     let lead = if ups == 0 { vec![".".to_string()] } else { vec!["..".to_string(); ups] };
     format!("import \"{}\"", [lead, down].concat().join("/"))
+}
+
+/// A directory inside the hako cache as an import names it:
+/// `<cache>/kanso-lang/senro@<sha>/models` is `kanso-lang/senro/models`. A
+/// tree dropped into the cache by hand has no `@<sha>`, and reads the same.
+fn hako_import(dir: &std::path::Path) -> Option<String> {
+    let cache = std::fs::canonicalize(hako_cache()).ok()?;
+    let rest = dir.strip_prefix(&cache).ok()?;
+    let mut parts = rest.components().map(|c| c.as_os_str().to_string_lossy().into_owned());
+    let owner = parts.next()?;
+    let tree = parts.next()?;
+    let repo = tree.split('@').next().unwrap_or(&tree).to_string();
+    Some([owner, repo].into_iter().chain(parts).collect::<Vec<_>>().join("/"))
 }
 
 /// Loads an entry's dependencies again with the arms its derivations
