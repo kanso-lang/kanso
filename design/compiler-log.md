@@ -1304,3 +1304,8 @@ the lock resolves. `tests/hako.rs` gains
 from the app writes an arm into the app that imports back into the hako.
 Before the change it was refused with "a line holds at most 80 characters —
 this one has 128"; now it prints `hello there`.
+
+The new branch moves one row by layout, entry_instructions 120,154,980 ->
+120,155,020, as CI measured; the compile and library rows stand. A senro app
+installed as a hako could not compile without this, so the floor is lowered
+by that cost under #2280, as it was for kanso#2511.
