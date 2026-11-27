@@ -1306,18 +1306,33 @@ u1 G + u2 Q, and an x comparison against r Z^2 that needs no inversion.
 It refuses a key off the curve, a coordinate of 32 bytes that is not
 below p, non-strict DER, and r or s outside 1..n-1.
 
-Harness first, as the verification rules ask. tests/p256/cases.py draws
-keys, messages and tamperings and has OpenSSL (Python's `cryptography`)
-judge each. 52,000 cases, seeds 2, 11 and 12, agreed in every verdict:
-22,228 accepted, 29,772 refused. The first 200, at seed 1, disagreed on
-13, all a coordinate written as x + p: OpenSSL reduces it and accepts the
-key, SEC 1 2.3.4 says a coordinate is a field element below p, so the
-script now refuses those as the library does. tests/p256_agrees_with_openssl.rs
-runs a committed 240-case corpus with OpenSSL's verdicts natively and its
-first twelve on the interpreter. Watched red by comparing the point's y
-with r: every case read 0. lib/p256/p256_test.kso holds RFC 6979 A.2.5's
-two signatures, each checked against OpenSSL before it was written, and
-watched red the same way (three of ten failed).
+Harness first, as the verification rules ask. The first harness was a
+Python script over Python's `cryptography`; CI's python-free gate refused
+it, so scripts/p256_cases does the same in kanso, driving OpenSSL's command
+line: sixteen keys from `openssl ecparam`, signatures from `openssl dgst
+-sign`, tamperings made by moving bytes, and the verdict from `openssl
+pkeyutl -verify`. 51,000 of its cases agreed with the library in every
+verdict, 22,358 accepted and 28,642 refused; the Python
+harness had agreed on 52,000 more before it went.
+
+Both harnesses found disagreements, and each was the reference's. A
+coordinate written as x + p: OpenSSL reduces it and accepts the key, SEC 1
+2.3.4 makes a coordinate a field element below p, so the scripts refuse it
+as the library does. And a signature with a byte after its DER: `openssl
+dgst -verify` reads no more of the signature file than the key's longest
+signature, 72 bytes, so it judged the signature without the byte and
+accepted; `pkeyutl` reads the whole file and refuses it.
+
+tests/p256_agrees_with_openssl.rs runs a committed 240-case corpus with
+OpenSSL's verdicts natively and its first twelve on the interpreter.
+Watched red by comparing the point's y with r: every case read 0.
+lib/p256/p256_test.kso holds RFC 6979 A.2.5's two signatures, each checked
+against OpenSSL before it was written, and watched red the same way
+(three of ten failed).
+
+CI moved three compile rows by layout, for a module more in the binary's
+table: compile_instructions 22,843,804 -> 22,843,810, entry_instructions
+120,155,020 -> 120,155,062, library_instructions 64,189,750 -> 64,189,756.
 
 Measured in this container, not CI: about 13 ms a verification at the
 release tier, 34 ms at the development tier, 1.4 s on the interpreter.

@@ -1,22 +1,20 @@
 //! `std/p256` against OpenSSL, on a corpus OpenSSL judged.
 //!
-//! tests/p256/cases.py writes random keys, messages and signatures, and as
-//! many that are wrong in one way: a message or a signature with a bit
-//! flipped, another key, a key off the curve or with a coordinate at or past
-//! p, r or s of zero or of n or past it, the other s (n - s, which ECDSA
-//! accepts), a DER integer with a needless zero, and a byte after the
-//! sequence. OpenSSL, through Python's `cryptography`, judges each; the
-//! script refuses a coordinate at or past p itself, which SEC 1 asks and
-//! OpenSSL forgives by reducing it. tests/p256/cases.txt holds 240 of those
-//! cases and tests/p256/verdicts.txt OpenSSL's verdicts.
+//! scripts/p256_cases makes keys with `openssl ecparam`, signs random
+//! messages with `openssl dgst -sign`, and makes most cases wrong in one way:
+//! a message or a signature with a bit flipped, another key, a key off the
+//! curve or with a coordinate at or past p, r or s of zero or of n or past
+//! it, the other s (n - s, which ECDSA accepts), a DER integer with a
+//! needless zero, a byte after the sequence, or a random r and s.
+//! `openssl pkeyutl -verify` judges each; the script refuses a coordinate at
+//! or past p itself, which SEC 1 asks and OpenSSL forgives by reducing it.
+//! tests/p256/cases.txt holds 240 of those cases and tests/p256/verdicts.txt
+//! OpenSSL's verdicts.
 //!
 //! The judge (tests/p256/judge) imports `std/p256` as any program does, so
 //! the library's own text answers, never a copy of it. The corpus runs
 //! natively, and its first twelve cases run on the interpreter too, where a
 //! verification takes over a second.
-//!
-//! Before the corpus, the same script's 52,000 cases (seeds 2, 11 and 12)
-//! agreed in every verdict: 22,228 accepted and 29,772 refused.
 //!
 //! WATCHED RED by comparing the point's y with r in place of its x: the
 //! native run prints 0 for every case, and the first disagreement is the
@@ -59,8 +57,8 @@ fn std_p256_agrees_with_openssl_natively() {
     assert_eq!(got.lines().count(), 240, "one verdict a case");
     assert_eq!(
         want.lines().filter(|l| *l == "1").count(),
-        99,
-        "the corpus holds 99 good signatures"
+        119,
+        "the corpus holds 119 good signatures"
     );
     if let Some(d) = first_disagreement(&want, &got, &cases) {
         panic!("std/p256 and OpenSSL disagree: {d}");
