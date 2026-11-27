@@ -419,12 +419,12 @@ served, with no worker beside it</code></pre>
   <pre><code><span class="c"># The guestbook's mail, as a Rails mailer holds it: what each letter says,</span>
 <span class="c"># and the signed link it carries, which starts with `mail/url_for`. Each</span>
 <span class="c"># letter is queued on `db` and sent by the worker beside the server. First, a</span>
-<span class="c"># link to choose a new password, bound to the digest the account keeps, so</span>
-<span class="c"># it works once.</span>
-<span class="k">pub</span> <span class="k">fn</span> <span class="f">reset</span> req db id email kept
-  <span class="f">time/now</span>
-    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> <span class="f">mail/url_for</span> (reset_path req id kept t))
-    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> <span class="f">mail/delivered_later</span> db (reset_letter email link))</code></pre>
+<span class="c"># link to a new password, bound to the digest the account keeps, so it works</span>
+<span class="c"># once.</span>
+<span class="k">pub</span> <span class="k">fn</span> reset req db id email kept
+  time<span class="o">/</span>now
+    <span class="o">.&gt;</span> (t <span class="o">-&gt;</span> mail<span class="o">/</span>url_for (reset_path req id kept t))
+    <span class="o">.&gt;</span> (link <span class="o">-&gt;</span> mail<span class="o">/</span>delivered_later db (reset_letter email link))</code></pre>
 </div>
 
 <p>and since the app has a mailer, <code>app/run</code> starts a worker on the <code>mail</code> queue beside the server, which runs as long as the server does:</p>
